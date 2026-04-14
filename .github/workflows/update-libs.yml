@@ -27,11 +27,21 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v3
+        with:
+          cache-disabled: true
+          add-job-summary: 'never'
 
       - name: Run update-libs script
         env:
           REF: ${{ github.event.inputs.ref }}
         run: ./scripts/update-libs.sh --ref "$REF"
+
+      - name: Upload plugin CGPs
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugin-cgps
+          path: '*/build/plugin/*.cgp'
+          if-no-files-found: error
 
       - name: Commit updated jars
         run: |
