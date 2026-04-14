@@ -76,24 +76,31 @@ if [ ! -x "$CODEONTHEGO_PATH/gradlew" ]; then
     exit 1
 fi
 
-echo "Building jars in $CODEONTHEGO_PATH..."
-(cd "$CODEONTHEGO_PATH" && ./gradlew --console=plain :plugin-api:createPluginApiJar :gradle-plugin:jar)
+echo "Building plugin-api jar in $CODEONTHEGO_PATH..."
+(cd "$CODEONTHEGO_PATH" && ./gradlew --console=plain :plugin-api:createPluginApiJar)
+
+# plugin-builder lives in its own self-contained Gradle build under plugin-api/plugin-builder/.
+# Despite the file ultimately landing in libs/ as gradle-plugin.jar, it is the plugin-builder
+# module's output — the Gradle plugin (id: com.itsaky.androidide.plugins.build) that each
+# example plugin applies. The CodeOnTheGo gradle-plugin/ module is unrelated.
+echo "Building plugin-builder jar in $CODEONTHEGO_PATH/plugin-api/plugin-builder..."
+"$CODEONTHEGO_PATH/gradlew" -p "$CODEONTHEGO_PATH/plugin-api/plugin-builder" --console=plain jar
 
 PLUGIN_API_SRC="$(ls "$CODEONTHEGO_PATH"/plugin-api/build/libs/plugin-api-*.jar 2>/dev/null | head -n1 || true)"
-GRADLE_PLUGIN_SRC="$CODEONTHEGO_PATH/gradle-plugin/build/libs/cogo-plugin.jar"
+PLUGIN_BUILDER_SRC="$(ls "$CODEONTHEGO_PATH"/plugin-api/plugin-builder/build/libs/plugin-builder-*.jar 2>/dev/null | head -n1 || true)"
 
 if [ -z "$PLUGIN_API_SRC" ] || [ ! -f "$PLUGIN_API_SRC" ]; then
     echo "Error: expected plugin-api jar not found under $CODEONTHEGO_PATH/plugin-api/build/libs/" >&2
     exit 1
 fi
-if [ ! -f "$GRADLE_PLUGIN_SRC" ]; then
-    echo "Error: expected gradle-plugin jar not found at $GRADLE_PLUGIN_SRC" >&2
+if [ -z "$PLUGIN_BUILDER_SRC" ] || [ ! -f "$PLUGIN_BUILDER_SRC" ]; then
+    echo "Error: expected plugin-builder jar not found under $CODEONTHEGO_PATH/plugin-api/plugin-builder/build/libs/" >&2
     exit 1
 fi
 
 mkdir -p "$LIBS_DIR"
-cp "$PLUGIN_API_SRC"    "$LIBS_DIR/plugin-api.jar"
-cp "$GRADLE_PLUGIN_SRC" "$LIBS_DIR/gradle-plugin.jar"
+cp "$PLUGIN_API_SRC"     "$LIBS_DIR/plugin-api.jar"
+cp "$PLUGIN_BUILDER_SRC" "$LIBS_DIR/gradle-plugin.jar"
 
 CODEONTHEGO_SHA="$(git -C "$CODEONTHEGO_PATH" rev-parse --short HEAD 2>/dev/null || echo unknown)"
 echo ""
