@@ -100,3 +100,9 @@ echo ""
 echo "Updated libs/ from CodeOnTheGo@$CODEONTHEGO_SHA"
 printf "  %-20s %s\n" "plugin-api.jar"    "$(du -h "$LIBS_DIR/plugin-api.jar" | cut -f1)"
 printf "  %-20s %s\n" "gradle-plugin.jar" "$(du -h "$LIBS_DIR/gradle-plugin.jar" | cut -f1)"
+
+SMOKE_TEST_PLUGIN="keystore-generator"
+echo ""
+echo "Smoke test: building $SMOKE_TEST_PLUGIN against the refreshed libs..."
+(cd "$REPO_ROOT/$SMOKE_TEST_PLUGIN" && ./gradlew --console=plain assemblePlugin)
+echo "Smoke test passed."
