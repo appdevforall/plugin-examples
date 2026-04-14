@@ -1,0 +1,47 @@
+name: Update libs from CodeOnTheGo
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: CodeOnTheGo branch or tag to build from
+        required: false
+        default: stage
+
+permissions:
+  contents: write
+
+jobs:
+  update-libs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout plugin-examples
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Run update-libs script
+        env:
+          REF: ${{ github.event.inputs.ref }}
+        run: ./scripts/update-libs.sh --ref "$REF"
+
+      - name: Commit updated jars
+        run: |
+          sha=$(git -C .cache/CodeOnTheGo rev-parse --short HEAD)
+          git config user.name "ADFA"
+          git config user.email "dev-team@appdevforall.org"
+          git add libs/
+          if git diff --cached --quiet; then
+            echo "No changes to libs/ — nothing to commit."
+            exit 0
+          fi
+          git commit -m "chore: update libs from CodeOnTheGo@${sha}"
+          git push
