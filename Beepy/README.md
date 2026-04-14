@@ -30,6 +30,3 @@ Drop your own WAVs into `Beepy/src/main/res/raw/` using the existing filenames (
 
 Output is a `.cgp` plugin package in `Beepy/build/outputs/`, installable from the IDE's plugin manager.
 
-## History
-
-The original implementation used `TextToSpeech.addEarcon()`, which appeared to work (`playEarcon` returned `SUCCESS`) but produced no audio. The TTS engine runs in a separate process and could not read files written into the host app's private cache directory. Switching to in-process `SoundPool` fixed playback and also eliminated StrictMode disk-read violations caused by the old cache-extraction path.
