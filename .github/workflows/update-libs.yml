@@ -36,11 +36,32 @@ jobs:
           REF: ${{ github.event.inputs.ref }}
         run: ./scripts/update-libs.sh --ref "$REF"
 
-      - name: Upload plugin CGPs
+      - name: Upload Beepy CGP
         uses: actions/upload-artifact@v4
         with:
-          name: plugin-cgps
-          path: '*/build/plugin/*.cgp'
+          name: beepy
+          path: Beepy/build/plugin/*.cgp
+          if-no-files-found: error
+
+      - name: Upload apk-viewer CGP
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk-viewer
+          path: apk-viewer/build/plugin/*.cgp
+          if-no-files-found: error
+
+      - name: Upload markdown-preview CGP
+        uses: actions/upload-artifact@v4
+        with:
+          name: markdown-preview
+          path: markdown-preview/build/plugin/*.cgp
+          if-no-files-found: error
+
+      - name: Upload keystore-generator CGP
+        uses: actions/upload-artifact@v4
+        with:
+          name: keystore-generator
+          path: keystore-generator/build/plugin/*.cgp
           if-no-files-found: error
 
       - name: Commit updated jars
