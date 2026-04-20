@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Keystore Generator — Help</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <main>
+        <h1>Keystore Generator</h1>
+        <p class="lede">Generate Android <code>.jks</code> keystores for signing release builds — directly from Code On The Go.</p>
+
+        <section>
+            <h2>Creating a keystore</h2>
+            <ol>
+                <li>Open <em>Generate Keystore</em> from the sidebar, or the main editor tab.</li>
+                <li>Fill in the keystore filename, passwords, alias, and certificate details.</li>
+                <li>Tap <strong>Generate Keystore</strong>. The file is written to your project's <code>app/</code> directory.</li>
+            </ol>
+        </section>
+
+        <section>
+            <h2>Certificate fields</h2>
+            <dl>
+                <dt>CN</dt><dd>Common name — your name or organization.</dd>
+                <dt>OU</dt><dd>Organizational unit (optional).</dd>
+                <dt>O</dt><dd>Organization (optional).</dd>
+                <dt>L / ST / C</dt><dd>Locality, state, and two-letter country code.</dd>
+            </dl>
+        </section>
+
+        <section>
+            <h2>Keep it safe</h2>
+            <p>Losing your keystore means you cannot publish updates to a previously signed app. Back it up to at least two secure locations and never commit it to source control.</p>
+        </section>
+    </main>
+</body>
+</html>
