@@ -185,29 +185,24 @@ class KeystoreGeneratorPlugin : IPlugin, UIExtension, EditorTabExtension, Docume
                 summary = "<b>Keystore Generator</b><br>Generate Android keystores for release builds",
                 detail = """
                     <h3>Android Keystore Generator</h3>
-                    <p>This plugin allows you to generate Android keystores (.jks files) directly within your project for signing release builds.</p>
+                    <p>Generate .jks keystores for signing release builds.</p>
 
                     <h4>How to use:</h4>
                     <ol>
-                        <li><b>Sidebar</b>: Click "Generate Keystore" in the sidebar to open the main editor tab</li>
-                        <li><b>Main Menu</b>: Use Tools → Generate Keystore for a dialog interface</li>
-                        <li><b>Bottom Sheet</b>: Access via the "Keystore Gen" tab in the editor bottom sheet</li>
-                        <li>Fill in the keystore details and certificate information</li>
-                        <li>Click "Generate Keystore" to create the file in your project's app directory</li>
+                        <li>Open via sidebar, Tools menu, or bottom sheet</li>
+                        <li>Fill in keystore and certificate details</li>
+                        <li>Click "Generate Keystore"</li>
                     </ol>
 
-                    <h4>Features:</h4>
-                    <ul>
-                        <li>RSA 2048-bit key generation with SHA256 signature</li>
-                        <li>X.509 certificate creation with customizable details</li>
-                        <li>Automatic project integration (saves to app/ directory)</li>
-                        <li>Form validation and error handling</li>
-                        <li>Multiple UI integration points</li>
-                    </ul>
-
-                    <p><b>💡 Tip:</b> Keep your keystore and passwords secure - you'll need them to update your app!</p>
+                    <p><b>💡 Tip:</b> Keep your keystore safe — you need it to update your app.</p>
                 """.trimIndent(),
-                buttons = emptyList()
+                buttons = listOf(
+                    PluginTooltipButton(
+                        description = "Open full keystore help",
+                        uri = "index.html",
+                        order = 0
+                    )
+                )
             ),
 
             // Plugin overview
@@ -240,8 +235,8 @@ class KeystoreGeneratorPlugin : IPlugin, UIExtension, EditorTabExtension, Docume
                 """.trimIndent(),
                 buttons = listOf(
                     PluginTooltipButton(
-                        description = "Plugin Development Guide",
-                        uri = "plugin/development/guide",
+                        description = "Open full keystore help",
+                        uri = "index.html",
                         order = 0
                     )
                 )
@@ -274,7 +269,14 @@ class KeystoreGeneratorPlugin : IPlugin, UIExtension, EditorTabExtension, Docume
                     </ul>
 
                     <p>Access from sidebar → Generate Keystore or bottom sheet → Keystore Gen tab.</p>
-                """.trimIndent()
+                """.trimIndent(),
+                buttons = listOf(
+                    PluginTooltipButton(
+                        description = "Open full keystore help",
+                        uri = "index.html",
+                        order = 0
+                    )
+                )
             ),
 
             // Keystore security documentation
@@ -312,7 +314,14 @@ class KeystoreGeneratorPlugin : IPlugin, UIExtension, EditorTabExtension, Docume
                     </ul>
 
                     <p><b>⚠️ Warning:</b> Losing your keystore means you cannot update your published app!</p>
-                """.trimIndent()
+                """.trimIndent(),
+                buttons = listOf(
+                    PluginTooltipButton(
+                        description = "Open full keystore help",
+                        uri = "index.html",
+                        order = 0
+                    )
+                )
             )
         )
     }
@@ -325,4 +334,6 @@ class KeystoreGeneratorPlugin : IPlugin, UIExtension, EditorTabExtension, Docume
     override fun onDocumentationUninstall() {
         context.logger.info("Removing Keystore Generator Plugin documentation")
     }
+
+    override fun getTier3DocsAssetPath(): String = "docs"
 }
