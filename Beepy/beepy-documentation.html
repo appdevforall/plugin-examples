@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Beepy Plugin Documentation</title>
+<style>
+  :root {
+    --bg: #fdfdfd;
+    --fg: #1a1a1a;
+    --accent: #2c5f8a;
+    --accent-light: #e8f0f8;
+    --border: #d0d7de;
+    --code-bg: #f4f6f8;
+    --table-stripe: #f8fafb;
+    --shadow: rgba(0,0,0,0.06);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--fg);
+    background: var(--bg);
+    line-height: 1.6;
+    max-width: 52rem;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+  }
+  header { border-bottom: 3px solid var(--accent); padding-bottom: 1.2rem; margin-bottom: 2rem; }
+  header h1 { font-size: 2rem; color: var(--accent); }
+  header p.subtitle { color: #555; margin-top: 0.3rem; }
+  header .meta { font-size: 0.85rem; color: #777; margin-top: 0.5rem; }
+  nav { background: var(--accent-light); border: 1px solid var(--border); border-radius: 6px; padding: 1rem 1.5rem; margin-bottom: 2.5rem; }
+  nav h2 { font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); margin-bottom: 0.5rem; }
+  nav ol { padding-left: 1.3rem; }
+  nav li { margin: 0.25rem 0; }
+  nav a { color: var(--accent); text-decoration: none; }
+  nav a:hover { text-decoration: underline; }
+  section { margin-bottom: 2.5rem; }
+  h2 { font-size: 1.4rem; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; margin-bottom: 1rem; }
+  h3 { font-size: 1.1rem; margin: 1.2rem 0 0.5rem; }
+  p, li { margin-bottom: 0.5rem; }
+  ul, ol { padding-left: 1.4rem; }
+  code {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    background: var(--code-bg);
+    padding: 0.15em 0.35em;
+    border-radius: 3px;
+    font-size: 0.9em;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1rem 1.2rem;
+    overflow-x: auto;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    margin: 0.8rem 0 1rem;
+  }
+  pre code { background: none; padding: 0; }
+  table { width: 100%; border-collapse: collapse; margin: 0.8rem 0 1rem; font-size: 0.95rem; }
+  th, td { text-align: left; padding: 0.55rem 0.8rem; border: 1px solid var(--border); }
+  th { background: var(--accent-light); font-weight: 600; }
+  tr:nth-child(even) td { background: var(--table-stripe); }
+  .diagram {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1.2rem;
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 0.85rem;
+    line-height: 1.55;
+    overflow-x: auto;
+    white-space: pre;
+    margin: 0.8rem 0 1rem;
+  }
+  .callout {
+    background: var(--accent-light);
+    border-left: 4px solid var(--accent);
+    padding: 0.8rem 1rem;
+    border-radius: 0 6px 6px 0;
+    margin: 1rem 0;
+  }
+  .file-tree { list-style: none; padding-left: 0; font-family: monospace; font-size: 0.9rem; }
+  .file-tree ul { list-style: none; padding-left: 1.5rem; }
+  footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: 0.85rem; color: #777; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Beepy Plugin</h1>
+  <p class="subtitle">Audible build-status earcons for CodeOnTheGo</p>
+  <div class="meta">Version 1.0.0 &middot; Author: App Dev for All &middot; Package: <code>com.example.beepy</code></div>
+</header>
+
+<nav>
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#overview">Executive Overview</a></li>
+    <li><a href="#functionality">Core Functionality</a></li>
+    <li><a href="#architecture">Technical Architecture</a></li>
+    <li><a href="#integration">Integration Points</a></li>
+    <li><a href="#deployment">Deployment &amp; Usage</a></li>
+    <li><a href="#benefits">Key Benefits</a></li>
+  </ol>
+</nav>
+
+<!-- ================================================================ -->
+<section id="overview">
+  <h2>1. Executive Overview</h2>
+  <p>
+    Beepy is a lightweight CodeOnTheGo plugin that delivers audible feedback
+    during builds. It plays a distinct short sound (earcon) when a build starts,
+    succeeds, or fails, letting developers keep their eyes on code while staying
+    aware of build progress.
+  </p>
+  <p>
+    The plugin is implemented in a single Kotlin file (~80 lines), requires no
+    special permissions, and ships three bundled WAV files as its only assets.
+    It integrates with the IDE through two framework interfaces &mdash;
+    <code>IPlugin</code> for lifecycle management and
+    <code>BuildStatusListener</code> for build events &mdash; making it a clean,
+    minimal example of event-driven plugin design.
+  </p>
+</section>
+
+<!-- ================================================================ -->
+<section id="functionality">
+  <h2>2. Core Functionality</h2>
+
+  <h3>Build-event sound mapping</h3>
+  <table>
+    <thead>
+      <tr><th>Build Event</th><th>Callback</th><th>Sound File</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Build starts</td><td><code>onBuildStarted()</code></td><td><code>res/raw/started.wav</code></td></tr>
+      <tr><td>Build succeeds</td><td><code>onBuildFinished()</code></td><td><code>res/raw/finished.wav</code></td></tr>
+      <tr><td>Build fails</td><td><code>onBuildFailed(error)</code></td><td><code>res/raw/failed.wav</code></td></tr>
+    </tbody>
+  </table>
+
+  <h3>Audio behaviour</h3>
+  <ul>
+    <li>Sounds are routed through <code>USAGE_ASSISTANCE_SONIFICATION</code>,
+        so they follow media/ringer volume and respect Do Not Disturb rules
+        rather than interrupting like a notification.</li>
+    <li>The <code>SoundPool</code> is configured with a maximum of two
+        concurrent streams, allowing overlapping playback if events arrive
+        in quick succession.</li>
+    <li>Playback parameters: full stereo volume (1.0 L / 1.0 R), priority 1,
+        no looping, normal playback rate.</li>
+  </ul>
+
+  <h3>Graceful degradation</h3>
+  <p>
+    <code>SoundPool.load()</code> is asynchronous. If a build event fires
+    before decoding finishes (~few hundred ms after activation), the event is
+    silently skipped. Because builds almost always outlast the load time, this
+    is rarely observable in practice.
+  </p>
+</section>
+
+<!-- ================================================================ -->
+<section id="architecture">
+  <h2>3. Technical Architecture</h2>
+
+  <h3>File layout</h3>
+  <ul class="file-tree">
+    <li>Beepy/
+      <ul>
+        <li>build.gradle.kts</li>
+        <li>proguard-rules.pro</li>
+        <li>src/main/
+          <ul>
+            <li>AndroidManifest.xml</li>
+            <li>kotlin/com/example/beepy/<strong>Beepy.kt</strong></li>
+            <li>res/raw/ &mdash; started.wav, finished.wav, failed.wav</li>
+            <li>res/values/strings.xml</li>
+          </ul>
+        </li>
+      </ul>
+    </li>
+  </ul>
+
+  <h3>Class diagram</h3>
+  <div class="diagram">
+         IPlugin                BuildStatusListener
+     (plugin lifecycle)          (build callbacks)
+            ^                          ^
+            |                          |
+            +------------+-------------+
+                         |
+    +--------------------------------------+
+    |               Beepy                  |
+    +--------------------------------------+
+    | - context : PluginContext            |
+    | - soundPool : SoundPool?             |
+    | - soundIds : Map&lt;String, Int&gt;        |
+    | - loadedIds : Set&lt;Int&gt;               |
+    +--------------------------------------+
+    | + initialize(ctx) : Boolean          |
+    | + activate() : Boolean               |
+    | + deactivate() : Boolean             |
+    | + dispose()                          |
+    | + onBuildStarted()                   |
+    | + onBuildFinished()                  |
+    | + onBuildFailed(error?)              |
+    | - loadSound(key, rawId)              |
+    | - play(key)                          |
+    +--------------------------------------+</div>
+
+  <h3>Lifecycle flow</h3>
+  <div class="diagram">
+  initialize(ctx)          activate()                    deactivate()
+  +--------------+    +---------------------+     +---------------------+
+  | Store plugin |    | Build AudioAttrs    |     | Remove listener     |
+  | context      |    | Create SoundPool    |     | Release SoundPool   |
+  +--------------+    | Load 3 WAV files    |     | Clear maps/sets     |
+                      | Subscribe to        |     +---------------------+
+                      |   IdeBuildService   |
+                      +---------------------+</div>
+
+  <h3>Key implementation details</h3>
+
+  <h4>Sound loading</h4>
+  <pre><code>private fun loadSound(key: String, @RawRes rawId: Int) {
+    val pool = soundPool ?: return
+    val id = context.androidContext.resources.openRawResourceFd(rawId).use {
+        pool.load(it, 1)
+    }
+    soundIds[key] = id
+}</code></pre>
+  <p>
+    Each WAV is opened as a raw resource file descriptor and handed to
+    <code>SoundPool.load()</code>. The returned sample ID is stored in
+    <code>soundIds</code> keyed by event name. When decoding completes, the
+    <code>OnLoadCompleteListener</code> adds the sample ID to
+    <code>loadedIds</code>.
+  </p>
+
+  <h4>Guarded playback</h4>
+  <pre><code>private fun play(key: String) {
+    val pool = soundPool ?: return
+    val id = soundIds[key] ?: return
+    if (id !in loadedIds) return
+    pool.play(id, 1f, 1f, 1, 0, 1f)
+}</code></pre>
+  <p>
+    Three guards protect against premature or invalid playback: the pool must
+    exist, the sound ID must be mapped, and the sample must have finished
+    loading. Only then is <code>play()</code> called.
+  </p>
+
+  <h4>Resource cleanup</h4>
+  <pre><code>override fun deactivate(): Boolean {
+    context.services.get(IdeBuildService::class.java)
+        ?.removeBuildStatusListener(this)
+    soundPool?.release()
+    soundPool = null
+    soundIds.clear()
+    loadedIds.clear()
+    return true
+}</code></pre>
+  <p>
+    On deactivation the listener is removed first, then the native
+    <code>SoundPool</code> is released and all tracking state is cleared.
+    <code>dispose()</code> is a no-op since <code>deactivate()</code> already
+    handles full cleanup.
+  </p>
+
+  <h3>Build configuration highlights</h3>
+  <table>
+    <tr><th>Setting</th><th>Value</th></tr>
+    <tr><td>Gradle plugin</td><td><code>com.itsaky.androidide.plugins.build</code></td></tr>
+    <tr><td>Compile / Target SDK</td><td>33</td></tr>
+    <tr><td>Min SDK</td><td>28</td></tr>
+    <tr><td>Java / Kotlin target</td><td>17</td></tr>
+    <tr><td>ProGuard</td><td>Disabled (<code>isMinifyEnabled = false</code>)</td></tr>
+    <tr><td>Plugin API</td><td><code>compileOnly</code> via <code>libs/plugin-api.jar</code></td></tr>
+    <tr><td>Output format</td><td><code>.cgp</code> package</td></tr>
+  </table>
+</section>
+
+<!-- ================================================================ -->
+<section id="integration">
+  <h2>4. Integration Points</h2>
+  <p>
+    Beepy touches the host IDE through a small number of well-defined
+    interfaces. It does not modify any main-app source files &mdash; all
+    integration happens at runtime through the plugin framework.
+  </p>
+
+  <h3>4.1 Plugin framework (<code>IPlugin</code>)</h3>
+  <p>
+    The <code>Beepy</code> class implements
+    <code>com.itsaky.androidide.plugins.IPlugin</code>, which the IDE
+    discovers and manages. The manifest declares the entry point:
+  </p>
+  <pre><code>&lt;meta-data android:name="plugin.main_class"
+           android:value="com.example.beepy.Beepy" /&gt;</code></pre>
+  <p>
+    The IDE calls <code>initialize()</code> &rarr; <code>activate()</code>
+    on load, and <code>deactivate()</code> &rarr; <code>dispose()</code> on
+    removal, giving the plugin full lifecycle control.
+  </p>
+
+  <h3>4.2 Build service (<code>IdeBuildService</code> / <code>BuildStatusListener</code>)</h3>
+  <p>
+    On activation, the plugin retrieves <code>IdeBuildService</code> from the
+    host's service registry and registers itself as a
+    <code>BuildStatusListener</code>:
+  </p>
+  <pre><code>context.services.get(IdeBuildService::class.java)
+    ?.addBuildStatusListener(this)</code></pre>
+  <p>
+    This is the only service the plugin consumes. The three callback methods
+    &mdash; <code>onBuildStarted</code>, <code>onBuildFinished</code>, and
+    <code>onBuildFailed</code> &mdash; each map directly to a sound.
+  </p>
+
+  <h3>4.3 Android context (resource access)</h3>
+  <p>
+    The plugin accesses <code>context.androidContext.resources</code> to open
+    its bundled WAV files via <code>openRawResourceFd()</code>. This is the
+    only use of the Android context; the plugin creates no Activities,
+    Services, BroadcastReceivers, or ContentProviders.
+  </p>
+
+  <h3>4.4 Permissions</h3>
+  <p>
+    Beepy requires no plugin permissions. The available permission system
+    (<code>filesystem.read</code>, <code>filesystem.write</code>,
+    <code>network.access</code>, <code>system.commands</code>,
+    <code>ide.settings</code>, <code>project.structure</code>) is left
+    entirely unused &mdash; the plugin only reads its own bundled resources
+    and listens to build events.
+  </p>
+
+  <h3>Integration summary</h3>
+  <div class="diagram">
+  +-----------------------------------+
+  |       CodeOnTheGo IDE Host        |
+  |                                   |
+  |  PluginContext                    |
+  |    +-- androidContext.resources   |
+  |    +-- services                   |
+  |          +-- IdeBuildService      |
+  +--------+-----------+--------------+
+           |           |
+   resources.          | addBuildStatusListener()
+   openRawResourceFd() |
+           |           |
+           v           v
+       +------------------------+
+       |         Beepy          |
+       +------------------------+
+       | onBuildStarted()       |-----&gt; play("started")
+       | onBuildFinished()      |-----&gt; play("finished")
+       | onBuildFailed(error?)  |-----&gt; play("failed")
+       +------------------------+            |
+                                             v
+                                        SoundPool
+                                     (Android audio)</div>
+</section>
+
+<!-- ================================================================ -->
+<section id="deployment">
+  <h2>5. Deployment &amp; Usage</h2>
+
+  <h3>Building</h3>
+  <pre><code>./gradlew :Beepy:assembleRelease</code></pre>
+  <p>
+    This produces a <code>.cgp</code> plugin package under
+    <code>Beepy/build/outputs/</code>.
+  </p>
+
+  <h3>Installation</h3>
+  <ol>
+    <li>Open CodeOnTheGo's plugin manager.</li>
+    <li>Import the <code>.cgp</code> file.</li>
+    <li>The IDE discovers <code>Beepy</code> via the manifest metadata and
+        activates it automatically.</li>
+  </ol>
+
+  <h3>Customising sounds</h3>
+  <ol>
+    <li>Replace the WAV files in <code>src/main/res/raw/</code> using the same
+        filenames: <code>started.wav</code>, <code>finished.wav</code>,
+        <code>failed.wav</code>.</li>
+    <li>Keep clips short &mdash; <code>SoundPool</code> is designed for
+        samples under ~1 MB decoded.</li>
+    <li>Rebuild and reinstall the plugin.</li>
+  </ol>
+
+  <h3>Runtime requirements</h3>
+  <table>
+    <tr><th>Requirement</th><th>Value</th></tr>
+    <tr><td>Min Android version</td><td>API 28 (Android 9)</td></tr>
+    <tr><td>Min IDE version</td><td>1.0.0</td></tr>
+    <tr><td>Permissions</td><td>None</td></tr>
+    <tr><td>Network access</td><td>Not required</td></tr>
+  </table>
+</section>
+
+<!-- ================================================================ -->
+<section id="benefits">
+  <h2>6. Key Benefits</h2>
+  <ul>
+    <li><strong>Eyes-free build awareness.</strong> Developers working on a
+        phone or tablet can stay focused on the editor and still know instantly
+        when a build starts, finishes, or fails.</li>
+    <li><strong>Minimal footprint.</strong> One Kotlin file, three small WAVs,
+        zero permissions. The plugin adds negligible size and no runtime
+        overhead outside of the brief moments when a sound plays.</li>
+    <li><strong>Respectful audio routing.</strong> By using
+        <code>USAGE_ASSISTANCE_SONIFICATION</code>, sounds follow the
+        device's media volume and DND rules instead of interrupting like
+        notifications.</li>
+    <li><strong>Clean lifecycle management.</strong> Resources are allocated
+        lazily on activation and fully released on deactivation &mdash; no
+        leaks, no lingering listeners.</li>
+    <li><strong>Easily customisable.</strong> Swapping the three WAV files is
+        the only step needed to personalise the audio cues.</li>
+    <li><strong>Good reference implementation.</strong> The plugin demonstrates
+        the core patterns needed to write a CodeOnTheGo plugin &mdash;
+        implementing <code>IPlugin</code>, accessing the service registry,
+        subscribing to events, and managing plugin lifecycle &mdash; in under
+        80 lines of code.</li>
+  </ul>
+</section>
+
+<footer>
+  Beepy Plugin Documentation &middot; Version 1.0.0 &middot; com.example.beepy
+</footer>
+
+</body>
+</html>
