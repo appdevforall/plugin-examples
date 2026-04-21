@@ -12,6 +12,7 @@ See the official [plugin documentation](https://www.appdevforall.org/codeonthego
 | [`apk-viewer/`](apk-viewer/)                       | Inspects an APK's contents and surfaces a structural breakdown.   |
 | [`markdown-preview/`](markdown-preview/)           | Renders Markdown files with a live preview pane in the editor.    |
 | [`keystore-generator/`](keystore-generator/)       | Generates signing keystores from inside the IDE.                  |
+| [`snippets/`](snippets/)                           | Adds user-managed code snippets with prefix-triggered expansions. |
 
 ## Building a plugin
 
