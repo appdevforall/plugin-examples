@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Snippets Plugin Documentation</title>
+<style>
+  :root {
+    --bg: #fdfdfd;
+    --fg: #1a1a1a;
+    --accent: #0f766e;
+    --accent-light: #e6f5f3;
+    --border: #d0d7de;
+    --code-bg: #f4f6f8;
+    --table-stripe: #f8fafb;
+    --shadow: rgba(0,0,0,0.06);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--fg);
+    background: var(--bg);
+    line-height: 1.6;
+    max-width: 52rem;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+  }
+  header { border-bottom: 3px solid var(--accent); padding-bottom: 1.2rem; margin-bottom: 2rem; }
+  header h1 { font-size: 2rem; color: var(--accent); }
+  header p.subtitle { color: #555; margin-top: 0.3rem; }
+  header .meta { font-size: 0.85rem; color: #777; margin-top: 0.5rem; }
+  nav { background: var(--accent-light); border: 1px solid var(--border); border-radius: 6px; padding: 1rem 1.5rem; margin-bottom: 2.5rem; }
+  nav h2 { font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); margin-bottom: 0.5rem; }
+  nav ol { padding-left: 1.3rem; }
+  nav li { margin: 0.25rem 0; }
+  nav a { color: var(--accent); text-decoration: none; }
+  nav a:hover { text-decoration: underline; }
+  section { margin-bottom: 2.5rem; }
+  h2 { font-size: 1.4rem; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; margin-bottom: 1rem; }
+  h3 { font-size: 1.1rem; margin: 1.2rem 0 0.5rem; }
+  p, li { margin-bottom: 0.5rem; }
+  ul, ol { padding-left: 1.4rem; }
+  code {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    background: var(--code-bg);
+    padding: 0.15em 0.35em;
+    border-radius: 3px;
+    font-size: 0.9em;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1rem 1.2rem;
+    overflow-x: auto;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    margin: 0.8rem 0 1rem;
+  }
+  pre code { background: none; padding: 0; }
+  table { width: 100%; border-collapse: collapse; margin: 0.8rem 0 1rem; font-size: 0.95rem; }
+  th, td { text-align: left; padding: 0.55rem 0.8rem; border: 1px solid var(--border); }
+  th { background: var(--accent-light); font-weight: 600; }
+  tr:nth-child(even) td { background: var(--table-stripe); }
+  .diagram {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1.2rem;
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 0.85rem;
+    line-height: 1.55;
+    overflow-x: auto;
+    white-space: pre;
+    margin: 0.8rem 0 1rem;
+  }
+  .callout {
+    background: var(--accent-light);
+    border-left: 4px solid var(--accent);
+    padding: 0.8rem 1rem;
+    border-radius: 0 6px 6px 0;
+    margin: 1rem 0;
+  }
+  .file-tree { list-style: none; padding-left: 0; font-family: monospace; font-size: 0.9rem; }
+  .file-tree ul { list-style: none; padding-left: 1.5rem; }
+  footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: 0.85rem; color: #777; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Custom Snippets Plugin</h1>
+  <p class="subtitle">User-managed code snippets for the CodeOnTheGo editor</p>
+  <div class="meta">Version 1.0.0 &middot; Author: App Dev For All &middot; Package: <code>com.codeonthego.snippets</code></div>
+</header>
+
+<nav>
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#overview">Executive Overview</a></li>
+    <li><a href="#functionality">Core Functionality</a></li>
+    <li><a href="#architecture">Technical Architecture</a></li>
+    <li><a href="#integration">Integration Points</a></li>
+    <li><a href="#deployment">Deployment &amp; Usage</a></li>
+    <li><a href="#benefits">Key Benefits</a></li>
+  </ol>
+</nav>
+
+<!-- ================================================================ -->
+<section id="overview">
+  <h2>1. Executive Overview</h2>
+  <p>
+    Custom Snippets is a CodeOnTheGo plugin that lets developers define, manage,
+    and expand their own code snippets directly inside the editor. Snippets are
+    stored per-project as JSON, contributed to the IDE's completion system via
+    <code>SnippetExtension</code>, and managed through a dedicated editor tab
+    with a full CRUD interface.
+  </p>
+  <p>
+    The plugin ships a built-in set of four Java defaults (such as
+    <code>sout</code>, <code>logi</code>, <code>trycatch</code>, and
+    <code>singleton</code>) that bootstrap automatically on first use, so
+    there is something to try immediately. After that, developers can add,
+    edit, and delete snippets through the UI or by editing the JSON file
+    directly &mdash; both paths converge on the same parser and the IDE picks
+    up changes without a restart.
+  </p>
+  <p>
+    The plugin spans three Kotlin source files and three XML layouts (~530
+    lines of code total), requires only <code>filesystem.read</code> and
+    <code>filesystem.write</code> permissions, and demonstrates several
+    advanced plugin capabilities: snippet contributions, editor tabs, side-menu
+    navigation, fragment-based UI, and live service registry interaction.
+  </p>
+</section>
+
+<!-- ================================================================ -->
+<section id="functionality">
+  <h2>2. Core Functionality</h2>
+
+  <h3>Snippet contributions</h3>
+  <p>
+    The plugin implements <code>SnippetExtension</code> to feed prefix-triggered
+    expansions into the IDE's completion popup. When a user types a prefix like
+    <code>sout</code> and accepts the completion, the body is expanded in place.
+    Placeholders follow the LSP tab-stop convention:
+  </p>
+  <table>
+    <thead>
+      <tr><th>Syntax</th><th>Meaning</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>$1</code>, <code>$2</code>, ...</td><td>Tab stops visited in order</td></tr>
+      <tr><td><code>${1:default}</code></td><td>Tab stop with a default value</td></tr>
+      <tr><td><code>$0</code></td><td>Final caret position</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Snippet scopes</h3>
+  <p>
+    Every snippet has a <code>scope</code> that controls where in the source
+    file it is offered as a completion. The four scopes are:
+  </p>
+  <table>
+    <thead>
+      <tr><th>Scope</th><th>Where it expands</th><th>Example use</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>global</code></td>
+        <td>Anywhere in the file</td>
+        <td>File-header comments, license blocks</td>
+      </tr>
+      <tr>
+        <td><code>top-level</code></td>
+        <td>At the top level of the file, outside any class or method</td>
+        <td>Import groups, class declarations</td>
+      </tr>
+      <tr>
+        <td><code>member</code></td>
+        <td>Inside a class body, at member level</td>
+        <td>Field declarations, method stubs, the <code>singleton</code> default</td>
+      </tr>
+      <tr>
+        <td><code>local</code></td>
+        <td>Inside a method or block</td>
+        <td>Statements like <code>sout</code>, <code>logi</code>, <code>trycatch</code></td>
+      </tr>
+    </tbody>
+  </table>
+  <p>
+    Scoping keeps the completion popup relevant &mdash; a <code>singleton</code>
+    pattern won't appear inside a method body, and a <code>sout</code> call
+    won't clutter completions at class level.
+  </p>
+
+  <h3>Snippet manager UI</h3>
+  <p>
+    A "Snippets" editor tab hosts <code>SnippetManagerFragment</code>, which
+    provides a scrollable card-based list of all snippets in the current
+    project. Each card shows the prefix, description, language/scope tags, and
+    a body preview. Users can:
+  </p>
+  <ul>
+    <li><strong>Add</strong> a new snippet via the "+ Add" button, which opens
+        a Material dialog with fields for prefix, description, language, scope,
+        and body.</li>
+    <li><strong>Edit</strong> an existing snippet by tapping its card.</li>
+    <li><strong>Delete</strong> a snippet via the trash-can icon, with a
+        confirmation dialog.</li>
+  </ul>
+  <p>
+    All changes are saved immediately to disk, the in-memory cache is
+    invalidated, and <code>IdeSnippetService.refreshSnippets()</code> is called
+    so the editor picks up changes without a restart.
+  </p>
+
+  <h3>Per-project storage</h3>
+  <p>
+    Snippets live at <code>.cg/snippets.json</code> in the project root. The
+    JSON schema is:
+  </p>
+  <pre><code>{
+  "snippets": [
+    {
+      "language": "java",
+      "scope": "local",
+      "prefix": "sout",
+      "description": "System.out.println",
+      "body": ["System.out.println($1);$0"]
+    }
+  ]
+}</code></pre>
+  <table>
+    <thead>
+      <tr><th>Field</th><th>Purpose</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>language</code></td><td>Target language id (<code>java</code>, <code>kotlin</code>, <code>xml</code>, <code>groovy</code>, <code>json</code>)</td></tr>
+      <tr><td><code>scope</code></td><td>Where the expansion applies (<code>global</code>, <code>local</code>, <code>member</code>, <code>top-level</code>)</td></tr>
+      <tr><td><code>prefix</code></td><td>Trigger text typed in the editor</td></tr>
+      <tr><td><code>description</code></td><td>Label shown in the completion popup</td></tr>
+      <tr><td><code>body</code></td><td>Lines of the expansion, joined with <code>\n</code></td></tr>
+    </tbody>
+  </table>
+
+  <h3>Default snippets (bootstrap)</h3>
+  <p>
+    If <code>.cg/snippets.json</code> does not exist when the plugin first
+    reads it, four Java snippets are written automatically:
+  </p>
+  <table>
+    <thead>
+      <tr><th>Prefix</th><th>Scope</th><th>Description</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>sout</code></td><td>local</td><td>System.out.println</td></tr>
+      <tr><td><code>logi</code></td><td>local</td><td>Log.i with TAG</td></tr>
+      <tr><td><code>trycatch</code></td><td>local</td><td>Try-catch block</td></tr>
+      <tr><td><code>singleton</code></td><td>member</td><td>Singleton instance pattern</td></tr>
+    </tbody>
+  </table>
+
+  <h3>File-change detection</h3>
+  <p>
+    <code>getSnippetContributions()</code> compares
+    <code>lastModified()</code> on the snippets file against a cached
+    timestamp. If the file has been edited on disk (by hand or by the manager
+    UI), the cache is invalidated and the file is re-parsed. This means
+    hand-editing the JSON and using the manager UI are fully interchangeable.
+  </p>
+</section>
+
+<!-- ================================================================ -->
+<section id="architecture">
+  <h2>3. Technical Architecture</h2>
+
+  <h3>File layout</h3>
+  <ul class="file-tree">
+    <li>snippets/
+      <ul>
+        <li>build.gradle.kts</li>
+        <li>proguard-rules.pro</li>
+        <li>src/main/
+          <ul>
+            <li>AndroidManifest.xml</li>
+            <li>kotlin/com/codeonthego/snippets/
+              <ul>
+                <li><strong>SnippetsPlugin.kt</strong> &mdash; plugin entry point, extensions</li>
+                <li><strong>SnippetsConfig.kt</strong> &mdash; data models, JSON parser</li>
+                <li>ui/<strong>SnippetManagerFragment.kt</strong> &mdash; manager UI</li>
+              </ul>
+            </li>
+            <li>res/layout/ &mdash; fragment_snippet_manager, dialog_snippet_editor, item_snippet_card</li>
+            <li>res/drawable/ &mdash; ic_snippet, ic_add_snippet, ic_delete, bg_spinner, bg_tag, bg_tag_neutral</li>
+            <li>res/values/styles.xml &mdash; Material 3 theme</li>
+          </ul>
+        </li>
+      </ul>
+    </li>
+  </ul>
+
+  <h3>Class overview</h3>
+  <table>
+    <thead>
+      <tr><th>Class</th><th>Role</th><th>Key interfaces</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>SnippetsPlugin</code></td>
+        <td>Plugin entry point. Manages lifecycle, provides snippets to IDE, registers editor tab and side-menu item.</td>
+        <td><code>IPlugin</code>, <code>SnippetExtension</code>, <code>EditorTabExtension</code>, <code>UIExtension</code></td>
+      </tr>
+      <tr>
+        <td><code>SnippetsConfig</code></td>
+        <td>Data class holding the list of <code>SnippetEntry</code> records.</td>
+        <td>&mdash;</td>
+      </tr>
+      <tr>
+        <td><code>SnippetEntry</code></td>
+        <td>Data class for a single snippet (language, scope, prefix, description, body).</td>
+        <td>&mdash;</td>
+      </tr>
+      <tr>
+        <td><code>SnippetsConfigParser</code></td>
+        <td>Singleton that reads/writes <code>snippets.json</code> via Gson.</td>
+        <td>&mdash;</td>
+      </tr>
+      <tr>
+        <td><code>SnippetManagerFragment</code></td>
+        <td>Fragment-based UI. Renders snippet cards, handles add/edit/delete with Material dialogs.</td>
+        <td>extends <code>Fragment</code></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Data flow</h3>
+  <div class="diagram">
+  .cg/snippets.json
+        |
+        | parse (Gson)
+        v
+  SnippetsConfigParser ---&gt; SnippetsConfig
+        |                     |
+        |                     | .snippets
+        |                     v
+        |               List&lt;SnippetEntry&gt;
+        |                     |
+        |                     | map to SnippetContribution
+        |                     v
+        |               IDE completion popup
+        |
+        | write (Gson, pretty-printed)
+        ^
+        |
+  SnippetManagerFragment
+    (add / edit / delete)</div>
+
+  <h3>Snippet loading and caching</h3>
+  <pre><code>override fun getSnippetContributions(): List&lt;SnippetContribution&gt; {
+    val projectRoot = getProjectRoot()
+        ?: return cachedContributions ?: emptyList()
+    val snippetsFile = File(projectRoot, SNIPPETS_PATH)
+
+    if (!snippetsFile.exists()) {
+        bootstrap(snippetsFile)
+    }
+
+    val currentMtime = if (snippetsFile.exists())
+        snippetsFile.lastModified() else 0L
+    if (currentMtime != snippetsLastModified
+            || cachedContributions == null) {
+        cachedContributions = loadSnippets(snippetsFile)
+        snippetsLastModified = currentMtime
+    }
+
+    return cachedContributions ?: emptyList()
+}</code></pre>
+  <p>
+    The method is called by the IDE whenever it needs snippet completions. It
+    bootstraps defaults if the file is missing, then uses a
+    <code>lastModified()</code> comparison to avoid re-parsing on every call.
+  </p>
+
+  <h3>Manager UI save path</h3>
+  <pre><code>private fun save() {
+    val file = SnippetsPlugin.instance?.getSnippetsFile() ?: return
+    SnippetsConfigParser.write(file, SnippetsConfig(snippets.toList()))
+    SnippetsPlugin.instance?.invalidateCache()
+    SnippetsPlugin.instance?.refreshRegistry()
+}</code></pre>
+  <p>
+    After writing JSON to disk, the fragment invalidates the plugin's
+    in-memory cache and calls <code>refreshSnippets()</code> on
+    <code>IdeSnippetService</code> so the editor's completion list updates
+    immediately.
+  </p>
+
+  <h3>UI layouts</h3>
+  <table>
+    <thead>
+      <tr><th>Layout</th><th>Purpose</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>fragment_snippet_manager</code></td>
+        <td>Top-level manager: title bar with snippet count, "+ Add" button, scrollable <code>LinearLayout</code> for cards, and an empty-state message.</td>
+      </tr>
+      <tr>
+        <td><code>item_snippet_card</code></td>
+        <td><code>MaterialCardView</code> for each snippet: bold monospace prefix, description, language/scope tags, body preview, and delete button.</td>
+      </tr>
+      <tr>
+        <td><code>dialog_snippet_editor</code></td>
+        <td>Material dialog for add/edit: <code>TextInputLayout</code> fields for prefix, description, and body; <code>Spinner</code> dropdowns for language and scope.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Build configuration</h3>
+  <table>
+    <tr><th>Setting</th><th>Value</th></tr>
+    <tr><td>Gradle plugin</td><td><code>com.itsaky.androidide.plugins.build</code></td></tr>
+    <tr><td>Compile / Target SDK</td><td>34</td></tr>
+    <tr><td>Min SDK</td><td>26</td></tr>
+    <tr><td>Java / Kotlin target</td><td>17</td></tr>
+    <tr><td>ProGuard</td><td>Disabled (<code>isMinifyEnabled = false</code>)</td></tr>
+    <tr><td>Plugin API</td><td><code>compileOnly</code> via <code>libs/plugin-api.jar</code></td></tr>
+    <tr><td>JSON library</td><td>Gson 2.10.1</td></tr>
+    <tr><td>Output format</td><td><code>.cgp</code> package</td></tr>
+  </table>
+</section>
+
+<!-- ================================================================ -->
+<section id="integration">
+  <h2>4. Integration Points</h2>
+  <p>
+    Snippets touches the host IDE through four extension interfaces and three
+    services. It does not modify any main-app source files &mdash; all
+    integration happens at runtime through the plugin framework.
+  </p>
+
+  <h3>4.1 Plugin lifecycle (<code>IPlugin</code>)</h3>
+  <p>
+    <code>SnippetsPlugin</code> implements <code>IPlugin</code>. The manifest
+    declares the entry point:
+  </p>
+  <pre><code>&lt;meta-data android:name="plugin.main_class"
+           android:value="com.codeonthego.snippets.SnippetsPlugin" /&gt;</code></pre>
+  <p>
+    <code>initialize()</code> stores the <code>PluginContext</code> and sets
+    a static <code>instance</code> reference (used by the fragment).
+    <code>deactivate()</code> clears the snippet cache.
+    <code>dispose()</code> nulls out the context and instance.
+  </p>
+
+  <h3>4.2 Snippet extension (<code>SnippetExtension</code>)</h3>
+  <p>
+    The IDE calls <code>getSnippetContributions()</code> to collect snippets
+    for the completion popup. The plugin returns a list of
+    <code>SnippetContribution</code> objects, each mapping a prefix to an
+    expansion body with tab stops. The result is cached and invalidated by
+    file-modification timestamp.
+  </p>
+
+  <h3>4.3 Editor tab (<code>EditorTabExtension</code>)</h3>
+  <p>
+    <code>getMainEditorTabs()</code> contributes a closeable, non-persistent
+    tab titled "Snippets" with a custom icon:
+  </p>
+  <pre><code>EditorTabItem(
+    id = TAB_ID,
+    title = "Snippets",
+    icon = R.drawable.ic_snippet,
+    fragmentFactory = { SnippetManagerFragment() },
+    isCloseable = true,
+    isPersistent = false,
+    order = 100
+)</code></pre>
+
+  <h3>4.4 Side-menu navigation (<code>UIExtension</code>)</h3>
+  <p>
+    <code>getSideMenuItems()</code> adds a "Manage Snippets" entry under the
+    <strong>tools</strong> group. Tapping it calls
+    <code>IdeEditorTabService.selectPluginTab(TAB_ID)</code> to open or focus
+    the manager tab.
+  </p>
+
+  <h3>4.5 Services consumed</h3>
+  <table>
+    <thead>
+      <tr><th>Service</th><th>Usage</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>IdeProjectService</code></td>
+        <td><code>getCurrentProject().rootDir</code> &mdash; locates the project root to find <code>.cg/snippets.json</code></td>
+      </tr>
+      <tr>
+        <td><code>IdeEditorTabService</code></td>
+        <td><code>selectPluginTab()</code> &mdash; opens the Snippets manager tab from the side menu</td>
+      </tr>
+      <tr>
+        <td><code>IdeSnippetService</code></td>
+        <td><code>refreshSnippets(pluginId)</code> &mdash; tells the IDE to re-read snippet contributions after a save</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>4.6 Fragment infrastructure</h3>
+  <p>
+    <code>SnippetManagerFragment</code> uses <code>PluginFragmentHelper</code>
+    to obtain a plugin-scoped <code>LayoutInflater</code> (required for
+    resolving resources bundled inside the <code>.cgp</code> package) and to
+    access the service registry from within the fragment.
+  </p>
+
+  <h3>4.7 Permissions</h3>
+  <p>
+    The manifest declares <code>filesystem.read</code> and
+    <code>filesystem.write</code>, which are needed to read and write
+    <code>.cg/snippets.json</code> in the project directory.
+  </p>
+
+  <h3>Integration summary</h3>
+  <div class="diagram">
+                    CodeOnTheGo IDE Host
+  +----------------------------------------------------+
+  |                                                    |
+  |  IdeProjectService  -- getCurrentProject().rootDir |
+  |  IdeSnippetService  -- refreshSnippets(pluginId)   |
+  |  IdeEditorTabService -- selectPluginTab(tabId)     |
+  |                                                    |
+  +--+------------------+------------------+-----------+
+     |                  |                  |
+     v                  v                  v
+  project root     snippet registry    tab system
+     |                  ^                  ^
+     |                  |                  |
+  +--+------------------+------------------+-----------+
+  |                SnippetsPlugin                      |
+  |                                                    |
+  |  SnippetExtension --&gt; getSnippetContributions()    |
+  |  EditorTabExtension --&gt; getMainEditorTabs()        |
+  |  UIExtension --&gt; getSideMenuItems()                |
+  +----------------------+-----------------------------+
+                         |
+             reads/writes .cg/snippets.json
+                         |
+                         v
+              SnippetManagerFragment
+              (add / edit / delete UI)</div>
+</section>
+
+<!-- ================================================================ -->
+<section id="deployment">
+  <h2>5. Deployment &amp; Usage</h2>
+
+  <h3>Building</h3>
+  <pre><code>./gradlew :snippets:assemblePluginDebug</code></pre>
+  <p>
+    This produces a <code>.cgp</code> plugin package under
+    <code>snippets/build/outputs/</code>.
+  </p>
+
+  <h3>Installation</h3>
+  <ol>
+    <li>Open CodeOnTheGo's plugin manager.</li>
+    <li>Import the <code>.cgp</code> file.</li>
+    <li>The IDE discovers <code>SnippetsPlugin</code> via the manifest metadata
+        and activates it automatically.</li>
+    <li>Open any project &mdash; four default Java snippets are bootstrapped
+        into <code>.cg/snippets.json</code> on first access.</li>
+  </ol>
+
+  <h3>Using snippets in the editor</h3>
+  <ol>
+    <li>Start typing a prefix (e.g. <code>sout</code>) in a Java file.</li>
+    <li>The completion popup shows the snippet with its description.</li>
+    <li>Accept the completion &mdash; the body is inserted with tab stops for
+        quick editing.</li>
+  </ol>
+
+  <h3>Managing snippets</h3>
+  <ul>
+    <li><strong>Via the UI:</strong> Open <em>Tools &gt; Manage Snippets</em>
+        from the side menu, or switch to the "Snippets" editor tab.</li>
+    <li><strong>Via the file:</strong> Edit <code>.cg/snippets.json</code>
+        directly. Changes are detected by <code>lastModified()</code> on the
+        next completion request.</li>
+  </ul>
+
+  <h3>Runtime requirements</h3>
+  <table>
+    <tr><th>Requirement</th><th>Value</th></tr>
+    <tr><td>Min Android version</td><td>API 26 (Android 8)</td></tr>
+    <tr><td>Min IDE version</td><td>1.0.0</td></tr>
+    <tr><td>Permissions</td><td><code>filesystem.read</code>, <code>filesystem.write</code></td></tr>
+    <tr><td>Network access</td><td>Not required</td></tr>
+  </table>
+</section>
+
+<!-- ================================================================ -->
+<section id="benefits">
+  <h2>6. Key Benefits</h2>
+  <ul>
+    <li><strong>Faster coding on mobile.</strong> Typing boilerplate on a phone
+        keyboard is painful. Snippets turn a short prefix into a full code
+        block with tab-stop navigation, saving keystrokes where they cost the
+        most.</li>
+    <li><strong>Per-project, version-controllable.</strong> Snippets are stored
+        in <code>.cg/snippets.json</code> inside the project root, so they can
+        be committed to source control and shared across a team.</li>
+    <li><strong>Dual editing paths.</strong> The graphical manager UI and direct
+        JSON editing are fully interchangeable &mdash; the file-modification
+        timestamp ensures both paths stay in sync without restarts.</li>
+    <li><strong>Live registry refresh.</strong> After saving, the plugin calls
+        <code>IdeSnippetService.refreshSnippets()</code> so the editor's
+        completion list updates immediately &mdash; no need to close and reopen
+        files.</li>
+    <li><strong>Bootstrapped defaults.</strong> Four practical Java snippets are
+        created on first use, so the plugin is useful out of the box and serves
+        as examples for writing custom entries.</li>
+    <li><strong>Rich reference implementation.</strong> The plugin demonstrates
+        four extension interfaces (<code>IPlugin</code>,
+        <code>SnippetExtension</code>, <code>EditorTabExtension</code>,
+        <code>UIExtension</code>), three IDE services, fragment-based UI with
+        <code>PluginFragmentHelper</code>, Material Design dialogs, and
+        per-project file I/O &mdash; making it a comprehensive template for
+        building more complex plugins.</li>
+  </ul>
+</section>
+
+<footer>
+  Custom Snippets Plugin Documentation &middot; Version 1.0.0 &middot; com.codeonthego.snippets
+</footer>
+
+</body>
+</html>
