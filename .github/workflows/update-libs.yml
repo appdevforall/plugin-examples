@@ -64,6 +64,13 @@ jobs:
           path: keystore-generator/build/plugin/*.cgp
           if-no-files-found: error
 
+      - name: Upload snippets CGP
+        uses: actions/upload-artifact@v4
+        with:
+          name: snippets
+          path: snippets/build/plugin/*.cgp
+          if-no-files-found: error
+
       - name: Commit updated jars
         run: |
           sha=$(git -C .cache/CodeOnTheGo rev-parse --short HEAD)
