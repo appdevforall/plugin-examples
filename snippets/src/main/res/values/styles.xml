@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="PluginTheme" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">#0f766e</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorPrimaryContainer">#A7F3D0</item>
+        <item name="colorOnPrimaryContainer">#002117</item>
+        <item name="colorSecondary">#4B635B</item>
+        <item name="colorOnSecondary">#FFFFFF</item>
+        <item name="colorSurface">#FAFAFA</item>
+        <item name="colorOnSurface">#171717</item>
+        <item name="colorOnSurfaceVariant">#404040</item>
+        <item name="colorOutline">#737373</item>
+        <item name="colorOutlineVariant">#D4D4D4</item>
+    </style>
+</resources>

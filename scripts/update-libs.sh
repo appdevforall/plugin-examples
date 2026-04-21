@@ -108,7 +108,7 @@ echo "Updated libs/ from CodeOnTheGo@$CODEONTHEGO_SHA"
 printf "  %-20s %s\n" "plugin-api.jar"    "$(du -h "$LIBS_DIR/plugin-api.jar" | cut -f1)"
 printf "  %-20s %s\n" "gradle-plugin.jar" "$(du -h "$LIBS_DIR/gradle-plugin.jar" | cut -f1)"
 
-PLUGINS=(Beepy apk-viewer markdown-preview keystore-generator)
+PLUGINS=(Beepy apk-viewer markdown-preview keystore-generator snippets)
 echo ""
 echo "Building all example plugins against the refreshed libs..."
 for plugin in "${PLUGINS[@]}"; do
