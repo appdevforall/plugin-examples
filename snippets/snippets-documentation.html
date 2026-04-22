@@ -90,8 +90,8 @@
 
 <header>
   <h1>Custom Snippets Plugin</h1>
-  <p class="subtitle">User-managed code snippets for the CodeOnTheGo editor</p>
-  <div class="meta">Version 1.0.0 &middot; Author: App Dev For All &middot; Package: <code>com.codeonthego.snippets</code></div>
+  <p class="subtitle">User-managed code snippets for the Code on the Go editor</p>
+  <div class="meta">Version 1.0.0 &middot; Author: App Dev For All &middot; Package: <code>com.Code on the Go.snippets</code></div>
 </header>
 
 <nav>
@@ -110,7 +110,7 @@
 <section id="overview">
   <h2>1. Executive Overview</h2>
   <p>
-    Custom Snippets is a CodeOnTheGo plugin that lets developers define, manage,
+    Custom Snippets is a Code on the Go plugin that lets developers define, manage,
     and expand their own code snippets directly inside the editor. Snippets are
     stored per-project as JSON, contributed to the IDE's completion system via
     <code>SnippetExtension</code>, and managed through a dedicated editor tab
@@ -287,7 +287,7 @@
         <li>src/main/
           <ul>
             <li>AndroidManifest.xml</li>
-            <li>kotlin/com/codeonthego/snippets/
+            <li>kotlin/com/Code on the Go/snippets/
               <ul>
                 <li><strong>SnippetsPlugin.kt</strong> &mdash; plugin entry point, extensions</li>
                 <li><strong>SnippetsConfig.kt</strong> &mdash; data models, JSON parser</li>
@@ -449,7 +449,7 @@
     declares the entry point:
   </p>
   <pre><code>&lt;meta-data android:name="plugin.main_class"
-           android:value="com.codeonthego.snippets.SnippetsPlugin" /&gt;</code></pre>
+           android:value="com.Code on the Go.snippets.SnippetsPlugin" /&gt;</code></pre>
   <p>
     <code>initialize()</code> stores the <code>PluginContext</code> and sets
     a static <code>instance</code> reference (used by the fragment).
@@ -527,7 +527,7 @@
 
   <h3>Integration summary</h3>
   <div class="diagram">
-                    CodeOnTheGo IDE Host
+                    Code on the Go IDE Host
   +----------------------------------------------------+
   |                                                    |
   |  IdeProjectService  -- getCurrentProject().rootDir |
@@ -568,7 +568,7 @@
 
   <h3>Installation</h3>
   <ol>
-    <li>Open CodeOnTheGo's plugin manager.</li>
+    <li>Open Code on the Go's plugin manager.</li>
     <li>Import the <code>.cgp</code> file.</li>
     <li>The IDE discovers <code>SnippetsPlugin</code> via the manifest metadata
         and activates it automatically.</li>
@@ -635,7 +635,7 @@
 </section>
 
 <footer>
-  Custom Snippets Plugin Documentation &middot; Version 1.0.0 &middot; com.codeonthego.snippets
+  Custom Snippets Plugin Documentation &middot; Version 1.0.0 &middot; com.Code on the Go.snippets
 </footer>
 
 </body>
