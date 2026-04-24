@@ -1,4 +1,4 @@
-package com.codeonthego.ndkinstaller
+package org.appdevforall.ndkinstaller
 
 import com.itsaky.androidide.plugins.IPlugin
 import com.itsaky.androidide.plugins.PluginContext
@@ -112,6 +112,7 @@ class NdkInstallerPlugin : IPlugin {
             val cgt = service.createTemplateBuilder("NDK")
                 .description("An NDK and CMake binary installer with corresponding NDK Activity template")
                 .showPackageNameOption()
+                
                 .showLanguageOption()
                 .showMinSdkOption()
                 .thumbnailFromAssets("$ASSETS_NDK/template/thumb.png", ctx)

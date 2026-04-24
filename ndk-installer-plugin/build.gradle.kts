@@ -13,11 +13,11 @@ pluginBuilder {
 }
 
 android {
-    namespace = "com.codeonthego.ndkinstaller"
+    namespace = "org.appdevforall.ndkinstaller"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.codeonthego.ndkinstaller"
+        applicationId = "org.appdevforall.ndkinstaller"
         minSdk = 26
         targetSdk = 34
         versionCode = 1

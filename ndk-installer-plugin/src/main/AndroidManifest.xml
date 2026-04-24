@@ -7,7 +7,7 @@
 
         <meta-data
             android:name="plugin.id"
-            android:value="com.codeonthego.ndkinstaller" />
+            android:value="org.appdevforall.ndkinstaller" />
 
         <meta-data
             android:name="plugin.name"
@@ -35,7 +35,7 @@
 
         <meta-data
             android:name="plugin.main_class"
-            android:value="com.codeonthego.ndkinstaller.NdkInstallerPlugin" />
+            android:value="org.appdevforall.ndkinstaller.NdkInstallerPlugin" />
 
     </application>
 
