@@ -1,11 +1,23 @@
 rootProject.name = "ndk-installer-plugin"
 
 pluginManagement {
-    includeBuild("../../CodeOnTheGo/plugin-api/plugin-builder")
     repositories {
         google()
         mavenCentral()
         gradlePluginPortal()
+    }
+}
+
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath(files("../libs/plugin-api.jar"))
+        classpath(files("../libs/gradle-plugin.jar"))
+        classpath("com.android.tools.build:gradle:8.11.0")
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.3.0")
     }
 }
 
@@ -17,6 +29,3 @@ dependencyResolutionManagement {
         gradlePluginPortal()
     }
 }
-
-include(":plugin-api")
-project(":plugin-api").projectDir = file("../../CodeOnTheGo/plugin-api")

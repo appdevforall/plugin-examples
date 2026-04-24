@@ -1,10 +1,13 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 import java.net.URL
 import java.security.MessageDigest
 import java.net.HttpURLConnection
 
+
 plugins {
-    id("com.android.application") version "8.8.2"
-    id("org.jetbrains.kotlin.android") version "2.1.21"
+    id("com.android.application")
+    id("org.jetbrains.kotlin.android")
     id("com.itsaky.androidide.plugins.build")
 }
 
@@ -40,18 +43,17 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_17)
     }
-
-    sourceSets["main"].assets.srcDir(
-        layout.buildDirectory.dir("generated/assets")
-    )
-
 }
 
 dependencies {
-    compileOnly(project(":plugin-api"))
+    compileOnly(files("../libs/plugin-api.jar"))
+
 
     implementation("org.jetbrains.kotlin:kotlin-stdlib:2.1.21")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
