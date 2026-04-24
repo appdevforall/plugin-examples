@@ -1,0 +1,2 @@
+-keep class org.appdevforall.ndkinstaller.** { *; }
+-keep class com.itsaky.androidide.plugins.** { *; }
