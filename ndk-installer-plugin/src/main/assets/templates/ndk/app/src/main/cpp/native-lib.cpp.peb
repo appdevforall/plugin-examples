@@ -1,0 +1,9 @@
+#include <jni.h>
+#include <string>
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_${{ PACKAGE_NAME | replace({".": "_"}) }}_MainActivity_stringFromJNI(
+        JNIEnv* env,
+        jobject /* this */) {
+    return env->NewStringUTF("Hello from C++");
+}

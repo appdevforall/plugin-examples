@@ -1,0 +1,2 @@
+-keep class com.codeonthego.ndkinstaller.** { *; }
+-keep class com.itsaky.androidide.plugins.** { *; }
