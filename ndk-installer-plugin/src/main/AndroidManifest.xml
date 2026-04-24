@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application
+        android:label="NDK Installer"
+        android:theme="@android:style/Theme.Material.Light.NoActionBar">
+
+        <meta-data
+            android:name="plugin.id"
+            android:value="org.appdevforall.ndkinstaller" />
+
+        <meta-data
+            android:name="plugin.name"
+            android:value="NDK Installer" />
+
+        <meta-data
+            android:name="plugin.version"
+            android:value="${pluginVersion}" />
+
+        <meta-data
+            android:name="plugin.description"
+            android:value="Installs a bundled NDK (tar.xz) into the IDE's Android SDK on activation and removes it on deactivation." />
+
+        <meta-data
+            android:name="plugin.author"
+            android:value="App Dev for All" />
+
+        <meta-data
+            android:name="plugin.min_ide_version"
+            android:value="1.0.0" />
+
+        <meta-data
+            android:name="plugin.permissions"
+            android:value="ide.environment.write,filesystem.read,filesystem.write" />
+
+        <meta-data
+            android:name="plugin.main_class"
+            android:value="org.appdevforall.ndkinstaller.NdkInstallerPlugin" />
+
+    </application>
+
+</manifest>

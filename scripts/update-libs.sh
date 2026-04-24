@@ -108,13 +108,19 @@ echo "Updated libs/ from CodeOnTheGo@$CODEONTHEGO_SHA"
 printf "  %-20s %s\n" "plugin-api.jar"    "$(du -h "$LIBS_DIR/plugin-api.jar" | cut -f1)"
 printf "  %-20s %s\n" "gradle-plugin.jar" "$(du -h "$LIBS_DIR/gradle-plugin.jar" | cut -f1)"
 
-PLUGINS=(Beepy apk-viewer markdown-preview keystore-generator snippets)
+PLUGINS=(Beepy apk-viewer markdown-preview keystore-generator snippets ndk-installer-plugin)
 echo ""
 echo "Building all example plugins against the refreshed libs..."
 for plugin in "${PLUGINS[@]}"; do
     echo ""
     echo "→ $plugin"
-    (cd "$REPO_ROOT/$plugin" && ./gradlew --console=plain assemblePlugin)
+    (
+        cd "$REPO_ROOT/$plugin"
+        if [[ "$plugin" == "ndk-installer-plugin" ]]; then
+            ./gradlew --console=plain downloadAssets
+        fi
+        ./gradlew --console=plain assemblePlugin
+    )
 done
 echo ""
 echo "All plugins built successfully."

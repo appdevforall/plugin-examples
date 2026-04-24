@@ -1,0 +1,42 @@
+
+package ${{PACKAGE_NAME}}
+
+import androidx.appcompat.app.AppCompatActivity
+import android.os.Bundle
+import ${{PACKAGE_NAME}}.databinding.ActivityMainBinding
+
+class MainActivity : AppCompatActivity() {
+
+    private var _binding: ActivityMainBinding? = null
+    
+    private val binding: ActivityMainBinding
+      get() = checkNotNull(_binding) { "Activity has been destroyed" }
+    
+    // Declare the native method
+    private external fun stringFromJNI(): String
+
+    // Load the native library
+    companion object {
+        init {
+            System.loadLibrary("native-lib");
+        }
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+
+        // Inflate and get instance of binding
+        _binding = ActivityMainBinding.inflate(layoutInflater)
+
+        // set content view to binding's root
+        setContentView(binding.root)
+
+        // Call JNI method and display result
+        binding.textView.text = stringFromJNI()
+    }
+    
+    override fun onDestroy() {
+        super.onDestroy()
+        _binding = null
+    }
+}
