@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NDK Installer Plugin Documentation</title>
+<style>
+  :root {
+    --bg: #fdfdfd;
+    --fg: #1a1a1a;
+    --accent: #0f766e;
+    --accent-light: #e6f5f3;
+    --border: #d0d7de;
+    --code-bg: #f4f6f8;
+    --table-stripe: #f8fafb;
+    --shadow: rgba(0,0,0,0.06);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--fg);
+    background: var(--bg);
+    line-height: 1.6;
+    max-width: 52rem;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+  }
+  header { border-bottom: 3px solid var(--accent); padding-bottom: 1.2rem; margin-bottom: 2rem; }
+  header h1 { font-size: 2rem; color: var(--accent); }
+  header p.subtitle { color: #555; margin-top: 0.3rem; }
+  header .meta { font-size: 0.85rem; color: #777; margin-top: 0.5rem; }
+  nav { background: var(--accent-light); border: 1px solid var(--border); border-radius: 6px; padding: 1rem 1.5rem; margin-bottom: 2.5rem; }
+  nav h2 { font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); margin-bottom: 0.5rem; }
+  nav ol { padding-left: 1.3rem; }
+  nav li { margin: 0.25rem 0; }
+  nav a { color: var(--accent); text-decoration: none; }
+  nav a:hover { text-decoration: underline; }
+  section { margin-bottom: 2.5rem; }
+  h2 { font-size: 1.4rem; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; margin-bottom: 1rem; }
+  h3 { font-size: 1.1rem; margin: 1.2rem 0 0.5rem; }
+  p, li { margin-bottom: 0.5rem; }
+  ul, ol { padding-left: 1.4rem; }
+  code {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    background: var(--code-bg);
+    padding: 0.15em 0.35em;
+    border-radius: 3px;
+    font-size: 0.9em;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1rem 1.2rem;
+    overflow-x: auto;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    margin: 0.8rem 0 1rem;
+  }
+  pre code { background: none; padding: 0; }
+  table { width: 100%; border-collapse: collapse; margin: 0.8rem 0 1rem; font-size: 0.95rem; }
+  th, td { text-align: left; padding: 0.55rem 0.8rem; border: 1px solid var(--border); }
+  th { background: var(--accent-light); font-weight: 600; }
+  tr:nth-child(even) td { background: var(--table-stripe); }
+  .diagram {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1.2rem;
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 0.85rem;
+    line-height: 1.55;
+    overflow-x: auto;
+    white-space: pre;
+    margin: 0.8rem 0 1rem;
+  }
+  .callout {
+    background: var(--accent-light);
+    border-left: 4px solid var(--accent);
+    padding: 0.8rem 1rem;
+    border-radius: 0 6px 6px 0;
+    margin: 1rem 0;
+  }
+  .file-tree { list-style: none; padding-left: 0; font-family: monospace; font-size: 0.9rem; }
+  .file-tree ul { list-style: none; padding-left: 1.5rem; }
+  footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: 0.85rem; color: #777; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>NDK Installer Plugin</h1>
+  <p class="subtitle">Bundled NDK and CMake installer with NDK Activity project template for Code on the Go</p>
+  <div class="meta">Version 1.0.0 &middot; Author: App Dev For All &middot; Package: <code>org.appdevforall.ndkinstaller</code></div>
+</header>
+
+<nav>
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#overview">Executive Overview</a></li>
+    <li><a href="#functionality">Core Functionality</a></li>
+    <li><a href="#architecture">Technical Architecture</a></li>
+    <li><a href="#integration">Integration Points</a></li>
+    <li><a href="#deployment">Deployment &amp; Usage</a></li>
+    <li><a href="#benefits">Key Benefits</a></li>
+  </ol>
+</nav>
+
+<!-- ================================================================ -->
+<section id="overview">
+  <h2>1. Executive Overview</h2>
+  <p>
+    NDK Installer is a Code on the Go plugin that automatically installs a
+    bundled Android NDK (Native Development Kit) and CMake into the IDE's Android SDK directory when
+    activated, and cleanly removes them when deactivated. Alongside the binary
+    installation, it registers an "NDK Activity" project template that
+    scaffolds a complete Android NDK project with C++ support, JNI bindings,
+    and CMake build configuration.
+  </p>
+  <p>
+    The plugin ships a pre-packaged <code>ndk-cmake.tar.xz</code> archive as a
+    bundled asset. On activation, a background coroutine extracts this archive
+    into the IDE's Android home directory while logging progress. On
+    deactivation, the plugin removes the <code>ndk/</code> and
+    <code>cmake/</code> directories, ensuring a clean uninstall.
+  </p>
+  <p>
+    The plugin consists of a single Kotlin source file (177 lines), requires
+    <code>ide.environment.write</code>, <code>filesystem.read</code>, and
+    <code>filesystem.write</code> permissions, and demonstrates several plugin
+    capabilities: asset extraction via <code>IdeArchiveService</code>,
+    environment directory access via <code>IdeEnvironmentService</code>,
+    file management via <code>IdeFileService</code>, and project template
+    registration via <code>IdeTemplateService</code>.
+  </p>
+</section>
+
+<!-- ================================================================ -->
+<section id="functionality">
+  <h2>2. Core Functionality</h2>
+
+  <h3>NDK and CMake installation</h3>
+  <p>
+    The plugin bundles an <code>ndk-cmake.tar.xz</code> archive containing
+    pre-built NDK and CMake binaries. On activation, a coroutine launched on
+    <code>Dispatchers.IO</code> extracts this archive into the IDE's Android
+    home directory using <code>IdeArchiveService.extract()</code>. The
+    extraction reports progress in MiB via a callback:
+  </p>
+  <pre><code>val result = source.use { stream -&gt;
+    archive.extract(
+        source = stream,
+        format = ArchiveFormat.TAR_XZ,
+        destination = targetDir
+    ) { bytes, entry -&gt;
+        val mib = bytes / MIB
+        val suffix = entry?.let { " ($it)" } ?: ""
+        context.logger.debug("extract progress: ${mib} MiB$suffix")
+    }
+}</code></pre>
+  <p>
+    The result is checked for success or failure, with detailed logging in
+    either case (file count and total bytes on success, error message and
+    exception on failure).
+  </p>
+
+  <h3>Clean removal</h3>
+  <p>
+    When the plugin is deactivated, it removes both the <code>ndk/</code> and
+    <code>cmake/</code> subdirectories from the Android home directory using
+    <code>IdeFileService.delete()</code>. This ensures that disabling the
+    plugin does not leave behind orphaned binaries.
+  </p>
+
+  <h3>NDK Activity project template</h3>
+  <p>
+    The plugin registers an "NDK Activity" template via
+    <code>IdeTemplateService</code> that scaffolds a complete Android project
+    with native C++ support. The template includes:
+  </p>
+  <ul>
+    <li>A Gradle wrapper and project-level build files</li>
+    <li>An <code>app</code> module with NDK, CMake, and JNI configuration</li>
+    <li>A <code>native-lib.cpp</code> with a sample JNI function</li>
+    <li>A <code>CMakeLists.txt</code> for the native build</li>
+    <li>Both Java and Kotlin <code>MainActivity</code> variants</li>
+    <li>Full Android resource set (layouts, drawables, launcher icons, themes)</li>
+  </ul>
+
+  <h3>Template parameters</h3>
+  <p>
+    The template accepts user-supplied and system-injected parameters that are
+    substituted into <code>.peb</code> (Pebble) template files at project
+    creation time:
+  </p>
+  <table>
+    <thead>
+      <tr><th>Category</th><th>Parameter</th><th>Template variable</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Required</td><td>App name</td><td><code>APP_NAME</code></td></tr>
+      <tr><td>Required</td><td>Package name</td><td><code>PACKAGE_NAME</code></td></tr>
+      <tr><td>Required</td><td>Save location</td><td><code>SAVE_LOCATION</code></td></tr>
+      <tr><td>Optional</td><td>Language (Java/Kotlin)</td><td><code>LANGUAGE</code></td></tr>
+      <tr><td>Optional</td><td>Minimum SDK</td><td><code>MIN_SDK</code></td></tr>
+      <tr><td>System</td><td>AGP version</td><td><code>AGP_VERSION</code></td></tr>
+      <tr><td>System</td><td>Kotlin version</td><td><code>KOTLIN_VERSION</code></td></tr>
+      <tr><td>System</td><td>Gradle version</td><td><code>GRADLE_VERSION</code></td></tr>
+      <tr><td>System</td><td>Compile SDK / Target SDK</td><td><code>COMPILE_SDK</code>, <code>TARGET_SDK</code></td></tr>
+      <tr><td>System</td><td>Java compatibility</td><td><code>JAVA_SOURCE_COMPAT</code>, <code>JAVA_TARGET_COMPAT</code>, <code>JAVA_TARGET</code></td></tr>
+    </tbody>
+  </table>
+
+  <h3>JNI bridge</h3>
+  <p>
+    The generated <code>native-lib.cpp</code> contains a sample JNI function
+    that returns a string from C++. The package name is transformed for JNI
+    naming using a Pebble filter:
+  </p>
+  <pre><code>extern "C" JNIEXPORT jstring JNICALL
+Java_${{ PACKAGE_NAME | replace({".": "_"}) }}_MainActivity_stringFromJNI(
+        JNIEnv* env,
+        jobject /* this */) {
+    return env-&gt;NewStringUTF("Hello from C++");
+}</code></pre>
+  <p>
+    The corresponding CMake configuration links against the Android
+    <code>log</code> library and builds the native code as a shared library
+    (<code>native-lib.so</code>).
+  </p>
+</section>
+
+<!-- ================================================================ -->
+<section id="architecture">
+  <h2>3. Technical Architecture</h2>
+
+  <h3>File layout</h3>
+  <ul class="file-tree">
+    <li>ndk-installer-plugin/
+      <ul>
+        <li>build.gradle.kts</li>
+        <li>proguard-rules.pro</li>
+        <li>src/main/
+          <ul>
+            <li>AndroidManifest.xml</li>
+            <li>kotlin/org/appdevforall/ndkinstaller/
+              <ul>
+                <li><strong>NdkInstallerPlugin.kt</strong> &mdash; plugin entry point, lifecycle, NDK install/removal</li>
+              </ul>
+            </li>
+            <li>assets/
+              <ul>
+                <li>ndk-cmake.tar.xz &mdash; bundled NDK and CMake binaries</li>
+                <li>templates/ndk/ &mdash; project template files
+                  <ul>
+                    <li>template/ &mdash; template.json, thumb.png</li>
+                    <li>*.peb &mdash; Pebble templates for Gradle files</li>
+                    <li>app/ &mdash; app module template (build, source, resources)</li>
+                    <li>app/src/main/cpp/ &mdash; native-lib.cpp.peb, CMakeLists.txt</li>
+                  </ul>
+                </li>
+              </ul>
+            </li>
+          </ul>
+        </li>
+      </ul>
+    </li>
+  </ul>
+
+  <h3>Class overview</h3>
+  <table>
+    <thead>
+      <tr><th>Class</th><th>Role</th><th>Key interfaces</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>NdkInstallerPlugin</code></td>
+        <td>Plugin entry point. Manages NDK install/uninstall lifecycle via coroutines, registers the NDK Activity project template.</td>
+        <td><code>IPlugin</code></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Plugin lifecycle</h3>
+  <table>
+    <thead>
+      <tr><th>Method</th><th>Behaviour</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>initialize()</code></td>
+        <td>Stores <code>PluginContext</code>, obtains <code>IdeTemplateService</code> reference</td>
+      </tr>
+      <tr>
+        <td><code>activate()</code></td>
+        <td>Launches NDK installation coroutine on <code>Dispatchers.IO</code>, registers NDK template</td>
+      </tr>
+      <tr>
+        <td><code>deactivate()</code></td>
+        <td>Cancels install job, removes NDK and CMake directories, unregisters template</td>
+      </tr>
+      <tr>
+        <td><code>dispose()</code></td>
+        <td>Cancels coroutine scope, nulls out <code>templateService</code></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Data flow</h3>
+  <div class="diagram">
+  Plugin activation
+        |
+        +--&gt; [coroutine on Dispatchers.IO]
+        |         |
+        |         | openPluginAsset("ndk-cmake.tar.xz")
+        |         v
+        |    IdeArchiveService.extract()
+        |         |
+        |         | TAR_XZ --&gt; Android home directory
+        |         v
+        |    ndk/ and cmake/ installed
+        |
+        +--&gt; IdeTemplateService.registerTemplate()
+                  |
+                  v
+             "NDK Activity" available in new-project wizard
+
+  Plugin deactivation
+        |
+        +--&gt; IdeFileService.delete(ndk/)
+        +--&gt; IdeFileService.delete(cmake/)
+        +--&gt; IdeTemplateService.unregisterTemplate("NDK.cgt")</div>
+
+  <h3>NDK installation</h3>
+  <pre><code>private fun installNdk() {
+    val env = context.services.get(IdeEnvironmentService::class.java)
+        ?: return fail("IdeEnvironmentService unavailable")
+    val archive = context.services.get(IdeArchiveService::class.java)
+        ?: return fail("IdeArchiveService unavailable")
+
+    val targetDir = File(env.getAndroidHomeDirectory().absolutePath)
+
+    val source = context.resources.openPluginAsset(NDK_ARCHIVE_NAME)
+        ?: return fail("Bundled asset not found: $NDK_ARCHIVE_NAME")
+
+    context.logger.info("Installing NDK to ${targetDir.absolutePath}")
+    val result = source.use { stream -&gt;
+        archive.extract(
+            source = stream,
+            format = ArchiveFormat.TAR_XZ,
+            destination = targetDir
+        ) { bytes, entry -&gt;
+            val mib = bytes / MIB
+            val suffix = entry?.let { " ($it)" } ?: ""
+            context.logger.debug("extract progress: ${mib} MiB$suffix")
+        }
+    }
+
+    when (result) {
+        is ExtractResult.Success -&gt; context.logger.info(
+            "NDK install complete: ${result.filesExtracted} files, " +
+            "${result.bytesWritten / MIB} MiB"
+        )
+        is ExtractResult.Failure -&gt; context.logger.error(
+            "NDK install failed: ${result.error.message}",
+            result.error
+        )
+    }
+}</code></pre>
+
+  <h3>NDK removal</h3>
+  <pre><code>private fun removeNdk() {
+    val env = context.services.get(IdeEnvironmentService::class.java) ?: return
+    val file = context.services.get(IdeFileService::class.java) ?: return
+    val ndkDir = File(env.getAndroidHomeDirectory(), NDK_SUBDIR)
+    if (ndkDir.exists()) {
+        val deleted = file.delete(ndkDir)
+        context.logger.info("ndk removal from ${ndkDir.absolutePath}: $deleted")
+    }
+    val cmakeDir = File(env.getAndroidHomeDirectory(), CMAKE_SUBDIR)
+    if (cmakeDir.exists()) {
+        val deleted = file.delete(cmakeDir)
+        context.logger.info("cmake removal from ${cmakeDir.absolutePath}: $deleted")
+    }
+}</code></pre>
+
+  <h3>Asset download (build-time)</h3>
+  <p>
+    The <code>ndk-cmake.tar.xz</code> archive is not checked into version
+    control. A custom Gradle task <code>downloadAssets</code> fetches it from
+    the release server and verifies the MD5 checksum before accepting it:
+  </p>
+  <pre><code>val downloadAssets by tasks.registering {
+    doLast {
+        val archiveUrl = "https://www.appdevforall.org/dev-assets/release/v8/ndk-cmake.tar.xz"
+        val md5Url     = "https://www.appdevforall.org/dev-assets/release/v8/ndk-cmake.tar.xz.md5"
+
+        val archiveBytes = httpDownload(archiveUrl)
+        archiveFile.writeBytes(archiveBytes)
+
+        val expected = httpDownload(md5Url).toString(Charsets.UTF_8).trim()
+        val actual   = md5Of(archiveFile)
+
+        if (!expected.equals(actual, ignoreCase = true))
+            throw GradleException("MD5 checksum mismatch")
+    }
+}</code></pre>
+
+  <h3>Build configuration</h3>
+  <table>
+    <tr><th>Setting</th><th>Value</th></tr>
+    <tr><td>Gradle plugin</td><td><code>com.itsaky.androidide.plugins.build</code></td></tr>
+    <tr><td>Plugin name</td><td><code>ndk-installer</code></td></tr>
+    <tr><td>Compile / Target SDK</td><td>34</td></tr>
+    <tr><td>Min SDK</td><td>26</td></tr>
+    <tr><td>Java / Kotlin target</td><td>17</td></tr>
+    <tr><td>ProGuard</td><td>Disabled (<code>isMinifyEnabled = false</code>)</td></tr>
+    <tr><td>Plugin API</td><td><code>compileOnly</code> via <code>libs/plugin-api.jar</code></td></tr>
+    <tr><td>Coroutines</td><td><code>kotlinx-coroutines-core:1.9.0</code></td></tr>
+    <tr><td>No-compress</td><td><code>.xz</code> files (preserves archive integrity)</td></tr>
+    <tr><td>Output format</td><td><code>.cgp</code> package</td></tr>
+  </table>
+
+  <h3>Generated project configuration</h3>
+  <p>
+    The NDK Activity template generates a project with these native build settings:
+  </p>
+  <table>
+    <tr><th>Setting</th><th>Value</th></tr>
+    <tr><td>NDK version</td><td><code>29.0.14206865</code></td></tr>
+    <tr><td>CMake minimum</td><td><code>3.10.2</code></td></tr>
+    <tr><td>C++ standard</td><td>C++17</td></tr>
+    <tr><td>ABI filter</td><td><code>arm64-v8a</code></td></tr>
+    <tr><td>Native library</td><td><code>native-lib</code> (shared)</td></tr>
+    <tr><td>Linked libraries</td><td>Android <code>log</code></td></tr>
+  </table>
+</section>
+
+<!-- ================================================================ -->
+<section id="integration">
+  <h2>4. Integration Points</h2>
+  <p>
+    NDK Installer interacts with the host IDE through four services. It does
+    not modify any main-app source files &mdash; all integration happens at
+    runtime through the plugin framework.
+  </p>
+
+  <h3>4.1 Plugin lifecycle (<code>IPlugin</code>)</h3>
+  <p>
+    <code>NdkInstallerPlugin</code> implements <code>IPlugin</code>. The
+    manifest declares the entry point:
+  </p>
+  <pre><code>&lt;meta-data android:name="plugin.main_class"
+           android:value="org.appdevforall.ndkinstaller.NdkInstallerPlugin" /&gt;</code></pre>
+  <p>
+    <code>initialize()</code> stores the <code>PluginContext</code> and obtains
+    <code>IdeTemplateService</code>. <code>activate()</code> launches the
+    background NDK install and registers the template.
+    <code>deactivate()</code> cancels installation, removes binaries, and
+    unregisters the template. <code>dispose()</code> cancels the coroutine
+    scope.
+  </p>
+
+  <h3>4.2 Environment access (<code>IdeEnvironmentService</code>)</h3>
+  <p>
+    The plugin uses <code>IdeEnvironmentService.getAndroidHomeDirectory()</code>
+    to locate the Android SDK root. This is the target directory for both
+    NDK extraction and removal. The plugin must declare
+    <code>ide.environment.write</code> permission to access this service.
+  </p>
+
+  <h3>4.3 Archive extraction (<code>IdeArchiveService</code>)</h3>
+  <p>
+    <code>IdeArchiveService.extract()</code> handles decompression and
+    extraction of the <code>TAR_XZ</code> archive. The service accepts a
+    source <code>InputStream</code>, a format enum, a destination directory,
+    and an optional progress callback reporting bytes extracted and current
+    entry name.
+  </p>
+
+  <h3>4.4 File management (<code>IdeFileService</code>)</h3>
+  <p>
+    <code>IdeFileService.delete()</code> recursively removes the
+    <code>ndk/</code> and <code>cmake/</code> directories during
+    deactivation. This provides a safe, IDE-managed file deletion.
+  </p>
+
+  <h3>4.5 Template registration (<code>IdeTemplateService</code>)</h3>
+  <p>
+    The plugin uses the template service's builder API to assemble and register
+    a <code>.cgt</code> template package. The builder supports:
+  </p>
+  <ul>
+    <li><code>description()</code> &mdash; sets the template description</li>
+    <li><code>showPackageNameOption()</code>, <code>showLanguageOption()</code>,
+        <code>showMinSdkOption()</code> &mdash; enable creation wizard fields</li>
+    <li><code>thumbnailFromAssets()</code> &mdash; sets the template thumbnail</li>
+    <li><code>addStaticFromAssets()</code> &mdash; registers template files from
+        bundled assets</li>
+    <li><code>build()</code> &mdash; produces the <code>.cgt</code> package</li>
+  </ul>
+  <p>
+    On deactivation, the template is unregistered via
+    <code>unregisterTemplate("NDK.cgt")</code>.
+  </p>
+
+  <h3>4.6 Services consumed</h3>
+  <table>
+    <thead>
+      <tr><th>Service</th><th>Usage</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>IdeEnvironmentService</code></td>
+        <td><code>getAndroidHomeDirectory()</code> &mdash; locates Android SDK root for NDK installation</td>
+      </tr>
+      <tr>
+        <td><code>IdeArchiveService</code></td>
+        <td><code>extract()</code> &mdash; decompresses and extracts the bundled <code>ndk-cmake.tar.xz</code></td>
+      </tr>
+      <tr>
+        <td><code>IdeFileService</code></td>
+        <td><code>delete()</code> &mdash; removes NDK and CMake directories on deactivation</td>
+      </tr>
+      <tr>
+        <td><code>IdeTemplateService</code></td>
+        <td><code>registerTemplate()</code> / <code>unregisterTemplate()</code> &mdash; manages the NDK Activity template</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>4.7 Permissions</h3>
+  <p>
+    The manifest declares three permissions:
+  </p>
+  <table>
+    <thead>
+      <tr><th>Permission</th><th>Purpose</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>ide.environment.write</code></td><td>Write access to the IDE's Android SDK directories</td></tr>
+      <tr><td><code>filesystem.read</code></td><td>Read bundled assets and template files</td></tr>
+      <tr><td><code>filesystem.write</code></td><td>Write extracted NDK/CMake binaries to disk</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Integration summary</h3>
+  <div class="diagram">
+                    Code on the Go IDE Host
+  +------------------------------------------------------+
+  |                                                      |
+  |  IdeEnvironmentService -- getAndroidHomeDirectory()  |
+  |  IdeArchiveService     -- extract(TAR_XZ)            |
+  |  IdeFileService        -- delete(directory)          |
+  |  IdeTemplateService    -- register/unregister        |
+  |                                                      |
+  +--+-------------------+-------------------+-----------+
+     |                   |                   |
+     v                   v                   v
+  Android home      archive system      template registry
+     |                   ^                   ^
+     |                   |                   |
+  +--+-------------------+-------------------+-----------+
+  |               NdkInstallerPlugin                     |
+  |                                                      |
+  |  activate()  --&gt; installNdk() [coroutine]            |
+  |              --&gt; registerNdkTemplate()               |
+  |  deactivate() --&gt; removeNdk()                        |
+  |               --&gt; unregisterTemplate()               |
+  +------------------------------------------------------+
+                         |
+             extracts ndk-cmake.tar.xz
+                         |
+                         v
+              ndk/ and cmake/ in Android home</div>
+</section>
+
+<!-- ================================================================ -->
+<section id="deployment">
+  <h2>5. Deployment &amp; Usage</h2>
+
+  <h3>Downloading assets</h3>
+  <p>
+    Before building, fetch the bundled NDK/CMake archive:
+  </p>
+  <pre><code>./gradlew :ndk-installer-plugin:downloadAssets</code></pre>
+  <p>
+    This downloads <code>ndk-cmake.tar.xz</code> from the release server,
+    verifies the MD5 checksum, and places it in
+    <code>src/main/assets/</code>.
+  </p>
+
+  <h3>Building</h3>
+  <pre><code>./gradlew :ndk-installer-plugin:assemblePluginDebug</code></pre>
+  <p>
+    This produces a <code>.cgp</code> plugin package under
+    <code>ndk-installer-plugin/build/outputs/</code>. The build configuration
+    sets <code>noCompress += listOf("xz")</code> to prevent the Android asset
+    system from re-compressing the archive.
+  </p>
+
+  <h3>Installation</h3>
+  <ol>
+    <li>Open Code on the Go's plugin manager.</li>
+    <li>Import the <code>.cgp</code> file.</li>
+    <li>The IDE discovers <code>NdkInstallerPlugin</code> via the manifest
+        metadata and activates it automatically.</li>
+    <li>The NDK and CMake binaries are extracted in the background &mdash;
+        progress is logged to the plugin logger.</li>
+  </ol>
+
+  <h3>Creating an NDK project</h3>
+  <ol>
+    <li>Open the new-project wizard in Code on the Go.</li>
+    <li>Select the "NDK Activity" template.</li>
+    <li>Enter the app name, package name, and save location.</li>
+    <li>Optionally choose the language (Java or Kotlin) and minimum SDK.</li>
+    <li>The wizard generates a complete project with C++ source, JNI bindings,
+        CMake configuration, and a ready-to-build Gradle setup.</li>
+  </ol>
+
+  <h3>Uninstallation</h3>
+  <p>
+    Deactivating or removing the plugin automatically deletes the
+    <code>ndk/</code> and <code>cmake/</code> directories from the Android
+    home and unregisters the NDK Activity template. No manual cleanup is
+    required.
+  </p>
+
+  <h3>Runtime requirements</h3>
+  <table>
+    <tr><th>Requirement</th><th>Value</th></tr>
+    <tr><td>Min Android version</td><td>API 26 (Android 8)</td></tr>
+    <tr><td>Min IDE version</td><td>1.0.0</td></tr>
+    <tr><td>Permissions</td><td><code>ide.environment.write</code>, <code>filesystem.read</code>, <code>filesystem.write</code></td></tr>
+    <tr><td>Network access</td><td>Not required at runtime (assets are bundled)</td></tr>
+    <tr><td>Disk space</td><td>Sufficient for NDK/CMake extraction (~300+ MiB)</td></tr>
+  </table>
+</section>
+
+<!-- ================================================================ -->
+<section id="benefits">
+  <h2>6. Key Benefits</h2>
+  <ul>
+    <li><strong>Zero-configuration NDK setup.</strong> Developers get a working
+        NDK and CMake installation simply by enabling the plugin &mdash; no
+        manual downloads, no PATH configuration, no version hunting.</li>
+    <li><strong>Clean install/uninstall.</strong> The plugin fully manages the
+        NDK lifecycle: installation on activation, removal on deactivation.
+        There are no orphaned binaries or lingering directories after the
+        plugin is disabled.</li>
+    <li><strong>Ready-to-build project template.</strong> The NDK Activity
+        template scaffolds a complete project with JNI, CMake, Gradle, and
+        proper ABI configuration. Developers can build and run native C++ code
+        immediately after project creation.</li>
+    <li><strong>Background installation.</strong> NDK extraction runs on a
+        background coroutine (<code>Dispatchers.IO</code>), so the IDE
+        remains responsive during the multi-megabyte extraction process.</li>
+    <li><strong>Integrity verification.</strong> The build-time
+        <code>downloadAssets</code> task verifies the archive's MD5 checksum,
+        ensuring the bundled NDK has not been corrupted or tampered with.</li>
+    <li><strong>Compact implementation.</strong> The entire plugin is a single
+        177-line Kotlin file, making it a clear reference for building plugins
+        that bundle and install large binary assets, interact with the IDE's
+        environment and archive services, and register project templates.</li>
+  </ul>
+</section>
+
+<footer>
+  NDK Installer Plugin Documentation &middot; Version 1.0.0 &middot; org.appdevforall.ndkinstaller
+</footer>
+
+</body>
+</html>
