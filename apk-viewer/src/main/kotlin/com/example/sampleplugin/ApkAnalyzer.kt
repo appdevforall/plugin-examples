@@ -11,47 +11,51 @@ import com.itsaky.androidide.plugins.extensions.EditorTabItem
 import com.itsaky.androidide.plugins.extensions.NavigationItem
 import com.itsaky.androidide.plugins.extensions.FileOpenExtension
 import com.itsaky.androidide.plugins.extensions.FileTabMenuItem
+import com.itsaky.androidide.plugins.extensions.DocumentationExtension
+import com.itsaky.androidide.plugins.extensions.PluginTooltipEntry
+import com.itsaky.androidide.plugins.extensions.PluginTooltipButton
 import com.itsaky.androidide.plugins.services.IdeEditorTabService
 import com.example.sampleplugin.R
 import com.example.sampleplugin.fragments.ApkAnalyzerFragment
 import java.io.File
 
 /**
- * APK Viewer Plugin
- * Provides APK analysis functionality via main menu toolbar and bottom sheet
+ * APK Analyzer plugin entry point. Provides APK structural analysis via the
+ * main editor tab, the bottom sheet, the sidebar, and the toolbar menu.
  */
-class ApkViewer : IPlugin, UIExtension, EditorTabExtension, FileOpenExtension {
+class ApkAnalyzer : IPlugin, UIExtension, EditorTabExtension, FileOpenExtension, DocumentationExtension {
 
     private lateinit var context: PluginContext
     private var pendingAnalysisFile: File? = null
 
     companion object {
         private const val TAB_ID = "apk_analyzer_main_tab"
+        private const val HELP_TOOLTIP_TAG = "apk_analyzer.help"
     }
 
     override fun initialize(context: PluginContext): Boolean {
         return try {
             this.context = context
-            context.logger.info("ApkViewer: Plugin initialized successfully")
+            context.logger.info("ApkAnalyzer: Plugin initialized successfully")
             true
         } catch (e: Exception) {
-            context.logger.error("ApkViewer: Plugin initialization failed", e)
+            context.logger.error("ApkAnalyzer: Plugin initialization failed", e)
             false
         }
     }
 
     override fun activate(): Boolean {
-        context.logger.info("ApkViewer: Activating plugin")
+        context.logger.info("ApkAnalyzer: Activating plugin")
         return true
     }
 
     override fun deactivate(): Boolean {
-        context.logger.info("ApkViewer: Deactivating plugin")
+        context.logger.info("ApkAnalyzer: Deactivating plugin")
         return true
     }
 
     override fun dispose() {
-        context.logger.info("ApkViewer: Disposing plugin")
+        context.logger.info("ApkAnalyzer: Disposing plugin")
     }
 
     // UIExtension - Main menu toolbar item
@@ -62,6 +66,7 @@ class ApkViewer : IPlugin, UIExtension, EditorTabExtension, FileOpenExtension {
                 title = "APK Analyzer",
                 isEnabled = true,
                 isVisible = true,
+                tooltipTag = HELP_TOOLTIP_TAG,
                 action = {
                     context.logger.info("APK Analyzer menu item clicked")
                     openApkAnalyzerTab()
@@ -72,14 +77,14 @@ class ApkViewer : IPlugin, UIExtension, EditorTabExtension, FileOpenExtension {
 
     // UIExtension - Bottom sheet tab
     override fun getEditorTabs(): List<TabItem> {
-        context.logger.debug("ApkViewer: getEditorTabs() called")
+        context.logger.debug("ApkAnalyzer: getEditorTabs() called")
 
         return listOf(
             TabItem(
-                id = "apk_viewer_tab",
+                id = "apk_analyzer_tab",
                 title = "APK Analyzer",
                 fragmentFactory = {
-                    context.logger.debug("ApkViewer: Creating ApkAnalyzerFragment for bottom sheet")
+                    context.logger.debug("ApkAnalyzer: Creating ApkAnalyzerFragment for bottom sheet")
                     ApkAnalyzerFragment()
                 },
                 isEnabled = true,
@@ -100,7 +105,26 @@ class ApkViewer : IPlugin, UIExtension, EditorTabExtension, FileOpenExtension {
                 isVisible = true,
                 group = "tools",
                 order = 0,
+                tooltipTag = HELP_TOOLTIP_TAG,
                 action = { openApkAnalyzerTab() }
+            )
+        )
+    }
+
+    override fun getTooltipCategory(): String = "plugin_${context.pluginId}"
+
+    override fun getTooltipEntries(): List<PluginTooltipEntry> {
+        return listOf(
+            PluginTooltipEntry(
+                tag = HELP_TOOLTIP_TAG,
+                summary = "This plugin provides detailed structural analysis of an APK within Code on the Go without requiring additional external tools.",
+                buttons = listOf(
+                    PluginTooltipButton(
+                        description = "Learn More",
+                        uri = "i/plugins-adfa.html",
+                        directPath = true,
+                    )
+                )
             )
         )
     }
@@ -165,7 +189,7 @@ class ApkViewer : IPlugin, UIExtension, EditorTabExtension, FileOpenExtension {
 
         return listOf(
             FileTabMenuItem(
-                id = "apk_viewer.analyze",
+                id = "apk_analyzer.analyze",
                 title = "Analyze APK",
                 order = 0,
                 action = {

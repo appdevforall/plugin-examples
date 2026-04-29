@@ -27,4 +27,4 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "apk-viewer"
+rootProject.name = "apk-analyzer"
