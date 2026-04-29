@@ -12,6 +12,7 @@ set -euo pipefail
 
 REPO_URL="https://github.com/appdevforall/CodeOnTheGo.git"
 DEFAULT_REF="stage"
+PLUGIN_BUILDER_ID="com.itsaky.androidide.plugins.build"
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 LIBS_DIR="$REPO_ROOT/libs"
@@ -108,15 +109,28 @@ echo "Updated libs/ from CodeOnTheGo@$CODEONTHEGO_SHA"
 printf "  %-20s %s\n" "plugin-api.jar"    "$(du -h "$LIBS_DIR/plugin-api.jar" | cut -f1)"
 printf "  %-20s %s\n" "gradle-plugin.jar" "$(du -h "$LIBS_DIR/gradle-plugin.jar" | cut -f1)"
 
-PLUGINS=(Beepy apk-viewer markdown-preview keystore-generator snippets ndk-installer-plugin)
+PLUGINS=()
+for build_file in "$REPO_ROOT"/*/build.gradle.kts; do
+    [ -f "$build_file" ] || continue
+    if grep -qF "$PLUGIN_BUILDER_ID" "$build_file"; then
+        PLUGINS+=("$(basename "$(dirname "$build_file")")")
+    fi
+done
+
+if [ "${#PLUGINS[@]}" -eq 0 ]; then
+    echo "Error: no example plugins discovered (looked for sibling dirs whose build.gradle.kts applies $PLUGIN_BUILDER_ID)." >&2
+    exit 1
+fi
+
 echo ""
+echo "Discovered example plugins: ${PLUGINS[*]}"
 echo "Building all example plugins against the refreshed libs..."
 for plugin in "${PLUGINS[@]}"; do
     echo ""
     echo "→ $plugin"
     (
         cd "$REPO_ROOT/$plugin"
-        if [[ "$plugin" == "ndk-installer-plugin" ]]; then
+        if grep -q 'downloadAssets' build.gradle.kts; then
             ./gradlew --console=plain downloadAssets
         fi
         ./gradlew --console=plain assemblePlugin

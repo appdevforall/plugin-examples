@@ -12,7 +12,7 @@ permissions:
   contents: write
 
 jobs:
-  update-libs:
+  release:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -31,54 +31,19 @@ jobs:
           cache-disabled: true
           add-job-summary: 'never'
 
+      - name: Compute release tag
+        id: tag
+        env:
+          RUN_NUMBER: ${{ github.run_number }}
+        run: echo "name=build-$(date -u +%Y-%m-%d)-${RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+
       - name: Run update-libs script
         env:
-          REF: ${{ github.event.inputs.ref }}
+          REF: ${{ inputs.ref }}
         run: ./scripts/update-libs.sh --ref "$REF"
 
-      - name: Upload Beepy CGP
-        uses: actions/upload-artifact@v4
-        with:
-          name: beepy
-          path: Beepy/build/plugin/*.cgp
-          if-no-files-found: error
-
-      - name: Upload apk-viewer CGP
-        uses: actions/upload-artifact@v4
-        with:
-          name: apk-viewer
-          path: apk-viewer/build/plugin/*.cgp
-          if-no-files-found: error
-
-      - name: Upload markdown-preview CGP
-        uses: actions/upload-artifact@v4
-        with:
-          name: markdown-preview
-          path: markdown-preview/build/plugin/*.cgp
-          if-no-files-found: error
-
-      - name: Upload keystore-generator CGP
-        uses: actions/upload-artifact@v4
-        with:
-          name: keystore-generator
-          path: keystore-generator/build/plugin/*.cgp
-          if-no-files-found: error
-
-      - name: Upload snippets CGP
-        uses: actions/upload-artifact@v4
-        with:
-          name: snippets
-          path: snippets/build/plugin/*.cgp
-          if-no-files-found: error
-
-      - name: Upload ndk-installer CGP
-        uses: actions/upload-artifact@v4
-        with:
-          name: ndk-installer
-          path: ndk-installer-plugin/build/plugin/*.cgp
-          if-no-files-found: error
-
       - name: Commit updated jars
+        id: commit
         run: |
           sha=$(git -C .cache/CodeOnTheGo rev-parse --short HEAD)
           git config user.name "ADFA"
@@ -86,7 +51,18 @@ jobs:
           git add libs/
           if git diff --cached --quiet; then
             echo "No changes to libs/ — nothing to commit."
-            exit 0
+          else
+            git commit -m "chore: update libs from CodeOnTheGo@${sha}"
+            git push
           fi
-          git commit -m "chore: update libs from CodeOnTheGo@${sha}"
-          git push
+          echo "codeonthego_sha=${sha}" >> "$GITHUB_OUTPUT"
+          echo "head_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.name }}
+          target_commitish: ${{ steps.commit.outputs.head_sha }}
+          body: Built against CodeOnTheGo@${{ steps.commit.outputs.codeonthego_sha }}.
+          fail_on_unmatched_files: true
+          files: '*/build/plugin/*.cgp'
