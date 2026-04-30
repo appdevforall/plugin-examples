@@ -12,7 +12,7 @@
 
         <meta-data
             android:name="plugin.name"
-            android:value="APK Viewer" />
+            android:value="APK Analyzer" />
 
         <meta-data
             android:name="plugin.version"
