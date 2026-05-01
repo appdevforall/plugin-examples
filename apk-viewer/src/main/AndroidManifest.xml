@@ -8,11 +8,11 @@
         <!-- Plugin metadata -->
         <meta-data
             android:name="plugin.id"
-            android:value="com.example.apkviewer" />
+            android:value="com.example.apkanalyzer" />
 
         <meta-data
             android:name="plugin.name"
-            android:value="APK Viewer" />
+            android:value="APK Analyzer" />
 
         <meta-data
             android:name="plugin.version"
@@ -20,7 +20,7 @@
 
         <meta-data
             android:name="plugin.description"
-            android:value="Analyze APK structure, contents, and metadata. View file sizes, native libraries, resources, and compression details." />
+            android:value="See a structural analysis of your APK." />
 
         <meta-data
             android:name="plugin.author"
@@ -36,11 +36,12 @@
 
         <meta-data
             android:name="plugin.main_class"
-            android:value="com.example.sampleplugin.ApkViewer" />
+            android:value="com.example.sampleplugin.ApkAnalyzer" />
 
         <meta-data
             android:name="plugin.sidebar_items"
             android:value="1" />
+
 
     </application>
 

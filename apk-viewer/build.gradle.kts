@@ -7,7 +7,7 @@ plugins {
 }
 
 pluginBuilder {
-    pluginName = "apk-viewer"
+    pluginName = "apk-analyzer"
 }
 
 android {
