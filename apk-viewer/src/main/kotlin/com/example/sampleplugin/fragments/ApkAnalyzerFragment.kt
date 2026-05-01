@@ -37,7 +37,7 @@ data class TableSection(
 class ApkAnalyzerFragment : Fragment() {
 
     companion object {
-        private const val PLUGIN_ID = "com.example.apkviewer"
+        private const val PLUGIN_ID = "com.example.apkanalyzer"
         private const val MAX_LARGE_FILES_DISPLAYED = 10
         private const val FALLBACK_SURFACE = 0xFFFFFBFE.toInt()
         private const val FALLBACK_SURFACE_VARIANT = 0xFFE7E0EC.toInt()
