@@ -1,9 +1,11 @@
 package com.appdevforall.keygen.plugin.fragments
 
+import android.graphics.Rect
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
@@ -97,6 +99,7 @@ class KeystoreGeneratorFragment : Fragment(), BuildStatusListener {
         super.onViewCreated(view, savedInstanceState)
         initializeViews(view)
         setupClickListeners()
+        setupFocusScroll()
         updateButtonStates()
     }
 
@@ -172,6 +175,33 @@ class KeystoreGeneratorFragment : Fragment(), BuildStatusListener {
                 showToast(getString(R.string.docs_not_available))
             }
             true
+        }
+    }
+
+    private fun setupFocusScroll() {
+        val fields = arrayOf<EditText>(
+            keystoreNameInput,
+            keystorePasswordInput,
+            keyAliasInput,
+            keyPasswordInput,
+            certificateNameInput,
+            organizationalUnitInput,
+            organizationInput,
+            cityInput,
+            stateInput,
+            countryInput
+        )
+        for (field in fields) {
+            field.setOnFocusChangeListener { focused, hasFocus ->
+                if (hasFocus) {
+                    focused.post {
+                        focused.requestRectangleOnScreen(
+                            Rect(0, 0, focused.width, focused.height),
+                            false
+                        )
+                    }
+                }
+            }
         }
     }
 
