@@ -66,11 +66,11 @@ class ApkAnalyzer : IPlugin, UIExtension, EditorTabExtension, FileOpenExtension,
                 title = "APK Analyzer",
                 isEnabled = true,
                 isVisible = true,
-                tooltipTag = HELP_TOOLTIP_TAG,
                 action = {
                     context.logger.info("APK Analyzer menu item clicked")
                     openApkAnalyzerTab()
-                }
+                },
+                tooltipTag = HELP_TOOLTIP_TAG,
             )
         )
     }
