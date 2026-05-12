@@ -70,6 +70,11 @@ dependencies {
     implementation("org.jetbrains.kotlin:kotlin-stdlib:2.3.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
+    // OkHttp for the xkcd JSON endpoint + image fetch.
+    // Kept tiny and dependency-free — no Glide/Retrofit, since this plugin is a
+    // teaching example and we want the network layer to read top-to-bottom.
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
     testImplementation("junit:junit:4.13.2")
 }
 
