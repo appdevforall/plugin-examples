@@ -75,6 +75,16 @@ class XkcdPanelFragment : Fragment() {
      * Raw PNG bytes of the currently-displayed comic. Kept in memory so a
      * triple-tap can copy the image to the clipboard without re-downloading
      * or re-encoding the rendered Bitmap.
+     *
+     * **Tradeoff worth knowing if you copy this pattern:** this pins up to
+     * `MAX_IMAGE_BYTES` (5 MB) on the heap for the Fragment's lifetime. On a
+     * 2 GB device that's a noticeable allocation. Alternatives:
+     *   - re-fetch on triple-tap (slow, requires network)
+     *   - re-compress the rendered `Bitmap` back to PNG on demand (CPU spike)
+     *   - write to disk on every fetch (the old approach — adds I/O on success
+     *     path, was removed for simplicity)
+     * The in-memory buffer is the right call for a demo plugin; if you write
+     * a plugin that holds multiple images, reconsider.
      */
     private var lastBytes: ByteArray? = null
 
