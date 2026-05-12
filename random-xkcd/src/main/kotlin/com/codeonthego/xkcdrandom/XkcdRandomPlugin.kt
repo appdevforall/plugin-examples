@@ -76,7 +76,8 @@ class XkcdRandomPlugin : IPlugin, UIExtension, DocumentationExtension {
             id = TAB_ID,
             title = "XKCD",
             fragmentFactory = { XkcdPanelFragment() },
-            order = 200
+            order = 200,
+            tooltipTag = TOOLTIP_TAG_TAB
         )
     )
 
