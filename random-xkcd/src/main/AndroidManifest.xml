@@ -19,6 +19,10 @@
             android:value="${pluginVersion}" />
 
         <meta-data
+            android:name="plugin.description"
+            android:value="A random xkcd comic in your bottom sheet. Tap for a new one, double-tap to copy URL, triple-tap to copy image. Demo plugin: see Tier 3 docs for a code walkthrough." />
+
+        <meta-data
             android:name="plugin.author"
             android:value="Code on the Go Team" />
 
@@ -41,6 +45,17 @@
         <meta-data
             android:name="plugin.main_class"
             android:value="com.codeonthego.xkcdrandom.XkcdRandomPlugin" />
+
+        <!-- Plugin Manager icons. Required for debug builds; release builds
+             skip this check. Paths are inside the .cgp (APK) zip — assets/
+             entries land at exactly this path because the Android build
+             system bundles assets verbatim. -->
+        <meta-data
+            android:name="plugin.icon_day"
+            android:value="assets/icon_day.png" />
+        <meta-data
+            android:name="plugin.icon_night"
+            android:value="assets/icon_night.png" />
 
     </application>
 
