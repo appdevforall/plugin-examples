@@ -26,6 +26,18 @@
             android:name="plugin.min_ide_version"
             android:value="1.0.0" />
 
+        <!-- network.access — required by the manifest validator and conveys
+             intent to the user at install time. xkcd JSON + image fetch.
+
+             CoGo's filesystem.* permissions only gate the *host IDE's*
+             project-file services. Writes to the plugin's own filesDir
+             (used by the triple-tap clipboard flow's FileProvider hop)
+             and access to the system clipboard are sandbox-allowed and
+             need no declaration. See the Tier-3 walkthrough for details. -->
+        <meta-data
+            android:name="plugin.permissions"
+            android:value="network.access" />
+
         <meta-data
             android:name="plugin.main_class"
             android:value="com.codeonthego.xkcdrandom.XkcdRandomPlugin" />
