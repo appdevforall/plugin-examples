@@ -1,5 +1,8 @@
 package com.codeonthego.xkcdrandom.fragments
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.graphics.BitmapFactory
 import android.os.Bundle
 import android.os.Handler
@@ -15,6 +18,7 @@ import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
+import androidx.core.content.FileProvider
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import com.codeonthego.xkcdrandom.R
@@ -30,6 +34,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.coroutineContext
 import java.io.ByteArrayOutputStream
+import java.io.File
 
 /**
  * The "XKCD" tab body.
@@ -39,8 +44,14 @@ import java.io.ByteArrayOutputStream
  *     PluginFragmentHelper-wrapped inflater that lets us resolve our
  *     own R.layout.* against the plugin's APK.
  *   - the OnTouchListener: where ACTION_UP feeds the
- *     [TapCountClassifier] and decides to roll a new comic.
+ *     [TapCountClassifier] and decides to roll a new comic / copy URL /
+ *     copy image.
  *   - loadRandomComic(): coroutine-based fetch + render.
+ *
+ * Why we don't use [android.view.GestureDetector]:
+ *   - GestureDetector resolves single/double tap but not triple.
+ *   - A small purpose-built [TapCountClassifier] reads cleaner in the
+ *     Tier-3 walkthrough.
  */
 class XkcdPanelFragment : Fragment() {
 
@@ -57,8 +68,15 @@ class XkcdPanelFragment : Fragment() {
     private var progressView: ProgressBar? = null
     private var emptyView: TextView? = null
 
-    /** The comic we're currently displaying. */
+    /** The comic we're currently displaying — used by the clipboard handlers. */
     private var currentComic: XkcdComic? = null
+
+    /**
+     * Raw PNG bytes of the currently-displayed comic. Kept in memory so a
+     * triple-tap can copy the image to the clipboard without re-downloading
+     * or re-encoding the rendered Bitmap.
+     */
+    private var lastBytes: ByteArray? = null
 
     /** In-flight fetch, so rapid SINGLE-tap bursts don't fan out into N parallel fetches. */
     private var loadJob: Job? = null
@@ -157,9 +175,71 @@ class XkcdPanelFragment : Fragment() {
         if (!isAdded || view == null) return
         when (c) {
             TapCountClassifier.Classification.SINGLE -> loadRandomComic()
-            TapCountClassifier.Classification.DOUBLE -> { /* copyUrlToClipboard — next commit */ }
-            TapCountClassifier.Classification.TRIPLE -> { /* copyImageToClipboard — next commit */ }
+            TapCountClassifier.Classification.DOUBLE -> copyUrlToClipboard()
+            TapCountClassifier.Classification.TRIPLE -> copyImageToClipboard()
             null -> { /* nothing to do */ }
+        }
+    }
+
+    // --- clipboard ---
+
+    private fun copyUrlToClipboard() {
+        val comic = currentComic ?: return
+        val cm = requireContext().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        cm.setPrimaryClip(ClipData.newPlainText("xkcd-url", comic.pageUrl))
+        toast(getString(R.string.toast_url_copied, comic.pageUrl))
+    }
+
+    /**
+     * Triple-tap → push the in-memory PNG to the clipboard as image/png.
+     *
+     * Plugin manifest providers don't get registered at runtime (plugins
+     * are loaded via DexClassLoader, not installed as apps), so we route
+     * through the host IDE's existing FileProvider authority. The host's
+     * file_provider_paths.xml exposes `filesDir` (`<files-path … path="." />`),
+     * so we write the current comic's PNG to `filesDir/xkcd_share/last.png`
+     * and grant a content URI from there.
+     *
+     * URI-permission caveat: `ClipData.newUri` does not auto-grant
+     * `FLAG_GRANT_READ_URI_PERMISSION` to the eventual paste target. We
+     * rely on the host's FileProvider declaring `grantUriPermissions="true"`,
+     * which lets the system grant a temporary read grant to whatever app
+     * calls `ContentResolver.openInputStream` on our clip URI. This works on
+     * stock Android API 24+ but has been observed to fail silently on some
+     * OEM clipboard managers — worth real-device verification.
+     */
+    private fun copyImageToClipboard() {
+        val bytes = lastBytes
+        if (bytes == null) {
+            toast(getString(R.string.toast_image_copy_failed))
+            return
+        }
+        val ctx = requireContext()
+        viewLifecycleOwner.lifecycleScope.launch {
+            // Up to 5 MB of file write — off the main thread.
+            val target = withContext(Dispatchers.IO) {
+                val shareDir = File(ctx.filesDir, "xkcd_share").apply { mkdirs() }
+                val out = File(shareDir, "last.png")
+                try {
+                    out.writeBytes(bytes)
+                    out
+                } catch (_: Exception) {
+                    null
+                }
+            }
+            if (target == null) {
+                toast(getString(R.string.toast_image_copy_failed))
+                return@launch
+            }
+            val authority = "${ctx.packageName}.providers.fileprovider"
+            val uri = FileProvider.getUriForFile(ctx, authority, target)
+            // ClipData.newUri queries the ContentResolver for the URI's
+            // MIME type (image/png for our PNG), so the resulting clip
+            // advertises image/* to paste targets.
+            val clip = ClipData.newUri(ctx.contentResolver, "xkcd-image", uri)
+            val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            cm.setPrimaryClip(clip)
+            toast(getString(R.string.toast_image_copied))
         }
     }
 
@@ -209,10 +289,12 @@ class XkcdPanelFragment : Fragment() {
      */
     private fun loadRandomComic() {
         if (loadJob?.isActive == true) return
+        // Only blank the panel if we have nothing to show yet — otherwise
+        // keep the current comic visible while the new one loads.
         if (currentComic == null) showLoading()
         loadJob = viewLifecycleOwner.lifecycleScope.launch {
             val result = withContext(Dispatchers.IO) { fetchAndDecode() }
-            val (comic, bmp) = result ?: run {
+            val (comic, bytes, bmp) = result ?: run {
                 if (currentComic == null) showEmptyState() else {
                     progressView?.visibility = View.GONE
                     toast(getString(R.string.toast_fetch_failed))
@@ -220,12 +302,13 @@ class XkcdPanelFragment : Fragment() {
                 return@launch
             }
             currentComic = comic
+            lastBytes = bytes
             showComic(comic, bmp)
         }
     }
 
-    /** Returns (comic, decoded bitmap) on success, null on any IO/parse failure. */
-    private suspend fun fetchAndDecode(): Pair<XkcdComic, android.graphics.Bitmap>? {
+    /** Returns (comic, raw PNG bytes, decoded bitmap) on success, null on any IO/parse failure. */
+    private suspend fun fetchAndDecode(): Triple<XkcdComic, ByteArray, android.graphics.Bitmap>? {
         val comic = api.fetchRandom() ?: return null
         val bytes = api.openImageStream(comic.imageUrl)?.use { stream ->
             // Bounded read — cap at 5 MB so a pathological response can't
@@ -250,7 +333,7 @@ class XkcdPanelFragment : Fragment() {
         // is the production-grade approach — see
         // https://developer.android.com/topic/performance/graphics/load-bitmap
         val bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return null
-        return comic to bmp
+        return Triple(comic, bytes, bmp)
     }
 
     companion object {
