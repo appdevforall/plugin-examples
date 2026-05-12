@@ -30,12 +30,11 @@ Kotlin — small enough to read top-to-bottom in an evening.</p>
 <h2>1. Plugin entry point</h2>
 
 <p class="why"><b>Why you care:</b> every plugin starts with an
-<code>IPlugin</code> class that the host loads via
-<code>DexClassLoader</code>. The class is your plugin's "main" — the
-host reflectively instantiates it by the fully-qualified name in
-<code>plugin.main_class</code>, then drives the
+<code>IPlugin</code> class. The host loads it via
+<code>DexClassLoader</code>, reflectively instantiates it from
+<code>plugin.main_class</code>, and drives the
 <code>initialize → activate → deactivate → dispose</code> lifecycle.
-Get this skeleton right and the rest is just opt-in extensions.</p>
+Get this right and the rest is opt-in.</p>
 
 <pre>class XkcdRandomPlugin : IPlugin {
 
@@ -76,12 +75,8 @@ use it from every other method.</p>
 
 <h2>2. Manifest + permissions</h2>
 
-<p class="why"><b>Why you care:</b> the manifest is how the host
-discovers your plugin, finds the entry class, and validates what
-you're allowed to do. Permissions in CoGo gate access to the
-<em>host's</em> resources, not your own — which means many things
-you'd expect to declare (clipboard, your own
-<code>filesDir</code>) actually need no declaration at all.</p>
+<p class="why"><b>Why you care:</b> the manifest tells the host how
+to find your plugin and what host resources you're allowed to touch.</p>
 
 <pre>&lt;manifest xmlns:android="http://schemas.android.com/apk/res/android"&gt;
     &lt;application
@@ -142,13 +137,17 @@ provide a Fragment factory.</p>
             id = "xkcd_bottom_tab",
             title = "XKCD",
             fragmentFactory = { XkcdPanelFragment() },
-            order = 200
+            order = 200,
+            tooltipTag = "xkcd.tab"
         )
     )
 }</pre>
 
-<p>The Fragment itself is mostly normal Android — except for one
-required override:</p>
+<p><code>tooltipTag</code> connects this tab to the help entry from
+<code>DocumentationExtension</code> (Step 7). Omit it and the host
+falls back to <code>"&lt;pluginId&gt;.&lt;tabId&gt;"</code>.</p>
+
+<p>The Fragment needs one non-obvious override:</p>
 
 <pre>override fun onGetLayoutInflater(savedInstanceState: Bundle?): LayoutInflater {
     val inflater = super.onGetLayoutInflater(savedInstanceState)
@@ -210,9 +209,6 @@ root.setOnTouchListener { _, event -&gt;
     false  // never consume — let ScrollView keep scrolling
 }</pre>
 
-<p>Returning <code>false</code> is important — consuming the event
-would break scroll behavior on tall comics.</p>
-
 <h2>5. Network fetch over HTTPS</h2>
 
 <p class="why"><b>Why you care:</b> most plugins talk to a network
@@ -257,13 +253,12 @@ initial probe fails — i.e. the network is down.</p>
     }
 }</pre>
 
-<p class="callout-inline"><b>Performance note:</b> for very large
-images on low-end devices, Android's <a
+<p class="callout-inline">For production use on low-end devices, prefer
+Android's <a
 href="https://developer.android.com/topic/performance/graphics/load-bitmap">bounded
-bitmap decoding pattern</a> (<code>BitmapFactory.Options.inSampleSize</code>
-with a two-pass decode) is the production-grade approach. This plugin
-keeps it simple with <code>BitmapFactory.decodeByteArray(...)</code>
-plus a 5 MB cap on the network read.</p>
+bitmap decoding pattern</a>. This plugin keeps it simple:
+<code>BitmapFactory.decodeByteArray(...)</code> with a 5 MB
+network-read cap.</p>
 
 <h2>6. Clipboard support</h2>
 
@@ -337,12 +332,6 @@ for the URI's MIME type. The host's <code>FileProvider</code> resolves
 <code>image/*</code> to paste targets. Paste into Messages, Gmail, any
 image-aware app — it pastes the image, not the URL.</p>
 
-<h3>6c. User feedback</h3>
-
-<p>Every clipboard action shows a toast so the user knows it
-happened. The system clipboard is invisible — without feedback,
-users can't tell whether a copy succeeded.</p>
-
 <h2>7. Three-tier tooltip for plugin help</h2>
 
 <p class="why"><b>Why you care:</b> CoGo has a per-plugin help API.
@@ -388,6 +377,10 @@ provides help users can discover without leaving the IDE.</p>
 <tr><td>3</td><td><code>buttons[].uri</code></td><td>A button labeled <code>description</code>. Tapping it opens an HTML page (this one) served at <code>http://localhost:6174/plugin/&lt;pluginId&gt;/&lt;uri&gt;</code>.</td></tr>
 </table>
 
+<p><code>tag</code> here is the same string you put on
+<code>TabItem.tooltipTag</code> (Step 3) — that's the wire that
+connects the long-press on the tab to this entry.</p>
+
 <p><code>getTier3DocsAssetPath() = "docs"</code> says: "my Tier 3
 walkthrough lives under <code>src/main/assets/docs/</code>." At
 install time the host's <code>Tier3AssetWalker</code> indexes
@@ -401,74 +394,27 @@ IDE:</b> just open <code>random-xkcd/src/main/assets/docs/index.html</code>
 in any browser. It renders identically; the localhost:6174 URL is
 only used when the host serves it inside CoGo.</p>
 
-<h2>What you observe end-to-end</h2>
-
-<ol>
-    <li><b>Plugin appears in Plugin Manager</b> with status "Enabled".</li>
-    <li><b>"XKCD" tab</b> shows up in the editor bottom sheet.</li>
-    <li><b>Open the tab</b> → spinner → comic renders with title + alt.</li>
-    <li><b>Single-tap</b> → new comic loads.</li>
-    <li><b>Double-tap</b> → toast "URL copied: …" — paste in any text field to confirm.</li>
-    <li><b>Triple-tap</b> → toast "Comic image copied to clipboard" — paste in Messages to confirm.</li>
-    <li><b>Long-press the tab</b> → Tier-1 tooltip; "See More" → Tier-2 detail; "Code walkthrough" → opens this page.</li>
-</ol>
-
 <h2>The sandbox model in one screen</h2>
 
-<p>Plugins run inside the host IDE's process, but the plugin classes
-are loaded by a <code>DexClassLoader</code> that's separate from the
-host's class loader. Three durable consequences:</p>
-
-<ol>
-    <li><b>No plugin manifest registration.</b> The OS never sees
-    your plugin's <code>AndroidManifest.xml</code>, so
-    <code>&lt;activity&gt;</code>, <code>&lt;service&gt;</code>,
-    <code>&lt;provider&gt;</code>, and <code>&lt;receiver&gt;</code>
-    declarations are dead code. Anything that requires OS
-    registration must go through the host.</li>
-
-    <li><b><code>R.*</code> resolves against whichever
-    <code>Resources</code> your code is using.</b> The host's
-    <code>LayoutInflater</code> resolves to host resources by default;
-    wrap with
-    <code>PluginFragmentHelper.getPluginInflater(pluginId, parent)</code>
-    to flip it to your plugin's APK.</li>
-
-    <li><b>Permissions gate the host's resources, not your own.</b>
-    Your <code>filesDir</code>, <code>cacheDir</code>, and the system
-    clipboard need no declaration. Declare a permission only when
-    you touch something the host mediates.</li>
-</ol>
-
-<p>The standard escape valves:</p>
-
+<p>Three rules to remember:</p>
 <ul>
-    <li>For UI surfaces — register an extension
-    (<code>UIExtension</code>, <code>EditorTabExtension</code>,
-    <code>DocumentationExtension</code>).</li>
-    <li>For services — fetch via
-    <code>context.services.get(IdeXxxService::class.java)</code> or
-    <code>requireContext().getSystemService(...)</code>.</li>
-    <li>For file sharing across apps — copy under
-    <code>ctx.filesDir</code> and use
-    <code>FileProvider.getUriForFile(ctx,
-    "${ctx.packageName}.providers.fileprovider", file)</code>.</li>
+    <li>Manifest <code>&lt;provider&gt;</code>, <code>&lt;activity&gt;</code>,
+    <code>&lt;service&gt;</code>, <code>&lt;receiver&gt;</code> are dead code —
+    route via host extensions or its <code>FileProvider</code>.</li>
+    <li><code>R.*</code> resolves against whichever <code>Resources</code>
+    your code is using — wrap the inflater.</li>
+    <li>Permissions gate the <em>host's</em> resources only — your
+    <code>filesDir</code>, <code>cacheDir</code>, and the clipboard
+    need no declaration.</li>
 </ul>
 
 <h2>xkcd attribution + license</h2>
 
-<p>xkcd comics are © Randall Munroe and licensed <b>CC BY-NC 2.5</b>
-(see <a href="https://xkcd.com/license.html">xkcd.com/license.html</a>).
-This plugin fetches comics over HTTPS, displays them with an
-always-visible attribution line (<i>"Comics © Randall Munroe · xkcd.com
-· CC BY-NC 2.5"</i> beneath every comic), and is itself non-commercial
-(open-source demo plugin for an open-source IDE). No caching, no
-redistribution beyond what the user explicitly copies to their own
-clipboard.</p>
-
-<p>The plugin's own source code is licensed per the surrounding
-<code>plugin-examples</code> repository. xkcd's license applies only to
-the comic content the plugin displays.</p>
+<p>xkcd comics are © Randall Munroe, licensed
+<a href="https://xkcd.com/license.html">CC BY-NC 2.5</a>. This plugin
+fetches over HTTPS, shows a permanent attribution line under every
+comic, and is itself a non-commercial open-source demo. The plugin's
+source is licensed per the <code>plugin-examples</code> repo.</p>
 
 <h2>Where to go next</h2>
 
