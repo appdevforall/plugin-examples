@@ -1,28 +1,25 @@
 package com.codeonthego.xkcdrandom
 
+import com.codeonthego.xkcdrandom.fragments.XkcdPanelFragment
 import com.itsaky.androidide.plugins.IPlugin
 import com.itsaky.androidide.plugins.PluginContext
+import com.itsaky.androidide.plugins.extensions.TabItem
+import com.itsaky.androidide.plugins.extensions.UIExtension
 
 /**
- * Random-xkcd demo plugin — entry point.
+ * Random-xkcd demo plugin.
  *
- * Every plugin starts with an [IPlugin] class that the host loads via
- * `DexClassLoader`. The host reflectively instantiates this class by
- * the fully-qualified name in `plugin.main_class` (see manifest), then
- * drives the lifecycle:
- *
- *   initialize → activate → (use) → deactivate → dispose
- *
- * Subsequent commits opt this class into [UIExtension] (for a
- * bottom-sheet tab) and [DocumentationExtension] (for the in-IDE help
- * tooltip + Tier-3 walkthrough).
+ * Reading order:
+ *   - this file: lifecycle + tab registration
+ *   - [XkcdPanelFragment]: the bottom-sheet UI
  */
-class XkcdRandomPlugin : IPlugin {
+class XkcdRandomPlugin : IPlugin, UIExtension {
 
     private lateinit var context: PluginContext
 
     companion object {
         const val PLUGIN_ID = "com.codeonthego.xkcdrandom"
+        const val TAB_ID = "xkcd_bottom_tab"
     }
 
     override fun initialize(context: PluginContext): Boolean {
@@ -52,4 +49,24 @@ class XkcdRandomPlugin : IPlugin {
     override fun dispose() {
         context.logger.info("XkcdRandomPlugin disposed")
     }
+
+    // --- UIExtension: register the bottom-sheet tab ---
+
+    /**
+     * Register one bottom-sheet tab. The IDE shows it next to the eight
+     * built-in tabs (Build Output, App Logs, …) plus tabs from other
+     * plugins. `order` controls our position among plugin tabs only.
+     *
+     * The fragmentFactory returns a *new* fragment each time the tab is
+     * shown — never reuse a single Fragment instance, fragments have
+     * lifecycle expectations the IDE manages.
+     */
+    override fun getEditorTabs(): List<TabItem> = listOf(
+        TabItem(
+            id = TAB_ID,
+            title = "XKCD",
+            fragmentFactory = { XkcdPanelFragment() },
+            order = 200
+        )
+    )
 }
