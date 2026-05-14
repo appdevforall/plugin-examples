@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The whole panel is the gesture target — single/double/triple tap on
-     anywhere here cycles the comic, copies the URL, or copies the image. -->
+<!-- Layout mirrors the xkcd.com page: title + nav row above the comic.
+     The image itself is the only gesture target — single-tap copies the
+     URL, double-tap copies the image. The button row above provides the
+     same actions explicitly, so the gestures are discoverable, not
+     required. -->
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/xkcd_root"
     android:layout_width="match_parent"
@@ -14,6 +17,58 @@
         android:orientation="vertical"
         android:padding="12dp">
 
+        <!-- Title row: comic number + title, in the xkcd.com style. -->
+        <TextView
+            android:id="@+id/xkcd_caption"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textStyle="bold"
+            android:textSize="14sp"
+            android:textColor="?attr/colorOnSurface"
+            android:visibility="gone" />
+
+        <!-- Button row: xkcd.com-style controls above the comic.
+             Random replaces the "tap to roll" gesture; Copy URL + Copy
+             Image are explicit affordances mirroring the simplified
+             tap model on the image itself. -->
+        <LinearLayout
+            android:id="@+id/xkcd_buttons"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="8dp"
+            android:orientation="horizontal"
+            android:gravity="center">
+
+            <Button
+                android:id="@+id/xkcd_btn_random"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginEnd="4dp"
+                android:text="@string/btn_random"
+                style="?attr/buttonBarButtonStyle" />
+
+            <Button
+                android:id="@+id/xkcd_btn_copy_url"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="4dp"
+                android:layout_marginEnd="4dp"
+                android:text="@string/btn_copy_url"
+                style="?attr/buttonBarButtonStyle" />
+
+            <Button
+                android:id="@+id/xkcd_btn_copy_image"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="4dp"
+                android:text="@string/btn_copy_image"
+                style="?attr/buttonBarButtonStyle" />
+        </LinearLayout>
+
         <!-- Spinner sits over the panel while the comic is fetching. Hidden
              while a comic is rendered or in the empty state. -->
         <ProgressBar
@@ -25,7 +80,11 @@
             android:visibility="gone" />
 
         <!-- White card holds the comic image so dark-mode users still
-             see the comic correctly (xkcd is black-on-white). -->
+             see the comic correctly (xkcd is black-on-white). Image is
+             the gesture target — single-tap copies URL, double-tap copies
+             the image. The whole panel is scrollable for tall comics; the
+             image's gesture detector returns false for fling/scroll so
+             ScrollView still gets a chance to scroll. -->
         <FrameLayout
             android:id="@+id/xkcd_image_card"
             android:layout_width="match_parent"
@@ -44,16 +103,6 @@
         </FrameLayout>
 
         <TextView
-            android:id="@+id/xkcd_caption"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:textStyle="bold"
-            android:textSize="14sp"
-            android:textColor="?attr/colorOnSurface"
-            android:visibility="gone" />
-
-        <TextView
             android:id="@+id/xkcd_alt"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -62,14 +111,14 @@
             android:textColor="?attr/colorOnSurfaceVariant"
             android:visibility="gone" />
 
-        <!-- Legend always visible — the gesture model is non-obvious, so
-             we surface it in the panel instead of hiding it behind a
-             tooltip alone. -->
+        <!-- Legend explains the optional gesture shortcuts. The buttons
+             above are the canonical surface; gestures are extras for
+             one-handed use. -->
         <TextView
             android:id="@+id/xkcd_legend"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
+            android:layout_marginTop="12dp"
             android:textSize="12sp"
             android:textColor="?attr/colorOnSurfaceVariant"
             android:text="@string/legend" />

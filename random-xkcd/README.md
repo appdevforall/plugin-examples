@@ -1,8 +1,10 @@
 # random-xkcd
 
 A small Code on the Go plugin that shows a random xkcd comic in the
-editor bottom sheet. Tap for a new comic, double-tap to copy the URL,
-triple-tap to copy the image. Long-press the tab for in-IDE help.
+editor bottom sheet. Three buttons above the comic — Random / Copy
+URL / Copy image — mirror the xkcd.com control bar. Tap the image
+to copy URL, double-tap to copy image. Long-press the tab for
+in-IDE help.
 
 Designed as a canonical "this is what a small CoGo plugin looks like"
 example. Under 300 lines of Kotlin, every plugin-specific concept
@@ -28,7 +30,7 @@ The tutorial covers the plugin in 7 steps:
 1. Plugin entry point (`IPlugin` lifecycle)
 2. Manifest + permissions
 3. Bottom-sheet tab UI (`UIExtension`)
-4. Tap interactions (single / double / triple)
+4. UI interactions: buttons + gestures (`GestureDetector.SimpleOnGestureListener`)
 5. Network fetch over HTTPS
 6. Clipboard support (text + image via host `FileProvider`)
 7. Three-tier tooltip help (`DocumentationExtension`)
@@ -55,17 +57,17 @@ random-xkcd/
     │   └── icon_night.png         ← Plugin Manager icon, dark theme
     ├── kotlin/org/appdevforall/randomxkcd/
     │   ├── XkcdRandomPlugin.kt    ← lifecycle + tab + tooltip registration
-    │   ├── fragments/XkcdPanelFragment.kt
+    │   ├── fragments/XkcdPanelFragment.kt  ← button wiring + GestureDetector
     │   ├── net/XkcdApiClient.kt   ← HTTP, two endpoints, no auth
-    │   ├── net/XkcdComic.kt
-    │   └── ui/TapCountClassifier.kt  ← 1/2/3 tap state machine
+    │   └── net/XkcdComic.kt
     └── res/
         ├── layout/fragment_xkcd_panel.xml
         └── values/, values-night/
 ```
 
-Plus unit tests under `src/test/` for the tap classifier
-(JUnit 4 + Truth, no Robolectric).
+No custom test surface — every piece is small enough that JVM unit
+tests would just re-test Android framework behavior. UX is covered
+by mobile-MCP / Android QA on real devices.
 
 ## Run tests
 
