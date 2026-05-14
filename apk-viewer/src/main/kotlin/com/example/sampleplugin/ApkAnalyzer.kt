@@ -71,6 +71,7 @@ class ApkAnalyzer : IPlugin, UIExtension, EditorTabExtension, FileOpenExtension,
                     openApkAnalyzerTab()
                 },
                 tooltipTag = HELP_TOOLTIP_TAG,
+                icon = R.drawable.ic_apk_analyzer,
             )
         )
     }
