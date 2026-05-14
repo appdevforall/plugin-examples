@@ -2,11 +2,6 @@ name: Update libs from CodeOnTheGo
 
 on:
   workflow_dispatch:
-    inputs:
-      ref:
-        description: CodeOnTheGo branch or tag to build from
-        required: false
-        default: stage
 
 permissions:
   contents: write
@@ -41,9 +36,7 @@ jobs:
         run: echo "name=build-$(date -u +%Y-%m-%d)-${RUN_NUMBER}" >> "$GITHUB_OUTPUT"
 
       - name: Run update-libs script
-        env:
-          REF: ${{ inputs.ref }}
-        run: ./scripts/update-libs.sh --ref "$REF"
+        run: ./scripts/update-libs.sh
 
       - name: Commit updated jars
         id: commit
