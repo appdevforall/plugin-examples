@@ -1,6 +1,6 @@
-package com.codeonthego.xkcdrandom.ui
+package org.appdevforall.randomxkcd.ui
 
-import com.codeonthego.xkcdrandom.ui.TapCountClassifier.Classification
+import org.appdevforall.randomxkcd.ui.TapCountClassifier.Classification
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull

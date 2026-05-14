@@ -1,6 +1,6 @@
-package com.codeonthego.xkcdrandom
+package org.appdevforall.randomxkcd
 
-import com.codeonthego.xkcdrandom.fragments.XkcdPanelFragment
+import org.appdevforall.randomxkcd.fragments.XkcdPanelFragment
 import com.itsaky.androidide.plugins.IPlugin
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.extensions.DocumentationExtension
@@ -18,8 +18,8 @@ import com.itsaky.androidide.plugins.extensions.UIExtension
  * Reading order:
  *   - this file: lifecycle + tab registration + tooltip / docs wiring
  *   - [XkcdPanelFragment]: the bottom-sheet UI + tap handling
- *   - [com.codeonthego.xkcdrandom.net.XkcdApiClient]: HTTP, single file
- *   - [com.codeonthego.xkcdrandom.ui.TapCountClassifier]: the 1/2/3 tap
+ *   - [org.appdevforall.randomxkcd.net.XkcdApiClient]: HTTP, single file
+ *   - [org.appdevforall.randomxkcd.ui.TapCountClassifier]: the 1/2/3 tap
  *     state machine, with unit tests
  */
 class XkcdRandomPlugin : IPlugin, UIExtension, DocumentationExtension {
@@ -27,7 +27,7 @@ class XkcdRandomPlugin : IPlugin, UIExtension, DocumentationExtension {
     private lateinit var context: PluginContext
 
     companion object {
-        const val PLUGIN_ID = "com.codeonthego.xkcdrandom"
+        const val PLUGIN_ID = "org.appdevforall.randomxkcd"
         const val TAB_ID = "xkcd_bottom_tab"
         const val TOOLTIP_TAG_TAB = "xkcd.tab"
     }
@@ -125,7 +125,7 @@ class XkcdRandomPlugin : IPlugin, UIExtension, DocumentationExtension {
      * Subdirectory under src/main/assets/ that holds the Tier 3 walkthrough.
      * Every file under assets/docs/ is indexed by Tier3AssetWalker at
      * install time and served from
-     *   http://localhost:6174/plugin/com.codeonthego.xkcdrandom/<file>
+     *   http://localhost:6174/plugin/org.appdevforall.randomxkcd/<file>
      *
      * Files reference each other with relative paths (e.g. css/walkthrough.css).
      */

@@ -1,4 +1,4 @@
-package com.codeonthego.xkcdrandom.net
+package org.appdevforall.randomxkcd.net
 
 /**
  * One xkcd comic. Mirrors the subset of fields we use from
