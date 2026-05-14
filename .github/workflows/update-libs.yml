@@ -63,7 +63,7 @@ jobs:
 
       - name: Stage .cgp files with website filenames
         run: |
-          mkdir -p .deploy
+          mkdir -p deploy-staging
           declare -A MAP=(
             ["apk-viewer"]="apk-analyzer.cgp"
             ["Beepy"]="beepy.cgp"
@@ -78,16 +78,16 @@ jobs:
               echo "ERROR: no .cgp found under ${module}/build/plugin/"
               exit 1
             fi
-            cp "$src" ".deploy/${MAP[$module]}"
-            echo "Staged $src -> .deploy/${MAP[$module]}"
+            cp "$src" "deploy-staging/${MAP[$module]}"
+            echo "Staged $src -> deploy-staging/${MAP[$module]}"
           done
-          ls -la .deploy/
+          ls -la deploy-staging/
 
       - name: Upload .cgp artifacts for deploy job
         uses: actions/upload-artifact@v4
         with:
           name: plugins-cgp
-          path: .deploy/*.cgp
+          path: deploy-staging/*.cgp
           retention-days: 7
           if-no-files-found: error
 
@@ -109,10 +109,10 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: plugins-cgp
-          path: .deploy
+          path: deploy-staging
 
       - name: List staged files
-        run: ls -la .deploy/
+        run: ls -la deploy-staging/
 
       - name: Set up SSH key
         env:
@@ -153,7 +153,7 @@ jobs:
         env:
           REMOTE: ${{ vars.GREENGEEKS_SSH_USER }}@${{ vars.GREENGEEKS_SSH_HOST }}
         run: |
-          for f in .deploy/*.cgp; do
+          for f in deploy-staging/*.cgp; do
             echo "Uploading $f -> $REMOTE:$PLUGINS_REMOTE_PATH/$(basename "$f")"
             scp -o StrictHostKeyChecking=no "$f" "$REMOTE:$PLUGINS_REMOTE_PATH/"
           done
@@ -163,7 +163,7 @@ jobs:
           REMOTE: ${{ vars.GREENGEEKS_SSH_USER }}@${{ vars.GREENGEEKS_SSH_HOST }}
         run: |
           failures=0
-          for f in .deploy/*.cgp; do
+          for f in deploy-staging/*.cgp; do
             name=$(basename "$f")
             local_md5=$(md5sum "$f" | cut -d ' ' -f1)
             remote_md5=$(ssh "$REMOTE" "md5sum $PLUGINS_REMOTE_PATH/$name | cut -d ' ' -f1")
