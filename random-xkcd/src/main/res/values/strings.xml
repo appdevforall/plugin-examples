@@ -14,6 +14,7 @@
     <string name="toast_url_copied">URL copied: %1$s</string>
     <string name="toast_image_copied">Comic image copied to clipboard</string>
     <string name="toast_image_copy_failed">Could not copy image — load a comic first</string>
+    <string name="toast_no_comic_yet">No comic loaded yet — tap Random first</string>
     <string name="toast_fetch_failed">Could not load comic — check your connection</string>
 
     <string name="comic_caption">#%1$d  &#8220;%2$s&#8221;</string>
