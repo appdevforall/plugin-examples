@@ -61,15 +61,6 @@ jobs:
           echo "codeonthego_sha=${sha}" >> "$GITHUB_OUTPUT"
           echo "head_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
-      - name: Publish release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.tag.outputs.name }}
-          target_commitish: ${{ steps.commit.outputs.head_sha }}
-          body: Built against CodeOnTheGo@${{ steps.commit.outputs.codeonthego_sha }}.
-          fail_on_unmatched_files: true
-          files: '*/build/plugin/*.cgp'
-
       - name: Stage .cgp files with website filenames
         run: |
           mkdir -p .deploy
@@ -96,8 +87,18 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: plugins-cgp
-          path: .deploy/
+          path: .deploy/*.cgp
           retention-days: 7
+          if-no-files-found: error
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.name }}
+          target_commitish: ${{ steps.commit.outputs.head_sha }}
+          body: Built against CodeOnTheGo@${{ steps.commit.outputs.codeonthego_sha }}.
+          fail_on_unmatched_files: true
+          files: '*/build/plugin/*.cgp'
 
   deploy:
     needs: release
