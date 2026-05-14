@@ -12,15 +12,14 @@ import com.itsaky.androidide.plugins.extensions.UIExtension
 /**
  * Random-xkcd demo plugin. Three goals:
  *   1. Show a random xkcd comic in the bottom-sheet "XKCD" tab.
- *   2. Demonstrate the tap surface — tap / double-tap / triple-tap.
+ *   2. Demonstrate the canonical UI surface — buttons above the comic
+ *      plus Android's standard single/double-tap gestures on the image.
  *   3. Be a small, readable "how to write a CoGo plugin" example.
  *
  * Reading order:
  *   - this file: lifecycle + tab registration + tooltip / docs wiring
- *   - [XkcdPanelFragment]: the bottom-sheet UI + tap handling
+ *   - [XkcdPanelFragment]: the bottom-sheet UI + button wiring + gestures
  *   - [org.appdevforall.randomxkcd.net.XkcdApiClient]: HTTP, single file
- *   - [org.appdevforall.randomxkcd.ui.TapCountClassifier]: the 1/2/3 tap
- *     state machine, with unit tests
  */
 class XkcdRandomPlugin : IPlugin, UIExtension, DocumentationExtension {
 
@@ -100,14 +99,19 @@ class XkcdRandomPlugin : IPlugin, UIExtension, DocumentationExtension {
     override fun getTooltipEntries(): List<PluginTooltipEntry> = listOf(
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_TAB,
-            summary = "Random xkcd comic. Tap to roll a new one.",
+            summary = "Random xkcd comic. Tap Random for a new one.",
             detail = """
                 <p>This panel pulls a random comic from <b>xkcd.com</b>.</p>
+                <p>Controls above the comic:</p>
                 <ul>
-                  <li><b>Tap</b> — fetch a new random comic.</li>
-                  <li><b>Double-tap</b> — copy the comic's URL to the clipboard.</li>
-                  <li><b>Triple-tap</b> — copy the comic image to the clipboard
-                      (paste it into Messages or any image-aware app).</li>
+                  <li><b>Random</b> — fetch a new comic.</li>
+                  <li><b>Copy URL</b> — copy the comic's page URL.</li>
+                  <li><b>Copy image</b> — copy the comic image to the clipboard.</li>
+                </ul>
+                <p>Gesture shortcuts on the image:</p>
+                <ul>
+                  <li><b>Tap</b> — copy URL.</li>
+                  <li><b>Double-tap</b> — copy image.</li>
                 </ul>
                 <p>Fetches use HTTPS only.</p>
             """.trimIndent(),

@@ -16,8 +16,9 @@ Kotlin — small enough to read top-to-bottom in an evening.</p>
 
 <div class="callout">
     <b>What you'll build.</b> An "XKCD" tab in CoGo's editor bottom
-    sheet. Tap the comic for a new one. Double-tap copies the
-    URL to the clipboard. Triple-tap copies the image. Long-press the
+    sheet. Buttons above the comic — <em>Random / Copy URL / Copy
+    image</em> — mirror the xkcd.com control bar. Single-tap on the
+    comic copies the URL; double-tap copies the image. Long-press the
     tab for in-IDE help.
 </div>
 
@@ -116,7 +117,7 @@ resources, not your own.</b> Your <code>context.filesDir</code> and
 <code>context.cacheDir</code> belong to the host APK's Android
 sandbox and are yours to use freely. The system clipboard is
 reachable directly via <code>ClipboardManager</code>. So even though
-this plugin <em>writes to <code>filesDir</code></em> (the triple-tap
+this plugin <em>writes to <code>filesDir</code></em> (the copy-image
 clipboard hop in Step 6) and <em>writes to the clipboard</em>, the
 only permission it needs is <code>network.access</code>. Declare
 permissions to mean "I touch what the host mediates" — nothing
@@ -170,44 +171,58 @@ Never cache a singleton Fragment; the host calls the factory whenever
 the tab is shown, and Fragment lifecycle expectations require a clean
 instance each time.</p>
 
-<h2>4. Tap interactions (single / double / triple)</h2>
+<h2>4. UI interactions: buttons + gestures</h2>
 
-<p class="why"><b>Why you care:</b> Android's
-<code>GestureDetector</code> resolves single + double tap but not
-triple. The XKCD plugin needs all three (tap = new comic, double-tap
-= copy URL, triple-tap = copy image), so it rolls a small
-<code>TapCountClassifier</code> state machine. It's clean enough to
-lift into your own plugin if you need tap-burst handling.</p>
+<p class="why"><b>Why you care:</b> the canonical surface for plugin
+actions is buttons in the layout — they're discoverable, accessible,
+and easy to test. Gestures on top of that are optional convenience.
+Android's <code>GestureDetector.SimpleOnGestureListener</code> handles
+single + double tap with two callbacks. Don't reach for a custom tap
+state machine if your model fits this pattern.</p>
 
-<pre>// TapCountClassifier — pure state machine, no Android imports,
-// no clocks. The Fragment supplies `now` (uptime millis) and
-// decides when to resolve(). Makes the classifier unit-testable
-// in plain JUnit.
-class TapCountClassifier(private val windowMs: Long = DEFAULT_WINDOW_MS) {
-    enum class Classification { SINGLE, DOUBLE, TRIPLE }
-    /** Returns true if this tap closed a burst (3 taps inside the window). */
-    fun onTap(nowMs: Long): Boolean { … }
-    fun resolve(): Classification? { … }
+<p>The XKCD plugin's button row mirrors the
+<a href="https://xkcd.com">xkcd.com</a> control bar: <em>Random</em>,
+<em>Copy URL</em>, <em>Copy image</em>. Each is a normal
+<code>Button</code> wired with <code>setOnClickListener</code>:</p>
+
+<pre>view.findViewById&lt;Button&gt;(R.id.xkcd_btn_random).setOnClickListener {
+    loadRandomComic()
+}
+view.findViewById&lt;Button&gt;(R.id.xkcd_btn_copy_url).setOnClickListener {
+    copyUrlToClipboard()
+}
+view.findViewById&lt;Button&gt;(R.id.xkcd_btn_copy_image).setOnClickListener {
+    copyImageToClipboard()
 }</pre>
 
-<p>The Fragment's touch listener feeds each <code>ACTION_UP</code>
-into the classifier, but only when the gesture didn't move beyond the
-system touch slop — otherwise scrolling a tall comic would also
-register as a tap:</p>
+<p>Gesture shortcuts on the image itself are pure
+<code>GestureDetector</code>:</p>
 
-<pre>val touchSlop = ViewConfiguration.get(view.context).scaledTouchSlop
-root.setOnTouchListener { _, event -&gt;
-    when (event.actionMasked) {
-        MotionEvent.ACTION_DOWN -&gt; { downX = event.x; downY = event.y }
-        MotionEvent.ACTION_UP -&gt; {
-            val dx = event.x - downX; val dy = event.y - downY
-            if (dx * dx + dy * dy &lt;= touchSlop * touchSlop) {
-                handleTap(); root.performClick()
-            }
-        }
+<pre>private inner class ImageGestureListener : GestureDetector.SimpleOnGestureListener() {
+    override fun onDown(e: MotionEvent) = true  // required to receive subsequent events
+
+    override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+        copyUrlToClipboard()
+        return true
     }
-    false  // never consume — let ScrollView keep scrolling
+
+    override fun onDoubleTap(e: MotionEvent): Boolean {
+        copyImageToClipboard()
+        return true
+    }
+}
+
+val gestureDetector = GestureDetector(view.context, ImageGestureListener())
+imageView.setOnTouchListener { v, event -&gt;
+    val handled = gestureDetector.onTouchEvent(event)
+    if (event.actionMasked == MotionEvent.ACTION_UP) v.performClick()
+    handled
 }</pre>
+
+<p>The detector is attached to the <code>ImageView</code> only —
+the rest of the panel scrolls normally. <code>onSingleTapConfirmed</code>
+fires after Android's double-tap window expires, so it doesn't
+preempt double-tap.</p>
 
 <h2>5. Network fetch over HTTPS</h2>
 
@@ -348,13 +363,14 @@ provides help users can discover without leaving the IDE.</p>
     override fun getTooltipEntries(): List&lt;PluginTooltipEntry&gt; = listOf(
         PluginTooltipEntry(
             tag = "xkcd.tab",
-            summary = "Random xkcd comic. Tap to roll a new one.",
+            summary = "Random xkcd comic. Tap Random for a new one.",
             detail = """
                 &lt;p&gt;This panel pulls a random comic from &lt;b&gt;xkcd.com&lt;/b&gt;.&lt;/p&gt;
+                &lt;p&gt;Use the &lt;b&gt;Random / Copy URL / Copy image&lt;/b&gt;
+                buttons above the comic, or shortcut on the image:&lt;/p&gt;
                 &lt;ul&gt;
-                  &lt;li&gt;&lt;b&gt;Tap&lt;/b&gt; — fetch a new random comic.&lt;/li&gt;
-                  &lt;li&gt;&lt;b&gt;Double-tap&lt;/b&gt; — copy the URL.&lt;/li&gt;
-                  &lt;li&gt;&lt;b&gt;Triple-tap&lt;/b&gt; — copy the image.&lt;/li&gt;
+                  &lt;li&gt;&lt;b&gt;Tap&lt;/b&gt; — copy URL.&lt;/li&gt;
+                  &lt;li&gt;&lt;b&gt;Double-tap&lt;/b&gt; — copy image.&lt;/li&gt;
                 &lt;/ul&gt;
             """.trimIndent(),
             buttons = listOf(
@@ -424,10 +440,9 @@ source is licensed per the <code>plugin-examples</code> repo.</p>
     <li><b>Sibling demo plugins</b> — <code>forms-plugin</code> and
     <code>maps-plugin</code> show plugins with more complex UI and
     persistent state.</li>
-    <li><b>This plugin's source</b> — under 300 lines of Kotlin.
+    <li><b>This plugin's source</b> — under 250 lines of Kotlin.
     Read it top-to-bottom: <code>XkcdRandomPlugin.kt</code> →
-    <code>XkcdPanelFragment.kt</code> → <code>XkcdApiClient.kt</code> →
-    <code>TapCountClassifier.kt</code>.</li>
+    <code>XkcdPanelFragment.kt</code> → <code>XkcdApiClient.kt</code>.</li>
 </ul>
 
 </body>

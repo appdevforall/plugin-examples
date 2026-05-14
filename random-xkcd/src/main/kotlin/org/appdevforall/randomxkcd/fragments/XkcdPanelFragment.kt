@@ -5,14 +5,12 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.graphics.BitmapFactory
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
-import android.os.SystemClock
+import android.view.GestureDetector
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
-import android.view.ViewConfiguration
 import android.view.ViewGroup
+import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.ProgressBar
@@ -25,7 +23,6 @@ import org.appdevforall.randomxkcd.R
 import org.appdevforall.randomxkcd.XkcdRandomPlugin
 import org.appdevforall.randomxkcd.net.XkcdApiClient
 import org.appdevforall.randomxkcd.net.XkcdComic
-import org.appdevforall.randomxkcd.ui.TapCountClassifier
 import com.itsaky.androidide.plugins.base.PluginFragmentHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -43,21 +40,14 @@ import java.io.File
  *   - onCreateView / onViewCreated: standard fragment setup, with the
  *     PluginFragmentHelper-wrapped inflater that lets us resolve our
  *     own R.layout.* against the plugin's APK.
- *   - the OnTouchListener: where ACTION_UP feeds the
- *     [TapCountClassifier] and decides to roll a new comic / copy URL /
- *     copy image.
+ *   - the button-row wiring + image gesture detector: xkcd.com-style
+ *     controls above the comic, plus single/double-tap shortcuts on
+ *     the image itself.
  *   - loadRandomComic(): coroutine-based fetch + render.
- *
- * Why we don't use [android.view.GestureDetector]:
- *   - GestureDetector resolves single/double tap but not triple.
- *   - A small purpose-built [TapCountClassifier] reads cleaner in the
- *     Tier-3 walkthrough.
  */
 class XkcdPanelFragment : Fragment() {
 
     private val api = XkcdApiClient()
-    private val tapClassifier = TapCountClassifier()
-    private val mainHandler = Handler(Looper.getMainLooper())
 
     // Bound view references — populated in onViewCreated, cleared in
     // onDestroyView so we don't leak views across configuration changes.
@@ -73,26 +63,13 @@ class XkcdPanelFragment : Fragment() {
 
     /**
      * Raw PNG bytes of the currently-displayed comic. Kept in memory so a
-     * triple-tap can copy the image to the clipboard without re-downloading
-     * or re-encoding the rendered Bitmap.
-     *
-     * **Tradeoff worth knowing if you copy this pattern:** this pins up to
-     * `MAX_IMAGE_BYTES` (5 MB) on the heap for the Fragment's lifetime. On a
-     * 2 GB device that's a noticeable allocation. Alternatives:
-     *   - re-fetch on triple-tap (slow, requires network)
-     *   - re-compress the rendered `Bitmap` back to PNG on demand (CPU spike)
-     *   - write to disk on every fetch (the old approach — adds I/O on success
-     *     path, was removed for simplicity)
-     * The in-memory buffer is the right call for a demo plugin; if you write
-     * a plugin that holds multiple images, reconsider.
+     * "copy image" tap can hit the clipboard without re-downloading or
+     * re-encoding the rendered Bitmap.
      */
     private var lastBytes: ByteArray? = null
 
-    /** In-flight fetch, so rapid SINGLE-tap bursts don't fan out into N parallel fetches. */
+    /** In-flight fetch, so rapid Random presses don't fan out into N parallel fetches. */
     private var loadJob: Job? = null
-
-    /** Pending tap-window timeout — cancelled if we resolve early. */
-    private val resolveBurstRunnable = Runnable { handleClassification(tapClassifier.resolve()) }
 
     override fun onGetLayoutInflater(savedInstanceState: Bundle?): LayoutInflater {
         // Plugins must wrap the inflater so R.layout.* resolves against
@@ -118,41 +95,37 @@ class XkcdPanelFragment : Fragment() {
         progressView = view.findViewById(R.id.xkcd_progress)
         emptyView = view.findViewById(R.id.xkcd_empty)
 
-        // Tap dispatch: ACTION_UP feeds the classifier *only* if the
-        // gesture didn't move beyond the system touch slop — otherwise
-        // every fling/scroll on a tall comic would also fire a tap.
-        val root = view.findViewById<View>(R.id.xkcd_root)
-        val touchSlop = ViewConfiguration.get(view.context).scaledTouchSlop
-        var downX = 0f
-        var downY = 0f
-        root.setOnTouchListener { _, event ->
-            when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    downX = event.x
-                    downY = event.y
-                }
-                MotionEvent.ACTION_UP -> {
-                    val dx = event.x - downX
-                    val dy = event.y - downY
-                    if (dx * dx + dy * dy <= touchSlop * touchSlop) {
-                        handleTap()
-                        root.performClick()  // accessibility-friendly
-                    }
-                }
-            }
-            // We never consume the event here; let the ScrollView keep
-            // its scroll behavior so long content is still scrollable.
-            false
+        // Button row mirrors the xkcd.com control bar — explicit, discoverable
+        // actions for everything the plugin does. Gestures on the image (below)
+        // are convenience shortcuts that do the same things.
+        view.findViewById<Button>(R.id.xkcd_btn_random).setOnClickListener {
+            loadRandomComic()
+        }
+        view.findViewById<Button>(R.id.xkcd_btn_copy_url).setOnClickListener {
+            copyUrlToClipboard()
+        }
+        view.findViewById<Button>(R.id.xkcd_btn_copy_image).setOnClickListener {
+            copyImageToClipboard()
+        }
+
+        // Single-tap image → copy URL · Double-tap image → copy image.
+        // Standard GestureDetector handles the timing; we don't need a
+        // custom state machine. Attaches to the image only (not the whole
+        // panel) so scrolling a tall comic doesn't trigger taps.
+        val gestureDetector = GestureDetector(view.context, ImageGestureListener())
+        imageView?.setOnTouchListener { v, event ->
+            val handled = gestureDetector.onTouchEvent(event)
+            if (event.actionMasked == MotionEvent.ACTION_UP) v.performClick()
+            handled
         }
 
         // First show → kick off a fresh fetch. On configuration change
         // (rotation, etc.) the fragment is recreated but we don't re-fetch;
-        // the user can tap to roll a new comic if they want.
+        // the user can tap Random if they want a new comic.
         if (savedInstanceState == null) loadRandomComic()
     }
 
     override fun onDestroyView() {
-        mainHandler.removeCallbacks(resolveBurstRunnable)
         imageCard = null
         imageView = null
         captionView = null
@@ -164,44 +137,34 @@ class XkcdPanelFragment : Fragment() {
 
     // --- gesture handling ---
 
-    private fun handleTap() {
-        val now = SystemClock.uptimeMillis()
-        val burstClosedEarly = tapClassifier.onTap(now)
-        if (burstClosedEarly) {
-            // Triple-tap: resolve immediately for snappy feedback.
-            mainHandler.removeCallbacks(resolveBurstRunnable)
-            handleClassification(tapClassifier.resolve())
-            return
-        }
-        // Otherwise, wait one window for more taps. Re-arm the timeout
-        // on every tap so the burst only fires after the user pauses.
-        mainHandler.removeCallbacks(resolveBurstRunnable)
-        mainHandler.postDelayed(resolveBurstRunnable, TapCountClassifier.DEFAULT_WINDOW_MS)
-    }
+    private inner class ImageGestureListener : GestureDetector.SimpleOnGestureListener() {
+        override fun onDown(e: MotionEvent): Boolean = true  // required to receive subsequent events
 
-    private fun handleClassification(c: TapCountClassifier.Classification?) {
-        // Guard against the deferred Handler runnable firing after the
-        // view has been torn down — would otherwise touch viewLifecycleOwner.
-        if (!isAdded || view == null) return
-        when (c) {
-            TapCountClassifier.Classification.SINGLE -> loadRandomComic()
-            TapCountClassifier.Classification.DOUBLE -> copyUrlToClipboard()
-            TapCountClassifier.Classification.TRIPLE -> copyImageToClipboard()
-            null -> { /* nothing to do */ }
+        override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+            copyUrlToClipboard()
+            return true
+        }
+
+        override fun onDoubleTap(e: MotionEvent): Boolean {
+            copyImageToClipboard()
+            return true
         }
     }
 
     // --- clipboard ---
 
     private fun copyUrlToClipboard() {
-        val comic = currentComic ?: return
+        val comic = currentComic ?: run {
+            toast(getString(R.string.toast_image_copy_failed))
+            return
+        }
         val cm = requireContext().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         cm.setPrimaryClip(ClipData.newPlainText("xkcd-url", comic.pageUrl))
         toast(getString(R.string.toast_url_copied, comic.pageUrl))
     }
 
     /**
-     * Triple-tap → push the in-memory PNG to the clipboard as image/png.
+     * Push the in-memory PNG to the clipboard as image/png.
      *
      * Plugin manifest providers don't get registered at runtime (plugins
      * are loaded via DexClassLoader, not installed as apps), so we route
@@ -295,7 +258,7 @@ class XkcdPanelFragment : Fragment() {
      * bitmap decoding are on Dispatchers.IO; the callback hops back to
      * the main thread via the lifecycleScope's Main dispatcher.
      *
-     * Skips if a previous fetch is still in flight (rapid taps no-op).
+     * Skips if a previous fetch is still in flight (rapid Random presses no-op).
      */
     private fun loadRandomComic() {
         if (loadJob?.isActive == true) return
