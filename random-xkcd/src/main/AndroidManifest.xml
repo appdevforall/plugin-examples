@@ -20,7 +20,7 @@
 
         <meta-data
             android:name="plugin.description"
-            android:value="A random xkcd comic in your bottom sheet. Tap for a new one, double-tap to copy URL, triple-tap to copy image. Demo plugin: see Tier 3 docs for a code walkthrough." />
+            android:value="A random xkcd comic in your bottom sheet. Buttons above the comic: Random / Copy URL / Copy image. Demo plugin: see Tier 3 docs for a code walkthrough." />
 
         <meta-data
             android:name="plugin.author"
@@ -35,7 +35,7 @@
 
              CoGo's filesystem.* permissions only gate the *host IDE's*
              project-file services. Writes to the plugin's own filesDir
-             (used by the triple-tap clipboard flow's FileProvider hop)
+             (used by the copy-image clipboard flow's FileProvider hop)
              and access to the system clipboard are sandbox-allowed and
              need no declaration. See the Tier-3 walkthrough for details. -->
         <meta-data

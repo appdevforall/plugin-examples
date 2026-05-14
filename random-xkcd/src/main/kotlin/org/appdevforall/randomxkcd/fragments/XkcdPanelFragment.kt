@@ -155,7 +155,7 @@ class XkcdPanelFragment : Fragment() {
 
     private fun copyUrlToClipboard() {
         val comic = currentComic ?: run {
-            toast(getString(R.string.toast_image_copy_failed))
+            toast(getString(R.string.toast_no_comic_yet))
             return
         }
         val cm = requireContext().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
