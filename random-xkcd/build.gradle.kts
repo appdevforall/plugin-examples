@@ -11,11 +11,11 @@ pluginBuilder {
 }
 
 android {
-    namespace = "com.codeonthego.xkcdrandom"
+    namespace = "org.appdevforall.randomxkcd"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.codeonthego.xkcdrandom"
+        applicationId = "org.appdevforall.randomxkcd"
         minSdk = 26
         targetSdk = 34
         versionCode = 1

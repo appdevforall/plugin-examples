@@ -1,4 +1,4 @@
-package com.codeonthego.xkcdrandom.fragments
+package org.appdevforall.randomxkcd.fragments
 
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -21,11 +21,11 @@ import android.widget.Toast
 import androidx.core.content.FileProvider
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
-import com.codeonthego.xkcdrandom.R
-import com.codeonthego.xkcdrandom.XkcdRandomPlugin
-import com.codeonthego.xkcdrandom.net.XkcdApiClient
-import com.codeonthego.xkcdrandom.net.XkcdComic
-import com.codeonthego.xkcdrandom.ui.TapCountClassifier
+import org.appdevforall.randomxkcd.R
+import org.appdevforall.randomxkcd.XkcdRandomPlugin
+import org.appdevforall.randomxkcd.net.XkcdApiClient
+import org.appdevforall.randomxkcd.net.XkcdComic
+import org.appdevforall.randomxkcd.ui.TapCountClassifier
 import com.itsaky.androidide.plugins.base.PluginFragmentHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job

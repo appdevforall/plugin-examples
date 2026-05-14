@@ -1,4 +1,4 @@
-package com.codeonthego.xkcdrandom.ui
+package org.appdevforall.randomxkcd.ui
 
 /**
  * Tiny state machine that turns a stream of taps into one of three

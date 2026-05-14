@@ -8,7 +8,7 @@
         <!-- Plugin metadata -->
         <meta-data
             android:name="plugin.id"
-            android:value="com.codeonthego.xkcdrandom" />
+            android:value="org.appdevforall.randomxkcd" />
 
         <meta-data
             android:name="plugin.name"
@@ -24,7 +24,7 @@
 
         <meta-data
             android:name="plugin.author"
-            android:value="Code on the Go Team" />
+            android:value="App Dev For All" />
 
         <meta-data
             android:name="plugin.min_ide_version"
@@ -44,7 +44,7 @@
 
         <meta-data
             android:name="plugin.main_class"
-            android:value="com.codeonthego.xkcdrandom.XkcdRandomPlugin" />
+            android:value="org.appdevforall.randomxkcd.XkcdRandomPlugin" />
 
         <!-- Plugin Manager icons. Required for debug builds; release builds
              skip this check. Paths are inside the .cgp (APK) zip — assets/

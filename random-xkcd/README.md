@@ -12,7 +12,7 @@ called out where it shows up in the code.
 
 The full walkthrough lives in `src/main/assets/docs/index.html` —
 the **Tier 3 docs page** served by the host IDE at
-`http://localhost:6174/plugin/com.codeonthego.xkcdrandom/index.html`
+`http://localhost:6174/plugin/org.appdevforall.randomxkcd/index.html`
 once the plugin is installed.
 
 To read it:
@@ -53,7 +53,7 @@ random-xkcd/
     │   ├── docs/                  ← Tier 3 walkthrough (the tutorial)
     │   ├── icon_day.png           ← Plugin Manager icon, light theme
     │   └── icon_night.png         ← Plugin Manager icon, dark theme
-    ├── kotlin/com/codeonthego/xkcdrandom/
+    ├── kotlin/org/appdevforall/randomxkcd/
     │   ├── XkcdRandomPlugin.kt    ← lifecycle + tab + tooltip registration
     │   ├── fragments/XkcdPanelFragment.kt
     │   ├── net/XkcdApiClient.kt   ← HTTP, two endpoints, no auth

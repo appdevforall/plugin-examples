@@ -1,4 +1,4 @@
-package com.codeonthego.xkcdrandom.net
+package org.appdevforall.randomxkcd.net
 
 import kotlinx.coroutines.ensureActive
 import okhttp3.OkHttpClient

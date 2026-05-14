@@ -41,7 +41,7 @@ Get this right and the rest is opt-in.</p>
     private lateinit var context: PluginContext
 
     companion object {
-        const val PLUGIN_ID = "com.codeonthego.xkcdrandom"
+        const val PLUGIN_ID = "org.appdevforall.randomxkcd"
     }
 
     override fun initialize(context: PluginContext): Boolean {
@@ -84,11 +84,11 @@ to find your plugin and what host resources you're allowed to touch.</p>
         android:theme="@style/PluginTheme"&gt;
 
         &lt;meta-data android:name="plugin.id"
-                   android:value="com.codeonthego.xkcdrandom" /&gt;
+                   android:value="org.appdevforall.randomxkcd" /&gt;
         &lt;meta-data android:name="plugin.name"
                    android:value="Random XKCD" /&gt;
         &lt;meta-data android:name="plugin.main_class"
-                   android:value="com.codeonthego.xkcdrandom.XkcdRandomPlugin" /&gt;
+                   android:value="org.appdevforall.randomxkcd.XkcdRandomPlugin" /&gt;
         &lt;meta-data android:name="plugin.permissions"
                    android:value="network.access" /&gt;
     &lt;/application&gt;
