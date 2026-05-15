@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Random XKCD</string>
+
+    <string name="loading">Loading…</string>
+    <string name="empty_offline">Could not load a comic — connect to the internet and tap a navigation button.</string>
+    <string name="legend">Tap image → copy URL · Double-tap image → copy image</string>
+
+    <!-- Button labels (xkcd.com-style navigation row above the comic).
+         |< · Prev · Random · Next · >| -->
+    <string name="btn_first">|&lt;</string>
+    <string name="btn_prev">Prev</string>
+    <string name="btn_random">Random</string>
+    <string name="btn_next">Next</string>
+    <string name="btn_last">&gt;|</string>
+
+    <string name="toast_url_copied">URL copied: %1$s</string>
+    <string name="toast_image_copied">Comic image copied to clipboard</string>
+    <string name="toast_image_copy_failed">Could not copy image — load a comic first</string>
+    <string name="toast_no_comic_yet">No comic loaded yet — tap Random first</string>
+    <string name="toast_fetch_failed">Could not load comic — check your connection</string>
+
+    <string name="comic_caption">#%1$d  &#8220;%2$s&#8221;</string>
+    <string name="comic_alt_prefix">alt: %1$s</string>
+
+    <!-- xkcd comics are © Randall Munroe, licensed CC BY-NC 2.5
+         (https://xkcd.com/license.html). Attribution stays visible in the
+         panel and the surrounding docs. -->
+    <string name="credit">Comics © Randall Munroe · xkcd.com · CC BY-NC 2.5</string>
+</resources>

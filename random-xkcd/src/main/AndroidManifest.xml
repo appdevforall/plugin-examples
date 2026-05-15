@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application
+        android:label="@string/app_name"
+        android:theme="@style/PluginTheme">
+
+        <!-- Plugin metadata -->
+        <meta-data
+            android:name="plugin.id"
+            android:value="org.appdevforall.randomxkcd" />
+
+        <meta-data
+            android:name="plugin.name"
+            android:value="Random XKCD" />
+
+        <meta-data
+            android:name="plugin.version"
+            android:value="${pluginVersion}" />
+
+        <meta-data
+            android:name="plugin.description"
+            android:value="Browse xkcd comics from your bottom sheet. 5-button nav above the comic (|&lt; · &lt; Prev · Random · Next &gt; · &gt;|), defaulting to the latest. Tap image to copy URL, double-tap to copy image. Demo plugin: see Tier 3 docs for a code walkthrough." />
+
+        <meta-data
+            android:name="plugin.author"
+            android:value="App Dev For All" />
+
+        <meta-data
+            android:name="plugin.min_ide_version"
+            android:value="1.0.0" />
+
+        <!-- network.access — required by the manifest validator and conveys
+             intent to the user at install time. xkcd JSON + image fetch.
+
+             CoGo's filesystem.* permissions only gate the *host IDE's*
+             project-file services. Writes to the plugin's own filesDir
+             (used by the copy-image clipboard flow's FileProvider hop)
+             and access to the system clipboard are sandbox-allowed and
+             need no declaration. See the Tier-3 walkthrough for details. -->
+        <meta-data
+            android:name="plugin.permissions"
+            android:value="network.access" />
+
+        <meta-data
+            android:name="plugin.main_class"
+            android:value="org.appdevforall.randomxkcd.XkcdRandomPlugin" />
+
+        <!-- Plugin Manager icons. Required for debug builds; release builds
+             skip this check. Paths are inside the .cgp (APK) zip — assets/
+             entries land at exactly this path because the Android build
+             system bundles assets verbatim. -->
+        <meta-data
+            android:name="plugin.icon_day"
+            android:value="assets/icon_day.png" />
+        <meta-data
+            android:name="plugin.icon_night"
+            android:value="assets/icon_night.png" />
+
+    </application>
+
+</manifest>
