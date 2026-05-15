@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>XKCD Plugin — Code Walkthrough</title>
+    <link rel="stylesheet" href="css/walkthrough.css">
+</head>
+<body>
+
+<h1>Building the XKCD Plugin</h1>
+<p class="lede">A 7-step tour of how a small Code on the Go plugin is
+built end-to-end. Each step adds one capability and teaches one
+plugin-platform concept. The whole plugin is under 300 lines of
+Kotlin — small enough to read top-to-bottom in an evening.</p>
+
+<div class="callout">
+    <b>What you'll build.</b> An "XKCD" tab in CoGo's editor bottom
+    sheet. A 5-button row above the comic
+    (<em>|&lt; · Prev · Random · Next · &gt;|</em>) mirrors
+    xkcd.com's own navigation bar; the panel defaults to the latest
+    comic. Single-tap on the comic copies the URL; double-tap copies
+    the image. Long-press the tab for in-IDE help.
+</div>
+
+<div class="callout">
+    <b>Prerequisites.</b> Kotlin + Android fragments + Gradle + basic
+    `kotlinx.coroutines`. You don't need prior plugin experience —
+    every plugin-specific concept is called out where it shows up.
+</div>
+
+<h2>1. Plugin entry point</h2>
+
+<p class="why"><b>Why you care:</b> every plugin starts with an
+<code>IPlugin</code> class. The host loads it via
+<code>DexClassLoader</code>, reflectively instantiates it from
+<code>plugin.main_class</code>, and drives the
+<code>initialize → activate → deactivate → dispose</code> lifecycle.
+Get this right and the rest is opt-in.</p>
+
+<pre>class XkcdRandomPlugin : IPlugin {
+
+    private lateinit var context: PluginContext
+
+    companion object {
+        const val PLUGIN_ID = "org.appdevforall.randomxkcd"
+    }
+
+    override fun initialize(context: PluginContext): Boolean {
+        return try {
+            this.context = context
+            context.logger.info("XkcdRandomPlugin initialized")
+            true
+        } catch (t: Throwable) {
+            context.logger.error("XkcdRandomPlugin initialization failed", t)
+            false
+        }
+    }
+
+    override fun activate(): Boolean { … }
+    override fun deactivate(): Boolean { … }
+    override fun dispose() { … }
+}</pre>
+
+<p class="callout-inline"><b>Plugin concept — wrap <code>initialize</code>
+in try/catch.</b> A stray exception here crashes the host IDE on plugin
+load. Return <code>false</code> on failure; the host then skips
+<code>activate()</code> for this plugin and keeps the rest of the IDE
+alive.</p>
+
+<p class="callout-inline"><b>Plugin concept — <code>PluginContext</code>
+is your handle to the host.</b> It exposes a per-plugin
+<code>logger</code>, a <code>services</code> registry (look up
+<code>IdeEditorTabService</code>, <code>IdeTooltipService</code>, etc.),
+and resource access. Stash the reference in <code>initialize</code> and
+use it from every other method.</p>
+
+<h2>2. Manifest + permissions</h2>
+
+<p class="why"><b>Why you care:</b> the manifest tells the host how
+to find your plugin and what host resources you're allowed to touch.</p>
+
+<pre>&lt;manifest xmlns:android="http://schemas.android.com/apk/res/android"&gt;
+    &lt;application
+        android:label="@string/app_name"
+        android:theme="@style/PluginTheme"&gt;
+
+        &lt;meta-data android:name="plugin.id"
+                   android:value="org.appdevforall.randomxkcd" /&gt;
+        &lt;meta-data android:name="plugin.name"
+                   android:value="Random XKCD" /&gt;
+        &lt;meta-data android:name="plugin.main_class"
+                   android:value="org.appdevforall.randomxkcd.XkcdRandomPlugin" /&gt;
+        &lt;meta-data android:name="plugin.permissions"
+                   android:value="network.access" /&gt;
+    &lt;/application&gt;
+&lt;/manifest&gt;</pre>
+
+<p>Plugin permissions are comma-separated values inside one
+<code>&lt;meta-data&gt;</code> entry — <em>not</em> the
+<code>&lt;uses-permission&gt;</code> system Android apps use. Available
+permissions:</p>
+
+<table>
+<tr><th>Permission</th><th>What it gates</th></tr>
+<tr><td><code>network.access</code></td><td>Required by the validator for any plugin that contacts the network. (Today the runtime gate is wired in, advisory for plugins — declare it anyway; it's forward-compatible.)</td></tr>
+<tr><td><code>filesystem.read</code></td><td>Read access to the <em>user's project</em> via <code>IdeFileService</code>, <code>IdeEditorService</code>, etc.</td></tr>
+<tr><td><code>filesystem.write</code></td><td>Write access to the user's project. Same gate as above.</td></tr>
+<tr><td><code>system.commands</code></td><td><code>Runtime.exec</code>, process spawning.</td></tr>
+<tr><td><code>ide.settings</code></td><td>Read/write IDE preferences.</td></tr>
+<tr><td><code>project.structure</code></td><td>Walk the user's open project.</td></tr>
+<tr><td><code>native.code</code></td><td>Execute native machine code.</td></tr>
+<tr><td><code>ide.environment.write</code></td><td>Write to IDE-managed dirs (SDK, NDK, cache).</td></tr>
+</table>
+
+<p class="callout"><b>Plugin concept — permissions gate the host's
+resources, not your own.</b> Your <code>context.filesDir</code> and
+<code>context.cacheDir</code> belong to the host APK's Android
+sandbox and are yours to use freely. The system clipboard is
+reachable directly via <code>ClipboardManager</code>. So even though
+this plugin <em>writes to <code>filesDir</code></em> (the copy-image
+clipboard hop in Step 6) and <em>writes to the clipboard</em>, the
+only permission it needs is <code>network.access</code>. Declare
+permissions to mean "I touch what the host mediates" — nothing
+else.</p>
+
+<h2>3. The bottom-sheet tab UI</h2>
+
+<p class="why"><b>Why you care:</b> bottom-sheet tabs are the primary
+place small plugins live in CoGo. They appear alongside Build Output,
+App Logs, IDE Logs, etc. — visible without leaving the editor. You
+register one with <code>UIExtension.getEditorTabs()</code> and
+provide a Fragment factory.</p>
+
+<pre>class XkcdRandomPlugin : IPlugin, UIExtension {
+
+    override fun getEditorTabs(): List&lt;TabItem&gt; = listOf(
+        TabItem(
+            id = "xkcd_bottom_tab",
+            title = "XKCD",
+            fragmentFactory = { XkcdPanelFragment() },
+            order = 200,
+            tooltipTag = "xkcd.tab"
+        )
+    )
+}</pre>
+
+<p><code>tooltipTag</code> connects this tab to the help entry from
+<code>DocumentationExtension</code> (Step 7). Omit it and the host
+falls back to <code>"&lt;pluginId&gt;.&lt;tabId&gt;"</code>.</p>
+
+<p>The Fragment needs one non-obvious override:</p>
+
+<pre>override fun onGetLayoutInflater(savedInstanceState: Bundle?): LayoutInflater {
+    val inflater = super.onGetLayoutInflater(savedInstanceState)
+    return PluginFragmentHelper.getPluginInflater(XkcdRandomPlugin.PLUGIN_ID, inflater)
+}</pre>
+
+<p class="callout"><b>Plugin concept — plugin Fragments must wrap
+their <code>LayoutInflater</code>.</b> Plugins load via
+<code>DexClassLoader</code>. The inflater the host hands you defaults
+to resolving <code>R.layout.*</code> against the <em>host IDE's</em>
+resources, not yours. Skip the wrap and you crash with
+<code>Resources$NotFoundException</code> the first time the Fragment
+shows. <code>PluginFragmentHelper.getPluginInflater(pluginId, parent)</code>
+wraps the inflater with a <code>Resources</code> instance backed by
+your plugin's APK.</p>
+
+<p class="callout-inline"><b>Plugin concept —
+<code>fragmentFactory</code> returns a fresh instance every time.</b>
+Never cache a singleton Fragment; the host calls the factory whenever
+the tab is shown, and Fragment lifecycle expectations require a clean
+instance each time.</p>
+
+<h2>4. UI interactions: navigation buttons + gestures</h2>
+
+<p class="why"><b>Why you care:</b> the canonical surface for plugin
+actions is buttons in the layout — they're discoverable, accessible,
+and easy to test. Gestures on top of that are optional convenience.
+Android's <code>GestureDetector.SimpleOnGestureListener</code> handles
+single + double tap with two callbacks. Don't reach for a custom tap
+state machine if your model fits this pattern.</p>
+
+<p>The XKCD plugin's button row mirrors the
+<a href="https://xkcd.com">xkcd.com</a> navigation bar — five
+buttons, left-to-right: <em>|&lt; · Prev · Random · Next · &gt;|</em>.
+Each is a normal <code>Button</code> wired with
+<code>setOnClickListener</code>; all five route through one
+<code>loadComic(nav)</code> helper that fetches + renders:</p>
+
+<pre>btnFirst?.setOnClickListener  { loadComic(Navigation.First) }
+btnPrev?.setOnClickListener   { loadComic(Navigation.Prev) }
+btnRandom.setOnClickListener  { loadComic(Navigation.Random) }
+btnNext?.setOnClickListener   { loadComic(Navigation.Next) }
+btnLast?.setOnClickListener   { loadComic(Navigation.Last) }</pre>
+
+<p class="callout-inline"><b>Plugin-friendly UX detail —
+default to Last.</b> On first show the fragment calls
+<code>loadComic(Navigation.Last)</code> so the user lands on the
+newest comic, exactly like opening xkcd.com in a browser. Prev / Next
+are disabled until we know the current cursor + the high-water mark,
+so the buttons never lie about what they can do.</p>
+
+<p class="callout-inline"><b>Edge case — comic #404.</b> xkcd #404
+is a deliberate joke: its JSON endpoint returns HTTP 404. The
+fetch handler steps past it in the same direction the user requested
+(Prev to #403, Next to #405), so the user never sees a "failed to
+load" toast for a quirk of the source data.</p>
+
+<p>Gesture shortcuts on the image itself are pure
+<code>GestureDetector</code>:</p>
+
+<pre>private inner class ImageGestureListener : GestureDetector.SimpleOnGestureListener() {
+    override fun onDown(e: MotionEvent) = true  // required to receive subsequent events
+
+    override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+        copyUrlToClipboard()
+        return true
+    }
+
+    override fun onDoubleTap(e: MotionEvent): Boolean {
+        copyImageToClipboard()
+        return true
+    }
+}
+
+val gestureDetector = GestureDetector(view.context, ImageGestureListener())
+imageView.setOnTouchListener { v, event -&gt;
+    val handled = gestureDetector.onTouchEvent(event)
+    if (event.actionMasked == MotionEvent.ACTION_UP) v.performClick()
+    handled
+}</pre>
+
+<p>The detector is attached to the <code>ImageView</code> only —
+the rest of the panel scrolls normally. <code>onSingleTapConfirmed</code>
+fires after Android's double-tap window expires, so it doesn't
+preempt double-tap.</p>
+
+<h2>5. Network fetch over HTTPS</h2>
+
+<p class="why"><b>Why you care:</b> most plugins talk to a network
+eventually. The XKCD client is the smallest realistic example:
+OkHttp + the <code>org.json</code> reader that ships with Android, no
+auth, two endpoints. It also shows the offline-failure contract —
+returning <code>null</code> rather than throwing keeps the caller's
+empty-state branch reachable on a flaky network.</p>
+
+<pre>class XkcdApiClient(private val client: OkHttpClient = defaultClient()) {
+
+    fun fetchRandom(): XkcdComic? {
+        val latest = fetchLatest() ?: return null
+        while (true) {
+            val pick = Random.nextInt(1, latest.num + 1)
+            if (pick == 404) continue
+            fetchByNumber(pick)?.let { return it }
+            // null = transient blip; just pick again
+        }
+    }
+
+    fun fetchLatest(): XkcdComic? = getJson(LATEST_URL)?.let(::parseComic)
+    fun fetchByNumber(num: Int): XkcdComic? = getJson(numUrl(num))?.let(::parseComic)
+}</pre>
+
+<p class="callout-inline"><b>Why the loop is unbounded:</b> xkcd #404
+is a joke comic that returns HTTP 404 on its JSON endpoint. A
+bounded retry can still land on the same dud. Looping until success
+is simpler and converges in 1-2 picks on a healthy network. The only
+way <code>fetchRandom</code> returns <code>null</code> is if the
+initial probe fails — i.e. the network is down.</p>
+
+<p>The Fragment wires this into a coroutine + bitmap decode on
+<code>Dispatchers.IO</code> so the UI stays responsive:</p>
+
+<pre>private fun loadRandomComic() {
+    if (loadJob?.isActive == true) return
+    if (currentComic == null) showLoading()
+    loadJob = viewLifecycleOwner.lifecycleScope.launch {
+        val result = withContext(Dispatchers.IO) { fetchAndDecode() }
+        // … render or show empty state
+    }
+}</pre>
+
+<p class="callout-inline">For production use on low-end devices, prefer
+Android's <a
+href="https://developer.android.com/topic/performance/graphics/load-bitmap">bounded
+bitmap decoding pattern</a>. This plugin keeps it simple:
+<code>BitmapFactory.decodeByteArray(...)</code> with a 5 MB
+network-read cap.</p>
+
+<h2>6. Clipboard support</h2>
+
+<p class="why"><b>Why you care:</b> moving things to the clipboard is
+how plugins integrate with the rest of the user's workflow. Text
+clipboard is trivial; image clipboard takes one detour through the
+host's <code>FileProvider</code> because of how Android's content URIs
+work in the plugin sandbox.</p>
+
+<h3>6a. Text — the easy path</h3>
+
+<pre>private fun copyUrlToClipboard() {
+    val comic = currentComic ?: return
+    val cm = requireContext().getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+    cm.setPrimaryClip(ClipData.newPlainText("xkcd-url", comic.pageUrl))
+    toast(getString(R.string.toast_url_copied, comic.pageUrl))
+}</pre>
+
+<p class="callout-inline"><b>No permission needed.</b> Android doesn't
+have a <code>&lt;uses-permission&gt;</code> for clipboard access either
+— clipboard write is implicitly allowed for foreground apps (which
+your plugin always is, because its tab is in the foreground IDE).
+Android 12+ adds a system toast on clipboard <em>reads</em>, but
+writes pass freely.</p>
+
+<h3>6b. Image — the FileProvider hop</h3>
+
+<pre>private fun copyImageToClipboard() {
+    val bytes = lastBytes ?: run { toast(/* failed */); return }
+    val ctx = requireContext()
+    viewLifecycleOwner.lifecycleScope.launch {
+        val target = withContext(Dispatchers.IO) {
+            val shareDir = File(ctx.filesDir, "xkcd_share").apply { mkdirs() }
+            val out = File(shareDir, "last.png")
+            try { out.writeBytes(bytes); out } catch (_: Exception) { null }
+        } ?: run { toast(/* failed */); return@launch }
+
+        val authority = "${ctx.packageName}.providers.fileprovider"
+        val uri = FileProvider.getUriForFile(ctx, authority, target)
+        val clip = ClipData.newUri(ctx.contentResolver, "xkcd-image", uri)
+        (ctx.getSystemService(CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(clip)
+        toast(/* image copied */)
+    }
+}</pre>
+
+<p class="callout"><b>Plugin concept — <code>&lt;provider&gt;</code>
+declarations in a plugin manifest are dead code.</b> Plugins are
+loaded via <code>DexClassLoader</code>, not installed as Android
+apps. Android's <code>PackageManager</code> never sees the plugin's
+manifest, so it never registers your <code>&lt;activity&gt;</code>,
+<code>&lt;service&gt;</code>, or <code>&lt;provider&gt;</code>.
+Anything that requires OS-side registration must go through the host.</p>
+
+<p>The escape valve: <strong>route through the host IDE's
+<code>FileProvider</code> authority.</strong> The host ships its own
+<code>FileProvider</code> with authority
+<code>${packageName}.providers.fileprovider</code> and a
+<code>file_provider_paths.xml</code> that exposes
+<code>filesDir</code>. Any file we drop under
+<code>ctx.filesDir/...</code> can be served from that authority.</p>
+
+<p><code>ctx.packageName</code> is the host's package name (because
+<code>ctx</code> is the host's <code>Context</code>), so this composes
+to the right authority without hard-coding it. And because
+<code>filesDir</code> is your plugin's own sandbox storage, writing
+to it doesn't need <code>filesystem.write</code>.</p>
+
+<p><code>ClipData.newUri</code> queries the <code>ContentResolver</code>
+for the URI's MIME type. The host's <code>FileProvider</code> resolves
+<code>.png</code> to <code>image/png</code>, so the clip advertises
+<code>image/*</code> to paste targets. Paste into Messages, Gmail, any
+image-aware app — it pastes the image, not the URL.</p>
+
+<h2>7. Three-tier tooltip for plugin help</h2>
+
+<p class="why"><b>Why you care:</b> CoGo has a per-plugin help API.
+A user long-presses your plugin's tab and gets in-IDE help that you
+provide. Three tiers, progressively-detailed: a one-liner, then an
+HTML detail panel, then a full HTML walkthrough page (this page).
+Implementing <code>DocumentationExtension</code> is how a plugin
+provides help users can discover without leaving the IDE.</p>
+
+<pre>class XkcdRandomPlugin : IPlugin, UIExtension, DocumentationExtension {
+
+    override fun getTooltipCategory(): String = "plugin_xkcd"
+
+    override fun getTooltipEntries(): List&lt;PluginTooltipEntry&gt; = listOf(
+        PluginTooltipEntry(
+            tag = "xkcd.tab",
+            summary = "Browse xkcd. Buttons navigate · tap = copy URL · double-tap = copy image.",
+            detail = """
+                &lt;p&gt;Defaults to the latest comic. Navigate with
+                &lt;b&gt;|&lt; · Prev · Random · Next · &gt;|&lt;/b&gt;.&lt;/p&gt;
+                &lt;ul&gt;
+                  &lt;li&gt;&lt;b&gt;Tap image&lt;/b&gt; — copy URL.&lt;/li&gt;
+                  &lt;li&gt;&lt;b&gt;Double-tap image&lt;/b&gt; — copy image.&lt;/li&gt;
+                &lt;/ul&gt;
+            """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(
+                    description = "Code walkthrough",
+                    uri = "index.html",
+                    order = 0
+                )
+            )
+        )
+    )
+
+    override fun getTier3DocsAssetPath(): String? = "docs"
+}</pre>
+
+<table>
+<tr><th>Tier</th><th>Field</th><th>What the user sees</th></tr>
+<tr><td>1</td><td><code>summary</code></td><td>Short string shown when long-pressing your tab.</td></tr>
+<tr><td>2</td><td><code>detail</code></td><td>HTML rendered inside the tooltip after tapping "See More".</td></tr>
+<tr><td>3</td><td><code>buttons[].uri</code></td><td>A button labeled <code>description</code>. Tapping it opens an HTML page (this one) served at <code>http://localhost:6174/plugin/&lt;pluginId&gt;/&lt;uri&gt;</code>.</td></tr>
+</table>
+
+<p><code>tag</code> here is the same string you put on
+<code>TabItem.tooltipTag</code> (Step 3) — that's the wire that
+connects the long-press on the tab to this entry.</p>
+
+<p><code>getTier3DocsAssetPath() = "docs"</code> says: "my Tier 3
+walkthrough lives under <code>src/main/assets/docs/</code>." At
+install time the host's <code>Tier3AssetWalker</code> indexes
+everything under that directory and serves each file at the URL
+above. Files reference each other with relative paths — so this
+page's <code>&lt;link rel="stylesheet" href="css/walkthrough.css"&gt;</code>
+just works.</p>
+
+<p class="callout-inline"><b>To preview the Tier 3 page outside the
+IDE:</b> just open <code>random-xkcd/src/main/assets/docs/index.html</code>
+in any browser. It renders identically; the localhost:6174 URL is
+only used when the host serves it inside CoGo.</p>
+
+<h2>The sandbox model in one screen</h2>
+
+<p>Three rules to remember:</p>
+<ul>
+    <li>Manifest <code>&lt;provider&gt;</code>, <code>&lt;activity&gt;</code>,
+    <code>&lt;service&gt;</code>, <code>&lt;receiver&gt;</code> are dead code —
+    route via host extensions or its <code>FileProvider</code>.</li>
+    <li><code>R.*</code> resolves against whichever <code>Resources</code>
+    your code is using — wrap the inflater.</li>
+    <li>Permissions gate the <em>host's</em> resources only — your
+    <code>filesDir</code>, <code>cacheDir</code>, and the clipboard
+    need no declaration.</li>
+</ul>
+
+<h2>xkcd attribution + license</h2>
+
+<p>xkcd comics are © Randall Munroe, licensed
+<a href="https://xkcd.com/license.html">CC BY-NC 2.5</a>. This plugin
+fetches over HTTPS, shows a permanent attribution line under every
+comic, and is itself a non-commercial open-source demo. The plugin's
+source is licensed per the <code>plugin-examples</code> repo.</p>
+
+<h2>Where to go next</h2>
+
+<ul>
+    <li><b>Plugin Development Guide (wiki)</b> — the full API
+    reference for every extension interface and host service.</li>
+    <li><b>Sibling demo plugins</b> — <code>forms-plugin</code> and
+    <code>maps-plugin</code> show plugins with more complex UI and
+    persistent state.</li>
+    <li><b>This plugin's source</b> — under 250 lines of Kotlin.
+    Read it top-to-bottom: <code>XkcdRandomPlugin.kt</code> →
+    <code>XkcdPanelFragment.kt</code> → <code>XkcdApiClient.kt</code>.</li>
+</ul>
+
+</body>
+</html>

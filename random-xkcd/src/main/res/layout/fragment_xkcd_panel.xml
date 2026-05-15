@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Layout mirrors the xkcd.com page: navigation row + title above the comic.
+     The image itself is the gesture target — single-tap copies the URL,
+     double-tap copies the image. The 5-button row above is the canonical
+     navigation surface (|< · < Prev · Random · Next > · >|); gestures
+     on the image are convenience shortcuts. -->
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/xkcd_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:id="@+id/xkcd_content"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="12dp">
+
+        <!-- Navigation row: |< · Prev · Random · Next · >|
+             Weights: first/last=0.8 (short symbol), prev/next=1.0, random=1.4
+             On a 370dp phone (total weight 5.0): ~59dp / ~74dp / ~104dp / ~74dp / ~59dp -->
+        <LinearLayout
+            android:id="@+id/xkcd_buttons"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="8dp"
+            android:orientation="horizontal"
+            android:gravity="center">
+
+            <Button
+                android:id="@+id/xkcd_btn_first"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="0.8"
+                android:text="@string/btn_first"
+                style="?attr/buttonBarButtonStyle" />
+
+            <Button
+                android:id="@+id/xkcd_btn_prev"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1.0"
+                android:text="@string/btn_prev"
+                style="?attr/buttonBarButtonStyle" />
+
+            <Button
+                android:id="@+id/xkcd_btn_random"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1.4"
+                android:text="@string/btn_random"
+                style="?attr/buttonBarButtonStyle" />
+
+            <Button
+                android:id="@+id/xkcd_btn_next"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1.0"
+                android:text="@string/btn_next"
+                style="?attr/buttonBarButtonStyle" />
+
+            <Button
+                android:id="@+id/xkcd_btn_last"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="0.8"
+                android:text="@string/btn_last"
+                style="?attr/buttonBarButtonStyle" />
+        </LinearLayout>
+
+        <!-- Title row: comic number + title, in the xkcd.com style.
+             Sits between the nav row and the image so it reads
+             top-to-bottom: buttons → title → image → alt-text. -->
+        <TextView
+            android:id="@+id/xkcd_caption"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textStyle="bold"
+            android:textSize="14sp"
+            android:textColor="?attr/colorOnSurface"
+            android:visibility="gone" />
+
+        <!-- Spinner sits over the panel while the comic is fetching. Hidden
+             while a comic is rendered or in the empty state. -->
+        <ProgressBar
+            android:id="@+id/xkcd_progress"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="24dp"
+            android:visibility="gone" />
+
+        <!-- White card holds the comic image so dark-mode users still
+             see the comic correctly (xkcd is black-on-white). Image is
+             the gesture target — single-tap copies URL, double-tap copies
+             the image. The whole panel is scrollable for tall comics; the
+             image's gesture detector returns false for fling/scroll so
+             ScrollView still gets a chance to scroll. -->
+        <FrameLayout
+            android:id="@+id/xkcd_image_card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@color/comic_background"
+            android:padding="8dp"
+            android:visibility="gone">
+
+            <ImageView
+                android:id="@+id/xkcd_image"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:adjustViewBounds="true"
+                android:scaleType="fitCenter"
+                android:contentDescription="@string/app_name" />
+        </FrameLayout>
+
+        <TextView
+            android:id="@+id/xkcd_alt"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:textSize="13sp"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:visibility="gone" />
+
+        <!-- Legend explains the optional gesture shortcuts. The buttons
+             above are the canonical surface; gestures are extras for
+             one-handed use. -->
+        <TextView
+            android:id="@+id/xkcd_legend"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:textSize="12sp"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:text="@string/legend" />
+
+        <TextView
+            android:id="@+id/xkcd_empty"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:gravity="center"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:text="@string/empty_offline"
+            android:visibility="gone" />
+
+        <!-- Attribution stays visible whenever the panel is shown.
+             xkcd is CC BY-NC 2.5 — see https://xkcd.com/license.html -->
+        <TextView
+            android:id="@+id/xkcd_credit"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:gravity="center"
+            android:textSize="11sp"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:text="@string/credit" />
+    </LinearLayout>
+</ScrollView>
