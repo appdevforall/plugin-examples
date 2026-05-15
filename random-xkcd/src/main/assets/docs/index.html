@@ -16,10 +16,11 @@ Kotlin — small enough to read top-to-bottom in an evening.</p>
 
 <div class="callout">
     <b>What you'll build.</b> An "XKCD" tab in CoGo's editor bottom
-    sheet. Buttons above the comic — <em>Random / Copy URL / Copy
-    image</em> — mirror the xkcd.com control bar. Single-tap on the
-    comic copies the URL; double-tap copies the image. Long-press the
-    tab for in-IDE help.
+    sheet. A 5-button row above the comic
+    (<em>|&lt; · Prev · Random · Next · &gt;|</em>) mirrors
+    xkcd.com's own navigation bar; the panel defaults to the latest
+    comic. Single-tap on the comic copies the URL; double-tap copies
+    the image. Long-press the tab for in-IDE help.
 </div>
 
 <div class="callout">
@@ -171,7 +172,7 @@ Never cache a singleton Fragment; the host calls the factory whenever
 the tab is shown, and Fragment lifecycle expectations require a clean
 instance each time.</p>
 
-<h2>4. UI interactions: buttons + gestures</h2>
+<h2>4. UI interactions: navigation buttons + gestures</h2>
 
 <p class="why"><b>Why you care:</b> the canonical surface for plugin
 actions is buttons in the layout — they're discoverable, accessible,
@@ -181,19 +182,30 @@ single + double tap with two callbacks. Don't reach for a custom tap
 state machine if your model fits this pattern.</p>
 
 <p>The XKCD plugin's button row mirrors the
-<a href="https://xkcd.com">xkcd.com</a> control bar: <em>Random</em>,
-<em>Copy URL</em>, <em>Copy image</em>. Each is a normal
-<code>Button</code> wired with <code>setOnClickListener</code>:</p>
+<a href="https://xkcd.com">xkcd.com</a> navigation bar — five
+buttons, left-to-right: <em>|&lt; · Prev · Random · Next · &gt;|</em>.
+Each is a normal <code>Button</code> wired with
+<code>setOnClickListener</code>; all five route through one
+<code>loadComic(nav)</code> helper that fetches + renders:</p>
 
-<pre>view.findViewById&lt;Button&gt;(R.id.xkcd_btn_random).setOnClickListener {
-    loadRandomComic()
-}
-view.findViewById&lt;Button&gt;(R.id.xkcd_btn_copy_url).setOnClickListener {
-    copyUrlToClipboard()
-}
-view.findViewById&lt;Button&gt;(R.id.xkcd_btn_copy_image).setOnClickListener {
-    copyImageToClipboard()
-}</pre>
+<pre>btnFirst?.setOnClickListener  { loadComic(Navigation.First) }
+btnPrev?.setOnClickListener   { loadComic(Navigation.Prev) }
+btnRandom.setOnClickListener  { loadComic(Navigation.Random) }
+btnNext?.setOnClickListener   { loadComic(Navigation.Next) }
+btnLast?.setOnClickListener   { loadComic(Navigation.Last) }</pre>
+
+<p class="callout-inline"><b>Plugin-friendly UX detail —
+default to Last.</b> On first show the fragment calls
+<code>loadComic(Navigation.Last)</code> so the user lands on the
+newest comic, exactly like opening xkcd.com in a browser. Prev / Next
+are disabled until we know the current cursor + the high-water mark,
+so the buttons never lie about what they can do.</p>
+
+<p class="callout-inline"><b>Edge case — comic #404.</b> xkcd #404
+is a deliberate joke: its JSON endpoint returns HTTP 404. The
+fetch handler steps past it in the same direction the user requested
+(Prev to #403, Next to #405), so the user never sees a "failed to
+load" toast for a quirk of the source data.</p>
 
 <p>Gesture shortcuts on the image itself are pure
 <code>GestureDetector</code>:</p>
@@ -363,14 +375,13 @@ provides help users can discover without leaving the IDE.</p>
     override fun getTooltipEntries(): List&lt;PluginTooltipEntry&gt; = listOf(
         PluginTooltipEntry(
             tag = "xkcd.tab",
-            summary = "Random xkcd comic. Tap Random for a new one.",
+            summary = "Browse xkcd. Buttons navigate · tap = copy URL · double-tap = copy image.",
             detail = """
-                &lt;p&gt;This panel pulls a random comic from &lt;b&gt;xkcd.com&lt;/b&gt;.&lt;/p&gt;
-                &lt;p&gt;Use the &lt;b&gt;Random / Copy URL / Copy image&lt;/b&gt;
-                buttons above the comic, or shortcut on the image:&lt;/p&gt;
+                &lt;p&gt;Defaults to the latest comic. Navigate with
+                &lt;b&gt;|&lt; · Prev · Random · Next · &gt;|&lt;/b&gt;.&lt;/p&gt;
                 &lt;ul&gt;
-                  &lt;li&gt;&lt;b&gt;Tap&lt;/b&gt; — copy URL.&lt;/li&gt;
-                  &lt;li&gt;&lt;b&gt;Double-tap&lt;/b&gt; — copy image.&lt;/li&gt;
+                  &lt;li&gt;&lt;b&gt;Tap image&lt;/b&gt; — copy URL.&lt;/li&gt;
+                  &lt;li&gt;&lt;b&gt;Double-tap image&lt;/b&gt; — copy image.&lt;/li&gt;
                 &lt;/ul&gt;
             """.trimIndent(),
             buttons = listOf(

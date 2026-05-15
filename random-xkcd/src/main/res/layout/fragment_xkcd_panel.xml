@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Layout mirrors the xkcd.com page: title + nav row above the comic.
-     The image itself is the only gesture target — single-tap copies the
-     URL, double-tap copies the image. The button row above provides the
-     same actions explicitly, so the gestures are discoverable, not
-     required. -->
+<!-- Layout mirrors the xkcd.com page: navigation row + title above the comic.
+     The image itself is the gesture target — single-tap copies the URL,
+     double-tap copies the image. The 5-button row above is the canonical
+     navigation surface (|< · < Prev · Random · Next > · >|); gestures
+     on the image are convenience shortcuts. -->
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/xkcd_root"
     android:layout_width="match_parent"
@@ -17,7 +17,61 @@
         android:orientation="vertical"
         android:padding="12dp">
 
-        <!-- Title row: comic number + title, in the xkcd.com style. -->
+        <!-- Navigation row: |< · Prev · Random · Next · >|
+             Weights: first/last=0.8 (short symbol), prev/next=1.0, random=1.4
+             On a 370dp phone (total weight 5.0): ~59dp / ~74dp / ~104dp / ~74dp / ~59dp -->
+        <LinearLayout
+            android:id="@+id/xkcd_buttons"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="8dp"
+            android:orientation="horizontal"
+            android:gravity="center">
+
+            <Button
+                android:id="@+id/xkcd_btn_first"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="0.8"
+                android:text="@string/btn_first"
+                style="?attr/buttonBarButtonStyle" />
+
+            <Button
+                android:id="@+id/xkcd_btn_prev"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1.0"
+                android:text="@string/btn_prev"
+                style="?attr/buttonBarButtonStyle" />
+
+            <Button
+                android:id="@+id/xkcd_btn_random"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1.4"
+                android:text="@string/btn_random"
+                style="?attr/buttonBarButtonStyle" />
+
+            <Button
+                android:id="@+id/xkcd_btn_next"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1.0"
+                android:text="@string/btn_next"
+                style="?attr/buttonBarButtonStyle" />
+
+            <Button
+                android:id="@+id/xkcd_btn_last"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="0.8"
+                android:text="@string/btn_last"
+                style="?attr/buttonBarButtonStyle" />
+        </LinearLayout>
+
+        <!-- Title row: comic number + title, in the xkcd.com style.
+             Sits between the nav row and the image so it reads
+             top-to-bottom: buttons → title → image → alt-text. -->
         <TextView
             android:id="@+id/xkcd_caption"
             android:layout_width="match_parent"
@@ -26,48 +80,6 @@
             android:textSize="14sp"
             android:textColor="?attr/colorOnSurface"
             android:visibility="gone" />
-
-        <!-- Button row: xkcd.com-style controls above the comic.
-             Random replaces the "tap to roll" gesture; Copy URL + Copy
-             Image are explicit affordances mirroring the simplified
-             tap model on the image itself. -->
-        <LinearLayout
-            android:id="@+id/xkcd_buttons"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:layout_marginBottom="8dp"
-            android:orientation="horizontal"
-            android:gravity="center">
-
-            <Button
-                android:id="@+id/xkcd_btn_random"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:layout_marginEnd="4dp"
-                android:text="@string/btn_random"
-                style="?attr/buttonBarButtonStyle" />
-
-            <Button
-                android:id="@+id/xkcd_btn_copy_url"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:layout_marginStart="4dp"
-                android:layout_marginEnd="4dp"
-                android:text="@string/btn_copy_url"
-                style="?attr/buttonBarButtonStyle" />
-
-            <Button
-                android:id="@+id/xkcd_btn_copy_image"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:layout_marginStart="4dp"
-                android:text="@string/btn_copy_image"
-                style="?attr/buttonBarButtonStyle" />
-        </LinearLayout>
 
         <!-- Spinner sits over the panel while the comic is fetching. Hidden
              while a comic is rendered or in the empty state. -->

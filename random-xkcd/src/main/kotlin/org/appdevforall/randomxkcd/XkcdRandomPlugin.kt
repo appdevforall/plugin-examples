@@ -99,19 +99,22 @@ class XkcdRandomPlugin : IPlugin, UIExtension, DocumentationExtension {
     override fun getTooltipEntries(): List<PluginTooltipEntry> = listOf(
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_TAB,
-            summary = "Random xkcd comic. Tap Random for a new one.",
+            summary = "Browse xkcd. Buttons navigate · tap = copy URL · double-tap = copy image.",
             detail = """
-                <p>This panel pulls a random comic from <b>xkcd.com</b>.</p>
-                <p>Controls above the comic:</p>
+                <p>This panel browses <b>xkcd.com</b>. Defaults to the
+                latest comic.</p>
+                <p>Navigation row above the comic (left to right):</p>
                 <ul>
-                  <li><b>Random</b> — fetch a new comic.</li>
-                  <li><b>Copy URL</b> — copy the comic's page URL.</li>
-                  <li><b>Copy image</b> — copy the comic image to the clipboard.</li>
+                  <li><b>|&lt;</b> — first comic.</li>
+                  <li><b>Prev</b> — previous comic.</li>
+                  <li><b>Random</b> — a random comic.</li>
+                  <li><b>Next</b> — next comic.</li>
+                  <li><b>&gt;|</b> — latest comic.</li>
                 </ul>
                 <p>Gesture shortcuts on the image:</p>
                 <ul>
-                  <li><b>Tap</b> — copy URL.</li>
-                  <li><b>Double-tap</b> — copy image.</li>
+                  <li><b>Tap</b> — copy the comic's URL.</li>
+                  <li><b>Double-tap</b> — copy the comic image.</li>
                 </ul>
                 <p>Fetches use HTTPS only.</p>
             """.trimIndent(),
