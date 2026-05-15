@@ -11,7 +11,6 @@ import com.itsaky.androidide.plugins.extensions.NavigationItem
 import com.itsaky.androidide.plugins.extensions.UIExtension
 import com.itsaky.androidide.plugins.extensions.EditorTabExtension
 import com.itsaky.androidide.plugins.extensions.EditorTabItem
-import com.itsaky.androidide.plugins.extensions.TabItem
 import com.itsaky.androidide.plugins.extensions.MenuItem
 import com.itsaky.androidide.plugins.extensions.DocumentationExtension
 import com.itsaky.androidide.plugins.extensions.PluginTooltipEntry
@@ -88,20 +87,6 @@ class KeystoreGeneratorPlugin : IPlugin, UIExtension, EditorTabExtension, Docume
         context.logger.debug("Returning tab item: id=${tabItem.id}, title=${tabItem.title}, enabled=${tabItem.isEnabled}, visible=${tabItem.isVisible}")
 
         return listOf(tabItem)
-    }
-
-    // UIExtension interface methods - for bottom sheet tabs
-    override fun getEditorTabs(): List<TabItem> {
-        return listOf(
-            TabItem(
-                id = "keystore_generator_bottom",
-                title = "Keystore Gen",
-                fragmentFactory = { KeystoreGeneratorFragment() },
-                isEnabled = true,
-                isVisible = true,
-                order = 0
-            )
-        )
     }
 
     override fun getMainMenuItems(): List<MenuItem> {
@@ -189,7 +174,7 @@ class KeystoreGeneratorPlugin : IPlugin, UIExtension, EditorTabExtension, Docume
 
                     <h4>How to use:</h4>
                     <ol>
-                        <li>Open via sidebar, Tools menu, or bottom sheet</li>
+                        <li>Open via the sidebar Generate Keystore action</li>
                         <li>Fill in keystore and certificate details</li>
                         <li>Click "Generate Keystore"</li>
                     </ol>
@@ -216,7 +201,6 @@ class KeystoreGeneratorPlugin : IPlugin, UIExtension, EditorTabExtension, Docume
                     <h4>Integration Points:</h4>
                     <ul>
                         <li><b>Main Editor Tab</b> - Full keystore generator interface in main tab bar</li>
-                        <li><b>Bottom Sheet Tab</b> - Same interface accessible in editor bottom sheet</li>
                         <li><b>Main Menu Integration</b> - Dialog-based keystore generation</li>
                         <li><b>Sidebar Action</b> - Quick access button that opens main editor tab</li>
                         <li><b>Documentation System</b> - Integrated help and tooltips</li>
@@ -268,7 +252,7 @@ class KeystoreGeneratorPlugin : IPlugin, UIExtension, EditorTabExtension, Docume
                         <li><b>Certificate Details</b> - Distinguished name information</li>
                     </ul>
 
-                    <p>Access from sidebar → Generate Keystore or bottom sheet → Keystore Gen tab.</p>
+                    <p>Access from sidebar → Generate Keystore.</p>
                 """.trimIndent(),
                 buttons = listOf(
                     PluginTooltipButton(
