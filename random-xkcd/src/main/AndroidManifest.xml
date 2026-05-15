@@ -20,7 +20,7 @@
 
         <meta-data
             android:name="plugin.description"
-            android:value="A random xkcd comic in your bottom sheet. Buttons above the comic: Random / Copy URL / Copy image. Demo plugin: see Tier 3 docs for a code walkthrough." />
+            android:value="Browse xkcd comics from your bottom sheet. 5-button nav above the comic (|&lt; · &lt; Prev · Random · Next &gt; · &gt;|), defaulting to the latest. Tap image to copy URL, double-tap to copy image. Demo plugin: see Tier 3 docs for a code walkthrough." />
 
         <meta-data
             android:name="plugin.author"
