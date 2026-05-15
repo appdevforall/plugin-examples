@@ -6,7 +6,6 @@ import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.extensions.UIExtension
 import com.itsaky.androidide.plugins.extensions.EditorTabExtension
 import com.itsaky.androidide.plugins.extensions.MenuItem
-import com.itsaky.androidide.plugins.extensions.TabItem
 import com.itsaky.androidide.plugins.extensions.EditorTabItem
 import com.itsaky.androidide.plugins.extensions.NavigationItem
 import com.itsaky.androidide.plugins.extensions.ContextMenuContext
@@ -88,9 +87,6 @@ class MarkdownPreviewerPlugin : IPlugin, UIExtension, EditorTabExtension {
             )
         )
     }
-
-    // UIExtension - Bottom sheet tab
-    override fun getEditorTabs(): List<TabItem> = emptyList()
 
     // UIExtension - Sidebar navigation item
     override fun getSideMenuItems(): List<NavigationItem> {
