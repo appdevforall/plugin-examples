@@ -2,14 +2,12 @@ name: Update libs from CodeOnTheGo
 
 on:
   workflow_dispatch:
-    inputs:
-      ref:
-        description: CodeOnTheGo branch or tag to build from
-        required: false
-        default: stage
 
 permissions:
   contents: write
+
+env:
+  PLUGINS_REMOTE_PATH: public_html/flags/plugins
 
 jobs:
   release:
@@ -38,9 +36,7 @@ jobs:
         run: echo "name=build-$(date -u +%Y-%m-%d)-${RUN_NUMBER}" >> "$GITHUB_OUTPUT"
 
       - name: Run update-libs script
-        env:
-          REF: ${{ inputs.ref }}
-        run: ./scripts/update-libs.sh --ref "$REF"
+        run: ./scripts/update-libs.sh
 
       - name: Commit updated jars
         id: commit
@@ -58,6 +54,36 @@ jobs:
           echo "codeonthego_sha=${sha}" >> "$GITHUB_OUTPUT"
           echo "head_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
+      - name: Stage .cgp files with website filenames
+        run: |
+          mkdir -p deploy-staging
+          declare -A MAP=(
+            ["apk-viewer"]="apk-analyzer.cgp"
+            ["Beepy"]="beepy.cgp"
+            ["keystore-generator"]="keystore-generator.cgp"
+            ["markdown-preview"]="markdown-previewer.cgp"
+            ["ndk-installer-plugin"]="ndk-installer.cgp"
+            ["snippets"]="snippets.cgp"
+          )
+          for module in "${!MAP[@]}"; do
+            src=$(ls "${module}/build/plugin/"*.cgp 2>/dev/null | head -n1)
+            if [ -z "$src" ]; then
+              echo "ERROR: no .cgp found under ${module}/build/plugin/"
+              exit 1
+            fi
+            cp "$src" "deploy-staging/${MAP[$module]}"
+            echo "Staged $src -> deploy-staging/${MAP[$module]}"
+          done
+          ls -la deploy-staging/
+
+      - name: Upload .cgp artifacts for deploy job
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugins-cgp
+          path: deploy-staging/*.cgp
+          retention-days: 7
+          if-no-files-found: error
+
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
@@ -66,3 +92,87 @@ jobs:
           body: Built against CodeOnTheGo@${{ steps.commit.outputs.codeonthego_sha }}.
           fail_on_unmatched_files: true
           files: '*/build/plugin/*.cgp'
+
+  deploy:
+    needs: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Download .cgp artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: plugins-cgp
+          path: deploy-staging
+
+      - name: List staged files
+        run: ls -la deploy-staging/
+
+      - name: Set up SSH key
+        env:
+          GREENGEEKS_HOST: ${{ vars.GREENGEEKS_SSH_HOST }}
+          GREENGEEKS_KEY: ${{ secrets.GREENGEEKS_SSH_PRIVATE_KEY }}
+          GREENGEEKS_USER: ${{ vars.GREENGEEKS_SSH_USER }}
+        run: |
+          mkdir -p ~/.ssh
+          if [ -z "$GREENGEEKS_HOST" ]; then
+            echo "Error: GREENGEEKS_SSH_HOST variable is not set"
+            exit 1
+          fi
+          echo "$GREENGEEKS_KEY" > ~/.ssh/id_rsa
+          sed -i '$ { /^$/ d; }' ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          if ! grep -q "BEGIN.*PRIVATE KEY" ~/.ssh/id_rsa; then
+            echo "Error: SSH key does not appear to be in correct format"
+            exit 1
+          fi
+          cat > ~/.ssh/config <<EOF
+          Host *
+            IdentitiesOnly yes
+            PreferredAuthentications publickey
+            StrictHostKeyChecking no
+            UserKnownHostsFile ~/.ssh/known_hosts
+            PubkeyAuthentication yes
+            PasswordAuthentication no
+          Host $GREENGEEKS_HOST
+            User $GREENGEEKS_USER
+            IdentityFile ~/.ssh/id_rsa
+          EOF
+          chmod 600 ~/.ssh/config
+          unset SSH_AUTH_SOCK
+          unset SSH_AGENT_PID
+          ssh-keyscan -H "$GREENGEEKS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Upload .cgp files via scp
+        env:
+          REMOTE: ${{ vars.GREENGEEKS_SSH_USER }}@${{ vars.GREENGEEKS_SSH_HOST }}
+        run: |
+          for f in deploy-staging/*.cgp; do
+            echo "Uploading $f -> $REMOTE:$PLUGINS_REMOTE_PATH/$(basename "$f")"
+            scp -o StrictHostKeyChecking=no "$f" "$REMOTE:$PLUGINS_REMOTE_PATH/"
+          done
+
+      - name: Verify remote MD5 checksums
+        env:
+          REMOTE: ${{ vars.GREENGEEKS_SSH_USER }}@${{ vars.GREENGEEKS_SSH_HOST }}
+        run: |
+          failures=0
+          for f in deploy-staging/*.cgp; do
+            name=$(basename "$f")
+            local_md5=$(md5sum "$f" | cut -d ' ' -f1)
+            remote_md5=$(ssh "$REMOTE" "md5sum $PLUGINS_REMOTE_PATH/$name | cut -d ' ' -f1")
+            if [ "$local_md5" = "$remote_md5" ]; then
+              echo "OK   $name ($local_md5)"
+            else
+              echo "FAIL $name local=$local_md5 remote=$remote_md5"
+              failures=$((failures+1))
+            fi
+          done
+          if [ $failures -gt 0 ]; then
+            echo "ERROR: $failures file(s) failed MD5 verification"
+            exit 1
+          fi
+
+      - name: Cleanup SSH key
+        if: always()
+        run: |
+          rm -f ~/.ssh/id_rsa ~/.ssh/known_hosts || true
