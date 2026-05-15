@@ -6,7 +6,6 @@ import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.extensions.UIExtension
 import com.itsaky.androidide.plugins.extensions.EditorTabExtension
 import com.itsaky.androidide.plugins.extensions.MenuItem
-import com.itsaky.androidide.plugins.extensions.TabItem
 import com.itsaky.androidide.plugins.extensions.EditorTabItem
 import com.itsaky.androidide.plugins.extensions.NavigationItem
 import com.itsaky.androidide.plugins.extensions.FileOpenExtension
@@ -21,7 +20,7 @@ import java.io.File
 
 /**
  * APK Analyzer plugin entry point. Provides APK structural analysis via the
- * main editor tab, the bottom sheet, the sidebar, and the toolbar menu.
+ * main editor tab, the sidebar, and the toolbar menu.
  */
 class ApkAnalyzer : IPlugin, UIExtension, EditorTabExtension, FileOpenExtension, DocumentationExtension {
 
@@ -71,25 +70,6 @@ class ApkAnalyzer : IPlugin, UIExtension, EditorTabExtension, FileOpenExtension,
                     openApkAnalyzerTab()
                 },
                 tooltipTag = HELP_TOOLTIP_TAG,
-            )
-        )
-    }
-
-    // UIExtension - Bottom sheet tab
-    override fun getEditorTabs(): List<TabItem> {
-        context.logger.debug("ApkAnalyzer: getEditorTabs() called")
-
-        return listOf(
-            TabItem(
-                id = "apk_analyzer_tab",
-                title = "APK Analyzer",
-                fragmentFactory = {
-                    context.logger.debug("ApkAnalyzer: Creating ApkAnalyzerFragment for bottom sheet")
-                    ApkAnalyzerFragment()
-                },
-                isEnabled = true,
-                isVisible = true,
-                order = 100
             )
         )
     }
