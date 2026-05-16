@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>APK Viewer Plugin Documentation</title>
+<style>
+  :root {
+    --bg: #fdfdfd;
+    --fg: #1a1a1a;
+    --accent: #0f766e;
+    --accent-light: #e6f5f3;
+    --border: #d0d7de;
+    --code-bg: #f4f6f8;
+    --table-stripe: #f8fafb;
+    --shadow: rgba(0,0,0,0.06);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--fg);
+    background: var(--bg);
+    line-height: 1.6;
+    max-width: 52rem;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+  }
+  header { border-bottom: 3px solid var(--accent); padding-bottom: 1.2rem; margin-bottom: 2rem; }
+  header h1 { font-size: 2rem; color: var(--accent); }
+  header p.subtitle { color: #555; margin-top: 0.3rem; }
+  header .meta { font-size: 0.85rem; color: #777; margin-top: 0.5rem; }
+  nav { background: var(--accent-light); border: 1px solid var(--border); border-radius: 6px; padding: 1rem 1.5rem; margin-bottom: 2.5rem; }
+  nav h2 { font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); margin-bottom: 0.5rem; }
+  nav ol { padding-left: 1.3rem; }
+  nav li { margin: 0.25rem 0; }
+  nav a { color: var(--accent); text-decoration: none; }
+  nav a:hover { text-decoration: underline; }
+  section { margin-bottom: 2.5rem; }
+  h2 { font-size: 1.4rem; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; margin-bottom: 1rem; }
+  h3 { font-size: 1.1rem; margin: 1.2rem 0 0.5rem; }
+  p, li { margin-bottom: 0.5rem; }
+  ul, ol { padding-left: 1.4rem; }
+  code {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    background: var(--code-bg);
+    padding: 0.15em 0.35em;
+    border-radius: 3px;
+    font-size: 0.9em;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1rem 1.2rem;
+    overflow-x: auto;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    margin: 0.8rem 0 1rem;
+  }
+  pre code { background: none; padding: 0; }
+  table { width: 100%; border-collapse: collapse; margin: 0.8rem 0 1rem; font-size: 0.95rem; }
+  th, td { text-align: left; padding: 0.55rem 0.8rem; border: 1px solid var(--border); }
+  th { background: var(--accent-light); font-weight: 600; }
+  tr:nth-child(even) td { background: var(--table-stripe); }
+  .diagram {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1.2rem;
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 0.85rem;
+    line-height: 1.55;
+    overflow-x: auto;
+    white-space: pre;
+    margin: 0.8rem 0 1rem;
+  }
+  .callout {
+    background: var(--accent-light);
+    border-left: 4px solid var(--accent);
+    padding: 0.8rem 1rem;
+    border-radius: 0 6px 6px 0;
+    margin: 1rem 0;
+  }
+  .file-tree { list-style: none; padding-left: 0; font-family: monospace; font-size: 0.9rem; }
+  .file-tree ul { list-style: none; padding-left: 1.5rem; }
+  footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: 0.85rem; color: #777; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>APK Viewer Plugin</h1>
+  <p class="subtitle">In-IDE APK structural analysis for Code on the Go</p>
+  <div class="meta">Author: App Dev for All &middot; Package: <code>com.example.apkanalyzer</code></div>
+</header>
+
+<nav>
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#overview">Overview</a></li>
+    <li><a href="#value">Core Value Proposition</a></li>
+    <li><a href="#features">Key Features &amp; Benefits</a></li>
+    <li><a href="#users">Target Users</a></li>
+    <li><a href="#advantages">Competitive Advantages</a></li>
+    <li><a href="#install-value">Installation Value</a></li>
+    <li><a href="#requirements">Technical Requirements</a></li>
+  </ol>
+</nav>
+
+<!-- ================================================================ -->
+<section id="overview">
+  <h2>1. Overview</h2>
+  <p>
+    The APK Viewer Plugin is a comprehensive development tool for
+    CodeOnTheGo that provides APK analysis capabilities directly within
+    the IDE. Despite being labeled as a &ldquo;sample plugin,&rdquo; it
+    actually implements a fully functional APK analyzer with detailed
+    structural analysis.
+  </p>
+</section>
+
+<!-- ================================================================ -->
+<section id="value">
+  <h2>2. Core Value Proposition</h2>
+  <p>
+    For Android developers: instantly analyze APK files without leaving
+    the IDE, providing detailed insights into app structure, size
+    optimization opportunities, and technical metadata.
+  </p>
+</section>
+
+<!-- ================================================================ -->
+<section id="features">
+  <h2>3. Key Features &amp; Benefits</h2>
+
+  <h3>Comprehensive APK analysis</h3>
+  <table>
+    <thead>
+      <tr><th>Capability</th><th>What it provides</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>File structure analysis</td><td>Complete breakdown of APK contents, directories, and file organization</td></tr>
+      <tr><td>Size optimization</td><td>Detailed compression ratios, large file identification, and size breakdowns</td></tr>
+      <tr><td>Native library analysis</td><td>Architecture-specific library analysis with size metrics</td></tr>
+      <tr><td>Resource analysis</td><td>Resource directory structure and size analysis</td></tr>
+      <tr><td>Metadata extraction</td><td>APK signature schemes, multi-DEX detection, and obfuscation analysis</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Technical insights</h3>
+  <table>
+    <thead>
+      <tr><th>Insight</th><th>Description</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Compression analysis</td><td>Raw vs. compressed size ratios for optimization opportunities</td></tr>
+      <tr><td>Architecture support</td><td>Native library breakdown by CPU architecture (ARM, x86, etc.)</td></tr>
+      <tr><td>Multi-DEX detection</td><td>Identifies apps using multiple DEX files</td></tr>
+      <tr><td>Code obfuscation detection</td><td>Identifies ProGuard / R8 obfuscation usage</td></tr>
+      <tr><td>Signature analysis</td><td>APK signing scheme detection (v1 / v2 / v3)</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Developer workflow integration</h3>
+  <ul>
+    <li><strong>IDE integration:</strong> accessible via sidebar, main editor tabs, and bottom sheet</li>
+    <li><strong>File picker:</strong> native Android file picker for APK selection</li>
+    <li><strong>Background processing:</strong> non-blocking analysis with progress indicators</li>
+    <li><strong>Rich documentation:</strong> built-in help system with contextual tooltips</li>
+  </ul>
+</section>
+
+<!-- ================================================================ -->
+<section id="users">
+  <h2>4. Target Users</h2>
+  <ul>
+    <li><strong>Android developers</strong> analyzing their own or third-party APKs</li>
+    <li><strong>Mobile app testers</strong> performing app structure analysis</li>
+    <li><strong>DevOps engineers</strong> monitoring APK size and optimization</li>
+    <li><strong>Security researchers</strong> examining APK structure and metadata</li>
+  </ul>
+</section>
+
+<!-- ================================================================ -->
+<section id="advantages">
+  <h2>5. Competitive Advantages</h2>
+  <ol>
+    <li><strong>IDE-native:</strong> no need to switch to external tools</li>
+    <li><strong>Comprehensive analysis:</strong> more detailed than basic APK viewers</li>
+    <li><strong>Developer-focused:</strong> optimized for development workflows</li>
+    <li><strong>Extensible:</strong> built on CodeOnTheGo's plugin architecture</li>
+  </ol>
+</section>
+
+<!-- ================================================================ -->
+<section id="install-value">
+  <h2>6. Installation Value</h2>
+  <ul>
+    <li><strong>Time savings:</strong> eliminates the need for external APK analysis tools</li>
+    <li><strong>Workflow efficiency:</strong> keeps analysis within the development environment</li>
+    <li><strong>Detailed insights:</strong> provides more comprehensive analysis than basic tools</li>
+    <li><strong>Learning tool:</strong> helps developers understand APK structure and optimization opportunities</li>
+  </ul>
+</section>
+
+<!-- ================================================================ -->
+<section id="requirements">
+  <h2>7. Technical Requirements</h2>
+  <table>
+    <tr><th>Requirement</th><th>Value</th></tr>
+    <tr><td>Min Android version</td><td>API 26 (Android 8.0)</td></tr>
+    <tr><td>Permissions</td><td><code>filesystem.read</code>, <code>filesystem.write</code>, <code>project.structure</code></td></tr>
+    <tr><td>Project structure access</td><td>Required</td></tr>
+  </table>
+  <p>
+    This plugin transforms CodeOnTheGo from a code editor into a
+    comprehensive Android development platform by adding essential APK
+    analysis capabilities that developers typically need external tools
+    for.
+  </p>
+</section>
+
+<footer>
+  APK Viewer Plugin Documentation &middot; com.example.apkanalyzer
+</footer>
+
+</body>
+</html>
