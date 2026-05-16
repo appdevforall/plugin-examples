@@ -63,6 +63,7 @@ jobs:
             ["keystore-generator"]="keystore-generator.cgp"
             ["markdown-preview"]="markdown-previewer.cgp"
             ["ndk-installer-plugin"]="ndk-installer.cgp"
+            ["random-xkcd"]="random-xkcd.cgp"
             ["snippets"]="snippets.cgp"
           )
           for module in "${!MAP[@]}"; do
