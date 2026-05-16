@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Random XKCD Plugin Documentation</title>
+<style>
+  :root {
+    --bg: #fdfdfd;
+    --fg: #1a1a1a;
+    --accent: #0f766e;
+    --accent-light: #e6f5f3;
+    --border: #d0d7de;
+    --code-bg: #f4f6f8;
+    --table-stripe: #f8fafb;
+    --shadow: rgba(0,0,0,0.06);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--fg);
+    background: var(--bg);
+    line-height: 1.6;
+    max-width: 52rem;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+  }
+  header { border-bottom: 3px solid var(--accent); padding-bottom: 1.2rem; margin-bottom: 2rem; }
+  header h1 { font-size: 2rem; color: var(--accent); }
+  header p.subtitle { color: #555; margin-top: 0.3rem; }
+  header .meta { font-size: 0.85rem; color: #777; margin-top: 0.5rem; }
+  nav { background: var(--accent-light); border: 1px solid var(--border); border-radius: 6px; padding: 1rem 1.5rem; margin-bottom: 2.5rem; }
+  nav h2 { font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); margin-bottom: 0.5rem; }
+  nav ol { padding-left: 1.3rem; }
+  nav li { margin: 0.25rem 0; }
+  nav a { color: var(--accent); text-decoration: none; }
+  nav a:hover { text-decoration: underline; }
+  section { margin-bottom: 2.5rem; }
+  h2 { font-size: 1.4rem; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; margin-bottom: 1rem; }
+  h3 { font-size: 1.1rem; margin: 1.2rem 0 0.5rem; }
+  p, li { margin-bottom: 0.5rem; }
+  ul, ol { padding-left: 1.4rem; }
+  code {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    background: var(--code-bg);
+    padding: 0.15em 0.35em;
+    border-radius: 3px;
+    font-size: 0.9em;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1rem 1.2rem;
+    overflow-x: auto;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    margin: 0.8rem 0 1rem;
+  }
+  pre code { background: none; padding: 0; }
+  table { width: 100%; border-collapse: collapse; margin: 0.8rem 0 1rem; font-size: 0.95rem; }
+  th, td { text-align: left; padding: 0.55rem 0.8rem; border: 1px solid var(--border); }
+  th { background: var(--accent-light); font-weight: 600; }
+  tr:nth-child(even) td { background: var(--table-stripe); }
+  .diagram {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1.2rem;
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 0.85rem;
+    line-height: 1.55;
+    overflow-x: auto;
+    white-space: pre;
+    margin: 0.8rem 0 1rem;
+  }
+  .callout {
+    background: var(--accent-light);
+    border-left: 4px solid var(--accent);
+    padding: 0.8rem 1rem;
+    border-radius: 0 6px 6px 0;
+    margin: 1rem 0;
+  }
+  .file-tree { list-style: none; padding-left: 0; font-family: monospace; font-size: 0.9rem; }
+  .file-tree ul { list-style: none; padding-left: 1.5rem; }
+  footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: 0.85rem; color: #777; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Random XKCD Plugin</h1>
+  <p class="subtitle">Browse xkcd comics from the Code on the Go editor bottom sheet</p>
+  <div class="meta">Version 1.0.0 &middot; Author: App Dev For All &middot; Package: <code>org.appdevforall.randomxkcd</code></div>
+</header>
+
+<nav>
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#overview">Executive Overview</a></li>
+    <li><a href="#functionality">Core Functionality</a></li>
+    <li><a href="#architecture">Technical Architecture</a></li>
+    <li><a href="#integration">Integration Points</a></li>
+    <li><a href="#deployment">Deployment &amp; Usage</a></li>
+    <li><a href="#benefits">Key Benefits</a></li>
+    <li><a href="#license">Attribution &amp; License</a></li>
+  </ol>
+</nav>
+
+<!-- ================================================================ -->
+<section id="overview">
+  <h2>1. Executive Overview</h2>
+  <p>
+    Random XKCD is a Code on the Go plugin that puts an xkcd-comic browser into
+    the editor's bottom sheet. A new <strong>XKCD</strong> tab joins the
+    built-in bottom-sheet tabs (Build Output, App Logs, &hellip;); inside it,
+    a five-button navigation row mirrors the xkcd.com control bar &mdash;
+    <code>|&lt;</code>&thinsp;&middot;&thinsp;<code>&lt; Prev</code>&thinsp;&middot;&thinsp;<code>Random</code>&thinsp;&middot;&thinsp;<code>Next &gt;</code>&thinsp;&middot;&thinsp;<code>&gt;|</code>
+    &mdash; with the comic image rendered below. The panel opens on the latest
+    comic and stays there until the user navigates.
+  </p>
+  <p>
+    The image itself responds to two standard gestures: a single tap copies
+    the comic's canonical URL to the clipboard, and a double tap copies the
+    PNG itself (routed through the host IDE's <code>FileProvider</code>, since
+    plugin manifests don't register providers of their own). Long-pressing
+    the bottom-sheet tab opens a three-tier tooltip whose Tier&nbsp;3 button
+    launches the full code walkthrough that ships inside the
+    <code>.cgp</code>.
+  </p>
+  <p>
+    The plugin spans three Kotlin source files and one XML layout (~600 lines
+    of code total), declares only the <code>network.access</code> permission,
+    and is deliberately written as a canonical &ldquo;this is what a small
+    CoGo plugin looks like&rdquo; example. Every extension point it touches
+    &mdash; <code>IPlugin</code>, <code>UIExtension</code>,
+    <code>DocumentationExtension</code> &mdash; is exercised once, in the
+    simplest way that still tells the truth.
+  </p>
+</section>
+
+<!-- ================================================================ -->
+<section id="functionality">
+  <h2>2. Core Functionality</h2>
+
+  <h3>Bottom-sheet panel</h3>
+  <p>
+    The plugin contributes a single <strong>XKCD</strong> tab to the editor
+    bottom sheet, ordered at <code>200</code> among plugin tabs. The tab
+    body is a fragment with three regions, stacked vertically:
+  </p>
+  <ul>
+    <li>A five-button navigation row at the top.</li>
+    <li>The comic image inside a <code>FrameLayout</code> card.</li>
+    <li>The comic caption (number + title) and the xkcd
+        <em>alt</em>-text beneath it.</li>
+  </ul>
+  <p>
+    A progress spinner and an offline empty-state share the same region as
+    the image and swap in as needed.
+  </p>
+
+  <h3>Navigation row</h3>
+  <p>
+    The button row mirrors xkcd.com's own nav. Each button calls
+    <code>loadComic()</code> with a <code>Navigation</code> enum value; the
+    fragment debounces concurrent fetches and re-renders on the main
+    thread.
+  </p>
+  <table>
+    <thead>
+      <tr><th>Button</th><th>Action</th><th>Disabled when</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>|&lt;</code> First</td><td>Fetch comic <code>#1</code></td><td>never</td></tr>
+      <tr><td><code>&lt; Prev</code></td><td>Fetch <code>current&nbsp;&minus;&nbsp;1</code></td><td>at comic <code>#1</code> or before first load</td></tr>
+      <tr><td><code>Random</code></td><td>Pick a random number in <code>[1, latest]</code></td><td>never</td></tr>
+      <tr><td><code>Next &gt;</code></td><td>Fetch <code>current&nbsp;+&nbsp;1</code></td><td>at the high-water mark or before first load</td></tr>
+      <tr><td><code>&gt;|</code> Last</td><td>Re-probe the latest comic</td><td>never</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Image gestures</h3>
+  <p>
+    A standard <code>GestureDetector.SimpleOnGestureListener</code> attached
+    to the <code>ImageView</code> (not the whole panel, so scrolling a tall
+    comic doesn't trigger spurious taps) handles two gestures:
+  </p>
+  <table>
+    <thead>
+      <tr><th>Gesture</th><th>Effect</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Single tap</td><td>Copy <code>https://xkcd.com/&lt;num&gt;/</code> to clipboard as plain text</td></tr>
+      <tr><td>Double tap</td><td>Copy the in-memory PNG bytes to clipboard as <code>image/png</code></td></tr>
+    </tbody>
+  </table>
+  <p>
+    On Android 13+ the system shows its own clipboard indicator, so the
+    plugin suppresses its toast on those versions to avoid double-up.
+  </p>
+
+  <h3>Network surface</h3>
+  <p>
+    All HTTP lives in <code>XkcdApiClient</code>, in one file so it reads
+    top-to-bottom. Two JSON endpoints, no auth, no rate-limit handling
+    required:
+  </p>
+  <table>
+    <thead>
+      <tr><th>Endpoint</th><th>Purpose</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>GET https://xkcd.com/info.0.json</code></td><td>Latest comic metadata</td></tr>
+      <tr><td><code>GET https://xkcd.com/&lt;num&gt;/info.0.json</code></td><td>Specific comic metadata</td></tr>
+      <tr><td><code>GET https://imgs.xkcd.com/&hellip;</code></td><td>Comic PNG (streamed, capped at 5&nbsp;MB)</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Defensive parsing</h3>
+  <p>
+    The JSON parser rejects any <code>img</code> URL that doesn't start with
+    <code>https://imgs.xkcd.com/</code>, so a malicious or compromised
+    metadata response can't point the bitmap decoder at an attacker-controlled
+    host. JSON responses are bounded by <code>MAX_JSON_BYTES</code>
+    (64&nbsp;KB) and image downloads by <code>MAX_IMAGE_BYTES</code>
+    (5&nbsp;MB), both well above what xkcd actually returns. Every IO failure
+    converges on a single null return that routes through the offline
+    empty-state.
+  </p>
+
+  <h3>The #404 quirk</h3>
+  <p>
+    xkcd comic <code>#404</code> is a joke &mdash; its JSON endpoint returns
+    HTTP <code>404</code> deliberately. Both the random picker and the
+    Prev/Next walker skip past it: Random retries until it lands somewhere
+    else, and Prev/Next continue stepping in the same direction (so Prev
+    from #405 lands on #403, Next from #403 lands on #405). The user never
+    sees a &ldquo;failed to load&rdquo; toast for this case.
+  </p>
+
+  <h3>Three-tier tooltip</h3>
+  <p>
+    Long-pressing the <strong>XKCD</strong> tab opens the three-tier help
+    surface contributed via <code>DocumentationExtension</code>:
+  </p>
+  <table>
+    <thead>
+      <tr><th>Tier</th><th>Source</th><th>Trigger</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1 &mdash; one-liner</td><td><code>PluginTooltipEntry.summary</code></td><td>Long-press the tab</td></tr>
+      <tr><td>2 &mdash; HTML paragraph</td><td><code>PluginTooltipEntry.detail</code></td><td>&ldquo;See More&rdquo; on the Tier&nbsp;1 popup</td></tr>
+      <tr><td>3 &mdash; full HTML page</td><td><code>src/main/assets/docs/index.html</code></td><td>&ldquo;Code walkthrough&rdquo; button inside Tier&nbsp;2</td></tr>
+    </tbody>
+  </table>
+  <p>
+    The Tier&nbsp;3 page is served by the host IDE at
+    <code>http://localhost:6174/plugin/org.appdevforall.randomxkcd/index.html</code>
+    and indexed at install time by the host's <code>Tier3AssetWalker</code>.
+  </p>
+</section>
+
+<!-- ================================================================ -->
+<section id="architecture">
+  <h2>3. Technical Architecture</h2>
+
+  <h3>File layout</h3>
+  <ul class="file-tree">
+    <li>random-xkcd/
+      <ul>
+        <li>build.gradle.kts</li>
+        <li>proguard-rules.pro</li>
+        <li>src/main/
+          <ul>
+            <li>AndroidManifest.xml</li>
+            <li>assets/
+              <ul>
+                <li>docs/ &mdash; Tier&nbsp;3 walkthrough (<code>index.html</code> + <code>css/walkthrough.css</code>)</li>
+                <li>icon_day.png &mdash; Plugin Manager icon, light theme</li>
+                <li>icon_night.png &mdash; Plugin Manager icon, dark theme</li>
+              </ul>
+            </li>
+            <li>kotlin/org/appdevforall/randomxkcd/
+              <ul>
+                <li><strong>XkcdRandomPlugin.kt</strong> &mdash; lifecycle, tab registration, tooltip wiring</li>
+                <li>fragments/<strong>XkcdPanelFragment.kt</strong> &mdash; panel UI, button wiring, gestures, clipboard</li>
+                <li>net/<strong>XkcdApiClient.kt</strong> &mdash; HTTP, two endpoints, image stream</li>
+                <li>net/<strong>XkcdComic.kt</strong> &mdash; data class</li>
+              </ul>
+            </li>
+            <li>res/layout/fragment_xkcd_panel.xml &mdash; the panel layout</li>
+            <li>res/values/, res/values-night/ &mdash; colors, strings, styles</li>
+          </ul>
+        </li>
+      </ul>
+    </li>
+  </ul>
+
+  <h3>Class overview</h3>
+  <table>
+    <thead>
+      <tr><th>Class</th><th>Role</th><th>Key interfaces</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>XkcdRandomPlugin</code></td>
+        <td>Plugin entry point. Lifecycle, registers the bottom-sheet tab, contributes tooltip entries and the Tier&nbsp;3 docs path.</td>
+        <td><code>IPlugin</code>, <code>UIExtension</code>, <code>DocumentationExtension</code></td>
+      </tr>
+      <tr>
+        <td><code>XkcdPanelFragment</code></td>
+        <td>The XKCD tab body. Button wiring, image gestures, clipboard, render loop, navigation state.</td>
+        <td>extends <code>Fragment</code></td>
+      </tr>
+      <tr>
+        <td><code>XkcdApiClient</code></td>
+        <td>The entire HTTP surface in one file. Latest / by-number / random, plus a bounded image-stream helper.</td>
+        <td>&mdash;</td>
+      </tr>
+      <tr>
+        <td><code>XkcdComic</code></td>
+        <td>Plain data class: <code>num</code>, <code>title</code>, <code>alt</code>, <code>imageUrl</code>, derived <code>pageUrl</code>.</td>
+        <td>&mdash;</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Data flow</h3>
+  <div class="diagram">
+  user taps a nav button (|&lt; · &lt; Prev · Random · Next &gt; · &gt;|)
+        |
+        v
+  XkcdPanelFragment.loadComic(Navigation)
+        |
+        | Dispatchers.IO
+        v
+  XkcdApiClient
+   ├─ fetchLatest()     ──&gt; https://xkcd.com/info.0.json
+   ├─ fetchByNumber(n)  ──&gt; https://xkcd.com/n/info.0.json
+   ├─ fetchRandom()     ──&gt; loops fetchByNumber, skipping #404
+   └─ openImageStream() ──&gt; https://imgs.xkcd.com/...
+        |
+        | parseComic() — rejects non-imgs.xkcd.com hosts
+        v
+  XkcdComic + raw PNG bytes
+        |
+        | main thread
+        v
+  showComic() — renders bitmap, caption, alt
+        |
+        | tap / double-tap
+        v
+  ClipboardManager  (text URL  OR  image via host FileProvider)</div>
+
+  <h3>Lifecycle and navigation state</h3>
+  <p>
+    <code>XkcdPanelFragment</code> tracks three pieces of state across button
+    presses:
+  </p>
+  <table>
+    <thead>
+      <tr><th>Field</th><th>Purpose</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>currentComicNum</code></td><td>Number currently displayed. Drives Prev / Next enable state.</td></tr>
+      <tr><td><code>latestComicNum</code></td><td>High-water mark from the most recent Latest probe (or any Random that landed higher). Caps Next.</td></tr>
+      <tr><td><code>lastBytes</code></td><td>Raw PNG of the displayed comic, kept so &ldquo;copy image&rdquo; doesn't re-download.</td></tr>
+    </tbody>
+  </table>
+  <p>
+    A single <code>loadJob</code> guards against fan-out from rapid button
+    presses &mdash; if a fetch is already in flight, subsequent taps are
+    dropped on the floor.
+  </p>
+
+  <h3>Cooperative cancellation</h3>
+  <p>
+    Both <code>fetchRandom</code>'s retry loop and the image-download read
+    loop call <code>coroutineContext.ensureActive()</code> on every iteration,
+    so when the host tears the fragment down (rotation, tab close) the
+    coroutine exits cleanly with a <code>CancellationException</code> rather
+    than running to completion against a dead view.
+  </p>
+
+  <h3>Build configuration</h3>
+  <table>
+    <tr><th>Setting</th><th>Value</th></tr>
+    <tr><td>Gradle plugin</td><td><code>com.itsaky.androidide.plugins.build</code></td></tr>
+    <tr><td>Compile / Target SDK</td><td>34</td></tr>
+    <tr><td>Min SDK</td><td>26</td></tr>
+    <tr><td>Java / Kotlin target</td><td>17</td></tr>
+    <tr><td>ProGuard</td><td>Disabled (<code>isMinifyEnabled = false</code>)</td></tr>
+    <tr><td>Plugin API</td><td><code>compileOnly</code> via <code>libs/plugin-api.jar</code></td></tr>
+    <tr><td>HTTP library</td><td>OkHttp 4.12.0</td></tr>
+    <tr><td>JSON</td><td><code>org.json</code> (ships with Android &mdash; no extra dependency)</td></tr>
+    <tr><td>Output format</td><td><code>.cgp</code> package</td></tr>
+  </table>
+</section>
+
+<!-- ================================================================ -->
+<section id="integration">
+  <h2>4. Integration Points</h2>
+  <p>
+    Random XKCD touches the host IDE through three extension interfaces. It
+    does not consume any IDE services beyond the host's <code>FileProvider</code>
+    authority &mdash; all behavior is self-contained inside the plugin's own
+    sandbox.
+  </p>
+
+  <h3>4.1 Plugin lifecycle (<code>IPlugin</code>)</h3>
+  <p>
+    <code>XkcdRandomPlugin</code> implements <code>IPlugin</code>. The
+    manifest declares the entry point:
+  </p>
+  <pre><code>&lt;meta-data android:name="plugin.main_class"
+           android:value="org.appdevforall.randomxkcd.XkcdRandomPlugin" /&gt;</code></pre>
+  <p>
+    <code>initialize()</code> stores the <code>PluginContext</code> and is
+    wrapped in <code>try/catch</code> so a stray exception in setup can't
+    crash the host. <code>activate()</code>, <code>deactivate()</code>, and
+    <code>dispose()</code> log lifecycle transitions; there's no per-project
+    state to clean up.
+  </p>
+
+  <h3>4.2 Bottom-sheet tab (<code>UIExtension</code>)</h3>
+  <p>
+    <code>getEditorTabs()</code> contributes a single tab to the editor
+    bottom sheet:
+  </p>
+  <pre><code>TabItem(
+    id = TAB_ID,                              // "xkcd_bottom_tab"
+    title = "XKCD",
+    fragmentFactory = { XkcdPanelFragment() },
+    order = 200,
+    tooltipTag = TOOLTIP_TAG_TAB              // "xkcd.tab"
+)</code></pre>
+  <p>
+    The <code>fragmentFactory</code> returns a <em>new</em> fragment on every
+    invocation &mdash; never a singleton, because the host manages fragment
+    lifecycles. The <code>tooltipTag</code> wires the tab to the corresponding
+    <code>PluginTooltipEntry</code> below.
+  </p>
+
+  <h3>4.3 Three-tier docs (<code>DocumentationExtension</code>)</h3>
+  <p>
+    Two methods feed the tooltip system. <code>getTooltipEntries()</code>
+    returns a single <code>PluginTooltipEntry</code> with summary, detail
+    HTML, and a <code>Code walkthrough</code> button whose URI resolves to
+    <code>index.html</code> inside the Tier&nbsp;3 asset directory.
+    <code>getTier3DocsAssetPath()</code> returns <code>"docs"</code>, telling
+    the host that everything under <code>src/main/assets/docs/</code> should
+    be indexed and served from
+    <code>http://localhost:6174/plugin/org.appdevforall.randomxkcd/&hellip;</code>.
+  </p>
+
+  <h3>4.4 Clipboard image &mdash; the FileProvider hop</h3>
+  <p>
+    Copying an image to the system clipboard requires a content URI. Plugins
+    can't register their own <code>FileProvider</code> at runtime (they're
+    loaded via <code>DexClassLoader</code>, not installed as apps), so the
+    double-tap path routes through the host's existing FileProvider
+    authority:
+  </p>
+  <ol>
+    <li>Write the in-memory PNG to <code>filesDir/xkcd_share/last.png</code>
+        on <code>Dispatchers.IO</code>.</li>
+    <li>Ask the host's FileProvider for a content URI:
+        <code>FileProvider.getUriForFile(ctx, "${ctx.packageName}.providers.fileprovider", target)</code>.</li>
+    <li>Wrap the URI in a <code>ClipData.newUri</code> clip &mdash; this
+        queries the resolver for the URI's MIME type, advertising
+        <code>image/*</code> to paste targets.</li>
+  </ol>
+  <p>
+    The host's <code>file_provider_paths.xml</code> exposes <code>filesDir</code>
+    and the provider declares <code>grantUriPermissions="true"</code>, so the
+    system can hand out a temporary read grant to whatever app calls
+    <code>ContentResolver.openInputStream</code> on the clip URI.
+  </p>
+  <div class="callout">
+    <strong>Known caveat:</strong> some OEM clipboard managers have been
+    observed to silently drop image clips delivered this way. The flow works
+    on stock Android API&nbsp;24+; real-device verification is recommended for
+    OEM coverage.
+  </div>
+
+  <h3>4.5 Plugin-scoped LayoutInflater</h3>
+  <p>
+    <code>XkcdPanelFragment.onGetLayoutInflater</code> wraps the inflater via
+    <code>PluginFragmentHelper.getPluginInflater</code>. Without this,
+    <code>R.layout.fragment_xkcd_panel</code> resolves against the host
+    IDE's resources rather than the plugin's APK and throws
+    <code>Resources$NotFoundException</code> at inflate time.
+  </p>
+
+  <h3>4.6 Permissions</h3>
+  <p>
+    The manifest declares <strong>only</strong> <code>network.access</code>:
+  </p>
+  <pre><code>&lt;meta-data android:name="plugin.permissions"
+           android:value="network.access" /&gt;</code></pre>
+  <p>
+    Writes to the plugin's own <code>filesDir</code> (the FileProvider hop)
+    and access to the system clipboard are sandbox-allowed and need no
+    declaration. CoGo's <code>filesystem.*</code> permissions only gate the
+    host IDE's project-file services &mdash; not used here.
+  </p>
+
+  <h3>Integration summary</h3>
+  <div class="diagram">
+                    Code on the Go IDE Host
+  +----------------------------------------------------+
+  |                                                    |
+  |   bottom-sheet tab system                          |
+  |   tooltip system (Tier 1 / 2 / 3 walker)           |
+  |   host FileProvider (filesDir grant authority)     |
+  |                                                    |
+  +--+------------------+------------------+-----------+
+     |                  |                  |
+     v                  v                  v
+  XKCD tab          long-press tab     clipboard image
+     |                  |                  ^
+     |                  |                  |
+  +--+------------------+------------------+-----------+
+  |                XkcdRandomPlugin                    |
+  |                                                    |
+  |  IPlugin               --&gt; lifecycle               |
+  |  UIExtension           --&gt; getEditorTabs()         |
+  |  DocumentationExtension--&gt; tooltip + Tier 3 docs   |
+  +----------------------+-----------------------------+
+                         |
+              XkcdPanelFragment
+              (buttons, gestures, render)
+                         |
+                         v
+                  XkcdApiClient
+              (xkcd.com  +  imgs.xkcd.com)</div>
+</section>
+
+<!-- ================================================================ -->
+<section id="deployment">
+  <h2>5. Deployment &amp; Usage</h2>
+
+  <h3>Building</h3>
+  <pre><code>cd random-xkcd
+./gradlew assemblePlugin</code></pre>
+  <p>
+    Produces <code>random-xkcd/build/plugin/random-xkcd.cgp</code> &mdash; the
+    bundle you sideload into Code on the Go.
+  </p>
+
+  <h3>Installation</h3>
+  <ol>
+    <li>Open <em>Preferences &rarr; Plugin Manager &rarr; +</em>.</li>
+    <li>Select the <code>random-xkcd.cgp</code> file.</li>
+    <li>The IDE discovers <code>XkcdRandomPlugin</code> via the manifest
+        metadata and activates it automatically.</li>
+    <li>Open any project &mdash; the <strong>XKCD</strong> tab appears in
+        the editor bottom sheet.</li>
+  </ol>
+
+  <h3>Using the panel</h3>
+  <ol>
+    <li>Tap the <strong>XKCD</strong> tab in the bottom sheet &mdash; the
+        latest comic loads automatically.</li>
+    <li>Navigate with the five-button row above the comic.</li>
+    <li>Single-tap the image to copy the comic's URL; double-tap to copy
+        the image itself.</li>
+    <li>Long-press the <strong>XKCD</strong> tab for the three-tier help
+        surface, including the full code walkthrough.</li>
+  </ol>
+
+  <h3>Reading the code walkthrough</h3>
+  <ul>
+    <li><strong>Inside CoGo</strong> (the canonical path) &mdash; long-press
+        the <strong>XKCD</strong> tab &rarr; tap <strong>See More</strong>
+        &rarr; tap <strong>Code walkthrough</strong>. The IDE opens the page
+        in an in-IDE WebView.</li>
+    <li><strong>Outside CoGo</strong> &mdash; open
+        <code>src/main/assets/docs/index.html</code> directly in any
+        browser. Renders identically.</li>
+  </ul>
+
+  <h3>Runtime requirements</h3>
+  <table>
+    <tr><th>Requirement</th><th>Value</th></tr>
+    <tr><td>Min Android version</td><td>API 26 (Android 8)</td></tr>
+    <tr><td>Min IDE version</td><td>1.0.0</td></tr>
+    <tr><td>Permissions</td><td><code>network.access</code></td></tr>
+    <tr><td>Network access</td><td>Required &mdash; HTTPS to <code>xkcd.com</code> and <code>imgs.xkcd.com</code></td></tr>
+  </table>
+</section>
+
+<!-- ================================================================ -->
+<section id="benefits">
+  <h2>6. Key Benefits</h2>
+  <ul>
+    <li><strong>A canonical small-plugin example.</strong> Under 600 lines
+        of Kotlin across three source files, every plugin-specific concept
+        called out exactly where it shows up &mdash; the in-asset
+        walkthrough explains each one as a numbered step.</li>
+    <li><strong>Real-world UI patterns.</strong> Demonstrates a bottom-sheet
+        tab, fragment-based UI, a plugin-scoped <code>LayoutInflater</code>,
+        and the standard Android <code>GestureDetector</code> idiom for
+        single/double-tap distinction.</li>
+    <li><strong>Real-world network patterns.</strong> Bounded reads, host
+        whitelisting on parsed URLs, cooperative cancellation under
+        <code>lifecycleScope</code>, and a single fetch-in-flight guard
+        that survives rapid button mashes.</li>
+    <li><strong>Cross-app image clipboard.</strong> Shows the practical
+        FileProvider hop a plugin needs in order to put <code>image/*</code>
+        data on the system clipboard &mdash; including the OEM-clipboard
+        caveat worth knowing before relying on it.</li>
+    <li><strong>Three-tier in-IDE help.</strong> Wires up
+        <code>DocumentationExtension</code> end-to-end &mdash; one-liner,
+        HTML paragraph, and a full asset-served walkthrough &mdash; serving
+        as a template for any plugin that wants discoverable, in-context
+        documentation.</li>
+    <li><strong>Sandbox-honest permissions.</strong> Declares only
+        <code>network.access</code> and documents why the clipboard and
+        plugin-private filesystem writes do not need declarations &mdash;
+        useful reference for understanding CoGo's permission surface.</li>
+  </ul>
+</section>
+
+<!-- ================================================================ -->
+<section id="license">
+  <h2>7. Attribution &amp; License</h2>
+  <p>
+    xkcd comics are &copy; Randall Munroe and licensed
+    <strong>CC BY-NC 2.5</strong>
+    (<a href="https://xkcd.com/license.html">https://xkcd.com/license.html</a>).
+    This plugin:
+  </p>
+  <ul>
+    <li>Fetches comics over HTTPS from <code>xkcd.com</code> and
+        <code>imgs.xkcd.com</code>. No caching, no redistribution beyond
+        what the user explicitly copies to their own clipboard.</li>
+    <li>Displays an attribution line &mdash; <em>&ldquo;Comics &copy;
+        Randall Munroe &middot; xkcd.com &middot; CC BY-NC 2.5&rdquo;</em>
+        &mdash; beneath every comic in the panel.</li>
+    <li>Is itself non-commercial (open-source demo plugin for an
+        open-source IDE), consistent with the NC term.</li>
+  </ul>
+  <p>
+    The plugin's own source code is licensed per the surrounding
+    <code>plugin-examples</code> repository (see <code>LICENSE</code> at
+    the repo root). xkcd's license applies only to the comic content the
+    plugin displays.
+  </p>
+</section>
+
+<footer>
+  Random XKCD Plugin Documentation &middot; Version 1.0.0 &middot; org.appdevforall.randomxkcd
+</footer>
+
+</body>
+</html>
