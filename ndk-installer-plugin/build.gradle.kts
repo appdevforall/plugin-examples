@@ -59,27 +59,57 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
 }
 
-fun httpDownload(url: String): ByteArray {
+fun openHttpConnection(url: String, readTimeoutMs: Int): HttpURLConnection {
     val connection = URL(url).openConnection() as HttpURLConnection
     connection.instanceFollowRedirects = true
     connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
     connection.connectTimeout = 15000
-    connection.readTimeout = 30000
+    connection.readTimeout = readTimeoutMs
 
     val code = connection.responseCode
     if (code != 200) {
         throw GradleException("Failed to download $url (HTTP $code)")
     }
+    return connection
+}
 
-    return connection.inputStream.use { it.readBytes() }
+fun httpDownloadToFile(url: String, target: File): Long {
+    val connection = openHttpConnection(url, readTimeoutMs = 120_000)
+    val expectedLength = connection.contentLengthLong
+    var receivedLength = 0L
+
+    connection.inputStream.use { input ->
+        target.outputStream().buffered().use { output ->
+            val buffer = ByteArray(64 * 1024)
+            while (true) {
+                val read = input.read(buffer)
+                if (read == -1) break
+                output.write(buffer, 0, read)
+                receivedLength += read
+            }
+        }
+    }
+
+    if (expectedLength >= 0 && receivedLength != expectedLength) {
+        throw GradleException(
+            "Truncated download from $url: expected $expectedLength bytes, got $receivedLength"
+        )
+    }
+    return receivedLength
+}
+
+fun httpDownloadText(url: String): String {
+    val connection = openHttpConnection(url, readTimeoutMs = 30_000)
+    return connection.inputStream.use { it.readBytes() }.toString(Charsets.UTF_8)
 }
 
 fun md5Of(file: File): String {
     val md = MessageDigest.getInstance("MD5")
     file.inputStream().use { input ->
-        val buffer = ByteArray(8192)
-        var read: Int
-        while (input.read(buffer).also { read = it } != -1) {
+        val buffer = ByteArray(64 * 1024)
+        while (true) {
+            val read = input.read(buffer)
+            if (read == -1) break
             md.update(buffer, 0, read)
         }
     }
@@ -89,7 +119,6 @@ fun md5Of(file: File): String {
 val downloadAssets by tasks.registering {
     val assetsDir = project.file("src/main/assets")
     val archiveFile = assetsDir.resolve("ndk-cmake.tar.xz")
-    val md5File = assetsDir.resolve("ndk-cmake.tar.xz.md5")
 
     outputs.files(archiveFile)
 
@@ -98,27 +127,40 @@ val downloadAssets by tasks.registering {
 
         val archiveUrl = "https://www.appdevforall.org/dev-assets/release/v8/ndk-cmake.tar.xz"
         val md5Url = "https://www.appdevforall.org/dev-assets/release/v8/ndk-cmake.tar.xz.md5"
+        val maxAttempts = 3
 
-        logger.info("Downloading archive....")
-        val archiveBytes = httpDownload(archiveUrl)
-        archiveFile.writeBytes(archiveBytes)
+        var lastError: String? = null
+        for (attempt in 1..maxAttempts) {
+            logger.lifecycle("Downloading ndk-cmake assets (attempt $attempt/$maxAttempts)...")
+            try {
+                val expectedMd5 = httpDownloadText(md5Url).trim().lowercase()
+                val bytes = httpDownloadToFile(archiveUrl, archiveFile)
+                val actualMd5 = md5Of(archiveFile).lowercase()
 
-        logger.info("Downloading MD5…")
-        val md5Bytes = httpDownload(md5Url)
-        md5File.writeBytes(md5Bytes)
+                logger.info("Downloaded $bytes bytes")
+                logger.info("Expected MD5: $expectedMd5")
+                logger.info("Actual MD5:   $actualMd5")
 
-        val expected = md5File.readText().trim()
-        val actual = md5Of(archiveFile)
+                if (expectedMd5 == actualMd5) {
+                    return@doLast
+                }
+                lastError = "MD5 mismatch (expected=$expectedMd5, actual=$actualMd5)"
+            } catch (e: Exception) {
+                lastError = e.message ?: e.javaClass.simpleName
+            }
 
-        logger.info("Expected MD5: $expected")
-        logger.info("Actual MD5:   $actual")
-
-        md5File.delete()
-
-        if (!expected.equals(actual, ignoreCase = true)) {
-            throw GradleException("MD5 checksum mismatch for ndk-cmake.tar.xz")
+            logger.warn("Attempt $attempt failed: $lastError")
+            archiveFile.delete()
+            if (attempt < maxAttempts) {
+                val backoffMs = 2_000L * attempt
+                logger.lifecycle("Retrying in ${backoffMs}ms...")
+                Thread.sleep(backoffMs)
+            }
         }
 
+        throw GradleException(
+            "Failed to download ndk-cmake.tar.xz after $maxAttempts attempts: $lastError"
+        )
     }
 }
 
