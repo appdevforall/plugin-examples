@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="plugin_primary">#0F766E</color>
+    <color name="plugin_on_primary">#FFFFFF</color>
+    <color name="plugin_primary_container">#A7F3D0</color>
+    <color name="plugin_on_primary_container">#002117</color>
+
+    <color name="plugin_on_surface">#171717</color>
+</resources>

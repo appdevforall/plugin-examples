@@ -33,40 +33,49 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="0.8"
-                android:text="@string/btn_first"
-                style="?attr/buttonBarButtonStyle" />
+                android:layout_marginEnd="4dp"
+                android:minWidth="0dp"
+                android:paddingHorizontal="0dp"
+                android:text="@string/btn_first" />
 
             <Button
                 android:id="@+id/xkcd_btn_prev"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1.0"
-                android:text="@string/btn_prev"
-                style="?attr/buttonBarButtonStyle" />
+                android:layout_marginEnd="4dp"
+                android:minWidth="0dp"
+                android:paddingHorizontal="0dp"
+                android:text="@string/btn_prev" />
 
             <Button
                 android:id="@+id/xkcd_btn_random"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1.4"
-                android:text="@string/btn_random"
-                style="?attr/buttonBarButtonStyle" />
+                android:layout_marginEnd="4dp"
+                android:minWidth="0dp"
+                android:paddingHorizontal="0dp"
+                android:text="@string/btn_random" />
 
             <Button
                 android:id="@+id/xkcd_btn_next"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1.0"
-                android:text="@string/btn_next"
-                style="?attr/buttonBarButtonStyle" />
+                android:layout_marginEnd="4dp"
+                android:minWidth="0dp"
+                android:paddingHorizontal="0dp"
+                android:text="@string/btn_next" />
 
             <Button
                 android:id="@+id/xkcd_btn_last"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="0.8"
-                android:text="@string/btn_last"
-                style="?attr/buttonBarButtonStyle" />
+                android:minWidth="0dp"
+                android:paddingHorizontal="0dp"
+                android:text="@string/btn_last" />
         </LinearLayout>
 
         <!-- Title row: comic number + title, in the xkcd.com style.
