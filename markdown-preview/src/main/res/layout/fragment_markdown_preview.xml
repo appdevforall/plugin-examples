@@ -4,76 +4,73 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="?android:attr/colorBackground">
+    android:background="?attr/colorSurface">
 
-    <!-- Compact Header -->
+    <!-- Toolbar -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:paddingHorizontal="8dp"
-        android:paddingVertical="6dp"
-        android:background="?android:attr/colorBackgroundFloating"
-        android:elevation="2dp"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="8dp"
         android:gravity="center_vertical">
 
-        <!-- Current file name (shown when file loaded) -->
         <TextView
             android:id="@+id/tv_current_file"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:textSize="14sp"
-            android:textColor="?android:attr/textColorPrimary"
+            android:textColor="?attr/colorOnSurface"
+            android:textStyle="bold"
             android:ellipsize="middle"
             android:singleLine="true"
             android:visibility="gone" />
 
-        <!-- Placeholder when no file -->
         <TextView
             android:id="@+id/tv_placeholder"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="Select a file"
+            android:text="@string/plugin_title"
             android:textSize="14sp"
-            android:textColor="?android:attr/textColorSecondary" />
+            android:textStyle="bold"
+            android:textColor="?attr/colorOnSurface" />
 
-        <Button
+        <ImageButton
             android:id="@+id/btn_select_file"
-            android:layout_width="wrap_content"
-            android:layout_height="36dp"
-            android:minWidth="0dp"
-            android:text="Project"
-            android:textColor="#00BE00"
-            android:textSize="12sp"
-            android:paddingHorizontal="12dp"
-            style="@style/Widget.Material3.Button.TextButton" />
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:src="@drawable/ic_folder"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/select_from_project"
+            android:tooltipText="@string/select_from_project" />
 
-        <Button
+        <ImageButton
             android:id="@+id/btn_select_storage"
-            android:layout_width="wrap_content"
-            android:layout_height="36dp"
-            android:minWidth="0dp"
-            android:text="Storage"
-            android:textColor="#00BE00"
-            android:textSize="12sp"
-            android:paddingHorizontal="12dp"
-            style="@style/Widget.Material3.Button.TextButton" />
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:src="@drawable/ic_storage"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/select_from_storage"
+            android:tooltipText="@string/select_from_storage" />
 
-        <Button
+        <ImageButton
             android:id="@+id/btn_toggle_view"
-            android:layout_width="wrap_content"
-            android:layout_height="36dp"
-            android:minWidth="0dp"
-            android:text="Source"
-            android:textColor="#00BE00"
-            android:textSize="12sp"
-            android:paddingHorizontal="12dp"
-            android:visibility="gone"
-            style="@style/Widget.Material3.Button.TonalButton" />
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:src="@drawable/ic_source_code"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/view_source"
+            android:tooltipText="@string/view_source"
+            android:visibility="gone" />
 
     </LinearLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="?attr/colorOutlineVariant" />
 
     <!-- Status container -->
     <LinearLayout
@@ -88,8 +85,8 @@
 
         <ProgressBar
             android:id="@+id/progress_bar"
-            android:layout_width="24dp"
-            android:layout_height="24dp"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
             android:layout_marginEnd="12dp"
             style="@style/Widget.AppCompat.ProgressBar" />
 
@@ -98,7 +95,7 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:textSize="14sp"
+            android:textSize="13sp"
             android:textColor="@color/status_text" />
 
     </LinearLayout>
@@ -111,33 +108,60 @@
         android:layout_weight="1"
         android:orientation="vertical"
         android:gravity="center"
-        android:padding="32dp">
+        android:paddingHorizontal="32dp">
+
+        <ImageView
+            android:layout_width="64dp"
+            android:layout_height="64dp"
+            android:src="@drawable/ic_preview"
+            android:contentDescription="@null"
+            app:tint="?attr/colorPrimary" />
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
             android:text="@string/empty_state_title"
             android:textSize="18sp"
             android:textStyle="bold"
-            android:textColor="?android:attr/textColorPrimary" />
+            android:textColor="?attr/colorOnSurface" />
 
         <TextView
             android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="@string/empty_state_subtitle"
+            android:textSize="13sp"
+            android:textColor="?attr/colorOnSurface"
+            android:alpha="0.7"
+            android:gravity="center"
+            android:lineSpacingMultiplier="1.4" />
+
+        <Button
+            android:id="@+id/btn_empty_select_project"
+            android:layout_width="220dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="@string/select_from_project" />
+
+        <Button
+            android:id="@+id/btn_empty_select_storage"
+            android:layout_width="220dp"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="@string/empty_state_subtitle"
-            android:textSize="14sp"
-            android:textColor="?android:attr/textColorSecondary"
-            android:gravity="center" />
+            android:text="@string/select_from_storage" />
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
+            android:layout_marginTop="24dp"
             android:text="@string/supported_formats"
-            android:textSize="12sp"
-            android:textColor="?android:attr/textColorTertiary"
-            android:gravity="center" />
+            android:textSize="11sp"
+            android:textColor="?attr/colorOnSurface"
+            android:alpha="0.55"
+            android:gravity="center"
+            android:letterSpacing="0.04"
+            android:textAllCaps="true" />
 
     </LinearLayout>
 
@@ -156,7 +180,7 @@
         android:layout_height="0dp"
         android:layout_weight="1"
         android:visibility="gone"
-        android:background="?android:attr/colorBackground">
+        android:background="?attr/colorSurface">
 
         <TextView
             android:id="@+id/tv_source_code"
@@ -165,7 +189,7 @@
             android:padding="16dp"
             android:fontFamily="monospace"
             android:textSize="13sp"
-            android:textColor="?android:attr/textColorPrimary"
+            android:textColor="?attr/colorOnSurface"
             android:lineSpacingMultiplier="1.2" />
 
     </ScrollView>
