@@ -3,8 +3,11 @@ package com.codeonthego.snippets.ui
 import android.os.Bundle
 import android.util.Log
 import android.view.LayoutInflater
+import androidx.appcompat.app.AlertDialog
+import androidx.core.content.ContextCompat
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Button
 import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.ArrayAdapter
@@ -17,7 +20,6 @@ import com.codeonthego.snippets.SnippetEntry
 import com.codeonthego.snippets.SnippetsConfig
 import com.codeonthego.snippets.SnippetsConfigParser
 import com.codeonthego.snippets.SnippetsPlugin
-import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.textfield.TextInputEditText
@@ -58,7 +60,7 @@ class SnippetManagerFragment : Fragment() {
         emptyView = view.findViewById(R.id.emptyView)
         snippetCount = view.findViewById(R.id.snippetCount)
 
-        view.findViewById<MaterialButton>(R.id.btnAdd).setOnClickListener {
+        view.findViewById<Button>(R.id.btnAdd).setOnClickListener {
             showEditor(null, -1)
         }
     }
@@ -141,7 +143,7 @@ class SnippetManagerFragment : Fragment() {
             scopeSpinner.setSelection(1)
         }
 
-        MaterialAlertDialogBuilder(ctx)
+        val editDialog = MaterialAlertDialogBuilder(ctx)
             .setTitle(if (existing != null) "Edit Snippet" else "New Snippet")
             .setView(dialogView)
             .setPositiveButton("Save") { _, _ ->
@@ -175,13 +177,14 @@ class SnippetManagerFragment : Fragment() {
             }
             .setNegativeButton("Cancel", null)
             .show()
+        applyDialogButtonColors(editDialog)
     }
 
     private fun confirmDelete(index: Int) {
         val ctx = context ?: return
         val entry = snippets.getOrNull(index) ?: return
 
-        MaterialAlertDialogBuilder(ctx)
+        val deleteDialog = MaterialAlertDialogBuilder(ctx)
             .setTitle("Delete Snippet")
             .setMessage("Delete \"${entry.prefix}\"?")
             .setPositiveButton("Delete") { _, _ ->
@@ -191,6 +194,15 @@ class SnippetManagerFragment : Fragment() {
             }
             .setNegativeButton("Cancel", null)
             .show()
+        applyDialogButtonColors(deleteDialog)
+    }
+
+    private fun applyDialogButtonColors(dialog: AlertDialog) {
+        val ctx = context ?: return
+        val color = ContextCompat.getColor(ctx, R.color.plugin_primary)
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setTextColor(color)
+        dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.setTextColor(color)
+        dialog.getButton(AlertDialog.BUTTON_NEUTRAL)?.setTextColor(color)
     }
 
     private fun save() {
