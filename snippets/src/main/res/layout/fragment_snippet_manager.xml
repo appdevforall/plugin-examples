@@ -32,16 +32,13 @@
             android:textColor="?android:attr/textColorSecondary"
             android:paddingEnd="4dp" />
 
-        <com.google.android.material.button.MaterialButton
+        <Button
             android:id="@+id/btnAdd"
-            style="@style/Widget.Material3.Button.OutlinedButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:minWidth="0dp"
             android:text="+ Add"
-            android:textSize="13sp"
-            android:textColor="?android:attr/textColorPrimary"
-            app:strokeColor="?attr/colorOutline"
-            app:rippleColor="?attr/colorOutlineVariant" />
+            android:textSize="13sp" />
 
     </LinearLayout>
 

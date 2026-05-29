@@ -11,6 +11,7 @@ import com.itsaky.androidide.plugins.extensions.NavigationItem
 import com.itsaky.androidide.plugins.extensions.ContextMenuContext
 import com.itsaky.androidide.plugins.services.IdeEditorTabService
 import com.codeonthego.markdownpreviewer.fragments.MarkdownPreviewFragment
+import com.codeonthego.markdownpreviewer.viewmodel.MarkdownPreviewViewModel
 import java.io.File
 
 class MarkdownPreviewerPlugin : IPlugin, UIExtension, EditorTabExtension {
@@ -56,6 +57,9 @@ class MarkdownPreviewerPlugin : IPlugin, UIExtension, EditorTabExtension {
 
     override fun dispose() {
         context.logger.info("MarkdownPreviewerPlugin: Disposing plugin")
+        PreviewState.consumePendingFile()
+        PreviewState.consumePendingUri()
+        MarkdownPreviewViewModel.reset()
     }
 
     // UIExtension - No main menu items (accessed via sidebar/context menu)
@@ -94,7 +98,7 @@ class MarkdownPreviewerPlugin : IPlugin, UIExtension, EditorTabExtension {
             NavigationItem(
                 id = "markdown_preview_sidebar",
                 title = "Preview",
-                icon = android.R.drawable.ic_menu_gallery,
+                icon = R.drawable.ic_preview,
                 isEnabled = true,
                 isVisible = true,
                 group = "tools",
@@ -113,7 +117,7 @@ class MarkdownPreviewerPlugin : IPlugin, UIExtension, EditorTabExtension {
             EditorTabItem(
                 id = "markdown_preview_main_tab",
                 title = "Preview",
-                icon = android.R.drawable.ic_menu_gallery,
+                icon = R.drawable.ic_preview,
                 fragmentFactory = {
                     context.logger.debug("Creating MarkdownPreviewFragment")
                     MarkdownPreviewFragment()
@@ -137,6 +141,11 @@ class MarkdownPreviewerPlugin : IPlugin, UIExtension, EditorTabExtension {
 
     override fun onEditorTabClosed(tabId: String) {
         context.logger.info("Editor tab closed: $tabId")
+        if (tabId == "markdown_preview_main_tab") {
+            PreviewState.consumePendingFile()
+            PreviewState.consumePendingUri()
+            MarkdownPreviewViewModel.reset()
+        }
     }
 
     override fun canCloseEditorTab(tabId: String): Boolean {
@@ -182,10 +191,19 @@ class MarkdownPreviewerPlugin : IPlugin, UIExtension, EditorTabExtension {
 object PreviewState {
     @Volatile
     var pendingFilePath: String? = null
-    
+
+    @Volatile
+    var pendingUri: android.net.Uri? = null
+
     fun consumePendingFile(): String? {
         val path = pendingFilePath
         pendingFilePath = null
         return path
+    }
+
+    fun consumePendingUri(): android.net.Uri? {
+        val uri = pendingUri
+        pendingUri = null
+        return uri
     }
 }
