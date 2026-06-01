@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="plugin_name">Sketch to UI</string>
+    <string name="title_generate_xml">Generate XML</string>
+    <string name="action_sketch_to_ui">Sketch to UI</string>
+    <string name="btn_detect">Detect</string>
+    <string name="btn_update">Update</string>
+    <string name="btn_save">Save</string>
+    <string name="image_placeholder_desc">Selected sketch or UI screenshot</string>
+    <string name="status_detecting">Running detection pipeline...</string>
+    <string name="status_initializing_model">Loading detection model...</string>
+    <string name="status_running_yolo">Detecting UI components...</string>
+    <string name="status_running_ocr">Reading text from detected regions...</string>
+    <string name="status_merging_detections">Merging component and OCR results...</string>
+    <string name="status_generating_xml">Generating XML...</string>
+    <string name="status_saving_file">Saving XML...</string>
+    <string name="status_updated">Generated XML applied.</string>
+    <string name="error_no_layout_file">Open an Android layout XML file before updating.</string>
+    <string name="error_no_image">Select an image before detecting.</string>
+    <string name="error_no_generated_xml">Run Detect before updating.</string>
+    <string name="error_detection_failed">Detection failed: %1$s</string>
+    <string name="error_update_failed">Generated XML could not be written.</string>
+    <string name="msg_no_image_selected">No image selected</string>
+    <string name="msg_image_capture_cancelled">Image capture cancelled</string>
+    <string name="msg_camera_permission_required">Camera permission is required.</string>
+    <string name="msg_select_image_first">Please select an image first</string>
+    <string name="msg_run_detection_first">Please run detection on an image first.</string>
+    <string name="msg_overwrite_layout">This will overwrite the contents of \'%s\'. Are you sure you want to continue?</string>
+    <string name="msg_model_load_failed">Model or labels could not be loaded</string>
+    <string name="msg_saved_to_downloads">Saved to Downloads/%s</string>
+    <string name="msg_error_saving_file">Error saving file: %s</string>
+    <string name="msg_share_xml_layout">Share XML Layout</string>
+    <string name="msg_placeholder_image_selected">Image selected for placeholder.</string>
+    <string name="msg_image_removed">Image deleted from the project</string>
+    <string name="layout_default_name">layout</string>
+    <string name="camera_picture_title">New Picture</string>
+    <string name="camera_picture_description">From the Camera</string>
+    <string name="confirm_update_title">Update layout?</string>
+    <string name="confirm_update_message">Replace %1$s with the generated layout XML?</string>
+    <string name="yes">Yes</string>
+    <string name="no">No</string>
+</resources>
