@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MyPlugin</string>
+    <string name="plugin_description">A Code on the Go plugin</string>
+    
+    
+    <string name="search_icons">Search icons</string>
+    <string name="no_icons_found">No icons found</string>
+    <string name="icon_description">Icon</string>
+</resources>
