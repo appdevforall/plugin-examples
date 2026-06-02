@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/card_root"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginHorizontal="@dimen/space_lg"
+    android:layout_marginTop="@dimen/space_sm"
+    android:layout_marginBottom="@dimen/space_md"
+    android:minHeight="128dp"
+    android:foreground="?attr/selectableItemBackground"
+    android:clickable="true"
+    android:focusable="true"
+    app:cardElevation="0dp"
+    app:cardCornerRadius="@dimen/radius_lg"
+    app:strokeWidth="@dimen/border_hairline"
+    app:strokeColor="@color/plugin_outline_variant"
+    app:cardBackgroundColor="@color/plugin_surface"
+    app:contentPadding="0dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingHorizontal="@dimen/space_lg"
+        android:paddingTop="@dimen/space_lg"
+        android:paddingBottom="@dimen/space_lg">
+
+        <!-- Eyebrow: visible only when tracking -->
+        <TextView
+            android:id="@+id/tracking_eyebrow"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="@dimen/space_md"
+            android:text="@string/project_status_tracking"
+            android:textSize="11sp"
+            android:textAllCaps="true"
+            android:letterSpacing="0.12"
+            android:fontFamily="sans-serif-medium"
+            android:textColor="@color/plugin_primary"
+            android:visibility="gone" />
+
+        <!-- Title row: project name + hourly rate -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:baselineAligned="false">
+
+            <TextView
+                android:id="@+id/title"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textSize="17sp"
+                android:fontFamily="sans-serif-medium"
+                android:textColor="@color/plugin_on_surface"
+                android:maxLines="1"
+                android:ellipsize="end" />
+
+            <TextView
+                android:id="@+id/rate"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/space_md"
+                android:textSize="13sp"
+                android:fontFamily="monospace"
+                android:textColor="@color/plugin_on_surface_variant" />
+        </LinearLayout>
+
+        <!-- Client subtitle -->
+        <TextView
+            android:id="@+id/client"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:textSize="13sp"
+            android:textColor="@color/plugin_text_muted"
+            android:maxLines="1"
+            android:ellipsize="end" />
+
+        <!-- Hairline divider -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginTop="@dimen/space_lg"
+            android:background="@color/plugin_outline_variant" />
+
+        <!-- Footer row: this-month label + value + overflow -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/space_md"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:baselineAligned="false">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/project_card_month_total"
+                    android:textSize="11sp"
+                    android:textAllCaps="true"
+                    android:letterSpacing="0.08"
+                    android:fontFamily="sans-serif-medium"
+                    android:textColor="@color/plugin_text_muted" />
+
+                <TextView
+                    android:id="@+id/month_value"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:textSize="22sp"
+                    android:fontFamily="monospace"
+                    android:fontFeatureSettings="tnum"
+                    android:textColor="@color/plugin_on_surface" />
+            </LinearLayout>
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/archived_chip"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="@dimen/space_xs"
+                android:text="@string/project_archived_chip"
+                android:textSize="11sp"
+                android:textColor="@color/plugin_text_muted"
+                android:visibility="gone"
+                app:chipMinHeight="26dp"
+                app:chipStrokeWidth="1dp"
+                app:chipStrokeColor="@color/plugin_outline_variant"
+                app:chipBackgroundColor="@color/plugin_surface"
+                style="@style/Widget.Material3.Chip.Assist" />
+
+            <ImageButton
+                android:id="@+id/btn_more"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:padding="@dimen/space_sm"
+                android:scaleType="centerInside"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/project_overflow_edit"
+                android:src="@drawable/ic_more_vert"
+                android:tint="@color/plugin_text_muted" />
+        </LinearLayout>
+    </LinearLayout>
+
+</com.google.android.material.card.MaterialCardView>

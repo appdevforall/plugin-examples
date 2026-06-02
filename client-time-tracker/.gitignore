@@ -1,0 +1,14 @@
+# Gradle
+.gradle/
+build/
+.kotlin/
+
+# IDE
+.idea/
+*.iml
+
+# Local configuration
+local.properties
+
+# OS
+.DS_Store
