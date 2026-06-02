@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application
+        android:label="Python Tools"
+        android:theme="@android:style/Theme.Material.Light.NoActionBar">
+
+        <meta-data
+            android:name="plugin.id"
+            android:value="com.appdevforall.python.plugin" />
+
+        <meta-data
+            android:name="plugin.name"
+            android:value="Python Tools" />
+
+        <meta-data
+            android:name="plugin.version"
+            android:value="${pluginVersion}" />
+
+        <meta-data
+            android:name="plugin.description"
+            android:value="Adds two Python project templates to Code On the Go (a Flask web app and a starter project), with on-device Python install and built-in run, install, and test actions." />
+
+        <meta-data
+            android:name="plugin.author"
+            android:value="App Dev For All" />
+
+        <meta-data
+            android:name="plugin.min_ide_version"
+            android:value="1.0.0" />
+
+        <meta-data
+            android:name="plugin.permissions"
+            android:value="filesystem.read,filesystem.write,system.commands,project.structure" />
+
+        <meta-data
+            android:name="plugin.main_class"
+            android:value="com.appdevforall.python.plugin.PythonToolsPlugin" />
+
+        <meta-data
+            android:name="plugin.icon_day"
+            android:value="assets/icon_day.png" />
+
+        <meta-data
+            android:name="plugin.icon_night"
+            android:value="assets/icon_night.png" />
+
+    </application>
+
+</manifest>
