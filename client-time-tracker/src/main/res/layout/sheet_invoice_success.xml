@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.core.widget.NestedScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:theme="@style/ThemeOverlay.Plugin"
+    android:background="@color/plugin_surface">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingHorizontal="@dimen/space_xl"
+        android:paddingTop="@dimen/space_md"
+        android:paddingBottom="@dimen/space_xl">
+
+        <!-- Drag handle -->
+        <View
+            android:layout_width="32dp"
+            android:layout_height="4dp"
+            android:layout_gravity="center_horizontal"
+            android:background="@drawable/drag_handle"
+            android:layout_marginBottom="@dimen/space_xl" />
+
+        <!-- Eyebrow row: check icon + INVOICE GENERATED -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <ImageView
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:src="@drawable/ic_check"
+                android:contentDescription="@null"
+                app:tint="@color/plugin_primary" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:text="@string/invoice_dialog_eyebrow"
+                android:textSize="11sp"
+                android:textAllCaps="true"
+                android:letterSpacing="0.12"
+                android:fontFamily="sans-serif-medium"
+                android:textColor="@color/plugin_primary" />
+        </LinearLayout>
+
+        <!-- Hero invoice number -->
+        <TextView
+            android:id="@+id/dialog_invoice_number"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/space_sm"
+            android:textSize="32sp"
+            android:fontFamily="monospace"
+            android:fontFeatureSettings="tnum"
+            android:textColor="@color/plugin_on_surface"
+            android:letterSpacing="-0.01" />
+
+        <!-- Divider -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginTop="@dimen/space_lg"
+            android:background="@color/plugin_outline_variant" />
+
+        <!-- TOTAL label + amount -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/space_lg"
+            android:text="@string/invoice_summary_total"
+            android:textSize="11sp"
+            android:textAllCaps="true"
+            android:letterSpacing="0.08"
+            android:fontFamily="sans-serif-medium"
+            android:textColor="@color/plugin_text_muted" />
+
+        <TextView
+            android:id="@+id/dialog_total"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/space_xs"
+            android:textSize="34sp"
+            android:fontFamily="monospace"
+            android:fontFeatureSettings="tnum"
+            android:textColor="@color/plugin_on_surface"
+            android:letterSpacing="-0.01" />
+
+        <!-- Period subtitle -->
+        <TextView
+            android:id="@+id/dialog_period"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/space_xs"
+            android:textSize="13sp"
+            android:fontFamily="monospace"
+            android:textColor="@color/plugin_text_muted" />
+
+        <!-- Double-divider receipt seam: 1dp line, 6dp gap, 1dp line -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginTop="@dimen/space_xl"
+            android:background="@color/plugin_outline_variant" />
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginTop="6dp"
+            android:background="@color/plugin_outline_variant" />
+
+        <!-- Files section label -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/space_xl"
+            android:text="@string/invoice_dialog_files_label"
+            android:textSize="11sp"
+            android:textAllCaps="true"
+            android:letterSpacing="0.08"
+            android:fontFamily="sans-serif-medium"
+            android:textColor="@color/plugin_text_muted" />
+
+        <!-- Files card -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/space_sm"
+            app:cardElevation="0dp"
+            app:cardCornerRadius="@dimen/radius_md"
+            app:strokeWidth="1dp"
+            app:strokeColor="@color/plugin_outline_variant"
+            app:cardBackgroundColor="@color/plugin_surface"
+            app:contentPadding="0dp">
+
+            <LinearLayout
+                android:id="@+id/files_container"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:divider="@drawable/divider_hairline"
+                android:showDividers="middle" />
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Action row -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="end"
+            android:layout_marginTop="@dimen/space_xl">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_done"
+                style="@style/PluginButton.Text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/invoice_action_done" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_share_all"
+                style="@style/PluginButton.Filled"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/space_sm"
+                android:text="@string/invoice_dialog_share_all" />
+        </LinearLayout>
+
+    </LinearLayout>
+</androidx.core.widget.NestedScrollView>

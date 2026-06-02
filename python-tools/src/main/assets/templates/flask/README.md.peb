@@ -1,0 +1,39 @@
+# ${{APP_NAME}}
+
+A Flask web application.
+
+## Setup
+
+```bash
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+python app.py
+```
+
+Server runs at `http://localhost:${{PORT}}`
+
+## Project Structure
+
+```
+${{APP_NAME}}/
+  app.py                 # Application entry point
+  config.py              # Configuration
+  requirements.txt       # Dependencies
+  static/
+    css/
+      style.css          # Stylesheet
+  templates/
+    base.html            # Base layout
+    index.html           # Home page
+    about.html           # About page
+    404.html             # Error page
+```
+
+## Routes
+
+| Route | Description |
+|-------|-------------|
+| `GET /` | Home page |
+| `GET /about` | About page |
+| `GET /api/health` | JSON health check |
