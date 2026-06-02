@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application
+        android:label="IconsRepository-Plugin"
+        android:theme="@style/PluginTheme">
+
+        <!-- Plugin metadata -->
+        <meta-data
+            android:name="plugin.id"
+            android:value="dev.omar.plugin.iconsrepo" />
+
+        <meta-data
+            android:name="plugin.name"
+            android:value="IconsRepository-Plugin" />
+        
+        <meta-data
+            android:name="plugin.icon_day"
+            android:value="assets/icon_day.png" />
+
+        <meta-data
+            android:name="plugin.icon_night"
+            android:value="assets/icon_night.png" />
+        <meta-data
+            android:name="plugin.version"
+            android:value="1.0.1" />
+
+        <meta-data
+            android:name="plugin.description"
+            android:value="A Code on the Go plugin" />
+
+        <meta-data
+            android:name="plugin.author"
+            android:value="OMAR HAIDAR" />
+
+        <meta-data
+            android:name="plugin.min_ide_version"
+            android:value="26.17" />
+
+        <meta-data
+            android:name="plugin.max_ide_version"
+            android:value="26.22" />
+
+        <!-- Available permissions (comma-separated): - filesystem.read : Read files from the filesystem - filesystem.write : Write files to the filesystem - network.access : Access the network - system.commands : Execute system commands - ide.settings : Access IDE settings - project.structure : Access project structure -->
+        <meta-data
+            android:name="plugin.permissions"
+            android:value="filesystem.read,filesystem.write,project.structure" />
+
+        <meta-data
+            android:name="plugin.main_class"
+            android:value="dev.omar.plugin.iconsrepo.Main" />
+
+        <meta-data
+            android:name="plugin.sidebar_items"
+            android:value="1" />
+
+        <meta-data
+            android:name="plugin.editor_tabs"
+            android:value="1" />
+
+    </application>
+
+</manifest>
