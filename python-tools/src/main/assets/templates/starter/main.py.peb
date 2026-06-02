@@ -1,0 +1,13 @@
+"""${{APP_NAME}} — application entry point."""
+
+
+def greet(name: str) -> str:
+    return f"Hello, {name}!"
+
+
+def main() -> None:
+    print(greet("${{APP_NAME}}"))
+
+
+if __name__ == "__main__":
+    main()
