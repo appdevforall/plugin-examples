@@ -21,6 +21,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    outputs:
+      plugins: ${{ steps.stage.outputs.plugins }}
     steps:
       - name: Checkout plugin-examples
         uses: actions/checkout@v4
@@ -42,34 +44,76 @@ jobs:
           CODEONTHEGO_REF: ${{ github.event.inputs.codeonthego_ref }}
         run: ./scripts/update-libs.sh --ref "$CODEONTHEGO_REF"
 
-      - name: Stage .cgp files with website filenames
+      - name: Stage built .cgp artifacts
+        id: stage
         run: |
           mkdir -p deploy-staging
-          declare -A MAP=(
-            ["apk-viewer"]="apk-analyzer.cgp"
-            ["Beepy"]="beepy.cgp"
-            ["keystore-generator"]="keystore-generator.cgp"
-            ["markdown-preview"]="markdown-previewer.cgp"
-            ["ndk-installer-plugin"]="ndk-installer.cgp"
-            ["random-xkcd"]="random-xkcd.cgp"
-            ["snippets"]="snippets.cgp"
-            ["icons-repository"]="icons-repository.cgp"
-          )
-          for module in "${!MAP[@]}"; do
-            src=$(ls "${module}/build/plugin/"*.cgp 2>/dev/null | head -n1)
+
+          # Discover every plugin module the same way scripts/update-libs.sh does
+          # (a sibling dir whose build.gradle.kts applies the plugin-builder Gradle
+          # plugin), then stage each plugin's built .cgp under its own name. The
+          # plugin-builder already names the artifact, so there is no rename map —
+          # new plugins are picked up automatically.
+          staged=0
+          names=()
+          for build_file in */build.gradle.kts; do
+            [ -f "$build_file" ] || continue
+            grep -qF "com.itsaky.androidide.plugins.build" "$build_file" || continue
+            module="$(dirname "$build_file")"
+            src="$(ls "${module}/build/plugin/"*.cgp 2>/dev/null | grep -v -- '-debug\.cgp$' | head -n1)"
             if [ -z "$src" ]; then
-              echo "ERROR: no .cgp found under ${module}/build/plugin/"
+              echo "ERROR: no release .cgp found under ${module}/build/plugin/ (did assemblePlugin run?)"
               exit 1
             fi
-            cp "$src" "deploy-staging/${MAP[$module]}"
-            echo "Staged $src -> deploy-staging/${MAP[$module]}"
+            cp "$src" "deploy-staging/$(basename "$src")"
+            echo "Staged $src -> deploy-staging/$(basename "$src")"
+            names+=("$(basename "$src" .cgp)")
+            staged=$((staged + 1))
           done
+
+          if [ "$staged" -eq 0 ]; then
+            echo "ERROR: no plugin modules discovered under */build.gradle.kts"
+            exit 1
+          fi
+
+          # Emit the staged artifact names as a JSON array so the publish job can
+          # fan out one downloadable artifact per plugin via a matrix.
+          plugins="$(printf '%s\n' "${names[@]}" | jq -R . | jq -cs .)"
+          echo "plugins=${plugins}" >> "$GITHUB_OUTPUT"
+
+          echo ""
+          echo "Staged ${staged} plugin artifact(s): ${names[*]}"
           ls -la deploy-staging/
 
-      - name: Upload .cgp artifacts
+      - name: Upload all .cgp as one bundle
         uses: actions/upload-artifact@v4
         with:
-          name: plugins-cgp
+          name: all-plugins-cgp
           path: deploy-staging/*.cgp
+          retention-days: 7
+          if-no-files-found: error
+
+  # publish one downloadable artifact per plugin so each .cgp can be
+  # grabbed directly from the run summary, not only as part of the bundle.
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        plugin: ${{ fromJson(needs.build.outputs.plugins) }}
+    steps:
+      - name: Download bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: all-plugins-cgp
+          path: deploy-staging
+
+      - name: Upload ${{ matrix.plugin }} as its own artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.plugin }}
+          path: deploy-staging/${{ matrix.plugin }}.cgp
           retention-days: 7
           if-no-files-found: error

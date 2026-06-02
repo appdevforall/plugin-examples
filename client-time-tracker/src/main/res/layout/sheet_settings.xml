@@ -1,0 +1,246 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.core.widget.NestedScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:theme="@style/ThemeOverlay.Plugin"
+    android:background="@color/plugin_surface"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="@dimen/space_xl">
+
+        <View
+            android:layout_width="32dp"
+            android:layout_height="4dp"
+            android:layout_gravity="center_horizontal"
+            android:background="@drawable/drag_handle"
+            android:layout_marginBottom="@dimen/space_lg" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_title"
+            android:textAppearance="@style/Plugin.Text.Title" />
+
+        <TextView
+            style="@style/Plugin.SectionHeader"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_section_tracking" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/settings_idle_threshold"
+                android:textAppearance="@style/Plugin.Text.Body" />
+
+            <TextView
+                android:id="@+id/idle_value"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textAppearance="@style/Plugin.Text.Mono" />
+        </LinearLayout>
+
+        <com.google.android.material.slider.Slider
+            android:id="@+id/idle_slider"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:valueFrom="1"
+            android:valueTo="30"
+            android:stepSize="1"
+            android:value="5"
+            app:trackColorActive="@color/plugin_primary"
+            app:trackColorInactive="@color/plugin_outline_variant"
+            app:thumbColor="@color/plugin_primary" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_idle_threshold_help"
+            android:textAppearance="@style/Plugin.Text.Small" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="@dimen/space_lg">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/settings_merge_gap"
+                android:textAppearance="@style/Plugin.Text.Body" />
+
+            <TextView
+                android:id="@+id/merge_value"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textAppearance="@style/Plugin.Text.Mono" />
+        </LinearLayout>
+
+        <com.google.android.material.slider.Slider
+            android:id="@+id/merge_slider"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:valueFrom="0"
+            android:valueTo="10"
+            android:stepSize="1"
+            android:value="2"
+            app:trackColorActive="@color/plugin_primary"
+            app:trackColorInactive="@color/plugin_outline_variant"
+            app:thumbColor="@color/plugin_primary" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_merge_gap_help"
+            android:textAppearance="@style/Plugin.Text.Small" />
+
+        <TextView
+            style="@style/Plugin.SectionHeader"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_section_invoicing" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:baselineAligned="false">
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginEnd="@dimen/space_sm"
+                android:hint="@string/settings_default_tax"
+                style="@style/PluginTextInputLayout">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/default_tax_input"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:singleLine="true"
+                    android:inputType="numberDecimal"
+                    android:textColor="@color/plugin_on_surface" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/default_currency_layout"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="@dimen/space_sm"
+                android:hint="@string/settings_default_currency"
+                app:endIconMode="custom"
+                app:endIconDrawable="@drawable/ic_arrow_drop_down"
+                app:endIconTint="@color/plugin_text_muted"
+                style="@style/PluginTextInputLayout">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/default_currency_input"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:singleLine="true"
+                    android:focusable="false"
+                    android:longClickable="false"
+                    android:cursorVisible="false"
+                    android:inputType="none"
+                    android:clickable="true"
+                    android:textColor="@color/plugin_on_surface" />
+            </com.google.android.material.textfield.TextInputLayout>
+        </LinearLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/space_md"
+            android:hint="@string/settings_invoice_prefix"
+            style="@style/PluginTextInputLayout">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/invoice_prefix_input"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:singleLine="true"
+                android:inputType="textCapCharacters"
+                android:textColor="@color/plugin_on_surface" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <TextView
+            style="@style/Plugin.SectionHeader"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_section_business" />
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="@string/settings_business_name"
+            style="@style/PluginTextInputLayout">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/business_name_input"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:singleLine="true"
+                android:inputType="textCapWords"
+                android:textColor="@color/plugin_on_surface" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/space_md"
+            android:hint="@string/settings_business_email"
+            style="@style/PluginTextInputLayout">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/business_email_input"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:singleLine="true"
+                android:inputType="textEmailAddress"
+                android:textColor="@color/plugin_on_surface" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/space_md"
+            android:hint="@string/settings_business_address"
+            style="@style/PluginTextInputLayout">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/business_address_input"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="textPostalAddress|textMultiLine"
+                android:maxLines="3"
+                android:textColor="@color/plugin_on_surface" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_done"
+            style="@style/PluginButton.Filled"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/space_xl"
+            android:text="@string/form_save" />
+
+    </LinearLayout>
+</androidx.core.widget.NestedScrollView>
