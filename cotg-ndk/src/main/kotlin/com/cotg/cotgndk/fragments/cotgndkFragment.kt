@@ -139,62 +139,11 @@ class cotgndkFragment : Fragment() {
             try {
                 val targetDir = File(envService?.getAndroidHomeDirectory(), "cotgx_ultimate_ndk")
 
-                if (!targetDir.exists() || targetDir.listFiles()?.isEmpty() == true) {
-                    if (selectedNdkFile != null && selectedNdkFile!!.exists()) {
-                        targetDir.mkdirs()
-                        val tempFile = File(targetDir.parentFile, "temp_cotgx_archive.tmp")
-
-                        appendConsole("\n[!] Copying environment to workspace...")
-                        try {
-                            selectedNdkFile!!.inputStream().use { input ->
-                                tempFile.outputStream().use { output ->
-                                    input.copyTo(output, 8192)
-                                }
-                            }
-
-                            appendConsole("\n[!] Extracting via Native OS Engine...")
-
-                            val extractCmd = "tar -xzf '${tempFile.absolutePath}' -C '${targetDir.absolutePath}'"
-
-                            val extProcess = ProcessBuilder("sh", "-c", extractCmd)
-                                .redirectErrorStream(true).start()
-                            val extReader = BufferedReader(InputStreamReader(extProcess.inputStream))
-                            var extLine: String?
-                            while (extReader.readLine().also { extLine = it } != null) {
-                                appendConsole("\n  -> $extLine")
-                            }
-                            val extExit = extProcess.waitFor()
-                            tempFile.delete()
-
-                            if (extExit == 0) {
-                                appendConsole("\n[✓] Environment Extracted Successfully!")
-                            } else {
-                                appendConsole("\n[x] Extraction Failed! Exit Code: $extExit")
-                                targetDir.deleteRecursively()
-                                enableButtons()
-                                return@launch
-                            }
-
-                        } catch (e: Exception) {
-                            appendConsole("\n[x] Extraction Error: ${e.message}")
-                            tempFile.delete()
-                            targetDir.deleteRecursively()
-                            enableButtons()
-                            return@launch
-                        }
-                    } else {
-                        appendConsole("\n[x] NDK Zip not found in Download folder.")
-                        enableButtons()
-                        return@launch
-                    }
-                } else {
-                    appendConsole("\n[✓] Environment is active and ready.")
-                }
+                if (!prepareNdkEnvironment(targetDir)) return@launch
 
                 val projectPath = getActiveProjectPath()
                 if (projectPath == null || !projectPath.exists()) {
                     appendConsole("\n[x] No active project found. Open a project in IDE first.")
-                    enableButtons()
                     return@launch
                 }
 
@@ -206,7 +155,6 @@ class cotgndkFragment : Fragment() {
 
                 if (!File(cppDir, "CMakeLists.txt").exists()) {
                     appendConsole("\n[x] CMakeLists.txt not found in app/src/main/cpp!")
-                    enableButtons()
                     return@launch
                 }
 
@@ -373,31 +321,88 @@ class cotgndkFragment : Fragment() {
                     echo "[★] BUILD SUCCESS!"
                 """.trimIndent()
 
-                val process = ProcessBuilder("sh", "-c", compileScript)
-                    .directory(projectPath)
-                    .redirectErrorStream(true)
-                    .start()
-
-                val reader = BufferedReader(InputStreamReader(process.inputStream))
-                var line: String?
-                while (reader.readLine().also { line = it } != null) {
-                    appendConsole("\n  -> $line")
-                }
-
-                val exitCode = process.waitFor()
-
-                if (exitCode == 0) {
-                    appendConsole("\n\n[★] COMPILATION SUCCESSFUL!")
-                    appendConsole("\n[★] Files are ready in app/src/main/jniLibs/arm64-v8a/")
-                } else {
-                    appendConsole("\n\n[x] Compilation Failed — exit code $exitCode")
-                }
-
+                runCompilation(compileScript, projectPath)
             } catch (e: Exception) {
                 appendConsole("\n[x] CRITICAL ERROR: ${e.message}")
             } finally {
                 enableButtons()
             }
+        }
+    }
+
+    private suspend fun prepareNdkEnvironment(targetDir: File): Boolean {
+        if (targetDir.exists() && targetDir.listFiles()?.isEmpty() != true) {
+            appendConsole("\n[✓] Environment is active and ready.")
+            return true
+        }
+
+        val archive = selectedNdkFile
+        if (archive == null || !archive.exists()) {
+            appendConsole("\n[x] NDK Zip not found in Download folder.")
+            return false
+        }
+
+        return extractNdkArchive(archive, targetDir)
+    }
+
+    private suspend fun extractNdkArchive(archive: File, targetDir: File): Boolean {
+        targetDir.mkdirs()
+        val tempFile = File(targetDir.parentFile, "temp_cotgx_archive.tmp")
+        appendConsole("\n[!] Copying environment to workspace...")
+
+        return try {
+            archive.inputStream().use { input ->
+                tempFile.outputStream().use { output ->
+                    input.copyTo(output, 8192)
+                }
+            }
+
+            appendConsole("\n[!] Extracting via Native OS Engine...")
+            val extractCmd = "tar -xzf '${tempFile.absolutePath}' -C '${targetDir.absolutePath}'"
+            val process = ProcessBuilder("sh", "-c", extractCmd)
+                .redirectErrorStream(true).start()
+            streamProcessOutput(process)
+            val exitCode = process.waitFor()
+            tempFile.delete()
+
+            if (exitCode == 0) {
+                appendConsole("\n[✓] Environment Extracted Successfully!")
+                true
+            } else {
+                appendConsole("\n[x] Extraction Failed! Exit Code: $exitCode")
+                targetDir.deleteRecursively()
+                false
+            }
+        } catch (e: Exception) {
+            appendConsole("\n[x] Extraction Error: ${e.message}")
+            tempFile.delete()
+            targetDir.deleteRecursively()
+            false
+        }
+    }
+
+    private suspend fun runCompilation(compileScript: String, projectPath: File) {
+        val process = ProcessBuilder("sh", "-c", compileScript)
+            .directory(projectPath)
+            .redirectErrorStream(true)
+            .start()
+
+        streamProcessOutput(process)
+        val exitCode = process.waitFor()
+
+        if (exitCode == 0) {
+            appendConsole("\n\n[★] COMPILATION SUCCESSFUL!")
+            appendConsole("\n[★] Files are ready in app/src/main/jniLibs/arm64-v8a/")
+        } else {
+            appendConsole("\n\n[x] Compilation Failed — exit code $exitCode")
+        }
+    }
+
+    private suspend fun streamProcessOutput(process: Process) {
+        val reader = BufferedReader(InputStreamReader(process.inputStream))
+        var line: String?
+        while (reader.readLine().also { line = it } != null) {
+            appendConsole("\n  -> $line")
         }
     }
 
