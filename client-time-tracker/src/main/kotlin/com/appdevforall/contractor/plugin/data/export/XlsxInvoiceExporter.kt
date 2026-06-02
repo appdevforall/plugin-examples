@@ -14,7 +14,7 @@ class XlsxInvoiceExporter : InvoiceExporter {
     override fun export(data: InvoiceData, outFile: File): File {
         outFile.parentFile?.mkdirs()
         FileOutputStream(outFile).use { fos ->
-            val workbook = Workbook(fos, "Contractor", "1.0")
+            val workbook = Workbook(fos, "Client Time Tracker", "1.0")
             val ws: Worksheet = workbook.newWorksheet("Invoice")
 
             ws.width(0, 22.0)
