@@ -138,6 +138,12 @@ jobs:
           Host $GREENGEEKS_HOST
             User $GREENGEEKS_USER
             IdentityFile ~/.ssh/id_rsa
+            ControlMaster auto
+            ControlPath ~/.ssh/cm-%r@%h:%p
+            ControlPersist 10m
+            ConnectTimeout 60
+            ServerAliveInterval 60
+            ServerAliveCountMax 10
           EOF
           chmod 600 ~/.ssh/config
           unset SSH_AUTH_SOCK
@@ -157,18 +163,20 @@ jobs:
         env:
           REMOTE: ${{ vars.GREENGEEKS_SSH_USER }}@${{ vars.GREENGEEKS_SSH_HOST }}
         run: |
+          names=$(cd deploy-staging && ls *.cgp)
+          remote_sums=$(ssh "$REMOTE" "cd $PLUGINS_REMOTE_PATH && md5sum $names")
           failures=0
-          for f in deploy-staging/*.cgp; do
-            name=$(basename "$f")
-            local_md5=$(md5sum "$f" | cut -d ' ' -f1)
-            remote_md5=$(ssh "$REMOTE" "md5sum $PLUGINS_REMOTE_PATH/$name | cut -d ' ' -f1")
+          while IFS= read -r line; do
+            remote_md5=$(echo "$line" | awk '{print $1}')
+            name=$(echo "$line" | awk '{print $2}')
+            local_md5=$(md5sum "deploy-staging/$name" | cut -d ' ' -f1)
             if [ "$local_md5" = "$remote_md5" ]; then
               echo "OK   $name ($local_md5)"
             else
               echo "FAIL $name local=$local_md5 remote=$remote_md5"
               failures=$((failures+1))
             fi
-          done
+          done <<< "$remote_sums"
           if [ $failures -gt 0 ]; then
             echo "ERROR: $failures file(s) failed MD5 verification"
             exit 1
