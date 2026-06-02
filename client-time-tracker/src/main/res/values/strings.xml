@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="contractor_plugin_label">Client Time Tracker</string>
+
+    <string name="contractor_title">Client Time Tracker</string>
+    <string name="sidebar_open_contractor">Client Time Tracker</string>
+    <string name="tab_projects">Project</string>
+    <string name="tab_sessions">Sessions</string>
+    <string name="tab_invoice">Invoice</string>
+
+    <string name="projects_empty_title">No projects yet</string>
+    <string name="projects_empty_body">Register the project you\'re working on to start tracking billable time automatically.</string>
+    <string name="action_register_project">Register project</string>
+    <string name="action_register_current">Register current project</string>
+    <string name="project_card_rate">%1$s/hr</string>
+    <string name="project_card_month_total">This month</string>
+    <string name="project_status_tracking">Tracking</string>
+    <string name="project_overflow_edit">Edit</string>
+    <string name="project_overflow_archive">Archive</string>
+    <string name="project_overflow_unarchive">Unarchive</string>
+    <string name="project_overflow_delete">Delete</string>
+    <string name="project_archived_chip">Archived</string>
+    <string name="project_delete_confirm_title">Delete project?</string>
+    <string name="project_delete_confirm_body">This permanently removes the project and all %1$d session(s) attached to it. This cannot be undone.</string>
+    <string name="action_delete">Delete</string>
+    <string name="action_cancel">Cancel</string>
+
+    <string name="form_register_project">Register project</string>
+    <string name="form_edit_project">Edit project</string>
+    <string name="form_label_display_name">Project name</string>
+    <string name="form_label_root_path">Project root</string>
+    <string name="form_label_client_name">Client name</string>
+    <string name="form_label_client_email">Client email</string>
+    <string name="form_label_client_address">Client address</string>
+    <string name="form_label_rate">Hourly rate</string>
+    <string name="form_label_currency">Currency</string>
+    <string name="form_label_tax">Tax %</string>
+    <string name="form_label_notes">Notes</string>
+    <string name="form_save">Save</string>
+    <string name="form_required">Required</string>
+    <string name="form_invalid_number">Enter a number</string>
+    <string name="form_no_project_open">No project is currently open in the IDE.</string>
+    <string name="form_already_registered">This project is already registered.</string>
+
+    <string name="sessions_filter_project">Project</string>
+    <string name="sessions_range_today">Today</string>
+    <string name="sessions_range_week">This week</string>
+    <string name="sessions_range_month">This month</string>
+    <string name="sessions_range_custom">Custom…</string>
+    <string name="sessions_empty_title">No sessions in this range</string>
+    <string name="sessions_empty_body">Start editing files in a registered project — sessions will appear here automatically.</string>
+    <string name="sessions_active_badge">Active</string>
+    <string name="sessions_total_label">Total tracked</string>
+    <string name="sessions_action_add_manual">Add session</string>
+    <string name="sessions_edit_title">Edit session</string>
+    <string name="sessions_add_title">Add manual session</string>
+    <string name="sessions_field_start">Start</string>
+    <string name="sessions_field_end">End</string>
+    <string name="sessions_field_notes">Notes</string>
+    <string name="sessions_delete_confirm">Delete this session?</string>
+
+    <string name="invoice_picker_project">Select project</string>
+    <string name="invoice_picker_range">Date range</string>
+    <string name="invoice_field_number">Invoice number</string>
+    <string name="invoice_field_notes">Invoice notes (optional)</string>
+    <string name="invoice_label_formats">Formats</string>
+    <string name="invoice_format_pdf">PDF</string>
+    <string name="invoice_format_xlsx">XLSX</string>
+    <string name="invoice_format_csv">CSV</string>
+    <string name="invoice_action_generate">Generate invoice</string>
+    <string name="invoice_summary_total">Total</string>
+    <string name="invoice_summary_hours">Hours</string>
+    <string name="invoice_summary_subtotal">Subtotal</string>
+    <string name="invoice_summary_tax">Tax (%1$s%%)</string>
+    <string name="invoice_generated_title">Invoice generated</string>
+    <string name="invoice_generated_body">%1$d file(s) written to %2$s</string>
+    <string name="invoice_action_share">Share</string>
+    <string name="invoice_action_done">Done</string>
+    <string name="invoice_no_sessions">No billable sessions in this range. Adjust the dates and try again.</string>
+    <string name="invoice_pick_project_prompt">Pick a project first.</string>
+    <string name="invoice_pick_format_prompt">Select at least one format.</string>
+    <string name="invoice_default_number_prefix">INV</string>
+
+    <string name="invoice_dialog_eyebrow">Invoice generated</string>
+    <string name="invoice_dialog_files_label">Generated files</string>
+    <string name="invoice_dialog_period_label">Period</string>
+    <string name="invoice_dialog_currency_label">Currency</string>
+    <string name="invoice_dialog_share_all">Share all</string>
+    <string name="invoice_action_open">Open</string>
+    <string name="action_close">Close</string>
+
+    <string name="error_no_project_title">Pick a project</string>
+    <string name="error_no_format_title">Choose a format</string>
+    <string name="error_no_sessions_title">No billable sessions</string>
+    <string name="error_project_missing_title">Project not found</string>
+    <string name="error_project_missing_body">The selected project no longer exists. Pick another and try again.</string>
+    <string name="error_generation_title">Export incomplete</string>
+    <string name="error_generation_body">One or more invoice files could not be written. Check available storage and try again.</string>
+    <string name="error_share_unavailable_title">Share unavailable</string>
+    <string name="error_share_unavailable_body">No app on this device can handle the invoice files.</string>
+    <string name="error_open_unavailable_title">Cannot open file</string>
+    <string name="error_open_unavailable_body">No app on this device can open this file type.</string>
+
+    <string name="settings_title">Settings</string>
+    <string name="settings_section_tracking">Tracking</string>
+    <string name="settings_section_invoicing">Invoicing</string>
+    <string name="settings_section_business">Your business</string>
+    <string name="settings_idle_threshold">Idle threshold</string>
+    <string name="settings_idle_threshold_value">%1$d min</string>
+    <string name="settings_idle_threshold_help">A session ends if there\'s no editor activity for this long. Idle time is not billed.</string>
+    <string name="settings_merge_gap">Merge gap</string>
+    <string name="settings_merge_gap_value">%1$d min</string>
+    <string name="settings_merge_gap_help">Sessions closer than this gap are merged into a single line item on invoices.</string>
+    <string name="settings_default_tax">Default tax %</string>
+    <string name="settings_default_currency">Default currency</string>
+    <string name="settings_invoice_prefix">Invoice number prefix</string>
+    <string name="settings_business_name">Your name / company</string>
+    <string name="settings_business_email">Email</string>
+    <string name="settings_business_address">Address</string>
+
+    <string name="duration_hours_minutes">%1$dh %2$02dm</string>
+    <string name="duration_minutes_only">%1$dm</string>
+    <string name="duration_zero">0m</string>
+</resources>

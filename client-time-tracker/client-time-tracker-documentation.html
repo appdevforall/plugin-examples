@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Client Time Tracker Plugin Documentation</title>
+<style>
+  :root {
+    --bg: #fdfdfd;
+    --fg: #1a1a1a;
+    --accent: #0f766e;
+    --accent-light: #e6f5f3;
+    --border: #d0d7de;
+    --code-bg: #f4f6f8;
+    --table-stripe: #f8fafb;
+    --shadow: rgba(0,0,0,0.06);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--fg);
+    background: var(--bg);
+    line-height: 1.6;
+    max-width: 52rem;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+  }
+  header { border-bottom: 3px solid var(--accent); padding-bottom: 1.2rem; margin-bottom: 2rem; }
+  header h1 { font-size: 2rem; color: var(--accent); }
+  header p.subtitle { color: #555; margin-top: 0.3rem; }
+  header .meta { font-size: 0.85rem; color: #777; margin-top: 0.5rem; }
+  nav { background: var(--accent-light); border: 1px solid var(--border); border-radius: 6px; padding: 1rem 1.5rem; margin-bottom: 2.5rem; }
+  nav h2 { font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); margin-bottom: 0.5rem; }
+  nav ol { padding-left: 1.3rem; }
+  nav li { margin: 0.25rem 0; }
+  nav a { color: var(--accent); text-decoration: none; }
+  nav a:hover { text-decoration: underline; }
+  section { margin-bottom: 2.5rem; }
+  h2 { font-size: 1.4rem; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; margin-bottom: 1rem; }
+  h3 { font-size: 1.1rem; margin: 1.2rem 0 0.5rem; }
+  p, li { margin-bottom: 0.5rem; }
+  ul, ol { padding-left: 1.4rem; }
+  code {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    background: var(--code-bg);
+    padding: 0.15em 0.35em;
+    border-radius: 3px;
+    font-size: 0.9em;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1rem 1.2rem;
+    overflow-x: auto;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    margin: 0.8rem 0 1rem;
+  }
+  pre code { background: none; padding: 0; }
+  table { width: 100%; border-collapse: collapse; margin: 0.8rem 0 1rem; font-size: 0.95rem; }
+  th, td { text-align: left; padding: 0.55rem 0.8rem; border: 1px solid var(--border); }
+  th { background: var(--accent-light); font-weight: 600; }
+  tr:nth-child(even) td { background: var(--table-stripe); }
+  .diagram {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1.2rem;
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 0.85rem;
+    line-height: 1.55;
+    overflow-x: auto;
+    white-space: pre;
+    margin: 0.8rem 0 1rem;
+  }
+  .callout {
+    background: var(--accent-light);
+    border-left: 4px solid var(--accent);
+    padding: 0.8rem 1rem;
+    border-radius: 0 6px 6px 0;
+    margin: 1rem 0;
+  }
+  .file-tree { list-style: none; padding-left: 0; font-family: monospace; font-size: 0.9rem; }
+  .file-tree ul { list-style: none; padding-left: 1.5rem; }
+  footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: 0.85rem; color: #777; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Client Time Tracker Plugin</h1>
+  <p class="subtitle">Track billable coding time per project and generate invoices, inside Code on the Go</p>
+  <div class="meta">Version 1.0.0 &middot; Author: App Dev For All &middot; Package: <code>com.appdevforall.contractor.plugin</code></div>
+</header>
+
+<nav>
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#overview">Executive Overview</a></li>
+    <li><a href="#functionality">Core Functionality</a></li>
+    <li><a href="#architecture">Technical Architecture</a></li>
+    <li><a href="#integration">Integration Points</a></li>
+    <li><a href="#deployment">Deployment &amp; Usage</a></li>
+    <li><a href="#benefits">Key Benefits</a></li>
+    <li><a href="#license">Attribution &amp; License</a></li>
+  </ol>
+</nav>
+
+<!-- ================================================================ -->
+<section id="overview">
+  <h2>1. Executive Overview</h2>
+  <p>
+    Client Time Tracker is a Code on the Go plugin for contractors who bill by the hour.
+    It adds a <strong>Client Time Tracker</strong> editor tab, plus a matching
+    side-menu entry, that records billable coding time automatically from editor
+    activity against the projects you register. It turns those sessions into
+    invoices in <strong>PDF</strong>, <strong>Excel</strong>, or
+    <strong>CSV</strong>.
+  </p>
+  <p>
+    Each tracked project carries its own client details, hourly rate, currency,
+    and tax rate. As you edit, save, and build inside a registered project, the
+    plugin opens and heartbeats a work session in the background. An idle timer
+    closes the session when you stop.
+  </p>
+  <p>
+    All state lives in the plugin's own standalone Room database
+    (<code>contractor.db</code>) under its private data directory. It never reads
+    or writes the IDE's databases. The plugin implements three extension
+    interfaces (<code>IPlugin</code>, <code>UIExtension</code>,
+    <code>EditorTabExtension</code>), consumes four host services, and subscribes
+    to the host's editor and project events over EventBus.
+  </p>
+</section>
+
+<!-- ================================================================ -->
+<section id="functionality">
+  <h2>2. Core Functionality</h2>
+
+  <h3>The Client Time Tracker tab</h3>
+  <p>
+    The plugin contributes one editor tab, <strong>Client Time Tracker</strong>, hosted
+    by <code>ContractorMainFragment</code>. Inside it, a Material
+    <code>TabLayout</code> switches between three screens, showing the active
+    screen and hiding the others (no <code>ViewPager</code>). An overflow button
+    opens Settings as a bottom sheet:
+  </p>
+  <table>
+    <thead>
+      <tr><th>Screen</th><th>Purpose</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><strong>Projects</strong></td><td>Register, edit, and archive tracked projects (client, rate, currency, tax).</td></tr>
+      <tr><td><strong>Sessions</strong></td><td>Review tracked work sessions; edit or delete individual rows.</td></tr>
+      <tr><td><strong>Invoice</strong></td><td>Pick a project and date range, preview the computed total, and export.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Registering a project</h3>
+  <p>
+    A tracked project binds a project <em>root path</em> on disk to billing
+    settings. Once registered, editor activity under that root counts toward that
+    project. Fields: display name, client name, email, address, hourly rate,
+    currency (ISO code, default <code>USD</code>), tax rate percent, and notes.
+    Rows are unique by <code>rootPath</code>. Projects can be archived rather
+    than deleted.
+  </p>
+
+  <h3>Automatic session tracking</h3>
+  <p>
+    <code>SessionTracker</code> drives tracking. It determines the
+    <em>active project</em> by asking the host which project is open
+    (<code>IdeProjectService.getCurrentProject()</code>) and matching its root
+    against the registered projects. Only activity whose file path falls under
+    the active project's root is counted.
+  </p>
+  <p>
+    A work session opens on the first activity and stays alive through
+    heartbeats:
+  </p>
+  <table>
+    <thead>
+      <tr><th>Signal</th><th>Source event</th><th>Effect</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Edit</td><td><code>DocumentChangeEvent</code></td><td>Heartbeat, increment edit count</td></tr>
+      <tr><td>Save</td><td><code>DocumentSaveEvent</code></td><td>Heartbeat, increment save count</td></tr>
+      <tr><td>Open / Close</td><td><code>DocumentOpenEvent</code> / <code>DocumentCloseEvent</code></td><td>Heartbeat</td></tr>
+      <tr><td>Build</td><td><code>BuildStatusListener.onBuildStarted/Finished/Failed</code></td><td>Open or keep the session alive</td></tr>
+      <tr><td>Project switch</td><td><code>ProjectInitializedEvent</code>, <code>OnResumeEvent</code></td><td>Re-evaluate the active project</td></tr>
+      <tr><td>Background</td><td><code>OnPauseEvent</code></td><td>Flush pending counts to the DB</td></tr>
+    </tbody>
+  </table>
+  <p>
+    To limit writes, heartbeats are persisted at most once every
+    <code>60s</code> (<code>HEARTBEAT_PERSIST_INTERVAL_MS</code>). Edit and save
+    counts accumulate in memory and flush on the interval, on pause, or on close.
+  </p>
+
+  <h3>Idle close and crash recovery</h3>
+  <p>
+    An idle loop ticks every <code>30s</code>. If no activity arrives for the
+    configured idle threshold (Settings, default 5&nbsp;minutes), the active
+    session closes at its last heartbeat, so an invoice never bills time spent
+    away from the keyboard. On startup, <code>recoverOrphanedSessions()</code>
+    closes sessions left open by a process that was killed without a clean
+    shutdown, capping them at their last persisted heartbeat.
+  </p>
+
+  <h3>Invoice generation</h3>
+  <p>
+    <code>GenerateInvoiceUseCase</code> turns a project and date range into an
+    <code>InvoiceData</code> document:
+  </p>
+  <ol>
+    <li>Load sessions in range; drop zero-duration sessions.</li>
+    <li>Merge sessions separated by less than the configured gap
+        (<code>sessionMergeGapMinutes</code>) so brief pauses don't fragment a
+        day.</li>
+    <li>Group by calendar day; each day becomes a line item of
+        <code>hours &times; rate</code>.</li>
+    <li>Sum to a subtotal, apply the project's tax percent, and total.</li>
+    <li>Fold in business info (from Settings) and client info (from the
+        project).</li>
+  </ol>
+  <p>
+    If no billable sessions fall in the range, the use case returns
+    <code>NoBillableSessions</code> and the UI shows an empty state instead of an
+    empty invoice.
+  </p>
+
+  <h3>Export formats</h3>
+  <p>
+    Every exporter implements a common <code>InvoiceExporter</code> interface
+    (<code>export(data, outFile): File</code>). Currency and dates are formatted
+    once in <code>InvoiceFormatting</code> for consistency across formats.
+  </p>
+  <table>
+    <thead>
+      <tr><th>Format</th><th>Exporter</th><th>Implementation</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>PDF</td><td><code>PdfInvoiceExporter</code></td><td>Android <code>PdfDocument</code> canvas rendering</td></tr>
+      <tr><td>Excel (<code>.xlsx</code>)</td><td><code>XlsxInvoiceExporter</code></td><td><code>org.dhatim:fastexcel</code></td></tr>
+      <tr><td>CSV</td><td><code>CsvInvoiceExporter</code></td><td>Direct text writer</td></tr>
+    </tbody>
+  </table>
+  <p>
+    The generated file is handed to the user through the host IDE's
+    <code>FileProvider</code> (see <a href="#integration">Integration Points</a>)
+    so it can be shared or opened by other apps.
+  </p>
+</section>
+
+<!-- ================================================================ -->
+<section id="architecture">
+  <h2>3. Technical Architecture</h2>
+
+  <h3>File layout</h3>
+  <ul class="file-tree">
+    <li>client-time-tracker/
+      <ul>
+        <li>build.gradle.kts, settings.gradle.kts, proguard-rules.pro</li>
+        <li>schemas/ (Room exported schema: <code>ContractorDatabase/1.json</code>)</li>
+        <li>src/main/
+          <ul>
+            <li>AndroidManifest.xml</li>
+            <li>assets/ (Plugin Manager icons: <code>icon_day.png</code>, <code>icon_night.png</code>)</li>
+            <li>kotlin/com/appdevforall/contractor/plugin/
+              <ul>
+                <li><strong>ContractorPlugin.kt</strong>: entry point; tab and side-menu registration, lifecycle</li>
+                <li><strong>ContractorServiceLocator.kt</strong>: manual DI; builds the DB, repos, use cases, tracker</li>
+                <li>data/db/: <code>ContractorDatabase</code>, entities, DAOs</li>
+                <li>data/repository/: Project / Session / Invoice repositories</li>
+                <li>data/export/: CSV / XLSX / PDF exporters</li>
+                <li>data/prefs/: <code>SettingsStore</code> (SharedPreferences)</li>
+                <li>domain/model/, domain/usecase/: <code>GenerateInvoiceUseCase</code>, <code>SessionMerger</code></li>
+                <li>tracker/<strong>SessionTracker.kt</strong>: EventBus and build-status driven session tracking</li>
+                <li>ui/: main, projects, sessions, invoice, settings, common (MVI <code>BaseViewModel</code>)</li>
+              </ul>
+            </li>
+            <li>res/layout/, res/values/, res/values-night/: ViewBinding layouts, colors, strings, styles</li>
+          </ul>
+        </li>
+      </ul>
+    </li>
+  </ul>
+
+  <h3>Class overview</h3>
+  <table>
+    <thead>
+      <tr><th>Class</th><th>Role</th><th>Key interfaces</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>ContractorPlugin</code></td>
+        <td>Plugin entry point. Registers the Client Time Tracker editor tab and side-menu item; drives lifecycle.</td>
+        <td><code>IPlugin</code>, <code>UIExtension</code>, <code>EditorTabExtension</code></td>
+      </tr>
+      <tr>
+        <td><code>ContractorServiceLocator</code></td>
+        <td>Process-wide singleton holder. Builds the Room DB, repositories, use cases, exporters, and the tracker.</td>
+        <td>None</td>
+      </tr>
+      <tr>
+        <td><code>ContractorDatabase</code></td>
+        <td>Standalone Room database at <code>contractor.db</code>; three tables.</td>
+        <td><code>RoomDatabase</code></td>
+      </tr>
+      <tr>
+        <td><code>SessionTracker</code></td>
+        <td>Opens, heartbeats, and closes work sessions from editor and build signals; idle timer; orphan recovery.</td>
+        <td><code>BuildStatusListener</code> + EventBus subscriber</td>
+      </tr>
+      <tr>
+        <td><code>GenerateInvoiceUseCase</code></td>
+        <td>Sessions to merged, day-grouped line items to a subtotal/tax/total <code>InvoiceData</code>.</td>
+        <td>None</td>
+      </tr>
+      <tr>
+        <td><code>BaseViewModel</code></td>
+        <td>Shared MVI base for the screen view models (state + one-shot effects).</td>
+        <td>extends <code>ViewModel</code></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Data model</h3>
+  <p>
+    The database is self-contained: three tables, the latter two foreign-keyed to
+    projects with <code>ON DELETE CASCADE</code>.
+  </p>
+  <table>
+    <thead>
+      <tr><th>Table</th><th>Entity</th><th>Holds</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>tracked_projects</code></td><td><code>TrackedProjectEntity</code></td><td>Root path, client, rate, currency, tax, archived flag</td></tr>
+      <tr><td><code>work_sessions</code></td><td><code>WorkSessionEntity</code></td><td>Project id, start/end, last heartbeat, edit/save counts</td></tr>
+      <tr><td><code>invoices</code></td><td><code>InvoiceEntity</code></td><td>Project id, number, period, totals, currency, exported files</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Room writes use explicit <code>@Query</code>, not <code>@Insert</code></h3>
+  <p>
+    Plugins run on the host's Room runtime via a parent-first
+    <code>DexClassLoader</code>, so a plugin's generated entity adapters subclass
+    the host's <code>EntityInsertAdapter</code>. In that topology the adapter's
+    <code>createQuery()</code> can be mis-dispatched across the classloader
+    boundary to a host DAO's statement. To avoid it, every write in this plugin
+    is an explicit inline statement:
+  </p>
+  <pre><code>@Query("INSERT INTO tracked_projects (id, rootPath, &hellip;) VALUES (:id, :rootPath, &hellip;)")
+suspend fun insertRow(id: String, rootPath: String, &hellip;)
+
+suspend fun insert(project: TrackedProjectEntity) = insertRow(project.id, project.rootPath, &hellip;)</code></pre>
+  <h3>Data flow</h3>
+  <div class="diagram">
+  editor activity (edit / save / open / close / build)
+        |
+        |  host EventBus  +  IdeBuildService.BuildStatusListener
+        v
+  SessionTracker
+   ├─ active project? (IdeProjectService.getCurrentProject vs registered roots)
+   ├─ ensureActiveSession()  ──&gt; open work_sessions row
+   ├─ handleHeartbeat()      ──&gt; throttle, accumulate edit/save counts
+   └─ idle loop / onPause    ──&gt; flush + close
+        |
+        v
+  contractor.db (Room: tracked_projects · work_sessions · invoices)
+        |
+        |  Invoice screen: project + date range
+        v
+  GenerateInvoiceUseCase  (merge, group-by-day, rate × hours, tax, total)
+        |
+        v
+  InvoiceExporter (PDF | XLSX | CSV)  ──&gt;  host FileProvider  ──&gt;  share / open</div>
+
+  <h3>Build configuration</h3>
+  <table>
+    <tr><th>Setting</th><th>Value</th></tr>
+    <tr><td>Gradle plugin</td><td><code>com.itsaky.androidide.plugins.build</code></td></tr>
+    <tr><td>Compile / Target SDK</td><td>34</td></tr>
+    <tr><td>Min SDK</td><td>26</td></tr>
+    <tr><td>Java / Kotlin target</td><td>17</td></tr>
+    <tr><td>ProGuard</td><td>Disabled (<code>isMinifyEnabled = false</code>)</td></tr>
+    <tr><td>Plugin API</td><td><code>compileOnly</code> via <code>../libs/plugin-api.jar</code></td></tr>
+    <tr><td>IDE event classes</td><td><code>compileOnly</code> via <code>../libs/eventbus-events.jar</code></td></tr>
+    <tr><td>Persistence</td><td>Room 2.7.0 (+ KSP)</td></tr>
+    <tr><td>Excel export</td><td><code>org.dhatim:fastexcel</code> 0.18.4</td></tr>
+    <tr><td>Output format</td><td><code>.cgp</code> package</td></tr>
+  </table>
+</section>
+
+<!-- ================================================================ -->
+<section id="integration">
+  <h2>4. Integration Points</h2>
+  <p>
+    Client Time Tracker implements three extension interfaces, consumes four host
+    services, subscribes to host events, and borrows the host's
+    <code>FileProvider</code>.
+  </p>
+
+  <h3>4.1 Plugin lifecycle (<code>IPlugin</code>)</h3>
+  <p>
+    <code>initialize()</code> builds the object graph through
+    <code>ContractorServiceLocator.init()</code>. <code>activate()</code> starts
+    the <code>SessionTracker</code>. <code>deactivate()</code> and
+    <code>dispose()</code> stop the tracker and close the database. Every callback
+    is wrapped in <code>runCatching</code>, so a setup error degrades gracefully
+    instead of crashing the host.
+  </p>
+
+  <h3>4.2 Editor tab and side menu (<code>EditorTabExtension</code>, <code>UIExtension</code>)</h3>
+  <p>
+    <code>getMainEditorTabs()</code> contributes the <strong>Client Time Tracker</strong>
+    tab; its fragment factory returns a fresh <code>ContractorMainFragment</code>.
+    <code>getSideMenuItems()</code> adds a navigation entry that opens the same
+    tab via <code>IdeEditorTabService.selectPluginTab()</code>.
+  </p>
+
+  <h3>4.3 Host services consumed</h3>
+  <table>
+    <thead>
+      <tr><th>Service</th><th>Used for</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>IdeEnvironmentService</code></td><td><code>getPluginDataDirectory()</code>: where <code>contractor.db</code> lives</td></tr>
+      <tr><td><code>IdeProjectService</code></td><td><code>getCurrentProject()</code>: resolve the active project root</td></tr>
+      <tr><td><code>IdeBuildService</code></td><td><code>addBuildStatusListener()</code>: count build time as activity</td></tr>
+      <tr><td><code>IdeEditorTabService</code></td><td>Open or select the plugin tab from the side menu</td></tr>
+    </tbody>
+  </table>
+
+  <h3>4.4 Host events (<code>eventbus-events.jar</code>)</h3>
+  <p>
+    <code>SessionTracker</code> registers with the host's
+    <code>EventBus.getDefault()</code> and subscribes to
+    <code>com.itsaky.androidide.eventbus.events.editor.*</code> and
+    <code>events.project.*</code> events. These classes are <strong>not</strong>
+    part of <code>plugin-api.jar</code>, so this plugin needs a third compile-only
+    jar:
+  </p>
+  <pre><code>compileOnly(files("../libs/plugin-api.jar"))
+compileOnly(files("../libs/eventbus-events.jar"))
+compileOnly("org.greenrobot:eventbus:3.3.1")</code></pre>
+  <div class="callout">
+    <strong>Note:</strong> any plugin that subscribes to host events over
+    EventBus needs <code>eventbus-events.jar</code> in the repo-root
+    <code>libs/</code> folder. It is vendored from CodeOnTheGo's
+    <code>eventbus-events</code> module and used <code>compileOnly</code>. The IDE
+    provides the classes at runtime.
+  </div>
+
+  <h3>4.5 Sharing exports: the FileProvider hop</h3>
+  <p>
+    A dex-loaded plugin cannot register its own <code>FileProvider</code>, so
+    exported invoices are shared through the host's existing authority
+    (<code>${HOST_APPLICATION_ID}.providers.fileprovider</code>), resolved at
+    runtime in <code>InvoiceSuccessSheet</code>. The host's FileProvider paths
+    whitelist the relevant directory and grant temporary read access to the
+    target app.
+  </p>
+
+  <h3>4.6 Plugin-scoped fragment restoration</h3>
+  <p>
+    The host activity is recreated on a theme (uiMode) change, and
+    <code>FragmentManager</code> restores nested fragments by class name using the
+    host classloader. <code>ContractorMainFragment</code> installs a
+    <code>PluginChildFragmentFactory</code> on its <code>childFragmentManager</code>
+    (before <code>super.onCreate()</code>) that loads plugin fragments through the
+    plugin's <code>DexClassLoader</code>. Without it, restoring an open bottom
+    sheet after a theme toggle throws <code>ClassNotFoundException</code>.
+  </p>
+
+  <h3>4.7 Permissions</h3>
+  <pre><code>&lt;meta-data android:name="plugin.permissions"
+           android:value="filesystem.read,filesystem.write,ide.environment.write" /&gt;</code></pre>
+  <p>
+    Filesystem permissions back invoice export to disk;
+    <code>ide.environment.write</code> backs the plugin's private data directory.
+  </p>
+</section>
+
+<!-- ================================================================ -->
+<section id="deployment">
+  <h2>5. Deployment &amp; Usage</h2>
+
+  <h3>Building</h3>
+  <pre><code>cd client-time-tracker
+./gradlew assemblePlugin</code></pre>
+  <p>
+    Produces <code>client-time-tracker/build/plugin/client-time-tracker.cgp</code>, the bundle you
+    sideload into Code on the Go.
+  </p>
+  <div class="callout">
+    <strong>Before building:</strong> this plugin needs
+    <code>../libs/eventbus-events.jar</code> in addition to the usual
+    <code>plugin-api.jar</code> and <code>gradle-plugin.jar</code>. See
+    &sect;4.4 and the repo-root <code>README</code>'s <em>libs/</em> notes.
+  </div>
+
+  <h3>Installation</h3>
+  <ol>
+    <li>Open <em>Preferences &rarr; Plugin Manager &rarr; +</em>.</li>
+    <li>Select the <code>client-time-tracker.cgp</code> file.</li>
+    <li>The IDE discovers <code>ContractorPlugin</code> via manifest metadata and
+        activates it.</li>
+    <li>Open the <strong>Client Time Tracker</strong> tab from the editor tab bar or the
+        side menu.</li>
+  </ol>
+
+  <h3>Using the plugin</h3>
+  <ol>
+    <li><strong>Projects</strong> &rarr; register a project: point it at a project
+        root and set the client, hourly rate, currency, and tax rate.</li>
+    <li>Work normally. While that project is open in the IDE, editing, saving, and
+        building accrue time to it.</li>
+    <li><strong>Sessions</strong> &rarr; review tracked sessions; edit or delete
+        any row that needs adjusting.</li>
+    <li><strong>Invoice</strong> &rarr; choose the project and a date range, review
+        the total, and export to PDF, Excel, or CSV.</li>
+    <li>Tune the idle threshold, session-merge gap, default tax and currency, and
+        business details under the overflow menu &rarr; <strong>Settings</strong>.</li>
+  </ol>
+
+  <h3>Runtime requirements</h3>
+  <table>
+    <tr><th>Requirement</th><th>Value</th></tr>
+    <tr><td>Min Android version</td><td>API 26 (Android 8)</td></tr>
+    <tr><td>Min IDE version</td><td>1.0.0</td></tr>
+    <tr><td>Permissions</td><td><code>filesystem.read</code>, <code>filesystem.write</code>, <code>ide.environment.write</code></td></tr>
+    <tr><td>Network access</td><td>None</td></tr>
+  </table>
+</section>
+
+<!-- ================================================================ -->
+<section id="benefits">
+  <h2>6. Key Benefits</h2>
+  <ul>
+    <li><strong>Hands-off billable tracking.</strong> Time accrues from editor and
+        build activity, with idle auto-close and crash recovery, so invoices
+        reflect work done.</li>
+    <li><strong>Invoices in three formats.</strong> One <code>InvoiceData</code>
+        model, three exporters (PDF, Excel via fastexcel, CSV), shared through the
+        host FileProvider.</li>
+    <li><strong>Standalone storage.</strong> A private Room database that never
+        touches the IDE's data, a model for plugins that need persistence.</li>
+    <li><strong>Event- and service-driven reference.</strong> Demonstrates host
+        EventBus subscription, <code>BuildStatusListener</code>, and consuming four
+        IDE services together in one plugin.</li>
+    <li><strong>UI patterns.</strong> A multi-screen tabbed fragment, MVI view
+        models, ViewBinding, and a plugin-scoped child <code>FragmentFactory</code>
+        that survives theme-toggle recreation.</li>
+    <li><strong>Documented Room-on-host gotcha.</strong> Shows the inline
+        <code>@Query</code> write pattern that sidesteps cross-classloader
+        entity-adapter mis-dispatch, useful for any Room-backed plugin.</li>
+  </ul>
+</section>
+
+<!-- ================================================================ -->
+<section id="license">
+  <h2>7. Attribution &amp; License</h2>
+  <p>
+    Client Time Tracker is an open-source example plugin for Code on the Go. Its source is
+    licensed per the surrounding <code>plugin-examples</code> repository (see
+    <code>LICENSE</code> at the repo root).
+  </p>
+  <ul>
+    <li>Excel export uses <a href="https://github.com/dhatim/fastexcel">fastexcel</a>
+        (Apache License 2.0).</li>
+    <li>PDF and CSV export use only the Android platform and Kotlin standard
+        library, with no extra runtime dependencies.</li>
+    <li>The plugin makes no network calls and transmits no data; everything it
+        records stays in its private on-device database.</li>
+  </ul>
+</section>
+
+<footer>
+  Client Time Tracker Plugin Documentation &middot; Version 1.0.0 &middot; com.appdevforall.contractor.plugin
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,284 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- ThemeOverlay applied via android:theme on bottom sheet root layouts. Forces the
+         plugin's button style and color attributes to win over whatever the
+         BottomSheetDialog's own ThemeOverlay sets, because android:theme on a ViewGroup
+         wraps that subtree's inflation Context and is read for theme attribute lookups
+         when MaterialButton resolves materialButtonStyle / colorOnPrimary / etc. -->
+    <style name="ThemeOverlay.Plugin" parent="">
+        <item name="colorPrimary">@color/plugin_primary</item>
+        <item name="colorOnPrimary">@color/plugin_on_primary</item>
+        <item name="colorPrimaryContainer">@color/plugin_primary_container</item>
+        <item name="colorOnPrimaryContainer">@color/plugin_on_primary_container</item>
+        <item name="colorSurface">@color/plugin_surface</item>
+        <item name="colorOnSurface">@color/plugin_on_surface</item>
+        <item name="colorSurfaceVariant">@color/plugin_surface_variant</item>
+        <item name="colorOnSurfaceVariant">@color/plugin_on_surface_variant</item>
+        <item name="colorOutline">@color/plugin_outline</item>
+        <item name="colorOutlineVariant">@color/plugin_outline_variant</item>
+        <item name="materialButtonStyle">@style/PluginButton.Filled</item>
+        <item name="textInputStyle">@style/PluginTextInputLayout</item>
+    </style>
+
+    <style name="PluginTheme" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/plugin_primary</item>
+        <item name="colorOnPrimary">@color/plugin_on_primary</item>
+        <item name="colorPrimaryContainer">@color/plugin_primary_container</item>
+        <item name="colorOnPrimaryContainer">@color/plugin_on_primary_container</item>
+
+        <item name="colorSecondary">@color/plugin_secondary</item>
+        <item name="colorOnSecondary">@color/plugin_on_secondary</item>
+        <item name="colorSecondaryContainer">@color/plugin_secondary_container</item>
+        <item name="colorOnSecondaryContainer">@color/plugin_on_secondary_container</item>
+
+        <item name="android:colorBackground">@color/plugin_surface</item>
+        <item name="colorSurface">@color/plugin_surface</item>
+        <item name="colorOnSurface">@color/plugin_on_surface</item>
+        <item name="colorSurfaceVariant">@color/plugin_surface_variant</item>
+        <item name="colorOnSurfaceVariant">@color/plugin_on_surface_variant</item>
+
+        <item name="colorOutline">@color/plugin_outline</item>
+        <item name="colorOutlineVariant">@color/plugin_outline_variant</item>
+
+        <item name="colorError">@color/plugin_error</item>
+        <item name="colorOnError">@color/plugin_on_error</item>
+        <item name="colorErrorContainer">@color/plugin_error_container</item>
+        <item name="colorOnErrorContainer">@color/plugin_on_error_container</item>
+
+        <item name="textInputStyle">@style/PluginTextInputLayout</item>
+        <item name="materialButtonStyle">@style/PluginButton.Filled</item>
+        <item name="materialCardViewStyle">@style/PluginCard</item>
+        <item name="bottomSheetDialogTheme">@style/PluginBottomSheetDialog</item>
+    </style>
+
+    <!-- Typography -->
+    <style name="Plugin.Text.Display" parent="TextAppearance.Material3.HeadlineMedium">
+        <item name="android:textColor">?attr/colorOnSurface</item>
+        <item name="android:textSize">@dimen/text_display</item>
+        <item name="android:letterSpacing">-0.02</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+    </style>
+
+    <style name="Plugin.Text.Title" parent="TextAppearance.Material3.TitleLarge">
+        <item name="android:textColor">?attr/colorOnSurface</item>
+        <item name="android:textSize">@dimen/text_title</item>
+        <item name="android:letterSpacing">-0.015</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+    </style>
+
+    <style name="Plugin.Text.Subtitle" parent="TextAppearance.Material3.TitleMedium">
+        <item name="android:textColor">?attr/colorOnSurface</item>
+        <item name="android:textSize">@dimen/text_subtitle</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+    </style>
+
+    <style name="Plugin.Text.Body" parent="TextAppearance.Material3.BodyMedium">
+        <item name="android:textColor">?attr/colorOnSurface</item>
+        <item name="android:textSize">@dimen/text_body</item>
+        <item name="android:lineSpacingMultiplier">1.4</item>
+    </style>
+
+    <style name="Plugin.Text.BodyMuted" parent="Plugin.Text.Body">
+        <item name="android:textColor">?attr/colorOnSurfaceVariant</item>
+    </style>
+
+    <style name="Plugin.Text.Small" parent="TextAppearance.Material3.BodySmall">
+        <item name="android:textColor">?attr/colorOnSurfaceVariant</item>
+        <item name="android:textSize">@dimen/text_small</item>
+    </style>
+
+    <style name="Plugin.Text.Label" parent="TextAppearance.Material3.LabelMedium">
+        <item name="android:textColor">@color/plugin_text_muted</item>
+        <item name="android:textSize">@dimen/text_micro</item>
+        <item name="android:textAllCaps">true</item>
+        <item name="android:letterSpacing">0.08</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+    </style>
+
+    <style name="Plugin.Text.Mono" parent="Plugin.Text.Body">
+        <item name="android:fontFamily">monospace</item>
+        <item name="android:fontFeatureSettings">"tnum"</item>
+    </style>
+
+    <style name="Plugin.Text.MonoLarge" parent="Plugin.Text.Title">
+        <item name="android:fontFamily">monospace</item>
+        <item name="android:fontFeatureSettings">"tnum"</item>
+        <item name="android:letterSpacing">0</item>
+    </style>
+
+    <style name="Plugin.Text.MonoHero" parent="Plugin.Text.Display">
+        <item name="android:fontFamily">monospace</item>
+        <item name="android:fontFeatureSettings">"tnum"</item>
+        <item name="android:letterSpacing">-0.01</item>
+    </style>
+
+    <!-- Buttons. Every color is a direct @color/* reference, never ?attr/*, so the
+         button cannot inherit the host's Material 3 default purple/pink accent through
+         theme attribute resolution when the dialog/popup window is constructed against
+         a different theme. The light/dark split is handled by values-night/colors.xml. -->
+    <style name="PluginButton.Filled" parent="Widget.Material3.Button">
+        <item name="android:textAllCaps">false</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:letterSpacing">0</item>
+        <item name="cornerRadius">@dimen/radius_md</item>
+        <item name="android:minHeight">@dimen/touch_target_min</item>
+        <item name="android:textColor">@color/plugin_on_primary</item>
+        <item name="backgroundTint">@color/plugin_primary</item>
+        <item name="iconTint">@color/plugin_on_primary</item>
+        <item name="rippleColor">@color/plugin_ripple</item>
+    </style>
+
+    <style name="PluginButton.Outlined" parent="Widget.Material3.Button.OutlinedButton">
+        <item name="android:textAllCaps">false</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:letterSpacing">0</item>
+        <item name="cornerRadius">@dimen/radius_md</item>
+        <item name="strokeColor">@color/plugin_outline</item>
+        <item name="android:minHeight">@dimen/touch_target_min</item>
+        <item name="android:textColor">@color/plugin_on_surface</item>
+        <item name="iconTint">@color/plugin_on_surface_variant</item>
+        <item name="rippleColor">@color/plugin_ripple</item>
+    </style>
+
+    <style name="PluginButton.Text" parent="Widget.Material3.Button.TextButton">
+        <item name="android:textAllCaps">false</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:letterSpacing">0</item>
+        <item name="android:textColor">?attr/colorOnPrimary</item>
+        <item name="iconTint">?attr/colorOnPrimary</item>
+        <item name="backgroundTint">@android:color/transparent</item>
+        <item name="rippleColor">@color/plugin_ripple</item>
+    </style>
+
+    <style name="PluginButton.TextDestructive" parent="Widget.Material3.Button.TextButton">
+        <item name="android:textAllCaps">false</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:letterSpacing">0</item>
+        <item name="android:textColor">?attr/colorOnPrimary</item>
+        <item name="iconTint">?attr/colorOnPrimary</item>
+        <item name="backgroundTint">@android:color/transparent</item>
+        <item name="rippleColor">@color/plugin_ripple</item>
+    </style>
+
+    <style name="PluginButton.Tonal" parent="Widget.Material3.Button.TonalButton">
+        <item name="android:textAllCaps">false</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:letterSpacing">0</item>
+        <item name="cornerRadius">@dimen/radius_md</item>
+        <item name="android:textColor">@color/plugin_on_primary_container</item>
+        <item name="backgroundTint">@color/plugin_primary_container</item>
+        <item name="rippleColor">@color/plugin_ripple</item>
+    </style>
+
+    <!-- Cards (border-only elevation) -->
+    <style name="PluginCard" parent="Widget.Material3.CardView.Outlined">
+        <item name="cardElevation">0dp</item>
+        <item name="cardCornerRadius">@dimen/radius_lg</item>
+        <item name="strokeWidth">@dimen/border_hairline</item>
+        <item name="strokeColor">?attr/colorOutlineVariant</item>
+        <item name="cardBackgroundColor">?attr/colorSurface</item>
+        <item name="contentPadding">@dimen/space_lg</item>
+    </style>
+
+    <style name="PluginCard.Compact">
+        <item name="contentPadding">@dimen/space_md</item>
+    </style>
+
+    <!-- Inputs -->
+    <style name="PluginTextInputLayout" parent="Widget.Material3.TextInputLayout.OutlinedBox">
+        <item name="boxStrokeColor">?attr/colorOutline</item>
+        <item name="boxStrokeErrorColor">?attr/colorError</item>
+        <item name="hintTextColor">?attr/colorOnSurfaceVariant</item>
+        <item name="boxCornerRadiusTopStart">@dimen/radius_md</item>
+        <item name="boxCornerRadiusTopEnd">@dimen/radius_md</item>
+        <item name="boxCornerRadiusBottomStart">@dimen/radius_md</item>
+        <item name="boxCornerRadiusBottomEnd">@dimen/radius_md</item>
+    </style>
+
+    <!-- Toolbar -->
+    <style name="PluginToolbar" parent="Widget.Material3.Toolbar.Surface">
+        <item name="titleTextAppearance">@style/Plugin.Text.Subtitle</item>
+        <item name="android:background">?attr/colorSurface</item>
+        <item name="android:elevation">0dp</item>
+    </style>
+
+    <!-- Tabs -->
+    <style name="PluginTabLayout" parent="Widget.Material3.TabLayout">
+        <item name="tabIndicatorColor">?attr/colorPrimary</item>
+        <item name="tabIndicatorHeight">2dp</item>
+        <item name="tabSelectedTextColor">?attr/colorOnSurface</item>
+        <item name="tabTextColor">?attr/colorOnSurfaceVariant</item>
+        <item name="tabBackground">@android:color/transparent</item>
+        <item name="tabRippleColor">@color/plugin_ripple</item>
+        <item name="tabTextAppearance">@style/Plugin.Text.Label</item>
+        <item name="tabPaddingStart">@dimen/space_lg</item>
+        <item name="tabPaddingEnd">@dimen/space_lg</item>
+    </style>
+
+    <!-- Chip groups -->
+    <style name="PluginChip.Filter" parent="Widget.Material3.Chip.Filter">
+        <item name="chipCornerRadius">@dimen/radius_md</item>
+        <item name="chipStrokeColor">?attr/colorOutlineVariant</item>
+        <item name="chipStrokeWidth">@dimen/border_hairline</item>
+        <item name="chipBackgroundColor">?attr/colorSurface</item>
+    </style>
+
+    <!-- Bottom sheet — FULL theme (not overlay) passed to BottomSheetDialog via
+         BottomSheetDialogFragment.getTheme(). A theme overlay would layer onto the host
+         activity's theme; a full theme replaces it, so all our color attrs and the
+         materialButtonStyle reliably win against MaterialThemeOverlay.wrap() resolution
+         inside MaterialButton's constructor. -->
+    <style name="PluginBottomSheetDialog" parent="Theme.Material3.DayNight.BottomSheetDialog">
+        <item name="bottomSheetStyle">@style/PluginBottomSheet</item>
+
+        <item name="colorPrimary">@color/plugin_primary</item>
+        <item name="colorOnPrimary">@color/plugin_on_primary</item>
+        <item name="colorPrimaryContainer">@color/plugin_primary_container</item>
+        <item name="colorOnPrimaryContainer">@color/plugin_on_primary_container</item>
+
+        <item name="colorSecondary">@color/plugin_secondary</item>
+        <item name="colorOnSecondary">@color/plugin_on_secondary</item>
+        <item name="colorSecondaryContainer">@color/plugin_secondary_container</item>
+        <item name="colorOnSecondaryContainer">@color/plugin_on_secondary_container</item>
+
+        <item name="android:colorBackground">@color/plugin_surface</item>
+        <item name="colorSurface">@color/plugin_surface</item>
+        <item name="colorOnSurface">@color/plugin_on_surface</item>
+        <item name="colorSurfaceVariant">@color/plugin_surface_variant</item>
+        <item name="colorOnSurfaceVariant">@color/plugin_on_surface_variant</item>
+
+        <item name="colorOutline">@color/plugin_outline</item>
+        <item name="colorOutlineVariant">@color/plugin_outline_variant</item>
+
+        <item name="colorError">@color/plugin_error</item>
+        <item name="colorOnError">@color/plugin_on_error</item>
+        <item name="colorErrorContainer">@color/plugin_error_container</item>
+        <item name="colorOnErrorContainer">@color/plugin_on_error_container</item>
+
+        <item name="materialButtonStyle">@style/PluginButton.Filled</item>
+        <item name="textInputStyle">@style/PluginTextInputLayout</item>
+        <item name="materialCardViewStyle">@style/PluginCard</item>
+    </style>
+
+    <style name="PluginBottomSheet" parent="Widget.Material3.BottomSheet">
+        <item name="backgroundTint">?attr/colorSurface</item>
+        <item name="shapeAppearance">@style/PluginBottomSheet.Shape</item>
+    </style>
+
+    <style name="PluginBottomSheet.Shape" parent="ShapeAppearance.Material3.Corner.Large">
+        <item name="cornerSizeTopLeft">@dimen/radius_xl</item>
+        <item name="cornerSizeTopRight">@dimen/radius_xl</item>
+        <item name="cornerSizeBottomLeft">0dp</item>
+        <item name="cornerSizeBottomRight">0dp</item>
+    </style>
+
+    <!-- Section header (mini eyebrow label above content). Explicit parent="" required: dot-name
+         inference would otherwise look up @style/Plugin which doesn't exist, breaking AAPT. -->
+    <style name="Plugin.SectionHeader" parent="">
+        <item name="android:textAppearance">@style/Plugin.Text.Label</item>
+        <item name="android:paddingTop">@dimen/space_lg</item>
+        <item name="android:paddingBottom">@dimen/space_sm</item>
+    </style>
+
+</resources>

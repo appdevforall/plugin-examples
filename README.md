@@ -15,6 +15,7 @@ See the official [plugin documentation](https://www.appdevforall.org/codeonthego
 | [`snippets/`](snippets/)                           | Adds user-managed code snippets with prefix-triggered expansions. |
 | [`random-xkcd/`](random-xkcd/)                     | Random xkcd comic in the editor bottom sheet; canonical small-plugin walkthrough with in-IDE help. |
 | [`icons-repository/`](icons-repository/)           | Browse a bundled Material icon catalog and import any icon as a Vector Drawable into the active project. |
+| [`client-time-tracker/`](client-time-tracker/)                       | Tracks billable coding sessions per project and generates PDF/Excel/CSV invoices. |
 
 ## Building a plugin
 
