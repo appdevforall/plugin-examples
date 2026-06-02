@@ -1,0 +1,29 @@
+# ${{APP_NAME}}
+
+A Python project created with Code on the Go.
+
+## Setup
+
+```bash
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+## Run
+
+```bash
+python main.py
+```
+
+Or use the **Run app** action in the toolbar. Add dependencies to
+`requirements.txt` and use **Install requirements**.
+
+## Project Structure
+
+```
+${{APP_NAME}}/
+  main.py            # Application entry point
+  requirements.txt   # Dependencies
+  README.md
+```
