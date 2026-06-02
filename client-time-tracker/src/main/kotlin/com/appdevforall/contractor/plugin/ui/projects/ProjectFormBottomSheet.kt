@@ -113,16 +113,16 @@ class ProjectFormBottomSheet : BottomSheetDialogFragment() {
     private fun applyPrefillOnce(state: ProjectFormState) {
         if (prefillApplied) return
         prefillApplied = true
-        val p = state.prefill
-        binding.rootInput.setText(p.rootPath)
-        binding.nameInput.setText(p.displayName)
-        binding.clientNameInput.setText(p.clientName)
-        binding.clientEmailInput.setText(p.clientEmail)
-        binding.clientAddressInput.setText(p.clientAddress)
-        binding.rateInput.setText(p.rate)
-        binding.currencyInput.setText(p.currency)
-        binding.taxInput.setText(p.tax)
-        binding.notesInput.setText(p.notes)
+        val prefill = state.prefill
+        binding.rootInput.setText(prefill.rootPath)
+        binding.nameInput.setText(prefill.displayName)
+        binding.clientNameInput.setText(prefill.clientName)
+        binding.clientEmailInput.setText(prefill.clientEmail)
+        binding.clientAddressInput.setText(prefill.clientAddress)
+        binding.rateInput.setText(prefill.rate)
+        binding.currencyInput.setText(prefill.currency)
+        binding.taxInput.setText(prefill.tax)
+        binding.notesInput.setText(prefill.notes)
     }
 
     private fun onSavePressed() {

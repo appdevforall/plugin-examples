@@ -2,10 +2,12 @@ package com.appdevforall.contractor.plugin.ui.invoice
 
 import androidx.lifecycle.viewModelScope
 import com.appdevforall.contractor.plugin.ContractorServiceLocator
+import com.appdevforall.contractor.plugin.data.db.entities.TrackedProjectEntity
 import com.appdevforall.contractor.plugin.data.export.InvoiceExporter
 import com.appdevforall.contractor.plugin.data.repository.InvoiceRepository
 import com.appdevforall.contractor.plugin.data.repository.ProjectRepository
 import com.appdevforall.contractor.plugin.domain.model.DateRanges
+import com.appdevforall.contractor.plugin.domain.model.InvoiceData
 import com.appdevforall.contractor.plugin.domain.usecase.GenerateInvoiceUseCase
 import com.appdevforall.contractor.plugin.domain.usecase.InvoiceNumberGenerator
 import com.appdevforall.contractor.plugin.ui.common.BaseViewModel
@@ -76,86 +78,116 @@ class InvoiceViewModel(
     }
 
     private fun generate() {
-        val s = currentState
-        if (s.selectedProjectId == null) {
+        val snapshot = currentState
+        if (snapshot.selectedProjectId == null) {
             emit(InvoiceEffect.ShowError(InvoiceEffect.ErrorCode.NoProject))
             return
         }
-        if (s.formats.isEmpty()) {
+        if (snapshot.formats.isEmpty()) {
             emit(InvoiceEffect.ShowError(InvoiceEffect.ErrorCode.NoFormat))
             return
         }
         viewModelScope.launch {
             reduce { copy(isGenerating = true) }
-            val project = projectRepository.getById(s.selectedProjectId) ?: run {
+            val project = projectRepository.getById(snapshot.selectedProjectId) ?: run {
                 reduce { copy(isGenerating = false) }
                 emit(InvoiceEffect.ShowError(InvoiceEffect.ErrorCode.ProjectMissing))
                 return@launch
             }
-            val result = generateInvoiceUseCase.build(
-                GenerateInvoiceUseCase.Input(
-                    project = project,
-                    invoiceNumber = s.invoiceNumber.ifBlank { invoiceNumberGenerator.next() },
-                    periodStartMillis = s.range.fromMillis,
-                    periodEndMillisExclusive = s.range.toMillis,
-                    notes = s.notes.ifBlank { null }
-                )
-            )
-            when (result) {
+            when (val result = buildInvoice(snapshot, project)) {
                 GenerateInvoiceUseCase.Result.NoBillableSessions -> {
                     reduce { copy(isGenerating = false) }
                     emit(InvoiceEffect.ShowError(InvoiceEffect.ErrorCode.NoSessions))
                 }
-                is GenerateInvoiceUseCase.Result.Success -> {
-                    val outDir = withContext(Dispatchers.IO) { resolveOutputDirectory(project.rootPath) }
-                    val safeNumber = result.data.invoiceNumber.replace(Regex("[^A-Za-z0-9._-]"), "_")
-                    val outFiles = mutableListOf<File>()
-                    withContext(Dispatchers.IO) {
-                        for (format in s.formats) {
-                            val exporter = exporters.firstOrNull { it.format == format } ?: continue
-                            val target = File(outDir, "$safeNumber.${format.extension}")
-                            runCatching { exporter.export(result.data, target) }
-                                .onSuccess { outFiles += it }
-                        }
-                        if (outFiles.isNotEmpty()) {
-                            invoiceRepository.create(
-                                projectId = project.id,
-                                invoiceNumber = result.data.invoiceNumber,
-                                periodStart = s.range.fromMillis,
-                                periodEnd = s.range.toMillis,
-                                totalSeconds = result.data.totalDurationMillis / 1000,
-                                subtotal = result.data.subtotal,
-                                taxAmount = result.data.taxAmount,
-                                total = result.data.total,
-                                currency = result.data.currency,
-                                exportedFiles = outFiles.map { it.absolutePath },
-                                notes = result.data.notes
-                            )
-                        }
-                    }
-                    val nextNumber = invoiceNumberGenerator.next()
-                    reduce { copy(isGenerating = false, invoiceNumber = nextNumber) }
-                    if (outFiles.isEmpty()) {
-                        emit(InvoiceEffect.ShowError(InvoiceEffect.ErrorCode.GenerationFailed))
-                    } else {
-                        emit(
-                            InvoiceEffect.ShowSuccess(
-                                GenerationResult(
-                                    invoiceNumber = result.data.invoiceNumber,
-                                    outDir = outDir.absolutePath,
-                                    outFiles = outFiles.map { it.absolutePath },
-                                    total = result.data.total,
-                                    currency = result.data.currency,
-                                    periodStartIsoDate = result.data.periodStart.toString(),
-                                    periodEndIsoDate = result.data.periodEnd.toString()
-                                )
-                            )
-                        )
-                    }
-                }
+                is GenerateInvoiceUseCase.Result.Success -> exportAndPersist(snapshot, project, result.data)
             }
         }
     }
+
+    private suspend fun buildInvoice(
+        snapshot: InvoiceState,
+        project: TrackedProjectEntity
+    ): GenerateInvoiceUseCase.Result =
+        generateInvoiceUseCase.build(
+            GenerateInvoiceUseCase.Input(
+                project = project,
+                invoiceNumber = snapshot.invoiceNumber.ifBlank { invoiceNumberGenerator.next() },
+                periodStartMillis = snapshot.range.fromMillis,
+                periodEndMillisExclusive = snapshot.range.toMillis,
+                notes = snapshot.notes.ifBlank { null }
+            )
+        )
+
+    private suspend fun exportAndPersist(
+        snapshot: InvoiceState,
+        project: TrackedProjectEntity,
+        data: InvoiceData
+    ) {
+        val outDir = withContext(Dispatchers.IO) { resolveOutputDirectory(project.rootPath) }
+        val outFiles = withContext(Dispatchers.IO) { writeExports(snapshot, data, outDir) }
+        if (outFiles.isNotEmpty()) {
+            persistInvoice(snapshot, project, data, outFiles)
+        }
+        val nextNumber = invoiceNumberGenerator.next()
+        reduce { copy(isGenerating = false, invoiceNumber = nextNumber) }
+        if (outFiles.isEmpty()) {
+            emit(InvoiceEffect.ShowError(InvoiceEffect.ErrorCode.GenerationFailed))
+        } else {
+            emit(InvoiceEffect.ShowSuccess(successResult(data, outDir, outFiles)))
+        }
+    }
+
+    private fun writeExports(
+        snapshot: InvoiceState,
+        data: InvoiceData,
+        outDir: File
+    ): List<File> {
+        val safeNumber = data.invoiceNumber.replace(Regex("[^A-Za-z0-9._-]"), "_")
+        val outFiles = mutableListOf<File>()
+        for (format in snapshot.formats) {
+            val exporter = exporters.firstOrNull { it.format == format } ?: continue
+            val target = File(outDir, "$safeNumber.${format.extension}")
+            runCatching { exporter.export(data, target) }
+                .onSuccess { outFiles += it }
+        }
+        return outFiles
+    }
+
+    private suspend fun persistInvoice(
+        snapshot: InvoiceState,
+        project: TrackedProjectEntity,
+        data: InvoiceData,
+        outFiles: List<File>
+    ) {
+        invoiceRepository.create(
+            projectId = project.id,
+            invoiceNumber = data.invoiceNumber,
+            periodStart = snapshot.range.fromMillis,
+            periodEnd = snapshot.range.toMillis,
+            totalSeconds = data.totalDurationMillis / 1000,
+            subtotal = data.subtotal,
+            taxAmount = data.taxAmount,
+            total = data.total,
+            currency = data.currency,
+            exportedFiles = outFiles.map { it.absolutePath },
+            notes = data.notes
+        )
+    }
+
+    private fun successResult(
+        data: InvoiceData,
+        outDir: File,
+        outFiles: List<File>
+    ): GenerationResult =
+        GenerationResult(
+            invoiceNumber = data.invoiceNumber,
+            outDir = outDir.absolutePath,
+            outFiles = outFiles.map { it.absolutePath },
+            total = data.total,
+            currency = data.currency,
+            periodStartIsoDate = data.periodStart.toString(),
+            periodEndIsoDate = data.periodEnd.toString()
+        )
 
     private fun resolveOutputDirectory(rootPath: String): File {
         val projectFolder = File(rootPath, "invoices")

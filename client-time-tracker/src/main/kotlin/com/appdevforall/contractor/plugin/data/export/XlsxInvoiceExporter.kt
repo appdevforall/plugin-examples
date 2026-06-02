@@ -15,7 +15,7 @@ class XlsxInvoiceExporter : InvoiceExporter {
         outFile.parentFile?.mkdirs()
         FileOutputStream(outFile).use { fos ->
             val workbook = Workbook(fos, "Client Time Tracker", "1.0")
-            val ws: Worksheet = workbook.newWorksheet("Invoice")
+        val ws: Worksheet = workbook.newWorksheet("Invoice")
 
             ws.width(0, 22.0)
             ws.width(1, 14.0)
