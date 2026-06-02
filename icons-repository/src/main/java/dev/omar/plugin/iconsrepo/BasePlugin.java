@@ -1,0 +1,135 @@
+package dev.omar.plugin.iconsrepo;
+
+import android.content.Context;
+import android.view.LayoutInflater;
+
+import androidx.fragment.app.Fragment;
+
+import com.itsaky.androidide.plugins.IPlugin;
+import com.itsaky.androidide.plugins.PluginContext;
+import com.itsaky.androidide.plugins.PluginLogger;
+import com.itsaky.androidide.plugins.ServiceRegistry;
+import com.itsaky.androidide.plugins.base.PluginFragmentHelper;
+import com.itsaky.androidide.plugins.extensions.ContextMenuContext;
+import com.itsaky.androidide.plugins.extensions.EditorTabExtension;
+import com.itsaky.androidide.plugins.extensions.EditorTabItem;
+import com.itsaky.androidide.plugins.extensions.FabAction;
+import com.itsaky.androidide.plugins.extensions.MenuItem;
+import com.itsaky.androidide.plugins.extensions.NavigationItem;
+import com.itsaky.androidide.plugins.extensions.ProjectType;
+import com.itsaky.androidide.plugins.extensions.TabItem;
+import com.itsaky.androidide.plugins.extensions.ToolbarAction;
+import com.itsaky.androidide.plugins.extensions.UIExtension;
+
+import com.itsaky.androidide.plugins.services.IdeProjectService;
+import java.util.List;
+
+public abstract class BasePlugin implements IPlugin, UIExtension, EditorTabExtension {
+
+    private PluginContext context;
+    private IdeProjectService projectService;
+    
+    
+    @Override
+    public boolean initialize(PluginContext context) {
+        try {
+            this.context = context;
+            this.projectService = getServices().get(IdeProjectService.class);
+            if(projectService == null){
+                throw new NullPointerException("IdeProjectService not available!");
+            }
+            
+            onInitialized(context);
+            return true;
+        } catch (Exception err) {
+            return false;
+        }
+    }
+    
+    public IdeProjectService getProjectService() {
+    	return projectService;
+    }
+    
+    public PluginContext getPluginContext() {
+    	return context;
+    }
+    
+    public ServiceRegistry getServices() {
+    	return context.getServices();
+    }
+    
+    public PluginLogger getLogger() {
+    	return context.getLogger();
+    }
+    
+    public Context getContext() {
+    	return PluginFragmentHelper.getPluginContext(getPluginId());
+    }
+    
+    public abstract void onInitialized(PluginContext context);
+    
+    public abstract String getPluginId();
+
+    @Override
+    public boolean activate() {
+        return true;
+    }
+
+    @Override
+    public boolean deactivate() {
+        return true;
+    }
+
+    @Override
+    public void dispose() {
+        projectService = null;
+        context = null;
+    }
+
+    @Override
+    public List<EditorTabItem> getMainEditorTabs() {
+        return null;
+    }
+
+    @Override
+    public List<NavigationItem> getSideMenuItems() {
+        return null;
+    }
+
+
+    @Override
+    public void onEditorTabSelected(String tabId, Fragment fragment) {}
+
+    @Override
+    public void onEditorTabClosed(String tabId) {}
+
+    @Override
+    public boolean canCloseEditorTab(String tabId) {
+        return true;
+    }
+
+    @Override
+    public List<MenuItem> getMainMenuItems() {
+        return null;
+    }
+
+    @Override
+    public List<MenuItem> getContextMenuItems(ContextMenuContext _context) {
+        return null;
+    }
+
+    @Override
+    public List<TabItem> getEditorTabs() {
+        return null;
+    }
+
+    @Override
+    public List<ToolbarAction> getToolbarActions() {
+        return null;
+    }
+
+    @Override
+    public List<FabAction> getFabActions() {
+        return null;
+    }
+}

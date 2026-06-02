@@ -53,6 +53,7 @@ jobs:
             ["ndk-installer-plugin"]="ndk-installer.cgp"
             ["random-xkcd"]="random-xkcd.cgp"
             ["snippets"]="snippets.cgp"
+            ["icons-repository"]="icons-repository.cgp"
           )
           for module in "${!MAP[@]}"; do
             src=$(ls "${module}/build/plugin/"*.cgp 2>/dev/null | head -n1)

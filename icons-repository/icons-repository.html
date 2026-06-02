@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IconsRepository-Plugin — Documentation</title>
+    <style>
+        html, body {
+            background: #ffffff;
+            color: #000000;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.55;
+            margin: 0;
+            padding: 2rem 1.5rem;
+        }
+        body {
+            max-width: 820px;
+            margin: 0 auto;
+        }
+        h1, h2, h3 {
+            color: #000000;
+            margin-top: 1.6em;
+        }
+        h1 { font-size: 1.9rem; margin-top: 0; }
+        h2 { font-size: 1.35rem; border-bottom: 1px solid #000000; padding-bottom: 0.2em; }
+        h3 { font-size: 1.1rem; }
+        p, li { color: #000000; }
+        code, pre {
+            background: #ffffff;
+            color: #000000;
+            border: 1px solid #000000;
+            border-radius: 3px;
+            font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+            font-size: 0.92em;
+        }
+        code { padding: 0.05em 0.35em; }
+        pre {
+            padding: 0.75em 1em;
+            overflow-x: auto;
+        }
+        pre code { border: none; padding: 0; }
+        ul { padding-left: 1.4rem; }
+        a { color: #000000; }
+        .meta {
+            font-size: 0.9rem;
+            color: #000000;
+            margin-top: -0.4rem;
+        }
+    </style>
+</head>
+<body>
+
+<h1>IconsRepository-Plugin</h1>
+<p class="meta">A Code on the Go (CoGo) plugin that adds vector drawable icons to Android projects directly from inside the IDE.</p>
+
+<h2 id="executive-overview">Executive overview</h2>
+<p>
+    IconsRepository-Plugin is a sidebar extension for the Code on the Go IDE that lets developers browse a bundled library of Material-style icons and import any of them into the current Android project as a Vector Drawable XML. The plugin replaces the manual "find an SVG, convert it, copy it into <code>res/drawable</code>, fix the colors" loop with a single dialog: pick an icon, optionally pick a tint, hit Import. The result is committed-ready XML in the project's <code>res/drawable</code> directory with no external network calls and no SDK changes required.
+</p>
+<p>
+    The plugin targets Code on the Go versions <strong>26.17 through 26.22</strong> and runs on Android API 26 and above.
+</p>
+<p>
+    Originally created by <a href="https://github.com/omar-haidar">OMAR HAIDAR</a> (<a href="https://github.com/omar-haidar/IconsRepository-Plugin">upstream repository</a>) and included in this collection with attribution.
+</p>
+
+<h2 id="core-functionality">Core functionality</h2>
+<ul>
+    <li><strong>Bundled icon catalog.</strong> Ships with a ZIP-packed Material icon set as a plugin asset. No download required at runtime; works fully offline.</li>
+    <li><strong>Searchable browser.</strong> A grid view with debounced search backed by a trie-based index so name queries stay responsive on full catalogs.</li>
+    <li><strong>One-tap import.</strong> Selecting an icon opens an Import dialog where the developer chooses a drawable name and an optional tint. The plugin extracts the SVG path, generates a Vector Drawable XML, and writes it into the active app module's <code>res/drawable</code> directory.</li>
+    <li><strong>Tint handling.</strong> Supports either a literal hex color or one of the IDE's dynamic Material colors (resolved via theme attributes), applied as <code>android:tint</code> on the generated vector.</li>
+    <li><strong>Input validation.</strong> Drawable names and color values are validated before the file is written — invalid names or bad hex colors block the import.</li>
+    <li><strong>Safe writes.</strong> Filenames are sanitized to <code>[a-zA-Z0-9._-]</code> before being joined with the destination directory; existing files are not overwritten.</li>
+</ul>
+
+<h2 id="technical-architecture">Technical architecture</h2>
+<p>
+    The plugin is a standard Code on the Go plugin module built with the <code>com.itsaky.androidide.plugins.build</code> Gradle plugin. The output of <code>./gradlew assemblePlugin</code> is a <code>.cgp</code> bundle (signed APK with the plugin metadata) ready for the IDE's Plugin Manager.
+</p>
+
+<h3>Module layout</h3>
+<ul>
+    <li><code>Main</code> — implements <code>IPlugin</code> via <code>BasePlugin</code>; registers one sidebar item and one editor tab; owns the singleton <code>IconRepository</code>.</li>
+    <li><code>BasePlugin</code> — common lifecycle plumbing on top of the <code>plugin-api</code>; exposes <code>PluginContext</code>, <code>ServiceRegistry</code>, and a logger to subclasses, and clears references in <code>dispose()</code>.</li>
+    <li><code>repository.IconRepository</code> — loads icons from the bundled <code>material_icon.zip</code> asset on a background thread, caches them in memory, and exposes an asynchronous load API. Provides <code>shutdown()</code> to terminate the executor on plugin disposal.</li>
+    <li><code>ui.fragments.MainFragment</code> — the catalog UI: a grid <code>RecyclerView</code> driven by <code>IconsAdapter</code>, with a debounced search input and an import dialog.</li>
+    <li><code>ui.adapter.IconsAdapter</code> — owns the search index, the SVG render executor pool, the main-thread handler, and the bitmap <code>LruCache</code>. All resources are released in <code>onDetachedFromRecyclerView</code>.</li>
+    <li><code>data.importer.SvgToVectorImporter</code> — extracts SVG <code>d</code> path data, builds a Vector Drawable document with <code>XmlPullParser</code>, and writes it to the project's resource directory.</li>
+    <li><code>data.importer.AppPathResolver</code> — resolves the active project's <code>app/src/main/res/drawable</code> through the IDE's <code>IProject</code>/<code>IModule</code> APIs (with a Gradle-plugin-project fallback).</li>
+    <li><code>data.validation</code> — small validation framework (<code>Validator</code>, <code>ValidationRule</code>, <code>IconNameRule</code>, <code>HexColorRule</code>, <code>RequiredRule</code>) used by the import dialog.</li>
+</ul>
+
+<h3>Permissions</h3>
+<p>The plugin declares the following permissions in <code>AndroidManifest.xml</code>:</p>
+<ul>
+    <li><code>filesystem.read</code> — for reading the bundled icon catalog.</li>
+    <li><code>filesystem.write</code> — for writing the generated Vector Drawable XML.</li>
+    <li><code>project.structure</code> — for resolving the active module's source sets and resource directories.</li>
+</ul>
+<p>The plugin does not access the network, run system commands, change IDE settings, or ship native code.</p>
+
+<h3>Lifecycle and resource discipline</h3>
+<p>
+    All long-lived resources are scoped to either the adapter or the plugin and are torn down explicitly. The search and render executors and the bitmap cache live on <code>IconsAdapter</code> and are shut down in <code>onDetachedFromRecyclerView</code>. The <code>IconRepository</code> executor is shut down in <code>Main.dispose()</code>, which also clears the <code>Main.instance</code> static reference. <code>BasePlugin.dispose()</code> clears <code>PluginContext</code> and <code>IdeProjectService</code> references so no IDE state survives plugin unload.
+</p>
+
+<h2 id="usage">Usage</h2>
+<h3>Installation</h3>
+<ol>
+    <li>Open Code on the Go.</li>
+    <li>Open the Plugin Manager.</li>
+    <li>Install <strong>IconsRepository-Plugin</strong>.</li>
+</ol>
+
+<h3>Importing an icon</h3>
+<ol>
+    <li>Open an Android project in the IDE.</li>
+    <li>Tap the IconsRepository entry in the sidebar (or open the Icons Repository editor tab).</li>
+    <li>Wait briefly for the icon catalog to load (a spinner is shown while the bundled archive is parsed).</li>
+    <li>Use the search field to find an icon by name.</li>
+    <li>Tap an icon to open the Import dialog.</li>
+    <li>Choose a drawable name (defaults to <code>ic_&lt;icon-name&gt;</code> with dashes replaced by underscores).</li>
+    <li>Optionally choose a tint: <em>None</em>, a custom hex color, or a dynamic Material color.</li>
+    <li>Tap <strong>Import</strong>. The plugin writes <code>&lt;name&gt;.xml</code> into the app module's <code>res/drawable</code> directory.</li>
+</ol>
+
+<h3>Building from source</h3>
+<pre><code>./gradlew assemblePlugin</code></pre>
+<p>The signed <code>.cgp</code> artifact is written to <code>build/plugin/IconsRepository-Plugin.cgp</code>. Use <code>./gradlew assemblePluginDebug</code> for the debug variant.</p>
+
+<h2 id="key-benefits">Key benefits</h2>
+<ul>
+    <li><strong>Stays on-device.</strong> Everything ships in the plugin asset — no network access, no third-party CDN, no rate limits, no opt-in telemetry.</li>
+    <li><strong>Vector-first output.</strong> Generates Android Vector Drawables, not PNGs, so imported icons scale cleanly and stay small in the APK.</li>
+    <li><strong>Idiomatic placement.</strong> Files land in the active app module's standard <code>res/drawable</code> directory and follow the <code>ic_*</code> naming convention by default.</li>
+    <li><strong>Lifecycle-clean.</strong> Threads, handlers, and caches are scoped to the adapter or plugin and torn down on disposal — no leaked executors or pinned IDE references.</li>
+    <li><strong>Minimal permission surface.</strong> Only the three permissions the import flow actually exercises are requested; no network, system command, or native-code permissions.</li>
+    <li><strong>Reproducible build.</strong> A single documented Gradle command (<code>./gradlew assemblePlugin</code>) produces the submission artifact on any clean machine with the Android SDK installed.</li>
+</ul>
+
+</body>
+</html>
