@@ -42,28 +42,37 @@ jobs:
           CODEONTHEGO_REF: ${{ github.event.inputs.codeonthego_ref }}
         run: ./scripts/update-libs.sh --ref "$CODEONTHEGO_REF"
 
-      - name: Stage .cgp files with website filenames
+      - name: Stage built .cgp artifacts
         run: |
           mkdir -p deploy-staging
-          declare -A MAP=(
-            ["apk-viewer"]="apk-analyzer.cgp"
-            ["Beepy"]="beepy.cgp"
-            ["keystore-generator"]="keystore-generator.cgp"
-            ["markdown-preview"]="markdown-previewer.cgp"
-            ["ndk-installer-plugin"]="ndk-installer.cgp"
-            ["random-xkcd"]="random-xkcd.cgp"
-            ["snippets"]="snippets.cgp"
-            ["icons-repository"]="icons-repository.cgp"
-          )
-          for module in "${!MAP[@]}"; do
-            src=$(ls "${module}/build/plugin/"*.cgp 2>/dev/null | head -n1)
+
+          # Discover every plugin module the same way scripts/update-libs.sh does
+          # (a sibling dir whose build.gradle.kts applies the plugin-builder Gradle
+          # plugin), then stage each plugin's built .cgp under its own name. The
+          # plugin-builder already names the artifact, so there is no rename map —
+          # new plugins are picked up automatically.
+          staged=0
+          for build_file in */build.gradle.kts; do
+            [ -f "$build_file" ] || continue
+            grep -qF "com.itsaky.androidide.plugins.build" "$build_file" || continue
+            module="$(dirname "$build_file")"
+            src="$(ls "${module}/build/plugin/"*.cgp 2>/dev/null | grep -v -- '-debug\.cgp$' | head -n1)"
             if [ -z "$src" ]; then
-              echo "ERROR: no .cgp found under ${module}/build/plugin/"
+              echo "ERROR: no release .cgp found under ${module}/build/plugin/ (did assemblePlugin run?)"
               exit 1
             fi
-            cp "$src" "deploy-staging/${MAP[$module]}"
-            echo "Staged $src -> deploy-staging/${MAP[$module]}"
+            cp "$src" "deploy-staging/$(basename "$src")"
+            echo "Staged $src -> deploy-staging/$(basename "$src")"
+            staged=$((staged + 1))
           done
+
+          if [ "$staged" -eq 0 ]; then
+            echo "ERROR: no plugin modules discovered under */build.gradle.kts"
+            exit 1
+          fi
+
+          echo ""
+          echo "Staged ${staged} plugin artifact(s)."
           ls -la deploy-staging/
 
       - name: Upload .cgp artifacts

@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>cotg ndk Plugin Documentation</title>
+<style>
+  :root {
+    --bg: #fdfdfd;
+    --fg: #1a1a1a;
+    --accent: #1a6b52;
+    --accent-light: #e3f4ec;
+    --border: #d0d7de;
+    --code-bg: #f4f6f8;
+    --table-stripe: #f8fafb;
+    --shadow: rgba(0,0,0,0.06);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--fg);
+    background: var(--bg);
+    line-height: 1.6;
+    max-width: 52rem;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+  }
+  header { border-bottom: 3px solid var(--accent); padding-bottom: 1.2rem; margin-bottom: 2rem; }
+  header h1 { font-size: 2rem; color: var(--accent); }
+  header p.subtitle { color: #555; margin-top: 0.3rem; }
+  header .meta { font-size: 0.85rem; color: #777; margin-top: 0.5rem; }
+  nav { background: var(--accent-light); border: 1px solid var(--border); border-radius: 6px; padding: 1rem 1.5rem; margin-bottom: 2.5rem; }
+  nav h2 { font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); margin-bottom: 0.5rem; }
+  nav ol { padding-left: 1.3rem; }
+  nav li { margin: 0.25rem 0; }
+  nav a { color: var(--accent); text-decoration: none; }
+  nav a:hover { text-decoration: underline; }
+  section { margin-bottom: 2.5rem; }
+  h2 { font-size: 1.4rem; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; margin-bottom: 1rem; }
+  h3 { font-size: 1.1rem; margin: 1.2rem 0 0.5rem; }
+  p, li { margin-bottom: 0.5rem; }
+  ul, ol { padding-left: 1.4rem; }
+  code {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    background: var(--code-bg);
+    padding: 0.15em 0.35em;
+    border-radius: 3px;
+    font-size: 0.9em;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1rem 1.2rem;
+    overflow-x: auto;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    margin: 0.8rem 0 1rem;
+  }
+  pre code { background: none; padding: 0; }
+  table { width: 100%; border-collapse: collapse; margin: 0.8rem 0 1rem; font-size: 0.95rem; }
+  th, td { text-align: left; padding: 0.55rem 0.8rem; border: 1px solid var(--border); }
+  th { background: var(--accent-light); font-weight: 600; }
+  tr:nth-child(even) td { background: var(--table-stripe); }
+  .diagram {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1.2rem;
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 0.85rem;
+    line-height: 1.55;
+    overflow-x: auto;
+    white-space: pre;
+    margin: 0.8rem 0 1rem;
+  }
+  .callout {
+    background: var(--accent-light);
+    border-left: 4px solid var(--accent);
+    padding: 0.8rem 1rem;
+    border-radius: 0 6px 6px 0;
+    margin: 1rem 0;
+  }
+  .file-tree { list-style: none; padding-left: 0; font-family: monospace; font-size: 0.9rem; }
+  .file-tree ul { list-style: none; padding-left: 1.5rem; }
+  footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: 0.85rem; color: #777; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>cotg ndk</h1>
+  <p class="subtitle">On-device C++ compiler and NDK toolchain for Code on the Go</p>
+  <div class="meta">Version 6.0.0 &middot; Author: App Dev for All &middot; Package: <code>com.cotg.cotgndk</code></div>
+</header>
+
+<nav>
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#overview">Executive Overview</a></li>
+    <li><a href="#functionality">Core Functionality</a></li>
+    <li><a href="#architecture">Technical Architecture</a></li>
+    <li><a href="#integration">Integration Points</a></li>
+    <li><a href="#deployment">Deployment &amp; Usage</a></li>
+    <li><a href="#benefits">Key Benefits</a></li>
+  </ol>
+</nav>
+
+<!-- ================================================================ -->
+<section id="overview">
+  <h2>1. Executive Overview</h2>
+  <p>
+    <strong>cotg ndk</strong> is a native C++ build environment that runs on the device. It
+    installs an Android NDK, discovers the Clang toolchain and sysroot, provisions missing
+    Android platform libraries, configures the active project's <code>app/src/main/cpp</code>
+    with CMake, compiles the native sources for <code>arm64-v8a</code>, and writes the resulting
+    shared library into <code>app/src/main/jniLibs/arm64-v8a</code>. It needs no desktop NDK,
+    host toolchain, or PATH setup.
+  </p>
+  <p>
+    The plugin contributes a <strong>"COTG C++ Engine"</strong> item to the IDE sidebar and a
+    <strong>"C++ Compiler"</strong> main editor tab. The tab hosts a build console with a
+    Compile action, a Copy Logs button, a Download NDK shortcut, and two build options:
+    Export libc++_shared.so and Parallel mode.
+  </p>
+  <p>
+    The implementation is two Kotlin files: <code>cotgndk.kt</code> (the plugin entry point and
+    UI contributions) and <code>cotgndkFragment.kt</code> (the console UI and the compiler
+    engine). The plugin requires the <code>filesystem.read</code>,
+    <code>filesystem.write</code>, <code>project.structure</code>, <code>system.commands</code>,
+    and <code>ide.environment.write</code> permissions, and consumes the
+    <code>IdeEnvironmentService</code>, <code>IdeProjectService</code>, and
+    <code>IdeEditorTabService</code> host services.
+  </p>
+</section>
+
+<!-- ================================================================ -->
+<section id="functionality">
+  <h2>2. Core Functionality</h2>
+
+  <h3>The C++ Compiler console</h3>
+  <p>
+    The <code>cotgndkFragment</code> renders a terminal-style console (a <code>TextView</code>
+    inside a <code>ScrollView</code>) and the build controls. When the tab opens, the fragment
+    wires up its buttons and runs an NDK status check that decides whether compilation is
+    available:
+  </p>
+  <ul>
+    <li><strong>Compile</strong>: runs the build pipeline on a background coroutine</li>
+    <li><strong>Copy Logs</strong>: copies the console text to the system clipboard</li>
+    <li><strong>Download NDK</strong>: opens the NDK release URL in a browser</li>
+    <li><strong>Export libc++_shared.so</strong>: copies the STL runtime into <code>jniLibs</code> when enabled</li>
+    <li><strong>Parallel mode</strong>: selects <code>make -j4</code> (fast) instead of <code>make -j1</code> (safe)</li>
+  </ul>
+
+  <h3>NDK detection</h3>
+  <p>
+    On open, <code>checkNdkStatus()</code> looks for an NDK in two places and enables or
+    disables the build controls based on what it finds:
+  </p>
+  <table>
+    <thead>
+      <tr><th>Condition</th><th>Result</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>$ANDROID_HOME/cotgx_ultimate_ndk</code> exists and is non-empty</td><td>NDK installed, ready to compile</td></tr>
+      <tr><td><code>cotgx-ndk-ultimate.tar.gz</code> present in the <code>Download</code> folder</td><td>Archive detected, extracted on first compile</td></tr>
+      <tr><td>Neither present</td><td>Compile disabled; Download NDK shown with instructions</td></tr>
+    </tbody>
+  </table>
+
+  <h3>NDK provisioning</h3>
+  <p>
+    On the first compile, if the NDK is not installed, the plugin copies the downloaded archive
+    into the workspace and extracts it with the native <code>tar</code> command into the IDE's
+    Android home directory. Extraction output streams to the console.
+  </p>
+  <pre><code>val extractCmd = "tar -xzf '${tempFile.absolutePath}' -C '${targetDir.absolutePath}'"
+val extProcess = ProcessBuilder("sh", "-c", extractCmd)
+    .redirectErrorStream(true).start()</code></pre>
+
+  <h3>Toolchain discovery</h3>
+  <p>
+    The engine does not assume a fixed NDK layout. An eight-step shell script locates each
+    required component at build time and stops with an error if a critical one is missing:
+  </p>
+  <ul>
+    <li><code>clang</code> / <code>clang++</code>: the C and C++ compilers, made executable with <code>chmod +x</code></li>
+    <li><code>sysroot</code>: the Android system root for headers and libraries</li>
+    <li><code>jni.h</code>: JNI headers, added with <code>-isystem</code></li>
+    <li><code>c++/v1</code>: the libc++ STL include root</li>
+    <li><code>libc++.so</code> / <code>libc++.a</code>: the STL link target</li>
+    <li>bundled <code>cmake</code> and <code>make</code>, falling back to the IDE's copies if absent</li>
+  </ul>
+  <p>The build targets <code>aarch64-linux-android21</code> with <code>--sysroot</code> set to the discovered system root.</p>
+
+  <h3>Sysroot self-healing</h3>
+  <p>
+    Some on-device sysroots ship without the Android platform stub libraries that native
+    projects link against. Before configuring CMake, the engine back-fills any missing
+    libraries from the device's <code>/system/lib64</code> (or <code>/system/lib</code>) into
+    the sysroot:
+  </p>
+  <div class="diagram">liblog        libandroid    libEGL        libGLESv2
+libGLESv3     libjnigraphics libmediandk  libOpenSLES
+libvulkan     libaaudio     libcamera2ndk libnativewindow</div>
+  <div class="callout">
+    <strong>liblog guard.</strong> If <code>liblog</code> is not in the sysroot and cannot be
+    provisioned from the system, the console prints a warning that any
+    <code>find_library(... log)</code> or <code>-llog</code> dependency will fail. The cause is
+    reported before the build reaches the linker.
+  </div>
+
+  <h3>Configure, build, export</h3>
+  <p>
+    With the toolchain resolved, the engine runs CMake with a manual toolchain configuration
+    (no NDK toolchain file required), then runs <code>make</code>:
+  </p>
+  <pre><code>"$CMAKE_BIN" "${cppDir}" \
+    -DCMAKE_SYSTEM_NAME=Android \
+    -DCMAKE_SYSTEM_VERSION=21 \
+    -DCMAKE_SYSROOT="$SYSROOT_DIR" \
+    -DCMAKE_C_COMPILER="$CLANG_BIN" \
+    -DCMAKE_CXX_COMPILER="$CLANGXX_BIN" \
+    -DCMAKE_MAKE_PROGRAM="$MAKE_BIN" \
+    -DCMAKE_C_FLAGS="$C_FLAGS" \
+    -DCMAKE_CXX_FLAGS="$CXX_FLAGS" \
+    -DCMAKE_BUILD_TYPE=Release \
+    -G "Unix Makefiles"
+
+"$MAKE_BIN" SHELL=/system/bin/sh -j4   # or -j1 in safe mode</code></pre>
+  <p>
+    Built <code>*.so</code> files are copied into <code>app/src/main/jniLibs/arm64-v8a/</code>.
+    When Export libc++_shared.so is enabled, the STL runtime is located in the NDK and copied
+    alongside them. The console ends with <code>[OK] BUILD SUCCESS</code> or a failure and its
+    exit code.
+  </p>
+</section>
+
+<!-- ================================================================ -->
+<section id="architecture">
+  <h2>3. Technical Architecture</h2>
+
+  <h3>File layout</h3>
+  <ul class="file-tree">
+    <li>cotg-ndk/
+      <ul>
+        <li>build.gradle.kts : plugin API via shared <code>../libs</code></li>
+        <li>settings.gradle.kts</li>
+        <li>proguard-rules.pro</li>
+        <li>src/main/
+          <ul>
+            <li>AndroidManifest.xml : metadata, permissions, day/night icons</li>
+            <li>kotlin/com/cotg/cotgndk/
+              <ul>
+                <li><strong>cotgndk.kt</strong> : plugin entry point; sidebar and editor-tab contributions</li>
+                <li>fragments/<strong>cotgndkFragment.kt</strong> : console UI and compiler engine</li>
+              </ul>
+            </li>
+            <li>res/ : <code>ic_plugin.xml</code> (the "&gt; C++" icon), <code>fragment_main.xml</code>, Material 3 theme</li>
+            <li>assets/ : <code>icon_day.png</code>, <code>icon_night.png</code> (plugin badges)</li>
+          </ul>
+        </li>
+      </ul>
+    </li>
+  </ul>
+
+  <h3>Class overview</h3>
+  <table>
+    <thead>
+      <tr><th>Class</th><th>Role</th><th>Key interfaces</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>cotgndk</code></td>
+        <td>Plugin entry point. Stores the <code>PluginContext</code> and contributes the sidebar item and the main editor tab. Opens the tab through <code>IdeEditorTabService</code>.</td>
+        <td><code>IPlugin</code>, <code>UIExtension</code>, <code>EditorTabExtension</code></td>
+      </tr>
+      <tr>
+        <td><code>cotgndkFragment</code></td>
+        <td>The "C++ Compiler" UI. Hosts the build console, detects the NDK, and runs the extract, discover, provision, configure, build, and export pipeline on a coroutine.</td>
+        <td><code>androidx.fragment.app.Fragment</code></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>UI contributions</h3>
+  <p>The plugin registers one sidebar item and one editor tab, both pointing at the compiler:</p>
+  <pre><code>override fun getSideMenuItems(): List&lt;NavigationItem&gt; = listOf(
+    NavigationItem(
+        id = "com_cotg_cotgndk_sidebar",
+        title = "COTG C++ Engine",
+        icon = R.drawable.ic_plugin,
+        group = "plugins",
+        order = 1,
+        action = { openPluginTab() }
+    )
+)
+
+override fun getMainEditorTabs(): List&lt;EditorTabItem&gt; = listOf(
+    EditorTabItem(
+        id = "com_cotg_cotgndk_main",
+        title = "C++ Compiler",
+        icon = R.drawable.ic_plugin,
+        fragmentFactory = { cotgndkFragment() },
+        tooltip = "Advanced NDK Engine"
+    )
+)
+
+private fun openPluginTab() {
+    val tabs = pluginCtx.services.get(IdeEditorTabService::class.java) ?: return
+    if (tabs.isTabSystemAvailable()) tabs.selectPluginTab("com_cotg_cotgndk_main")
+}</code></pre>
+
+  <h3>Plugin lifecycle</h3>
+  <table>
+    <thead>
+      <tr><th>Method</th><th>Behaviour</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>initialize()</code></td><td>Stores the <code>PluginContext</code> in a global bridge and logs initialization</td></tr>
+      <tr><td><code>activate()</code> / <code>deactivate()</code></td><td>Return <code>true</code>; the plugin is UI-driven with no background activation work</td></tr>
+      <tr><td><code>getSideMenuItems()</code> / <code>getMainEditorTabs()</code></td><td>Register the "COTG C++ Engine" item and "C++ Compiler" tab</td></tr>
+      <tr><td><code>dispose()</code></td><td>No-op; the fragment cleans up its own coroutine scope and view references</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Build pipeline (data flow)</h3>
+  <div class="diagram">Sidebar "COTG C++ Engine"  -->  selectPluginTab("...main")
+                                      |
+                                      v
+                          "C++ Compiler" tab (cotgndkFragment)
+                                      |  checkNdkStatus()
+             +------------------------+------------------------+
+             v                                                 v
+       NDK installed?                                 archive in Download?
+             |                                                 |
+             +----------------------> Compile <----------------+
+                                      |  (Dispatchers.IO)
+                                      v
+           tar -xzf  -->  discover clang / sysroot / JNI / libc++
+                                      |
+                                      v
+           provision platform libs into sysroot (liblog, ...)
+                                      |
+                                      v
+           cmake (manual toolchain, arm64-v8a, Release)
+                                      |
+                                      v
+           make -j4 | -j1  -->  copy *.so  -->  app/src/main/jniLibs/arm64-v8a
+                                      |
+                                      v
+                          BUILD SUCCESS (streamed to console)</div>
+
+  <h3>Build configuration</h3>
+  <table>
+    <tr><th>Setting</th><th>Value</th></tr>
+    <tr><td>Gradle plugin</td><td><code>com.itsaky.androidide.plugins.build</code></td></tr>
+    <tr><td>Plugin name</td><td><code>cotgndk</code></td></tr>
+    <tr><td>Compile / Target SDK</td><td>34</td></tr>
+    <tr><td>Min SDK</td><td>26</td></tr>
+    <tr><td>Java / Kotlin target</td><td>17</td></tr>
+    <tr><td>Version</td><td>6.0.0 (versionCode 6)</td></tr>
+    <tr><td>ProGuard</td><td>Disabled (<code>isMinifyEnabled = false</code>)</td></tr>
+    <tr><td>Plugin API</td><td><code>compileOnly</code> through shared <code>../libs/plugin-api.jar</code></td></tr>
+    <tr><td>Coroutines</td><td><code>kotlinx-coroutines-core</code> / <code>-android</code> 1.9.0</td></tr>
+    <tr><td>Output format</td><td><code>.cgp</code> package</td></tr>
+  </table>
+</section>
+
+<!-- ================================================================ -->
+<section id="integration">
+  <h2>4. Integration Points</h2>
+  <p>
+    cotg ndk integrates with the host IDE through three services and native command execution.
+    It does not modify any main-app source. All work happens at runtime through the plugin
+    framework and the device's own shell, CMake, and Clang.
+  </p>
+
+  <h3>4.1 Plugin lifecycle (<code>IPlugin</code>)</h3>
+  <p>The manifest declares the entry point:</p>
+  <pre><code>&lt;meta-data android:name="plugin.main_class"
+           android:value="com.cotg.cotgndk.cotgndk" /&gt;</code></pre>
+  <p>
+    <code>initialize()</code> stores the <code>PluginContext</code> in a global bridge so the
+    fragment can reach host services. The plugin also implements <code>UIExtension</code> for
+    the sidebar and <code>EditorTabExtension</code> for the editor tab.
+  </p>
+
+  <h3>4.2 Environment access (<code>IdeEnvironmentService</code>)</h3>
+  <p>
+    <code>getAndroidHomeDirectory()</code> locates the IDE's Android home. It is the install
+    target for the NDK (<code>cotgx_ultimate_ndk</code>) and the base for sysroot discovery and
+    provisioning. Requires <code>ide.environment.write</code>.
+  </p>
+
+  <h3>4.3 Project access (<code>IdeProjectService</code>)</h3>
+  <p>
+    <code>getCurrentProject().rootDir</code> resolves the active project so the engine can find
+    <code>app/src/main/cpp/CMakeLists.txt</code> and write build artifacts back into
+    <code>jniLibs</code>. Requires <code>project.structure</code>.
+  </p>
+
+  <h3>4.4 Editor tabs (<code>IdeEditorTabService</code>)</h3>
+  <p>
+    Tapping the sidebar item calls <code>selectPluginTab("com_cotg_cotgndk_main")</code> after
+    <code>isTabSystemAvailable()</code> to focus or open the "C++ Compiler" tab.
+  </p>
+
+  <h3>4.5 Native command execution</h3>
+  <p>
+    The compiler engine shells out through <code>ProcessBuilder("sh", "-c", ...)</code> to run
+    <code>tar</code>, <code>cmake</code>, <code>make</code>, and the discovered Clang binaries,
+    streaming combined stdout and stderr to the console. This requires the
+    <code>system.commands</code> permission. The fragment is themed through
+    <code>PluginFragmentHelper.getPluginInflater(PLUGIN_ID, inflater)</code>.
+  </p>
+
+  <h3>4.6 Services consumed</h3>
+  <table>
+    <thead>
+      <tr><th>Service</th><th>Usage</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>IdeEnvironmentService</code></td><td><code>getAndroidHomeDirectory()</code> for the NDK install location and sysroot base</td></tr>
+      <tr><td><code>IdeProjectService</code></td><td><code>getCurrentProject().rootDir</code> to locate the project to compile</td></tr>
+      <tr><td><code>IdeEditorTabService</code></td><td><code>selectPluginTab()</code> to open the compiler tab from the sidebar</td></tr>
+    </tbody>
+  </table>
+
+  <h3>4.7 Permissions</h3>
+  <table>
+    <thead>
+      <tr><th>Permission</th><th>Purpose</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>ide.environment.write</code></td><td>Resolve and write into the IDE's Android home (NDK, sysroot)</td></tr>
+      <tr><td><code>project.structure</code></td><td>Read the active project root and its <code>cpp</code> and <code>jniLibs</code> directories</td></tr>
+      <tr><td><code>filesystem.read</code></td><td>Read the NDK archive and project sources</td></tr>
+      <tr><td><code>filesystem.write</code></td><td>Extract the NDK and write built <code>.so</code> files</td></tr>
+      <tr><td><code>system.commands</code></td><td>Run <code>tar</code>, <code>cmake</code>, <code>make</code>, and Clang through <code>sh</code></td></tr>
+    </tbody>
+  </table>
+
+  <h3>Integration summary</h3>
+  <div class="diagram">                    Code on the Go IDE Host
+  +------------------------------------------------------+
+  |  IdeEnvironmentService -- getAndroidHomeDirectory()  |
+  |  IdeProjectService     -- getCurrentProject()        |
+  |  IdeEditorTabService   -- selectPluginTab()          |
+  +--+----------------+-------------------+--------------+
+     |                |                   |
+     v                v                   v
+  Android home   active project      editor tab system
+     |                |                   ^
+     |                |                   |
+  +--+----------------+-------------------+--------------+
+  |                    cotgndk / cotgndkFragment         |
+  |                                                      |
+  |  sidebar item --> openPluginTab() --> C++ Compiler   |
+  |  Compile --> sh: tar / cmake / make / clang          |
+  +------------------------------------------------------+
+                        |
+        builds app/src/main/cpp --> jniLibs/arm64-v8a/*.so</div>
+</section>
+
+<!-- ================================================================ -->
+<section id="deployment">
+  <h2>5. Deployment &amp; Usage</h2>
+
+  <h3>Building</h3>
+  <pre><code># debug
+./gradlew assemblePluginDebug
+
+# release
+./gradlew assemblePlugin</code></pre>
+  <p>
+    This produces a <code>.cgp</code> package under <code>build/plugin/</code>
+    (<code>cotgndk-debug.cgp</code> or <code>cotgndk.cgp</code>). The plugin links the Code on
+    the Go API as <code>compileOnly</code> from the repository's shared
+    <code>../libs/plugin-api.jar</code>.
+  </p>
+
+  <h3>Installation</h3>
+  <ol>
+    <li>Open Code on the Go's plugin manager.</li>
+    <li>Import the <code>.cgp</code> file.</li>
+    <li>The IDE discovers <code>com.cotg.cotgndk.cotgndk</code> from the manifest metadata and loads it.</li>
+    <li>Open <strong>COTG C++ Engine</strong> from the sidebar, or the <strong>C++ Compiler</strong> editor tab.</li>
+  </ol>
+
+  <h3>Preparing the NDK</h3>
+  <ol>
+    <li>In the C++ Compiler tab, tap <strong>Download NDK</strong> or open the release URL directly.</li>
+    <li>Place <code>cotgx-ndk-ultimate.tar.gz</code> in the device <code>Download</code> folder.</li>
+    <li>Reopen the tab. The status check detects the archive and enables Compile.</li>
+    <li>The archive is extracted to <code>$ANDROID_HOME/cotgx_ultimate_ndk</code> on the first build and reused afterward.</li>
+  </ol>
+
+  <h3>Compiling a project</h3>
+  <ol>
+    <li>Open a project that contains <code>app/src/main/cpp/CMakeLists.txt</code>.</li>
+    <li>Open the <strong>C++ Compiler</strong> tab.</li>
+    <li>Optionally enable <strong>Export libc++_shared.so</strong> and Parallel mode.</li>
+    <li>Tap <strong>Compile</strong> and read the streamed build log.</li>
+    <li>On success, the <code>.so</code> files are written to <code>app/src/main/jniLibs/arm64-v8a/</code>.</li>
+  </ol>
+
+  <h3>Runtime requirements</h3>
+  <table>
+    <tr><th>Requirement</th><th>Value</th></tr>
+    <tr><td>Min Android version</td><td>API 26 (Android 8.0)</td></tr>
+    <tr><td>Min IDE version</td><td>1.0.0</td></tr>
+    <tr><td>Target ABI</td><td><code>arm64-v8a</code></td></tr>
+    <tr><td>Permissions</td><td><code>filesystem.read</code>, <code>filesystem.write</code>, <code>project.structure</code>, <code>system.commands</code>, <code>ide.environment.write</code></td></tr>
+    <tr><td>Network access</td><td>Once, to download the NDK archive</td></tr>
+    <tr><td>Disk space</td><td>Sufficient for the extracted NDK toolchain</td></tr>
+  </table>
+</section>
+
+<!-- ================================================================ -->
+<section id="benefits">
+  <h2>6. Key Benefits</h2>
+  <ul>
+    <li><strong>On-device native builds.</strong> Compile C++ and JNI for Android inside Code
+        on the Go, without a desktop, remote build server, or cross-compilation setup.</li>
+    <li><strong>Zero-configuration toolchain.</strong> The engine discovers Clang, the sysroot,
+        JNI headers, the STL, and the bundled CMake and make at build time, so it adapts to the
+        NDK layout instead of hard-coding paths.</li>
+    <li><strong>Self-healing sysroot.</strong> Missing Android platform libraries are
+        provisioned from the device system, and an unresolved <code>liblog</code> is reported
+        before the linker stage.</li>
+    <li><strong>Fast or safe.</strong> A toggle switches between parallel
+        (<code>make -j4</code>) and single-threaded (<code>make -j1</code>) builds.</li>
+    <li><strong>Transparent feedback.</strong> Each step streams to a live console with
+        copy-to-clipboard.</li>
+    <li><strong>Reusable install.</strong> The NDK is extracted once into the Android home and
+        reused across builds; later compiles skip extraction.</li>
+  </ul>
+</section>
+
+<footer>
+  cotg ndk Plugin Documentation &middot; Version 6.0.0 &middot; com.cotg.cotgndk
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application
+        android:label="@string/app_name"
+        android:theme="@style/PluginTheme">
+
+        <meta-data
+            android:name="plugin.id"
+            android:value="com.cotg.cotgndk" />
+        <meta-data
+            android:name="plugin.name"
+            android:value="cotg ndk" />
+        <meta-data
+            android:name="plugin.version"
+            android:value="${pluginVersion}" />
+        <meta-data
+            android:name="plugin.description"
+            android:value="Advanced C++ Compiler and NDK Installer" />
+        <meta-data
+            android:name="plugin.author"
+            android:value="App Dev for All" />
+        <meta-data
+            android:name="plugin.min_ide_version"
+            android:value="1.0.0" />
+
+        <meta-data
+            android:name="plugin.permissions"
+            android:value="filesystem.read,filesystem.write,project.structure,system.commands,ide.environment.write" />
+
+        <meta-data
+            android:name="plugin.icon_day"
+            android:value="assets/icon_day.png" />
+        <meta-data
+            android:name="plugin.icon_night"
+            android:value="assets/icon_night.png" />
+        <meta-data
+            android:name="plugin.main_class"
+            android:value="com.cotg.cotgndk.cotgndk" />
+        <meta-data
+            android:name="plugin.sidebar_items"
+            android:value="1" />
+    </application>
+
+</manifest>
