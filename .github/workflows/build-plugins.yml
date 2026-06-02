@@ -21,6 +21,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    outputs:
+      plugins: ${{ steps.stage.outputs.plugins }}
     steps:
       - name: Checkout plugin-examples
         uses: actions/checkout@v4
@@ -43,6 +45,7 @@ jobs:
         run: ./scripts/update-libs.sh --ref "$CODEONTHEGO_REF"
 
       - name: Stage built .cgp artifacts
+        id: stage
         run: |
           mkdir -p deploy-staging
 
@@ -52,6 +55,7 @@ jobs:
           # plugin-builder already names the artifact, so there is no rename map —
           # new plugins are picked up automatically.
           staged=0
+          names=()
           for build_file in */build.gradle.kts; do
             [ -f "$build_file" ] || continue
             grep -qF "com.itsaky.androidide.plugins.build" "$build_file" || continue
@@ -63,6 +67,7 @@ jobs:
             fi
             cp "$src" "deploy-staging/$(basename "$src")"
             echo "Staged $src -> deploy-staging/$(basename "$src")"
+            names+=("$(basename "$src" .cgp)")
             staged=$((staged + 1))
           done
 
@@ -71,14 +76,44 @@ jobs:
             exit 1
           fi
 
+          # Emit the staged artifact names as a JSON array so the publish job can
+          # fan out one downloadable artifact per plugin via a matrix.
+          plugins="$(printf '%s\n' "${names[@]}" | jq -R . | jq -cs .)"
+          echo "plugins=${plugins}" >> "$GITHUB_OUTPUT"
+
           echo ""
-          echo "Staged ${staged} plugin artifact(s)."
+          echo "Staged ${staged} plugin artifact(s): ${names[*]}"
           ls -la deploy-staging/
 
-      - name: Upload .cgp artifacts
+      - name: Upload all .cgp as one bundle
         uses: actions/upload-artifact@v4
         with:
-          name: plugins-cgp
+          name: all-plugins-cgp
           path: deploy-staging/*.cgp
+          retention-days: 7
+          if-no-files-found: error
+
+  # publish one downloadable artifact per plugin so each .cgp can be
+  # grabbed directly from the run summary, not only as part of the bundle.
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        plugin: ${{ fromJson(needs.build.outputs.plugins) }}
+    steps:
+      - name: Download bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: all-plugins-cgp
+          path: deploy-staging
+
+      - name: Upload ${{ matrix.plugin }} as its own artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.plugin }}
+          path: deploy-staging/${{ matrix.plugin }}.cgp
           retention-days: 7
           if-no-files-found: error
