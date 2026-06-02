@@ -1,0 +1,131 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    line-height: 1.6;
+    color: #171717;
+    background: #fafafa;
+}
+
+nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 2rem;
+    border-bottom: 1px solid #e5e5e5;
+    background: #fff;
+}
+
+nav .logo {
+    font-weight: 700;
+    font-size: 1.125rem;
+    color: #0a0a0a;
+    text-decoration: none;
+}
+
+.nav-links {
+    display: flex;
+    gap: 1.5rem;
+}
+
+.nav-links a {
+    color: #525252;
+    text-decoration: none;
+    font-size: 0.875rem;
+}
+
+.nav-links a:hover {
+    color: #0a0a0a;
+}
+
+main {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 3rem 2rem;
+}
+
+.hero {
+    text-align: center;
+    padding: 4rem 0;
+}
+
+.hero h1 {
+    font-size: 2.5rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 0.5rem;
+}
+
+.hero p {
+    color: #737373;
+    font-size: 1.125rem;
+}
+
+.features {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 1.5rem;
+    margin-top: 3rem;
+}
+
+.card {
+    padding: 1.5rem;
+    border: 1px solid #e5e5e5;
+    border-radius: 8px;
+    background: #fff;
+}
+
+.card h3 {
+    font-size: 1rem;
+    margin-bottom: 0.5rem;
+}
+
+.card p {
+    color: #737373;
+    font-size: 0.875rem;
+}
+
+section h1 {
+    font-size: 2rem;
+    margin-bottom: 1rem;
+}
+
+section p {
+    margin-bottom: 0.75rem;
+}
+
+code {
+    background: #f5f5f5;
+    padding: 2px 6px;
+    border: 1px solid #e5e5e5;
+    border-radius: 4px;
+    font-size: 0.875rem;
+}
+
+.error-page {
+    text-align: center;
+    padding: 6rem 0;
+}
+
+.error-page h1 {
+    font-size: 6rem;
+    color: #d4d4d4;
+}
+
+.error-page a {
+    color: #171717;
+    text-decoration: underline;
+}
+
+footer {
+    text-align: center;
+    padding: 2rem;
+    color: #a3a3a3;
+    font-size: 0.8125rem;
+    border-top: 1px solid #e5e5e5;
+    margin-top: 4rem;
+}
