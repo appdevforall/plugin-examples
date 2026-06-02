@@ -75,47 +75,53 @@ class ProjectFormViewModel(
         reduce { copy(isSubmitting = true, errors = ProjectFormErrors()) }
         viewModelScope.launch {
             val id = editingId
-            if (id == null) {
-                val existing = projectRepository.getByRootPath(values.rootPath)
-                if (existing != null) {
-                    reduce { copy(isSubmitting = false) }
-                    emit(ProjectFormEffect.ShowAlreadyRegistered)
-                    return@launch
-                }
-                projectRepository.register(
-                    rootPath = values.rootPath,
-                    displayName = values.displayName,
-                    clientName = values.clientName,
-                    clientEmail = values.clientEmail,
-                    clientAddress = values.clientAddress,
-                    hourlyRate = values.hourlyRate,
-                    currency = values.currency,
-                    taxRatePercent = values.taxPercent,
-                    notes = values.notes
-                )
-            } else {
-                val current = projectRepository.getById(id) ?: run {
-                    reduce { copy(isSubmitting = false) }
-                    emit(ProjectFormEffect.Dismiss)
-                    return@launch
-                }
-                projectRepository.update(
-                    current.copy(
-                        displayName = values.displayName,
-                        clientName = values.clientName,
-                        clientEmail = values.clientEmail?.takeIf { it.isNotBlank() },
-                        clientAddress = values.clientAddress?.takeIf { it.isNotBlank() },
-                        hourlyRate = values.hourlyRate,
-                        currency = values.currency,
-                        taxRatePercent = values.taxPercent,
-                        notes = values.notes?.takeIf { it.isNotBlank() }
-                    )
-                )
-            }
+            val saved = if (id == null) registerNew(values) else updateExisting(id, values)
+            if (!saved) return@launch
             sessionTracker.onProjectRegistrationChanged()
             reduce { copy(isSubmitting = false) }
             emit(ProjectFormEffect.Dismiss)
         }
+    }
+
+    private suspend fun registerNew(values: ProjectFormValues): Boolean {
+        if (projectRepository.getByRootPath(values.rootPath) != null) {
+            reduce { copy(isSubmitting = false) }
+            emit(ProjectFormEffect.ShowAlreadyRegistered)
+            return false
+        }
+        projectRepository.register(
+            rootPath = values.rootPath,
+            displayName = values.displayName,
+            clientName = values.clientName,
+            clientEmail = values.clientEmail,
+            clientAddress = values.clientAddress,
+            hourlyRate = values.hourlyRate,
+            currency = values.currency,
+            taxRatePercent = values.taxPercent,
+            notes = values.notes
+        )
+        return true
+    }
+
+    private suspend fun updateExisting(id: String, values: ProjectFormValues): Boolean {
+        val current = projectRepository.getById(id) ?: run {
+            reduce { copy(isSubmitting = false) }
+            emit(ProjectFormEffect.Dismiss)
+            return false
+        }
+        projectRepository.update(
+            current.copy(
+                displayName = values.displayName,
+                clientName = values.clientName,
+                clientEmail = values.clientEmail?.takeIf { it.isNotBlank() },
+                clientAddress = values.clientAddress?.takeIf { it.isNotBlank() },
+                hourlyRate = values.hourlyRate,
+                currency = values.currency,
+                taxRatePercent = values.taxPercent,
+                notes = values.notes?.takeIf { it.isNotBlank() }
+            )
+        )
+        return true
     }
 
     private fun validate(values: ProjectFormValues): ProjectFormErrors = ProjectFormErrors(
