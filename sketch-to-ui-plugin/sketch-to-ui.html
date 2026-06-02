@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sketch to UI Plugin Documentation</title>
+<style>
+  :root {
+    --bg: #fdfdfd;
+    --fg: #1a1a1a;
+    --accent: #0f766e;
+    --accent-light: #e6f5f3;
+    --border: #d0d7de;
+    --code-bg: #f4f6f8;
+    --table-stripe: #f8fafb;
+    --shadow: rgba(0,0,0,0.06);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--fg);
+    background: var(--bg);
+    line-height: 1.6;
+    max-width: 52rem;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+  }
+  header { border-bottom: 3px solid var(--accent); padding-bottom: 1.2rem; margin-bottom: 2rem; }
+  header h1 { font-size: 2rem; color: var(--accent); }
+  header p.subtitle { color: #555; margin-top: 0.3rem; }
+  header .meta { font-size: 0.85rem; color: #777; margin-top: 0.5rem; }
+  nav { background: var(--accent-light); border: 1px solid var(--border); border-radius: 6px; padding: 1rem 1.5rem; margin-bottom: 2.5rem; }
+  nav h2 { font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); margin-bottom: 0.5rem; }
+  nav ol { padding-left: 1.3rem; }
+  nav li { margin: 0.25rem 0; }
+  nav a { color: var(--accent); text-decoration: none; }
+  nav a:hover { text-decoration: underline; }
+  section { margin-bottom: 2.5rem; }
+  h2 { font-size: 1.4rem; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; margin-bottom: 1rem; }
+  h3 { font-size: 1.1rem; margin: 1.2rem 0 0.5rem; }
+  p, li { margin-bottom: 0.5rem; }
+  ul, ol { padding-left: 1.4rem; }
+  code {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    background: var(--code-bg);
+    padding: 0.15em 0.35em;
+    border-radius: 3px;
+    font-size: 0.9em;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1rem 1.2rem;
+    overflow-x: auto;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    margin: 0.8rem 0 1rem;
+  }
+  pre code { background: none; padding: 0; }
+  table { width: 100%; border-collapse: collapse; margin: 0.8rem 0 1rem; font-size: 0.95rem; }
+  th, td { text-align: left; padding: 0.55rem 0.8rem; border: 1px solid var(--border); }
+  th { background: var(--accent-light); font-weight: 600; }
+  tr:nth-child(even) td { background: var(--table-stripe); }
+  .diagram {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1.2rem;
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 0.85rem;
+    line-height: 1.55;
+    overflow-x: auto;
+    white-space: pre;
+    margin: 0.8rem 0 1rem;
+  }
+  .callout {
+    background: var(--accent-light);
+    border-left: 4px solid var(--accent);
+    padding: 0.8rem 1rem;
+    border-radius: 0 6px 6px 0;
+    margin: 1rem 0;
+  }
+  .file-tree { list-style: none; padding-left: 0; font-family: monospace; font-size: 0.9rem; }
+  .file-tree ul { list-style: none; padding-left: 1.5rem; }
+  footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: 0.85rem; color: #777; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Sketch to UI Plugin</h1>
+  <p class="subtitle">Convert hand-drawn sketches and UI screenshots into Android XML layouts</p>
+  <div class="meta">Version 1.0.0 &middot; Author: App Dev for All &middot; Package: <code>com.appdevforall.sketchtoui.plugin</code></div>
+</header>
+
+<nav>
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#overview">Executive Overview</a></li>
+    <li><a href="#functionality">Core Functionality</a></li>
+    <li><a href="#pipeline">The Vision Pipeline</a></li>
+    <li><a href="#architecture">Technical Architecture</a></li>
+    <li><a href="#integration">Integration Points</a></li>
+    <li><a href="#deployment">Deployment &amp; Usage</a></li>
+    <li><a href="#requirements">Technical Requirements</a></li>
+    <li><a href="#benefits">Key Benefits</a></li>
+  </ol>
+</nav>
+
+<!-- ================================================================ -->
+<section id="overview">
+  <h2>1. Executive Overview</h2>
+  <p>
+    Sketch to UI is a Code on the Go plugin that turns a picture of an
+    interface &mdash; a whiteboard sketch, a paper drawing, or a screenshot of
+    another app &mdash; into a working Android XML layout. The user opens a
+    layout XML file, picks an image, and the plugin runs a complete
+    computer-vision pipeline (object detection + OCR + layout assembly) that
+    writes the result back into the editor.
+  </p>
+  <p>
+    All inference runs on-device. A bundled YOLO model
+    (<code>best_float32.tflite</code>, ~24&nbsp;MB) detects widget shapes;
+    Google ML Kit text recognition extracts labels; a margin-annotation parser
+    reads handwritten attribute hints (like <code>T-1</code> /
+    <code>B-1</code>) from the left and right sides of the sketch; and a layout
+    tree builder emits a <code>LinearLayout</code>-based XML structure scaled
+    to a 360&times;640 dp target. The plugin also updates
+    <code>res/values/strings.xml</code> in the host project with the strings it
+    extracted, so the generated layout is fully wired up to resources.
+  </p>
+  <p>
+    The plugin spans ~84 source files across UI, domain, data, and DI layers,
+    requires <code>filesystem.read</code>, <code>filesystem.write</code>,
+    <code>project.structure</code>, and <code>native.code</code> permissions
+    (the last is for the TFLite GPU delegate), and demonstrates a fully
+    self-contained ML workflow embedded in a CoGo plugin.
+  </p>
+</section>
+
+<!-- ================================================================ -->
+<section id="functionality">
+  <h2>2. Core Functionality</h2>
+
+  <h3>Activation</h3>
+  <p>
+    The plugin contributes a single main-menu item, "Sketch to UI", with the
+    eye-shaped icon. The item is enabled only when the file currently open in
+    the editor is an Android layout resource (an <code>.xml</code> file whose
+    parent directory is named <code>layout</code>). When the user activates
+    it, the plugin remembers the target layout file's path and opens its own
+    full-screen workspace inside the IDE.
+  </p>
+
+  <h3>The workspace screen</h3>
+  <p>
+    The plugin's screen is a single <code>SketchToUiFragment</code> that
+    hosts:
+  </p>
+  <ul>
+    <li>A toolbar with the title <em>Generate XML</em> and a back button.</li>
+    <li>A large <code>ZoomableImageView</code> for the source picture. Tapping
+        an empty view opens the system file picker; tapping detected
+        <em>image placeholders</em> opens a secondary picker so the user can
+        bind a real drawable to that region.</li>
+    <li>A <code>GuidelinesView</code> overlay with two draggable vertical
+        guides. Everything between them is treated as the layout canvas;
+        everything outside is treated as margin annotation space.</li>
+    <li>Three action buttons: <strong>Detect</strong>, <strong>Update</strong>,
+        and <strong>Save</strong>.</li>
+  </ul>
+
+  <h3>Detected widget types</h3>
+  <p>
+    The bundled YOLO model recognises 13 labels:
+  </p>
+  <table>
+    <thead>
+      <tr><th>Label</th><th>Meaning</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>generic_box</code></td><td>Catch-all rectangle; resolved into a more specific widget by <code>GenericBoxResolver</code> if text or context allows.</td></tr>
+      <tr><td><code>button</code></td><td>Material button.</td></tr>
+      <tr><td><code>dropdown_symbol</code></td><td>The chevron of a <code>Spinner</code>.</td></tr>
+      <tr><td><code>image_placeholder</code></td><td>Empty image slot; bindable to a drawable in the UI.</td></tr>
+      <tr><td><code>checkbox_checked</code>, <code>checkbox_unchecked</code></td><td>Check boxes in either state.</td></tr>
+      <tr><td><code>radio_button_checked</code>, <code>radio_button_unchecked</code></td><td>Radio buttons in either state.</td></tr>
+      <tr><td><code>slider</code></td><td>Seek bar / slider.</td></tr>
+      <tr><td><code>switch_on</code>, <code>switch_off</code></td><td>Material switch in either state.</td></tr>
+      <tr><td><code>widget_tag</code></td><td>Handwritten reference tag (e.g. <code>T-1</code>) inside the canvas, linking a widget to an annotation in the margin.</td></tr>
+      <tr><td><code>margin_metadata</code></td><td>Text appearing in the margin gutters that supplies attribute overrides.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Margin annotations</h3>
+  <p>
+    The plugin lets the sketch carry instructions that wouldn't fit on the
+    drawing itself. A tag like <code>T-1</code> drawn beside a widget binds it
+    to a free-text note like <code>T-1: hint="Email"</code> written in the
+    left or right margin. <code>MarginAnnotationParser</code> partitions
+    detections into three zones (left margin, canvas, right margin),
+    <code>WidgetAnnotationMatcher</code> joins each canvas tag to its margin
+    note, and <code>FuzzyAttributeParser</code> resolves the note (using
+    fuzzy matching) into concrete Android XML attributes.
+  </p>
+
+  <h3>Three terminal actions</h3>
+  <table>
+    <thead>
+      <tr><th>Button</th><th>Effect</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Detect</strong></td>
+        <td>Runs the full vision pipeline on the loaded image, overlays
+            colour-coded boxes on the picture, and stages a generated layout
+            internally.</td>
+      </tr>
+      <tr>
+        <td><strong>Update</strong></td>
+        <td>Asks for confirmation, then replaces the contents of the target
+            layout file (the one the user had open when launching the plugin)
+            with the generated XML. Also merges any extracted strings into
+            <code>app/src/main/res/values/strings.xml</code>. Returns the
+            user to the editor.</td>
+      </tr>
+      <tr>
+        <td><strong>Save</strong></td>
+        <td>Writes the generated layout XML to the device's
+            <code>Downloads/</code> folder under a generated filename, leaving
+            the project untouched.</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ================================================================ -->
+<section id="pipeline">
+  <h2>3. The Vision Pipeline</h2>
+  <p>
+    Pressing <strong>Detect</strong> runs <code>RunVisionUC</code>, which
+    orchestrates a four-stage pipeline. Each stage reports progress back to
+    the UI so the screen-reader can announce it.
+  </p>
+  <div class="diagram">
+  Source bitmap
+       |
+       v
+  +----------------------------+
+  | 1. YOLO detection          |  RunningYolo
+  |    best_float32.tflite     |
+  |    GPU-delegated via       |
+  |    LiteRT                  |
+  +-------------+--------------+
+                |
+                v       raw bounding boxes &amp; labels
+  +----------------------------+
+  | 2. Region OCR              |  RunningOcr
+  |    ML Kit text-recognition |
+  |    per detected region     |
+  |    + full-image pass for   |
+  |    untagged text           |
+  +-------------+--------------+
+                |
+                v       enriched + remaining + margin detections
+  +----------------------------+
+  | 3. Detection merging       |  MergingDetections
+  |    DetectionMerger,        |
+  |    MarginAnnotationParser  |
+  +-------------+--------------+
+                |
+                v       canvas detections + annotation map
+  +----------------------------+
+  | 4. Layout assembly         |  GeneratingXml
+  |    YoloToXmlConverter      |
+  |    LayoutTreeBuilder       |
+  |    AndroidXmlGenerator     |
+  +-------------+--------------+
+                |
+                v
+   layout.xml + strings.xml fragment</div>
+
+  <h3>Stage 1 &mdash; YOLO detection</h3>
+  <p>
+    <code>VisionRepositoryImpl</code> loads the bundled
+    <code>best_float32.tflite</code> from assets and runs inference through
+    LiteRT, using the GPU delegate when available. Raw output is post-processed
+    into <code>DetectionResult</code> records. <code>GenericBoxResolver</code>
+    then promotes generic boxes into specific widgets when neighbouring
+    context (text content, tag proximity) makes the type obvious.
+  </p>
+
+  <h3>Stage 2 &mdash; Region OCR</h3>
+  <p>
+    <code>RegionOcrProcessor</code> runs ML Kit text recognition on each
+    bounding box plus a full-image pass. Per-region OCR gives each widget its
+    label (button text, checkbox caption, etc.); the full-image pass picks up
+    any text that didn't fall inside a detection so it can be turned into a
+    standalone <code>TextView</code>.
+  </p>
+
+  <h3>Stage 3 &mdash; Merging &amp; margin parsing</h3>
+  <p>
+    <code>DetectionMerger</code> combines enriched widgets, remaining text
+    blocks, and image-wide OCR. Detections whose centre falls outside the
+    user-drawn guidelines are routed to <code>MarginAnnotationParser</code>,
+    which extracts free-text notes from each gutter and produces a
+    <code>Map&lt;widgetTag, annotation&gt;</code>.
+  </p>
+
+  <h3>Stage 4 &mdash; Layout assembly</h3>
+  <p>
+    <code>YoloToXmlConverter</code> takes the canvas detections, scales their
+    pixel boxes into a 360&times;640&nbsp;dp coordinate system with
+    <code>DetectionScaler</code>, attaches loose text via
+    <code>TextAssociator</code>, applies margin annotations through
+    <code>WidgetAnnotationMatcher</code> + <code>FuzzyAttributeParser</code>,
+    then hands the cleaned widget list to <code>LayoutTreeBuilder</code> and
+    <code>AndroidXmlGenerator</code> to emit a
+    <code>LinearLayout</code>-based XML tree wrapped in a
+    <code>ScrollView</code>. String literals extracted along the way are
+    returned separately so they can be merged into the project's
+    <code>strings.xml</code>.
+  </p>
+</section>
+
+<!-- ================================================================ -->
+<section id="architecture">
+  <h2>4. Technical Architecture</h2>
+
+  <h3>Source layout</h3>
+  <ul class="file-tree">
+    <li>sketch-to-ui-plugin/
+      <ul>
+        <li>build.gradle.kts &mdash; AGP application module, applies the CoGo plugin-builder</li>
+        <li>src/main/
+          <ul>
+            <li>AndroidManifest.xml &mdash; plugin metadata, permissions, ML Kit OCR dependency</li>
+            <li>assets/
+              <ul>
+                <li><strong>best_float32.tflite</strong> &mdash; bundled YOLO model (~24&nbsp;MB)</li>
+                <li>labels.txt &mdash; 13 widget class labels</li>
+                <li>icon_day.png, icon_night.png &mdash; plugin tray icons</li>
+              </ul>
+            </li>
+            <li>kotlin/com/appdevforall/sketchtoui/plugin/
+              <ul>
+                <li><strong>SketchToUiPlugin.kt</strong> &mdash; plugin entry point, menu, lifecycle</li>
+                <li>SketchToUiState.kt &mdash; static carrier for the target layout file</li>
+                <li>GeneratedStringsWriter.kt &mdash; merges new strings into the project's strings.xml</li>
+                <li>fragments/SketchToUiFragment.kt &mdash; the workspace UI</li>
+              </ul>
+            </li>
+            <li>java/org/appdevforall/codeonthego/computervision/
+              <ul>
+                <li>ui/ &mdash; <code>ZoomableImageView</code>, <code>GuidelinesView</code>, view model, UI state and events</li>
+                <li>domain/ &mdash; merger, scaler, OCR processor, annotation parser, XML converter, plus <code>usecase/</code>, <code>grammar/</code>, <code>parser/</code>, <code>model/</code>, <code>xml/</code></li>
+                <li>data/repository/ &mdash; <code>VisionRepositoryImpl</code>, <code>DrawableImportHelper</code></li>
+                <li>data/source/ &mdash; <code>YoloModelSource</code>, <code>OcrSource</code>, <code>MlKitInitializer</code></li>
+                <li>di/ &mdash; Koin module wiring</li>
+                <li>utils/ &mdash; bitmap, OCR, placeholder, XML, detection-visualisation helpers</li>
+              </ul>
+            </li>
+            <li>res/layout/ &mdash; <code>fragment_sketch_to_ui</code></li>
+            <li>res/drawable/ &mdash; icons for the menu, toolbar, and placeholder overlays</li>
+            <li>res/values/ &mdash; strings, colors, styles (with a <code>values-night</code> variant)</li>
+          </ul>
+        </li>
+        <li>src/test/ &mdash; JUnit tests for fuzzy attribute parsing, layout rendering, OCR sanitisation</li>
+      </ul>
+    </li>
+  </ul>
+
+  <h3>Key classes</h3>
+  <table>
+    <thead>
+      <tr><th>Class</th><th>Role</th><th>Layer</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>SketchToUiPlugin</code></td>
+        <td>Plugin entry. Implements <code>IPlugin</code>, <code>UIExtension</code>, <code>DocumentationExtension</code>. Owns the menu item and tooltip entry; routes activation to <code>IdeUIService.openPluginScreen</code>.</td>
+        <td>plugin</td>
+      </tr>
+      <tr>
+        <td><code>SketchToUiState</code></td>
+        <td>Static holder for the layout file path/name selected at activation time. Avoids passing state through fragment arguments.</td>
+        <td>plugin</td>
+      </tr>
+      <tr>
+        <td><code>SketchToUiFragment</code></td>
+        <td>Workspace UI. Wires the image picker, guideline overlay, detection runs, and confirmation dialogs.</td>
+        <td>plugin / ui</td>
+      </tr>
+      <tr>
+        <td><code>RunVisionUC</code></td>
+        <td>Orchestrates the full pipeline (detect &rarr; OCR &rarr; merge &rarr; margin-parse).</td>
+        <td>domain / usecase</td>
+      </tr>
+      <tr>
+        <td><code>GenerateXmlUC</code></td>
+        <td>Wraps <code>YoloToXmlConverter</code> to produce the (layoutXml, stringsXml) pair.</td>
+        <td>domain / usecase</td>
+      </tr>
+      <tr>
+        <td><code>VisionRepositoryImpl</code></td>
+        <td>Loads the TFLite model from assets, runs YOLO inference, releases native resources.</td>
+        <td>data</td>
+      </tr>
+      <tr>
+        <td><code>YoloToXmlConverter</code></td>
+        <td>Nine-step transform from raw detections to scaled, annotated, sorted UI elements ready to serialise.</td>
+        <td>domain</td>
+      </tr>
+      <tr>
+        <td><code>LayoutTreeBuilder</code> / <code>AndroidXmlGenerator</code></td>
+        <td>Build a <code>LinearLayout</code> tree from positioned widgets and serialise it to indented XML.</td>
+        <td>domain / xml</td>
+      </tr>
+      <tr>
+        <td><code>FuzzyAttributeParser</code></td>
+        <td>Maps free-text margin notes to canonical Android attribute=value pairs via fuzzy matching (FuzzyWuzzy).</td>
+        <td>domain / parser</td>
+      </tr>
+      <tr>
+        <td><code>GeneratedStringsWriter</code></td>
+        <td>Merges new <code>&lt;string&gt;</code> entries into the project's <code>app/src/main/res/values/strings.xml</code>.</td>
+        <td>plugin</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Coordinate system &amp; scaling</h3>
+  <p>
+    Detections enter the pipeline in source-image pixels. The
+    final output is always scaled to a logical 360&times;640&nbsp;dp canvas
+    (<code>TARGET_DP_WIDTH</code> &times; <code>TARGET_DP_HEIGHT</code> in
+    <code>SketchToUiFragment</code>), so the produced layout looks reasonable
+    regardless of the source image's dimensions. The horizontal guidelines
+    default to 20&nbsp;% and 80&nbsp;% of the image width and can be dragged by
+    the user before pressing Detect.
+  </p>
+
+  <h3>Build configuration</h3>
+  <table>
+    <tr><th>Setting</th><th>Value</th></tr>
+    <tr><td>Gradle plugin</td><td><code>com.itsaky.androidide.plugins.build</code></td></tr>
+    <tr><td>Compile / Target SDK</td><td>35</td></tr>
+    <tr><td>Min SDK</td><td>28</td></tr>
+    <tr><td>Java / Kotlin target</td><td>17</td></tr>
+    <tr><td>Plugin API</td><td><code>compileOnly</code> via <code>../libs/plugin-api.jar</code></td></tr>
+    <tr><td>ML runtime</td><td>LiteRT 1.0.1 (CPU + GPU delegate)</td></tr>
+    <tr><td>OCR</td><td>ML Kit text-recognition 16.0.1</td></tr>
+    <tr><td>DI</td><td>Koin 4.0.0</td></tr>
+    <tr><td>Fuzzy matching</td><td>FuzzyWuzzy 1.4.0</td></tr>
+    <tr><td>JSON</td><td>Gson 2.11.0</td></tr>
+    <tr><td>Output format</td><td><code>.cgp</code> package</td></tr>
+  </table>
+</section>
+
+<!-- ================================================================ -->
+<section id="integration">
+  <h2>5. Integration Points</h2>
+  <p>
+    Sketch to UI talks to the host IDE through three extension interfaces and
+    four services. It never modifies any IDE source &mdash; integration is
+    entirely through the plugin framework.
+  </p>
+
+  <h3>5.1 Plugin lifecycle (<code>IPlugin</code>)</h3>
+  <p>
+    The manifest declares the entry point:
+  </p>
+  <pre><code>&lt;meta-data android:name="plugin.main_class"
+           android:value="com.appdevforall.sketchtoui.plugin.SketchToUiPlugin" /&gt;</code></pre>
+  <p>
+    <code>initialize()</code> stores the <code>PluginContext</code> and caches
+    a static Android <code>Context</code> reference (used later by the
+    fragment to access plugin assets).
+    <code>activate()</code> / <code>deactivate()</code> are no-ops;
+    <code>dispose()</code> releases nothing on purpose &mdash; the native
+    TFLite resources are released after each detection in
+    <code>RunVisionUC</code>'s <code>finally</code> block.
+  </p>
+
+  <h3>5.2 Main-menu entry (<code>UIExtension</code>)</h3>
+  <p>
+    <code>getMainMenuItems()</code> contributes a single item:
+  </p>
+  <pre><code>MenuItem(
+    id = "sketch_to_ui",
+    title = "Sketch to UI",
+    icon = R.drawable.ic_computer_vision,
+    action = { openSketchToUiIfValid() },
+    tooltipTag = TOOLTIP_SKETCH_TO_UI
+).apply {
+    isEnabledProvider = { hasCurrentLayoutXml() }
+}</code></pre>
+  <p>
+    The <code>isEnabledProvider</code> is queried on every menu render so the
+    item greys out as soon as the user switches away from a layout XML file.
+    Side-menu items and toolbar actions are empty for this plugin.
+  </p>
+
+  <h3>5.3 Documentation tooltip (<code>DocumentationExtension</code>)</h3>
+  <p>
+    The plugin contributes one tooltip entry under category
+    <code>plugin_com.appdevforall.sketchtoui.plugin</code> with a summary
+    shown on hover and an HTML detail body shown in the help drawer.
+  </p>
+
+  <h3>5.4 Services consumed</h3>
+  <table>
+    <thead>
+      <tr><th>Service</th><th>Usage</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>IdeEditorService</code></td>
+        <td><code>getCurrentFile()</code> &mdash; check whether a layout XML is open before enabling the menu item, and read the editor's current file as a fallback target. <code>getLineCount()</code> / <code>getLineText()</code> / <code>replaceRange()</code> &mdash; rewrite the open buffer in place so the user sees the change without reloading.</td>
+      </tr>
+      <tr>
+        <td><code>IdeUIService</code></td>
+        <td><code>openPluginScreen()</code> &mdash; opens the workspace fragment as a full-screen plugin destination titled <em>Generate XML</em>.</td>
+      </tr>
+      <tr>
+        <td><code>IdeProjectService</code></td>
+        <td><code>getCurrentProject().rootDir</code> &mdash; locates the project root so the <code>GeneratedStringsWriter</code> can find <code>app/src/main/res/values/strings.xml</code>.</td>
+      </tr>
+      <tr>
+        <td><code>IdeFileService</code></td>
+        <td><code>readFile()</code> / <code>writeFile()</code> &mdash; reads the existing strings.xml, writes back the merged version, and falls back to writing the layout file directly if the editor buffer isn't the right target.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>5.5 Fragment infrastructure</h3>
+  <p>
+    <code>SketchToUiFragment</code> uses
+    <code>PluginFragmentHelper.getPluginInflater()</code> so resources bundled
+    inside the <code>.cgp</code> resolve at inflation time, and
+    <code>PluginFragmentHelper.getServiceRegistry()</code> to obtain IDE
+    services from inside the fragment lifecycle.
+  </p>
+
+  <h3>5.6 Permissions</h3>
+  <table>
+    <thead>
+      <tr><th>Permission</th><th>Why</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>filesystem.read</code></td><td>Read source images, the bundled model, project files</td></tr>
+      <tr><td><code>filesystem.write</code></td><td>Write generated layouts, update strings.xml, import drawable assets, save to Downloads</td></tr>
+      <tr><td><code>project.structure</code></td><td>Resolve the project root and the conventional <code>app/src/main/res/values/strings.xml</code> path</td></tr>
+      <tr><td><code>native.code</code></td><td>Execute the TFLite GPU delegate; without this the plugin cannot load the LiteRT native library</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Integration summary</h3>
+  <div class="diagram">
+                  Code on the Go IDE Host
+  +----------------------------------------------------+
+  |                                                    |
+  |  IdeEditorService  -- getCurrentFile / replaceRange|
+  |  IdeUIService      -- openPluginScreen(...)        |
+  |  IdeProjectService -- getCurrentProject().rootDir  |
+  |  IdeFileService    -- readFile / writeFile         |
+  |                                                    |
+  +--+--------------+----------------+-----------------+
+     |              |                |
+     v              v                v
+  editor       full-screen     project FS
+  buffer        fragment       (res/values/
+                                strings.xml)
+     ^              ^
+     |              |
+  +--+--------------+----------------------------------+
+  |             SketchToUiPlugin                       |
+  |                                                    |
+  |  UIExtension          --&gt; getMainMenuItems()       |
+  |  DocumentationExt.    --&gt; getTooltipEntries()      |
+  |  IPlugin              --&gt; initialize / activate    |
+  +-------------------+--------------------------------+
+                      |
+                      v
+              SketchToUiFragment
+              + RunVisionUC pipeline
+              + GeneratedStringsWriter</div>
+</section>
+
+<!-- ================================================================ -->
+<section id="deployment">
+  <h2>6. Deployment &amp; Usage</h2>
+
+  <h3>Building</h3>
+  <pre><code>cd sketch-to-ui-plugin
+./gradlew assemblePlugin</code></pre>
+  <p>
+    Produces <code>build/plugin/sketch-to-ui.cgp</code>. The
+    <code>libs/plugin-api.jar</code> at the repo root must exist; refresh it
+    with <code>../scripts/update-libs.sh</code> if you have just synced the
+    upstream CoGo source.
+  </p>
+
+  <h3>Installation</h3>
+  <ol>
+    <li>Open Code on the Go's Plugin Manager.</li>
+    <li>Import the <code>.cgp</code> file.</li>
+    <li>CoGo discovers <code>SketchToUiPlugin</code> via the manifest metadata
+        and activates it automatically. The "Sketch to UI" entry appears in
+        the main menu.</li>
+  </ol>
+
+  <h3>Generating a layout</h3>
+  <ol>
+    <li>Open the layout file you want to overwrite (e.g.
+        <code>app/src/main/res/layout/activity_main.xml</code>).</li>
+    <li>Activate the <strong>Sketch to UI</strong> menu item. The workspace
+        opens.</li>
+    <li>Tap the central image area and pick a photo or screenshot.</li>
+    <li>Drag the two vertical guidelines so the canvas (the part of the image
+        that represents the screen) is between them and any margin
+        annotations are outside.</li>
+    <li>Tap <strong>Detect</strong>. Status messages cycle through model
+        load, YOLO, OCR, merge, and XML generation. Detected boxes are drawn
+        over the image when the run finishes.</li>
+    <li>Tap any green <em>image placeholder</em> box to bind a drawable to
+        it. The picked image is imported into <code>res/drawable</code> and
+        the layout regenerates with a reference to it. Tap the small delete
+        icon on a placeholder to clear that binding and remove the imported
+        file.</li>
+    <li>Tap <strong>Update</strong> and confirm to overwrite the target
+        layout file. The plugin also appends any extracted
+        <code>&lt;string&gt;</code> entries to your project's
+        <code>strings.xml</code>, then returns you to the editor.</li>
+    <li>Alternatively, tap <strong>Save</strong> to write the layout XML to
+        the device's Downloads folder without touching the project.</li>
+  </ol>
+
+  <h3>Margin annotation conventions</h3>
+  <p>
+    Margin notes are free-text but the fuzzy parser recognises Android
+    attribute names. For example, writing <code>T-1: hint Email Address</code>
+    in the right margin and drawing the <code>T-1</code> tag next to an
+    <code>EditText</code> on the canvas will produce
+    <code>android:hint="Email Address"</code> on that widget. See the
+    <code>FuzzyAttributeParserTest</code> in
+    <code>src/test/</code> for the supported attribute vocabulary.
+  </p>
+</section>
+
+<!-- ================================================================ -->
+<section id="requirements">
+  <h2>7. Technical Requirements</h2>
+  <table>
+    <tr><th>Requirement</th><th>Value</th></tr>
+    <tr><td>Min Android version</td><td>API 28 (Android 9.0)</td></tr>
+    <tr><td>Target SDK</td><td>35</td></tr>
+    <tr><td>Min IDE version</td><td>1.0.0</td></tr>
+    <tr><td>Permissions</td><td><code>filesystem.read</code>, <code>filesystem.write</code>, <code>project.structure</code>, <code>native.code</code></td></tr>
+    <tr><td>Network access</td><td>Not required &mdash; all inference runs on-device</td></tr>
+    <tr><td>Installed model size</td><td>~24&nbsp;MB (bundled in assets)</td></tr>
+    <tr><td>GPU acceleration</td><td>Used when available via LiteRT GPU delegate</td></tr>
+  </table>
+</section>
+
+<!-- ================================================================ -->
+<section id="benefits">
+  <h2>8. Key Benefits</h2>
+  <ul>
+    <li><strong>From idea to running screen in one step.</strong> A photo of a
+        whiteboard becomes a real, editable layout XML file inside the
+        project &mdash; no transcription pass.</li>
+    <li><strong>Annotations on the sketch itself.</strong> Tag-and-margin
+        notation lets the designer carry intent that a pure picture can't
+        express, without forcing the developer to retype it.</li>
+    <li><strong>Fully on-device.</strong> No network calls and no third-party
+        service &mdash; the YOLO model and OCR engine both run locally, so
+        the plugin works offline and keeps sketches private.</li>
+    <li><strong>Round-trips into the project.</strong> Generated strings are
+        merged into <code>strings.xml</code> and image placeholders can be
+        bound to real drawables that get imported into <code>res/drawable</code>,
+        so the result is wired up to the rest of the project, not a
+        stand-alone snippet.</li>
+    <li><strong>Comprehensive plugin-API example.</strong> Demonstrates main
+        menu contribution, full-screen plugin destinations, documentation
+        tooltips, multiple IDE services, fragment-based UI with
+        <code>PluginFragmentHelper</code>, asset packaging, native library
+        permissions, and on-device ML &mdash; making it a substantial
+        reference for non-trivial plugins.</li>
+  </ul>
+</section>
+
+<footer>
+  Sketch to UI Plugin Documentation &middot; Version 1.0.0 &middot; com.appdevforall.sketchtoui.plugin
+</footer>
+
+</body>
+</html>
