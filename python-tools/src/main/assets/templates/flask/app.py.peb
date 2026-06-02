@@ -1,0 +1,33 @@
+import os
+from flask import Flask, render_template, jsonify
+
+app = Flask("${{APP_NAME}}")
+app.config.from_object("config")
+
+
+@app.route("/")
+def index():
+    return render_template("index.html", title="${{APP_NAME}}")
+
+
+@app.route("/about")
+def about():
+    return render_template("about.html", title="About")
+
+
+@app.route("/api/health")
+def health():
+    return jsonify({"status": "ok", "app": "${{APP_NAME}}"})
+
+
+@app.errorhandler(404)
+def not_found(e):
+    return render_template("404.html", title="Not Found"), 404
+
+
+if __name__ == "__main__":
+    app.run(
+        host="0.0.0.0",
+        port=int(os.environ.get("PORT", ${{PORT}})),
+        debug=app.config.get("DEBUG", True),
+    )

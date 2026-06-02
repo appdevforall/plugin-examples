@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="hero">
+    <h1>${{APP_NAME}}</h1>
+    <p>Your Flask app is running.</p>
+</section>
+
+<section class="features">
+    <div class="card">
+        <h3>Routes</h3>
+        <p>Pre-configured pages and API endpoint ready to extend.</p>
+    </div>
+    <div class="card">
+        <h3>Templates</h3>
+        <p>Jinja2 template inheritance with a shared base layout.</p>
+    </div>
+    <div class="card">
+        <h3>Static Files</h3>
+        <p>CSS served from the static directory.</p>
+    </div>
+</section>
+{% endblock %}
