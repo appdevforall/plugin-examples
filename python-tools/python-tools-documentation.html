@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Python Tools Plugin Documentation</title>
+<style>
+  :root {
+    --bg: #fdfdfd;
+    --fg: #1a1a1a;
+    --accent: #0f766e;
+    --accent-light: #e6f5f3;
+    --border: #d0d7de;
+    --code-bg: #f4f6f8;
+    --table-stripe: #f8fafb;
+    --shadow: rgba(0,0,0,0.06);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--fg);
+    background: var(--bg);
+    line-height: 1.6;
+    max-width: 52rem;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+  }
+  header { border-bottom: 3px solid var(--accent); padding-bottom: 1.2rem; margin-bottom: 2rem; }
+  header h1 { font-size: 2rem; color: var(--accent); }
+  header p.subtitle { color: #555; margin-top: 0.3rem; }
+  header .meta { font-size: 0.85rem; color: #777; margin-top: 0.5rem; }
+  nav { background: var(--accent-light); border: 1px solid var(--border); border-radius: 6px; padding: 1rem 1.5rem; margin-bottom: 2.5rem; }
+  nav h2 { font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); margin-bottom: 0.5rem; }
+  nav ol { padding-left: 1.3rem; }
+  nav li { margin: 0.25rem 0; }
+  nav a { color: var(--accent); text-decoration: none; }
+  nav a:hover { text-decoration: underline; }
+  section { margin-bottom: 2.5rem; }
+  h2 { font-size: 1.4rem; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; margin-bottom: 1rem; }
+  h3 { font-size: 1.1rem; margin: 1.2rem 0 0.5rem; }
+  p, li { margin-bottom: 0.5rem; }
+  ul, ol { padding-left: 1.4rem; }
+  code {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    background: var(--code-bg);
+    padding: 0.15em 0.35em;
+    border-radius: 3px;
+    font-size: 0.9em;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1rem 1.2rem;
+    overflow-x: auto;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    margin: 0.8rem 0 1rem;
+  }
+  pre code { background: none; padding: 0; }
+  table { width: 100%; border-collapse: collapse; margin: 0.8rem 0 1rem; font-size: 0.95rem; }
+  th, td { text-align: left; padding: 0.55rem 0.8rem; border: 1px solid var(--border); }
+  th { background: var(--accent-light); font-weight: 600; }
+  tr:nth-child(even) td { background: var(--table-stripe); }
+  .diagram {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1.2rem;
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 0.85rem;
+    line-height: 1.55;
+    overflow-x: auto;
+    white-space: pre;
+    margin: 0.8rem 0 1rem;
+  }
+  .callout {
+    background: var(--accent-light);
+    border-left: 4px solid var(--accent);
+    padding: 0.8rem 1rem;
+    border-radius: 0 6px 6px 0;
+    margin: 1rem 0;
+  }
+  .file-tree { list-style: none; padding-left: 0; font-family: monospace; font-size: 0.9rem; }
+  .file-tree ul { list-style: none; padding-left: 1.5rem; }
+  footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: 0.85rem; color: #777; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Python Tools</h1>
+  <p class="subtitle">Python and Flask project templates with a native run experience for Code on the Go</p>
+  <div class="meta">Version 1.0.0 &middot; Author: App Dev For All &middot; Package: <code>com.appdevforall.python.plugin</code></div>
+</header>
+
+<nav>
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#overview">Executive Overview</a></li>
+    <li><a href="#functionality">Core Functionality</a></li>
+    <li><a href="#architecture">Technical Architecture</a></li>
+    <li><a href="#integration">Integration Points</a></li>
+    <li><a href="#deployment">Deployment &amp; Usage</a></li>
+    <li><a href="#benefits">Key Benefits</a></li>
+  </ol>
+</nav>
+
+<!-- ================================================================ -->
+<section id="overview">
+  <h2>1. Executive Overview</h2>
+  <p>
+    Python Tools is a Code on the Go plugin that adds two new project types,
+    a <strong>Flask web app</strong> and a minimal <strong>Python starter</strong>,
+    and makes them runnable on the device. It is a reference example of how a
+    plugin adds a language and its project templates.
+  </p>
+  <p>
+    When the open project belongs to the Python domain, the plugin hides the
+    built-in Gradle build actions and contributes Python-native ones in their
+    place: <em>Run app</em>, <em>Run current file</em>,
+    <em>Install requirements</em>, and <em>Run tests</em>. Projects that are
+    not Python (anything carrying a Gradle build file) are left untouched.
+  </p>
+  <p>
+    On activation the plugin also ensures a Python interpreter is available.
+    If <code>python</code> is not on the path, it installs one, so a fresh
+    device can create and run a Python project with no manual setup.
+  </p>
+  <div class="callout">
+    Only light testing has been done; use at your own risk. Customer support
+    cannot provide help with this plugin.
+  </div>
+</section>
+
+<!-- ================================================================ -->
+<section id="functionality">
+  <h2>2. Core Functionality</h2>
+
+  <h3>Project templates</h3>
+  <p>
+    The plugin registers two templates with the host's template service.
+    Both render from <code>.peb</code> (Pebble) assets bundled in the
+    <code>.cgp</code>:
+  </p>
+  <ul>
+    <li><strong>Python Flask App:</strong> a Flask web app with routes, HTML
+        templates, static files, a configurable port, and basic error handling
+        (<code>app.py</code>, <code>config.py</code>, <code>templates/</code>,
+        <code>static/</code>, <code>requirements.txt</code>).</li>
+    <li><strong>Python Starter:</strong> a minimal project with a single
+        <code>main.py</code> entry point and a <code>requirements.txt</code>.</li>
+  </ul>
+
+  <h3>Python-native build actions</h3>
+  <p>
+    While a Python project is open, the plugin contributes the following
+    actions. The most-used action leads, so it takes the prime slot:
+  </p>
+  <table>
+    <thead><tr><th>Action</th><th>Runs</th><th>When</th></tr></thead>
+    <tbody>
+      <tr><td>Run app</td><td>The project entry point (<code>app.py</code> &rarr; <code>main.py</code> &rarr; <code>manage.py</code> &rarr; <code>__main__.py</code> &rarr; <code>wsgi.py</code>)</td><td>Always</td></tr>
+      <tr><td>Run current file</td><td><code>python &lt;focused file&gt;</code></td><td>When a <code>.py</code> file is focused</td></tr>
+      <tr><td>Install requirements</td><td><code>pip install -r requirements.txt</code></td><td>Always</td></tr>
+      <tr><td>Run tests</td><td><code>pytest</code> (installed on demand)</td><td>Always</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Quality-of-life behaviour</h3>
+  <ul>
+    <li><strong>Live output.</strong> Commands run with
+        <code>PYTHONUNBUFFERED=1</code>, so app output and pip progress stream
+        into the build panel instead of appearing only at exit.</li>
+    <li><strong>Auto-install on a missing import.</strong> If a run fails with
+        <code>ModuleNotFoundError</code> or <code>ImportError</code>, the plugin
+        notifies the user and runs <code>pip install -r requirements.txt</code>.</li>
+    <li><strong>Clean cancel.</strong> Cancelling a run stops the whole
+        process tree, including a Flask reloader child, so the server releases
+        its port.</li>
+  </ul>
+</section>
+
+<!-- ================================================================ -->
+<section id="architecture">
+  <h2>3. Technical Architecture</h2>
+  <p>
+    The plugin is two Kotlin files plus its assets. It implements
+    <code>IPlugin</code> for lifecycle and <code>BuildActionExtension</code>
+    for the build actions, and reaches the host through services it looks up
+    at <code>initialize()</code>.
+  </p>
+
+  <ul class="file-tree">
+    <li>python-tools/
+      <ul>
+        <li>src/main/kotlin/&hellip;/plugin/
+          <ul>
+            <li>PythonToolsPlugin.kt (templates, build actions, interpreter bootstrap)</li>
+            <li>PythonDomain.kt (Python-project detection)</li>
+          </ul>
+        </li>
+        <li>src/main/assets/templates/ (flask/ and starter/ <code>.peb</code> sources)</li>
+        <li>src/main/res/drawable/ (build-action icons)</li>
+      </ul>
+    </li>
+  </ul>
+
+  <h3>Domain gating</h3>
+  <p>
+    <code>PythonDomain</code> decides whether a directory is a Python project.
+    A Gradle marker disqualifies it, so a stray script inside a Java or Kotlin
+    project never steals the Gradle build actions:
+  </p>
+  <pre><code>private fun detect(root: File): Boolean {
+    if (GRADLE_MARKERS.any { File(root, it).exists() }) return false
+    if (File(root, "requirements.txt").exists()) return true
+    if (File(root, "pyproject.toml").exists()) return true
+    return root.listFiles { f -&gt; f.isFile &amp;&amp; f.name.endsWith(".py") }
+        ?.isNotEmpty() == true
+}</code></pre>
+  <p>
+    Both <code>toolbarActionsToHide()</code> and <code>getBuildActions()</code>
+    gate on this check, returning an empty set or list for non-Python projects.
+  </p>
+
+  <h3>Hiding the Gradle actions</h3>
+  <p>
+    The host allows only a fixed set of build actions to be hidden. The plugin
+    requests that set when a Python project is open:
+  </p>
+  <pre><code>override fun toolbarActionsToHide(): Set&lt;String&gt; =
+    if (isPythonProjectOpen()) ToolbarActionIds.BUILD_HIDEABLE else emptySet()</code></pre>
+
+  <h3>Process lifecycle</h3>
+  <p>
+    Commands are shell commands (<code>sh -c</code>) run through
+    <code>IdeCommandService</code>. The entry point is launched with
+    <code>exec</code>, so the Python process, not a wrapper shell, is the one
+    the host tracks. To make cancel tear down a Flask reloader's worker child,
+    the plugin ships a small <code>sitecustomize.py</code> on
+    <code>PYTHONPATH</code> that sets the kernel parent-death signal:
+  </p>
+  <pre><code># sitecustomize.py (installed into the plugin dir, added to PYTHONPATH)
+import ctypes, signal
+ctypes.CDLL("libc.so").prctl(1, signal.SIGKILL)  # PR_SET_PDEATHSIG</code></pre>
+  <p>
+    When the host kills the tracked process, the kernel kills its children too,
+    freeing the server's port.
+  </p>
+</section>
+
+<!-- ================================================================ -->
+<section id="integration">
+  <h2>4. Integration Points</h2>
+  <p>
+    Every host touch-point is an interface from <code>plugin-api.jar</code>.
+    The plugin declares the permissions
+    <code>filesystem.read</code>, <code>filesystem.write</code>,
+    <code>system.commands</code>, and <code>project.structure</code>.
+  </p>
+  <table>
+    <thead><tr><th>Extension / Service</th><th>Used for</th></tr></thead>
+    <tbody>
+      <tr><td><code>IPlugin</code></td><td>Lifecycle: <code>initialize</code>, <code>activate</code>, <code>deactivate</code>, <code>dispose</code>.</td></tr>
+      <tr><td><code>BuildActionExtension</code></td><td>Contribute build actions and hide the Gradle ones; receive start and complete callbacks.</td></tr>
+      <tr><td><code>IdeTemplateService</code></td><td>Build and register the Flask and Starter templates from assets.</td></tr>
+      <tr><td><code>IdeProjectService</code></td><td>Resolve the open project's root for domain detection.</td></tr>
+      <tr><td><code>IdeEditorService</code></td><td>Read the focused file for <em>Run current file</em>.</td></tr>
+      <tr><td><code>IdeCommandService</code></td><td>Run shell commands (run, pip, pytest, interpreter install).</td></tr>
+      <tr><td><code>IdeUIService</code></td><td>Surface notices (install prompts, run failures, stop notices).</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ================================================================ -->
+<section id="deployment">
+  <h2>5. Deployment &amp; Usage</h2>
+  <p>Build the installable plugin from the plugin folder:</p>
+  <pre><code>cd python-tools
+./gradlew assemblePlugin</code></pre>
+  <p>
+    The resulting <code>.cgp</code> lands under <code>build/plugin/</code>.
+    Install it from inside Code on the Go via the Plugin Manager. Then:
+  </p>
+  <ol>
+    <li>Create a project from <strong>Python Flask App</strong> or
+        <strong>Python Starter</strong> in the new-project picker.</li>
+    <li>Open it. The toolbar swaps to the Python build actions.</li>
+    <li>Tap <strong>Run app</strong>. On first run the plugin installs Python
+        if needed, then starts the app; output streams into the build panel.</li>
+  </ol>
+</section>
+
+<!-- ================================================================ -->
+<section id="benefits">
+  <h2>6. Key Benefits</h2>
+  <ul>
+    <li><strong>Adds a language end to end.</strong> Covers the full path from
+        project templates, through a domain check, to a language-native set of
+        build actions.</li>
+    <li><strong>Domain-safe gating.</strong> A reusable pattern for acting only
+        on the plugin's own project type and leaving other projects untouched.</li>
+    <li><strong>On-device interpreter setup.</strong> Installs the runtime when
+        it is missing, so the feature works on a fresh device.</li>
+    <li><strong>Reliable process lifecycle.</strong> A self-contained technique
+        for making cancel stop a server that forks a child.</li>
+  </ul>
+</section>
+
+<footer>
+  Python Tools Plugin Documentation &middot; Version 1.0.0 &middot; com.appdevforall.python.plugin
+</footer>
+
+</body>
+</html>

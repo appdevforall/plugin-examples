@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section>
+    <h1>About</h1>
+    <p>${{APP_NAME}} is a Flask web application.</p>
+    <p>Edit this page at <code>templates/about.html</code>.</p>
+</section>
+{% endblock %}
