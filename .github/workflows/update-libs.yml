@@ -163,7 +163,7 @@ jobs:
         env:
           REMOTE: ${{ vars.GREENGEEKS_SSH_USER }}@${{ vars.GREENGEEKS_SSH_HOST }}
         run: |
-          names=$(cd deploy-staging && ls *.cgp)
+          names=$(cd deploy-staging && ls *.cgp | tr '\n' ' ')
           remote_sums=$(ssh "$REMOTE" "cd $PLUGINS_REMOTE_PATH && md5sum $names")
           failures=0
           while IFS= read -r line; do
