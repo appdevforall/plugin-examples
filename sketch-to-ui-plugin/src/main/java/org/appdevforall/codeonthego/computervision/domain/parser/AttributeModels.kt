@@ -88,7 +88,21 @@ enum class AttributeKey(
     CONTENT_DESCRIPTION("android:contentDescription", listOf("contentdescription", "content_description")),
 
     TEXT_SIZE("android:textSize", listOf("textsize", "text_size"), ValueType.SP_DIMENSION),
-    TEXT_COLOR("android:textColor", listOf("textcolor", "text_color", "color", "text_colar", "textcolar"), ValueType.COLOR),
+    TEXT_COLOR(
+        "android:textColor",
+        listOf(
+            "textcolor",
+            "text_color",
+            "text_calar",
+            "text_colar",
+            "text_colour",
+            "textcalar",
+            "textcolar",
+            "textcolour",
+            "color"
+        ),
+        ValueType.COLOR
+    ),
     TEXT_STYLE("android:textStyle", listOf("textstyle", "text_style"), ValueType.TEXT_STYLE),
     TEXT_ALIGNMENT("android:textAlignment", listOf("textalignment", "text_alignment")),
     TEXT_ALL_CAPS("android:textAllCaps", listOf("textallcaps", "text_all_caps")),

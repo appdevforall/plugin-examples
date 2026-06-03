@@ -1,6 +1,5 @@
 package org.appdevforall.codeonthego.computervision.domain
 
-import android.graphics.Rect
 import org.appdevforall.codeonthego.computervision.domain.model.ScaledBox
 import org.appdevforall.codeonthego.computervision.utils.TextCleaner.cleanTextPreservingLeadingO
 import org.appdevforall.codeonthego.computervision.utils.TextCleaner.cleanTextStrippingLeadingO
@@ -15,59 +14,52 @@ object TextAssociator {
     private const val OVERLAP_THRESHOLD = 0.6
 
     fun assignTextToParents(parents: List<ScaledBox>, texts: List<ScaledBox>, allBoxes: List<ScaledBox>): List<ScaledBox> {
-        val consumedTexts = mutableSetOf<ScaledBox>()
-        val updatedParents = mutableMapOf<ScaledBox, ScaledBox>()
+        val consumedTexts = mutableListOf<ScaledBox>()
+        val updatedParents = mutableListOf<Pair<ScaledBox, ScaledBox>>()
 
         for (parent in parents) {
             texts.firstOrNull { text ->
-                !consumedTexts.contains(text) &&
-                    Rect(parent.rect).let { intersection ->
-                        intersection.intersect(text.rect) &&
-                            (intersection.width() * intersection.height()).let { intersectionArea ->
-                                val textArea = text.w * text.h
-                                textArea > 0 && (intersectionArea.toFloat() / textArea.toFloat()) > OVERLAP_THRESHOLD
-                            }
-                    }
+                !consumedTexts.any { it.sameGeometryAs(text) } &&
+                    textOverlapRatio(parent, text) > OVERLAP_THRESHOLD
             }?.let {
-                updatedParents[parent] = parent.copy(text = it.text)
+                updatedParents.add(parent to parent.copy(text = it.text))
                 consumedTexts.add(it)
             }
         }
 
         return allBoxes.mapNotNull { box ->
             when {
-                consumedTexts.contains(box) -> null
-                updatedParents.containsKey(box) -> updatedParents[box]
-                else -> box
+                consumedTexts.any { it.sameGeometryAs(box) } -> null
+                else -> updatedParents.firstOrNull { it.first.sameGeometryAs(box) }?.second ?: box
             }
         }
     }
 
     fun assignNearbyTextToWidgets(boxes: List<ScaledBox>, availableTexts: List<ScaledBox>): List<ScaledBox> {
-        val consumedTexts = mutableSetOf<ScaledBox>()
-        val updatedWidgets = mutableMapOf<ScaledBox, ScaledBox>()
+        val consumedTexts = mutableListOf<ScaledBox>()
+        val updatedWidgets = mutableListOf<Pair<ScaledBox, ScaledBox>>()
 
         val labelableWidgets = boxes.filter { isLabelableWidget(it) }.sortedWith(compareBy({ it.y }, { it.x }))
 
         for (widget in labelableWidgets) {
             val nearbyText = availableTexts
                 .asSequence()
-                .filter { it !in consumedTexts }
+                .filter { candidate -> consumedTexts.none { it.sameGeometryAs(candidate) } }
                 .filter { text -> widget.isVerticallyAlignedWith(text, tolerance = max(widget.h * 2.5, 40.0)) }
                 .minByOrNull { text -> widget.calculateProximityScoreTo(text) }
 
             if (nearbyText != null) {
-                val finalText = cleanWidgetText(widget, nearbyText.text)
-                updatedWidgets[widget] = widget.copy(text = finalText)
-                consumedTexts.add(nearbyText)
+                val labelFragments = collectLabelFragments(widget, nearbyText, availableTexts, consumedTexts)
+                val finalText = cleanWidgetText(widget, labelFragments.joinToString(" ") { it.text })
+                updatedWidgets.add(widget to widget.copy(text = finalText))
+                consumedTexts.addAll(labelFragments)
             }
         }
 
         return boxes.mapNotNull { box ->
-            when (box) {
-                in consumedTexts -> null
-                in updatedWidgets -> updatedWidgets[box]
-                else -> box
+            when {
+                consumedTexts.any { it.sameGeometryAs(box) } -> null
+                else -> updatedWidgets.firstOrNull { it.first.sameGeometryAs(box) }?.second ?: box
             }
         }
     }
@@ -88,19 +80,69 @@ object TextAssociator {
         }
     }
 
+    private fun collectLabelFragments(
+        widget: ScaledBox,
+        anchor: ScaledBox,
+        availableTexts: List<ScaledBox>,
+        consumedTexts: List<ScaledBox>
+    ): List<ScaledBox> {
+        val lineTolerance = max(anchor.h, widget.h).coerceAtLeast(12)
+        val maxGap = max(widget.h * 2, 28)
+
+        val fragments = mutableListOf(anchor)
+        var previous = anchor
+
+        while (true) {
+            val next = availableTexts
+                .asSequence()
+                .filter { candidate -> consumedTexts.none { it.sameGeometryAs(candidate) } }
+                .filter { candidate -> fragments.none { it.sameGeometryAs(candidate) } }
+                .filter { abs(it.centerY - anchor.centerY) <= lineTolerance }
+                .filter { it.x >= previous.x + previous.w }
+                .filter { it.x - (previous.x + previous.w) <= maxGap }
+                .minByOrNull { it.x }
+                ?: break
+
+            fragments.add(next)
+            previous = next
+        }
+
+        return fragments.sortedBy { it.x }
+    }
+
     private fun ScaledBox.isVerticallyAlignedWith(other: ScaledBox, tolerance: Double): Boolean {
         return abs(this.centerY - other.centerY) < tolerance
     }
 
     private fun ScaledBox.calculateProximityScoreTo(other: ScaledBox): Double {
-        val dx = this.rect.horizontalDistanceTo(other.rect).toDouble()
+        val dx = this.horizontalDistanceTo(other).toDouble()
         val dy = abs(this.centerY - other.centerY).toDouble()
         return (dx * dx) + (dy * dy * 5)
     }
 
-    private fun Rect.horizontalDistanceTo(other: Rect): Int = when {
-        this.right < other.left -> other.left - this.right
-        this.left > other.right -> this.left - other.right
+    private fun textOverlapRatio(parent: ScaledBox, text: ScaledBox): Float {
+        val intersectionWidth = minOf(parent.x + parent.w, text.x + text.w) - maxOf(parent.x, text.x)
+        val intersectionHeight = minOf(parent.y + parent.h, text.y + text.h) - maxOf(parent.y, text.y)
+        if (intersectionWidth <= 0 || intersectionHeight <= 0) return 0f
+
+        val textArea = text.w * text.h
+        if (textArea <= 0) return 0f
+
+        return (intersectionWidth * intersectionHeight).toFloat() / textArea.toFloat()
+    }
+
+    private fun ScaledBox.horizontalDistanceTo(other: ScaledBox): Int = when {
+        this.x + this.w < other.x -> other.x - (this.x + this.w)
+        this.x > other.x + other.w -> this.x - (other.x + other.w)
         else -> 0
+    }
+
+    private fun ScaledBox.sameGeometryAs(other: ScaledBox): Boolean {
+        return label == other.label &&
+            text == other.text &&
+            x == other.x &&
+            y == other.y &&
+            w == other.w &&
+            h == other.h
     }
 }

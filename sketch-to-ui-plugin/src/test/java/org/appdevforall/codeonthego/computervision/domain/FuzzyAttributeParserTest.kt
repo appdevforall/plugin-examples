@@ -91,6 +91,69 @@ class FuzzyAttributeParserTest {
     }
 
     @Test
+    fun `textColor black is normalized to valid color`() {
+        val annotation = "textcolor: black | width: 100dp"
+        val result = FuzzyAttributeParser.parse(annotation, "CheckBox")
+
+        assertEquals("#000000", result["android:textColor"])
+    }
+
+    @Test
+    fun `textColor OCR key variants keep black as local color value`() {
+        val annotations = listOf(
+            "textcolor: black",
+            "text color: black",
+            "text-color: black",
+            "text_color: black",
+            "textcalar: black",
+            "text calar:black",
+            "text calar: black",
+            "id: cb_group_1 textcolor: black",
+            "id: co group1 text: Sclect.optian textcalar: black",
+            "layout-width: 200dp layout-height: wrap-content id: cb_group_1 text: select_option textcolor: black"
+        )
+
+        annotations.forEach { annotation ->
+            val result = FuzzyAttributeParser.parse(annotation, "CheckBox")
+
+            assertEquals("Failed for annotation: $annotation", "#000000", result["android:textColor"])
+            assertTrue("textColor must not use group1 for annotation: $annotation", result["android:textColor"] != "group1")
+        }
+    }
+
+    @Test
+    fun `invalid textColor is omitted`() {
+        val annotation = "textcolor: group1 | width: 100dp"
+        val result = FuzzyAttributeParser.parse(annotation, "CheckBox")
+
+        assertNull(result["android:textColor"])
+        assertEquals("100dp", result["android:layout_width"])
+    }
+
+    @Test
+    fun `invalid textColor OCR variants are omitted`() {
+        val annotations = listOf(
+            "textcolor: group1",
+            "textcalar: group1"
+        )
+
+        annotations.forEach { annotation ->
+            val result = FuzzyAttributeParser.parse(annotation, "CheckBox")
+
+            assertNull("Expected invalid color to be omitted for annotation: $annotation", result["android:textColor"])
+        }
+    }
+
+    @Test
+    fun `android and project color resources are valid text colors`() {
+        val androidColor = FuzzyAttributeParser.parse("textcolor: @android:color/black | width: 100dp", "CheckBox")
+        val projectColor = FuzzyAttributeParser.parse("textcolor: @color/primary_text | width: 100dp", "CheckBox")
+
+        assertEquals("@android:color/black", androidColor["android:textColor"])
+        assertEquals("@color/primary_text", projectColor["android:textColor"])
+    }
+
+    @Test
     fun `OCR garbled keys are fuzzy matched via delimited`() {
         val annotation = "wldth: 100dp | hejght: 80dp"
         val result = FuzzyAttributeParser.parse(annotation, "Button")
