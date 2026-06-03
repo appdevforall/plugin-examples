@@ -1,0 +1,58 @@
+package ${{PACKAGE_NAME}}
+
+import android.database.sqlite.SQLiteDatabase
+import io.pebbletemplates.pebble.extension.Function
+import io.pebbletemplates.pebble.template.EvaluationContext
+import io.pebbletemplates.pebble.template.PebbleTemplate
+
+class QueryDbFunction : Function {
+
+  override fun getArgumentNames(): List<String> = listOf()
+
+  override fun execute(
+      args: MutableMap<String, Any?>,
+      self: PebbleTemplate,
+      context: EvaluationContext,
+      lineNumber: Int,
+  ): Any? {
+    val studentId: String? = context.getVariable("STUDENT_ID").toString()
+    val result: String
+    val dbPath = "/data/data/com.itsaky.androidide/databases/documentation.db"
+    val query =
+        """
+SELECT s.firstName || ' ' || s.lastName || ', ' ||
+c.className || ', ' ||
+se.sectionName || ', ' ||
+p.lastName
+FROM PUCC_Students AS s,
+PUCC_Classes AS c,
+PUCC_Sections  AS se,
+PUCC_Professors  AS p,
+PUCC_StudentAssignments  AS sa,
+PUCC_ProfessorAssignments AS pa
+WHERE
+pa.professorID = p.id
+AND pa.sectionID   = se.id
+AND s.id   = '$studentId'
+AND sa.sectionID   = se.id
+AND se.classID     = c.id
+AND s.firstName    = 'Jane'
+AND s.lastName    = 'Brown'
+"""
+    SQLiteDatabase.openDatabase(dbPath, null, SQLiteDatabase.OPEN_READONLY).use { db ->
+      db.rawQuery(query, null).use { cursor ->
+        val rows = cursor.count
+        when (rows) {
+          0 -> result = "Error: No record found for studentId - $studentId"
+          1 -> {
+            cursor.moveToNext()
+            result = cursor.getString(0)
+          }
+          else -> result = "Error: Found muliple records ($rows) for studentId $studentId"
+        }
+      }
+
+      return result
+    }
+  }
+}

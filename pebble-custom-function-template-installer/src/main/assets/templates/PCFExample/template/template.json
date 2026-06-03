@@ -1,0 +1,40 @@
+ {
+    "name": "PCF Eample Activty",
+    "description": "Creates a Pebble Custom Function example activity",
+  "tooltipTag": "template.pcfexample.activity",
+    "version": "0.1",
+    "parameters": {
+        "required": {
+            "appName": {identifier: "APP_NAME"},
+            "packageName":  {identifier: "PACKAGE_NAME"},
+            "saveLocation":  {identifier: "SAVE_LOCATION"}
+        },
+        "optional": {
+            "language": {identifier: "LANGUAGE"},
+            "minsdk":  {identifier: "MIN_SDK"}
+        },
+	"user": {
+	    "text":
+	    [
+		{"label":"StudentId", "identifier":"STUDENT_ID", "default":"0663864"},
+		{"label":"StudentName", "identifier":"STUDENT_NAME", "default":"Your Name Here"}
+	    ],
+	    "checkbox":
+	            [
+                {"label":"Include Reverse Sample Code","identifier":"REVERSE_SAMPLE", "default": true}, 
+                {"label":"Include QueryDB Sample Code","identifier":"QUERYDB_SAMPLE", "default": true}, 
+                {"label":"Include QueryURL Sample Code","identifier":"QUERYURL_SAMPLE", "default": true} 
+            ]
+        }
+    },
+    "system": {
+      "agpVersion": { "identifier": "AGP_VERSION" },
+      "kotlinVersion": { "identifier": "KOTLIN_VERSION" },
+      "gradleVersion": { "identifier": "GRADLE_VERSION" },
+      "compileSdk": { "identifier": "COMPILE_SDK" },
+      "targetSdk": { "identifier": "TARGET_SDK" },
+      "javaSourceCompat": { "identifier": "JAVA_SOURCE_COMPAT" },
+      "javaTargetCompat": { "identifier": "JAVA_TARGET_COMPAT" },
+      "javaTarget": { "identifier": "JAVA_TARGET" }
+    }
+}

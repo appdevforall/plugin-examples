@@ -1,0 +1,21 @@
+package ${{PACKAGE_NAME}}
+
+import io.pebbletemplates.pebble.extension.Function
+import io.pebbletemplates.pebble.template.PebbleTemplate
+import io.pebbletemplates.pebble.template.EvaluationContext
+
+class ReverseFunction : Function {
+
+    override fun getArgumentNames(): List<String> =
+        listOf("input")
+
+    override fun execute(
+        args: MutableMap<String, Any?>,
+        self: PebbleTemplate,
+        context: EvaluationContext,
+        lineNumber: Int
+    ): Any? {
+        val input = args["input"]?.toString() ?: return ""
+        return input.reversed()
+    }
+}

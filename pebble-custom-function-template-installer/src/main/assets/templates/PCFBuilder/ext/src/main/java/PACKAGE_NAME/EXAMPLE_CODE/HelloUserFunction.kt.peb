@@ -1,0 +1,22 @@
+package ${{PACKAGE_NAME}}
+
+import io.pebbletemplates.pebble.extension.Function
+import io.pebbletemplates.pebble.template.PebbleTemplate
+import io.pebbletemplates.pebble.template.EvaluationContext
+
+class HelloUserFunction : Function {
+
+    override fun getArgumentNames(): List<String> =
+        listOf()
+
+    override fun execute(
+        args: MutableMap<String, Any?>,
+        self: PebbleTemplate,
+        context: EvaluationContext,
+        lineNumber: Int
+    ): Any? {
+        val studentName: String? = context.getVariable("STUDENT_NAME").toString()
+        val name =  studentName ?: "Whoever You Are"
+        return "Hello ${name}"
+    }
+}
