@@ -3,6 +3,8 @@ package org.appdevforall.codeonthego.computervision.domain.xml
 import android.graphics.Rect
 import org.appdevforall.codeonthego.computervision.domain.model.LayoutItem
 import org.appdevforall.codeonthego.computervision.domain.model.ScaledBox
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -28,6 +30,35 @@ class LayoutRendererTest {
         assertTrue(xml.contains("""android:id="@+id/cb_group_2_a""""))
         assertTrue(xml.contains("""android:id="@+id/cb_group_2_b""""))
         assertTrue(!xml.contains("cbgraup2"))
+    }
+
+    @Test
+    fun `checkbox group noisy textColor annotation emits valid textColor without losing option labels`() {
+        val first = checkboxBox(y = 0, text = "Option 1", checked = true)
+        val second = checkboxBox(y = 20, text = "Option 2")
+        val third = checkboxBox(y = 40, text = "Option 3", checked = true)
+        val context = XmlContext()
+
+        val renderer = LayoutRenderer(
+            context = context,
+            annotations = mapOf(
+                first to "layout-width: 200dP layout-height. content wrap id: co group1 text: Sclect.optian textcalar: black"
+            )
+        )
+
+        renderer.render(LayoutItem.CheckboxGroup(listOf(first, second, third), "vertical"))
+
+        val xml = context.toString()
+
+        assertTrue(xml.contains("""android:id="@+id/cb_group_1_a""""))
+        assertTrue(xml.contains("""android:id="@+id/cb_group_1_b""""))
+        assertTrue(xml.contains("""android:id="@+id/cb_group_1_c""""))
+        assertTrue(xml.contains("""android:text="Option 1""""))
+        assertTrue(xml.contains("""android:text="Option 2""""))
+        assertTrue(xml.contains("""android:text="Option 3""""))
+        assertEquals(3, Regex("""android:textColor="#000000"""").findAll(xml).count())
+        assertFalse(xml.contains("""android:textColor="group1""""))
+        assertFalse(xml.contains("<TextView"))
     }
 
     @Test

@@ -22,6 +22,8 @@ class RegionOcrProcessor(
         "switch_off",
         "text_entry_box",
         "dropdown",
+        "checkbox_checked",
+        "checkbox_unchecked",
         "radio_button_checked",
         "radio_button_unchecked",
         "slider",
