@@ -1,0 +1,43 @@
+package ${{PACKAGE_NAME}}
+
+import android.os.Bundle
+import android.view.Menu
+import android.view.MenuItem
+import androidx.viewpager2.widget.ViewPager2
+import com.google.android.material.tabs.TabLayoutMediator;
+import androidx.appcompat.app.AppCompatActivity
+import com.google.android.material.floatingactionbutton.FloatingActionButton
+import com.google.android.material.snackbar.Snackbar
+import com.google.android.material.tabs.TabLayout
+import ${{PACKAGE_NAME}}.ui.main.SectionsPagerAdapter
+import ${{PACKAGE_NAME}}.databinding.ActivityMainBinding
+
+class MainActivity : AppCompatActivity() {
+
+    private lateinit var binding: ActivityMainBinding
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+
+        binding = ActivityMainBinding.inflate(layoutInflater)
+        setContentView(binding.root)
+        
+        setSupportActionBar(binding.toolbar)
+
+        val sectionsPagerAdapter = SectionsPagerAdapter(this)
+        val viewPager: ViewPager2 = binding.viewPager
+        val tabs: TabLayout = binding.tabs
+        
+        viewPager.adapter = sectionsPagerAdapter
+        
+        TabLayoutMediator(tabs, viewPager) { tab, position ->
+            tab.text = sectionsPagerAdapter.getPageTitle(position)
+        }.attach()
+
+
+        binding.fab.setOnClickListener { view ->
+            Snackbar.make(view, "Replace with your own action", Snackbar.LENGTH_LONG)
+                .setAction("Action", null).show()
+        }
+    }
+}

@@ -1,0 +1,120 @@
+plugins {
+    id("com.android.library")
+    kotlin("android")
+}
+
+android {
+    namespace = "${{PACKAGE_NAME}}"  
+    compileSdk = ${{COMPILE_SDK}}  
+
+    defaultConfig {
+        minSdk = ${{MIN_SDK}}  
+
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        consumerProguardFiles("consumer-rules.pro")
+    }
+
+    buildTypes {
+        release {
+            isMinifyEnabled = false
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+        }
+    }
+    
+    compileOptions {
+        sourceCompatibility = ${{JAVA_SOURCE_COMPAT}}  
+        targetCompatibility = ${{JAVA_TARGET_COMPAT}}  
+    }
+    kotlinOptions {
+        jvmTarget = "17"  
+    }
+}
+
+dependencies {
+    implementation("io.pebbletemplates:pebble:4.1.1")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.squareup.okio:okio:3.4.0")
+
+}
+
+tasks.register("buildExtensionsJar") {
+
+    outputs.upToDateWhen { false }
+
+    dependsOn("assembleRelease")
+
+    doLast {
+
+        val outputDir = layout.buildDirectory.dir("libs").get().asFile
+        outputDir.mkdirs()
+
+        val tempDir = layout.buildDirectory.dir("tmp/extensionsJar").get().asFile
+        tempDir.deleteRecursively()
+        tempDir.mkdirs()
+
+        // Correct runtime classpath
+        val runtimeJars = configurations["releaseRuntimeClasspath"].map { it.absolutePath }
+
+        // CORRECT compiled classes JAR for AGP 8.x
+        val classesJar = layout.buildDirectory
+            .file("intermediates/aar_main_jar/release/syncReleaseLibJars/classes.jar")
+            .get()
+            .asFile
+
+        if (!classesJar.exists()) {
+            throw GradleException("Compiled classes JAR not found: ${classesJar.absolutePath}")
+        }
+
+        // D8 output
+
+        val d8Output = File(tempDir, "dexed")
+        d8Output.mkdirs()
+
+        val androidSdkDir = android.sdkDirectory.absolutePath
+        val buildToolsVersion = android.buildToolsVersion
+        val d8Executable = File("$androidSdkDir/build-tools/$buildToolsVersion/d8")
+	val bashExecutable = File("/data/data/com.itsaky.androidide/files/usr/bin/bash")
+	
+        exec {
+            commandLine(
+		bashExecutable.absolutePath,
+                d8Executable.absolutePath,
+                "--release",
+                "--min-api", "24",
+                "--output", d8Output.absolutePath,
+                classesJar.absolutePath,
+                *runtimeJars.toTypedArray()
+            )
+        }
+
+        // Build final JAR
+        val finalJar = File(outputDir, "extensions.jar")
+        if (finalJar.exists()) finalJar.delete()
+
+        // Add META-INF/services from assets
+        val assetsDir = layout.buildDirectory
+            .dir("intermediates/assets/release/mergeReleaseAssets")
+            .get()
+            .asFile
+
+        ant.invokeMethod("jar", mapOf(
+            "destfile" to finalJar.absolutePath,
+            "basedir" to d8Output.absolutePath
+        ))
+
+        logger.lifecycle("assetsDir: ${assetsDir.absolutePath}")
+        if (assetsDir.exists()) {
+            logger.lifecycle("got here!")
+            ant.invokeMethod("jar", mapOf(
+                "destfile" to finalJar.absolutePath,
+                "update" to true,
+                "basedir" to assetsDir.absolutePath
+            ))
+        }
+
+        println("Built: ${finalJar.absolutePath}")
+    }
+}

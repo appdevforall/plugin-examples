@@ -1,0 +1,37 @@
+{
+    "name": "Build Extensions",
+    "description": "Build extensions.jar to support Pebble Custom Functions",
+    "tooltipTag": "template.custom.activity",
+    "version": "0.1",
+    "parameters": {
+        "required": {
+            "appName": {identifier: "APP_NAME"},
+            "packageName":  {identifier: "PACKAGE_NAME"},
+            "saveLocation":  {identifier: "SAVE_LOCATION"}
+        },
+        "optional": {
+            "minsdk":  {identifier: "MIN_SDK"}
+        },
+	"user": {
+	    "text":
+            [
+                {"label":"Author", "identifier":"PLUGIN_AUTHOR", "default":"Author"},
+                {"label":"Description", "identifier":"PLUGIN_DESC", "default":"Plugin description"} 
+            ],
+	    "checkbox":
+	    [
+		{"label":"Include Sample Functions", "identifier":"EXAMPLE_CODE", "default": true}
+	    ]
+	}
+    },
+    "system": {
+      "agpVersion": { "identifier": "AGP_VERSION" },
+      "kotlinVersion": { "identifier": "KOTLIN_VERSION" },
+      "gradleVersion": { "identifier": "GRADLE_VERSION" },
+      "compileSdk": { "identifier": "COMPILE_SDK" },
+      "targetSdk": { "identifier": "TARGET_SDK" },
+      "javaSourceCompat": { "identifier": "JAVA_SOURCE_COMPAT" },
+      "javaTargetCompat": { "identifier": "JAVA_TARGET_COMPAT" },
+      "javaTarget": { "identifier": "JAVA_TARGET" }
+    }
+}

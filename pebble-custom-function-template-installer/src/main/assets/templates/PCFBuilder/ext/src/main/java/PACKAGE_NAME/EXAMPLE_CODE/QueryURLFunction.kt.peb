@@ -1,0 +1,42 @@
+package ${{PACKAGE_NAME}}
+
+import io.pebbletemplates.pebble.extension.Function
+import io.pebbletemplates.pebble.template.EvaluationContext
+import io.pebbletemplates.pebble.template.PebbleTemplate
+import java.io.IOException
+import okhttp3.OkHttpClient
+import okhttp3.Request
+
+class QueryURLFunction() : Function {
+    private val client = OkHttpClient()
+
+    override fun getArgumentNames(): List<String> =
+        listOf("url")
+
+    override fun execute(
+        args: MutableMap<String, Any?>,
+        self: PebbleTemplate,
+        context: EvaluationContext,
+        lineNumber: Int
+    ): Any? {
+        val url = args["url"]?.toString() ?: return ""
+
+        val request = Request.Builder()
+            .url(url)
+            .build()
+
+        return try {
+            client.newCall(request).execute().use { response ->
+                if(!response.isSuccessful) {
+                    "Error: HTTP Response code: ${response.code}\n\tReason:  ${response.message}"
+                } else {
+                    response.body?.string()
+                }
+            }
+        } catch(e : IOException) {
+            "Error: IOException: ${e.message}"
+        }
+
+	return ""
+    }
+}

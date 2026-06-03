@@ -1,0 +1,48 @@
+package ${{PACKAGE_NAME}}.ui.main;
+
+import androidx.arch.core.util.Function;
+import androidx.lifecycle.LiveData;
+import androidx.lifecycle.MutableLiveData;
+import androidx.lifecycle.Transformations;
+import androidx.lifecycle.ViewModel;
+
+public class PageViewModel extends ViewModel {
+
+    private MutableLiveData<Integer> mIndex = new MutableLiveData<>();
+    private LiveData<String> mText = Transformations.map(mIndex, new Function<Integer, String>() {
+        @Override
+        public String apply(Integer input) {
+	    String result = "";
+	    String jsonString = "";
+	    switch(input) {
+	    	case 1:
+            	     result = "Hello ${{STUDENT_NAME}}";  //"${{ reverse ("Hello world from section: reverse") }}";
+		break;
+		case 2:
+		     result = "${{ queryDB() }}";
+      	     	break;
+		case 3:
+		     result  =
+		     """
+		     ${{ queryURL("http://localhost:6174/PUCC/api/v1.0/student/0663864") | raw }}
+		     """;
+		break;
+		case 4:
+		     result  = " ${{STUDENT_NAME}} ";
+		break;
+		default:
+	             result = "Error";
+		     break;
+	    }
+	    return result;
+	}
+    });
+
+    public void setIndex(int index) {
+        mIndex.setValue(index);
+    }
+
+    public LiveData<String> getText() {
+        return mText;
+    }
+}

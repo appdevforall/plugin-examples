@@ -1,0 +1,47 @@
+package ${{PACKAGE_NAME}};
+
+import android.os.Bundle;
+
+import com.google.android.material.snackbar.Snackbar;
+import com.google.android.material.tabs.TabLayoutMediator;
+
+import androidx.viewpager2.widget.ViewPager2;
+import androidx.appcompat.app.AppCompatActivity;
+
+import android.view.Menu;
+import android.view.MenuItem;
+import android.view.View;
+
+import ${{PACKAGE_NAME}}.ui.main.SectionsPagerAdapter;
+import ${{PACKAGE_NAME}}.databinding.ActivityMainBinding;
+
+public class MainActivity extends AppCompatActivity {
+
+    private ActivityMainBinding binding;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        binding = ActivityMainBinding.inflate(getLayoutInflater());
+        setContentView(binding.getRoot());
+        
+        setSupportActionBar(binding.toolbar);
+
+        SectionsPagerAdapter sectionsPagerAdapter = new SectionsPagerAdapter(this);
+        ViewPager2 viewPager = binding.viewPager;
+        viewPager.setAdapter(sectionsPagerAdapter);
+        
+        new TabLayoutMediator(binding.tabs, viewPager,
+            (tab, position) -> tab.setText(sectionsPagerAdapter.getPageTitle(position))
+        ).attach();
+
+        binding.fab.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                Snackbar.make(view, "Replace with your own action", Snackbar.LENGTH_LONG)
+                        .setAction("Action", null).show();
+            }
+        });
+    }
+}
