@@ -54,12 +54,23 @@ jobs:
           # plugin), then stage each plugin's built .cgp under its own name. The
           # plugin-builder already names the artifact, so there is no rename map —
           # new plugins are picked up automatically.
+          # Keep in sync with SKIP_PLUGINS in scripts/update-libs.sh.
+          SKIP_PLUGINS=(pebble-custom-function-template-installer)
+
           staged=0
           names=()
           for build_file in */build.gradle.kts; do
             [ -f "$build_file" ] || continue
             grep -qF "com.itsaky.androidide.plugins.build" "$build_file" || continue
             module="$(dirname "$build_file")"
+            skip=0
+            for s in "${SKIP_PLUGINS[@]}"; do
+              [ "$s" = "$module" ] && skip=1 && break
+            done
+            if [ "$skip" -eq 1 ]; then
+              echo "Skipping $module (in SKIP_PLUGINS)"
+              continue
+            fi
             src="$(ls "${module}/build/plugin/"*.cgp 2>/dev/null | grep -v -- '-debug\.cgp$' | head -n1)"
             if [ -z "$src" ]; then
               echo "ERROR: no release .cgp found under ${module}/build/plugin/ (did assemblePlugin run?)"
