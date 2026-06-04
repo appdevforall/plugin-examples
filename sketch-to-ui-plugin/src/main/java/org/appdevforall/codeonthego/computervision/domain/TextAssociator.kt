@@ -12,6 +12,9 @@ import kotlin.math.max
  */
 object TextAssociator {
     private const val OVERLAP_THRESHOLD = 0.6
+    private const val MIN_LINE_TOLERANCE = 12
+    private const val LABEL_FRAGMENT_MAX_GAP_MULTIPLIER = 2
+    private const val MIN_LABEL_FRAGMENT_MAX_GAP = 28
 
     fun assignTextToParents(parents: List<ScaledBox>, texts: List<ScaledBox>, allBoxes: List<ScaledBox>): List<ScaledBox> {
         val consumedTexts = mutableListOf<ScaledBox>()
@@ -86,25 +89,30 @@ object TextAssociator {
         availableTexts: List<ScaledBox>,
         consumedTexts: List<ScaledBox>
     ): List<ScaledBox> {
-        val lineTolerance = max(anchor.h, widget.h).coerceAtLeast(12)
-        val maxGap = max(widget.h * 2, 28)
+        val lineTolerance = max(anchor.h, widget.h).coerceAtLeast(MIN_LINE_TOLERANCE)
+        val maxGap = max(widget.h * LABEL_FRAGMENT_MAX_GAP_MULTIPLIER, MIN_LABEL_FRAGMENT_MAX_GAP)
+
+        val sameLineTexts = availableTexts
+            .asSequence()
+            .filter { candidate -> consumedTexts.none { it.sameGeometryAs(candidate) } }
+            .filter { candidate -> abs(candidate.centerY - anchor.centerY) <= lineTolerance }
+            .sortedBy { it.x }
+            .toList()
 
         val fragments = mutableListOf(anchor)
         var previous = anchor
 
-        while (true) {
-            val next = availableTexts
-                .asSequence()
-                .filter { candidate -> consumedTexts.none { it.sameGeometryAs(candidate) } }
-                .filter { candidate -> fragments.none { it.sameGeometryAs(candidate) } }
-                .filter { abs(it.centerY - anchor.centerY) <= lineTolerance }
-                .filter { it.x >= previous.x + previous.w }
-                .filter { it.x - (previous.x + previous.w) <= maxGap }
-                .minByOrNull { it.x }
-                ?: break
+        for (candidate in sameLineTexts) {
+            if (fragments.any { it.sameGeometryAs(candidate) }) continue
 
-            fragments.add(next)
-            previous = next
+            val previousEndX = previous.x + previous.w
+            val gap = candidate.x - previousEndX
+
+            if (candidate.x < previousEndX) continue
+            if (gap > maxGap) break
+
+            fragments.add(candidate)
+            previous = candidate
         }
 
         return fragments.sortedBy { it.x }
