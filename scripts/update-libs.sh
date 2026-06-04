@@ -109,11 +109,27 @@ echo "Updated libs/ from CodeOnTheGo@$CODEONTHEGO_SHA"
 printf "  %-20s %s\n" "plugin-api.jar"    "$(du -h "$LIBS_DIR/plugin-api.jar" | cut -f1)"
 printf "  %-20s %s\n" "gradle-plugin.jar" "$(du -h "$LIBS_DIR/gradle-plugin.jar" | cut -f1)"
 
+# Plugins listed here are skipped by both the build loop below and the
+# staging loop in .github/workflows/build-plugins.yml. Keep the two in sync.
+SKIP_PLUGINS=(pebble-custom-function-template-installer)
+
 PLUGINS=()
 for build_file in "$REPO_ROOT"/*/build.gradle.kts; do
     [ -f "$build_file" ] || continue
     if grep -qF "$PLUGIN_BUILDER_ID" "$build_file"; then
-        PLUGINS+=("$(basename "$(dirname "$build_file")")")
+        name="$(basename "$(dirname "$build_file")")"
+        skip=0
+        for s in "${SKIP_PLUGINS[@]}"; do
+            if [ "$s" = "$name" ]; then
+                skip=1
+                break
+            fi
+        done
+        if [ "$skip" -eq 1 ]; then
+            echo "Skipping $name (in SKIP_PLUGINS)"
+            continue
+        fi
+        PLUGINS+=("$name")
     fi
 done
 
