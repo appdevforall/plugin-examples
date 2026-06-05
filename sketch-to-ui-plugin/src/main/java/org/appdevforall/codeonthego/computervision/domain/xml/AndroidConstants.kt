@@ -23,6 +23,7 @@ object AndroidWidgetTags {
     const val CHECK_BOX = "CheckBox"
     const val RADIO_BUTTON = "RadioButton"
     const val SWITCH = "Switch"
+    const val SWITCH_COMPAT = "androidx.appcompat.widget.SwitchCompat"
     const val EDIT_TEXT = "EditText"
     const val SPINNER = "Spinner"
     const val SEEK_BAR = "SeekBar"

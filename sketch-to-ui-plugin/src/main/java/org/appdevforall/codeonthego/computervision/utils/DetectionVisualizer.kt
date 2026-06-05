@@ -10,6 +10,7 @@ import android.graphics.drawable.Drawable
 import androidx.appcompat.content.res.AppCompatResources
 import androidx.core.graphics.toColorInt
 import com.appdevforall.sketchtoui.plugin.R
+import org.appdevforall.codeonthego.computervision.domain.WidgetTagParser
 import org.appdevforall.codeonthego.computervision.domain.model.DetectionResult
 
 
@@ -115,6 +116,9 @@ class DetectionVisualizer(private val context: Context) {
         val placeholderIdsByDetection = mapPlaceholderDetections(detections)
 
         for (result in detections) {
+            if (result.isInvalidWidgetTag()) {
+                continue
+            }
             if (result.label == IMAGE_PLACEHOLDER_LABEL) {
                 val placeholderId = placeholderIdsByDetection[result] ?: continue
                 val hasSelectedImage = selectedPlaceholderIds.contains(placeholderId)
@@ -223,5 +227,9 @@ class DetectionVisualizer(private val context: Context) {
 
     fun clearCache() {
         deleteIconClickableAreas.clear()
+    }
+
+    private fun DetectionResult.isInvalidWidgetTag(): Boolean {
+        return label == "widget_tag" && WidgetTagParser.extractTag(text) == null
     }
 }
