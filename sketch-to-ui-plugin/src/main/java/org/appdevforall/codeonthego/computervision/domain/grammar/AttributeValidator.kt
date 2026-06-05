@@ -37,6 +37,21 @@ object DimensionValidator : AttributeValidator {
     }
 }
 
+object ColorValidator : AttributeValidator {
+    private val hexColorRegex = Regex("^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$")
+    private val androidColorRegex = Regex("^@android:color/[A-Za-z][A-Za-z0-9_]*$")
+    private val projectColorRegex = Regex("^@color/[A-Za-z][A-Za-z0-9_]*$")
+
+    override fun validate(rawValue: String): String? {
+        val trimmed = rawValue.trim()
+        return trimmed.takeIf {
+            hexColorRegex.matches(it) ||
+                androidColorRegex.matches(it) ||
+                projectColorRegex.matches(it)
+        }
+    }
+}
+
 class SpDimensionRangeValidator(
     private val minSp: Int,
     private val maxSp: Int
