@@ -61,6 +61,7 @@ jobs:
             ["apk-viewer"]="apk-analyzer.cgp"
             ["Beepy"]="beepy.cgp"
             ["keystore-generator"]="keystore-generator.cgp"
+            ["maps"]="maps.cgp"
             ["markdown-preview"]="markdown-previewer.cgp"
             ["ndk-installer-plugin"]="ndk-installer.cgp"
             ["random-xkcd"]="random-xkcd.cgp"
