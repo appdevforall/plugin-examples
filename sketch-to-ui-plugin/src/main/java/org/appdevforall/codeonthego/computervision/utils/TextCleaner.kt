@@ -27,6 +27,7 @@ object TextCleaner {
             .replace(Regex("^[\\[\\]()●○□☑✓-]+\\s*"), "")
 
         cleanedText = cleanedText.replace(Regex("^[DT]?opti[oa]n", RegexOption.IGNORE_CASE), "Option")
+        cleanedText = cleanedText.replace(Regex("^joption", RegexOption.IGNORE_CASE), "Option")
         cleanedText = cleanedText.replace(Regex("^pti[oa]n", RegexOption.IGNORE_CASE), "Option")
         cleanedText = cleanedText.replace(Regex("^optton", RegexOption.IGNORE_CASE), "Option")
 

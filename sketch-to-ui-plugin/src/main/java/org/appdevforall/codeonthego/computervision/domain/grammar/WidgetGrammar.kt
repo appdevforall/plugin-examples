@@ -28,15 +28,15 @@ interface LayoutGrammar : WidgetGrammar {
             AttributeKey.LAYOUT_WEIGHT.xmlName to PassThroughValidator,
             AttributeKey.PADDING.xmlName to DimensionValidator,
             AttributeKey.VISIBILITY.xmlName to CategoricalValidator(VisibilityValueSet.values),
-            AttributeKey.BACKGROUND.xmlName to PassThroughValidator,
-            AttributeKey.BACKGROUND_TINT.xmlName to PassThroughValidator
+            AttributeKey.BACKGROUND.xmlName to ColorValidator,
+            AttributeKey.BACKGROUND_TINT.xmlName to ColorValidator
         )
 }
 
 interface TextGrammar : LayoutGrammar {
     override val attributes: Map<String, AttributeValidator>
         get() = super.attributes + mapOf(
-            AttributeKey.TEXT_COLOR.xmlName to PassThroughValidator,
+            AttributeKey.TEXT_COLOR.xmlName to ColorValidator,
             AttributeKey.TEXT_SIZE.xmlName to PassThroughValidator,
             AttributeKey.TEXT_STYLE.xmlName to PassThroughValidator,
             AttributeKey.TEXT_ALIGNMENT.xmlName to PassThroughValidator,

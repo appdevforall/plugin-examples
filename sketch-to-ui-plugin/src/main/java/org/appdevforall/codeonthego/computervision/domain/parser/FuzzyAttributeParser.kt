@@ -9,6 +9,10 @@ object FuzzyAttributeParser {
     private val grammarValidator = UiGrammarValidator()
     private const val PIPE_DELIMITER = "|"
     private val multipleUnderscoresRegex = Regex("_+")
+    private val textColorKeyPhraseRegex = Regex(
+        "\\btext\\s*[-_ ]\\s*(?:colou?r|calar|colar)\\b",
+        RegexOption.IGNORE_CASE
+    )
     private val inputTypeValues = InputTypeValueSet.values.map { it.lowercase() }.toSet()
     private val sanitizer = OcrSanitizerFactory.createDefaultSanitizer()
 
@@ -35,7 +39,7 @@ object FuzzyAttributeParser {
     fun parse(annotation: String?, tag: String): Map<String, String> {
         if (annotation.isNullOrBlank()) return emptyMap()
 
-        val normalizedInput = annotation.replace(Regex("\\s+:"), ":")
+        val normalizedInput = normalizeOcrKeyPhrases(annotation.replace(Regex("\\s+:"), ":"))
         val tokens = tokenizeAnnotation(normalizedInput)
 
         val rawAttributes = mapTokensToAttributes(tokens, tag)
@@ -48,10 +52,35 @@ object FuzzyAttributeParser {
         val sanitized = sanitizer.sanitize(annotation)
 
         return if (sanitized.contains(PIPE_DELIMITER)) {
-            sanitized.split(PIPE_DELIMITER).map { it.trim() }.filter { it.isNotEmpty() }
+            sanitized.split(PIPE_DELIMITER)
+                .flatMap(::tokenizeDelimitedChunk)
+                .filter { it.isNotEmpty() }
         } else {
             sanitized.split(Regex("[:;]|\\s+")).map { it.trim() }.filter { it.isNotEmpty() }
         }
+    }
+
+    private fun normalizeOcrKeyPhrases(annotation: String): String {
+        return textColorKeyPhraseRegex.replace(annotation, "textcolor")
+    }
+
+    private fun tokenizeDelimitedChunk(chunk: String): List<String> {
+        val trimmed = chunk.trim()
+        if (trimmed.isEmpty()) return emptyList()
+
+        val delimiterIndex = trimmed.indexOfFirst { it == ':' || it == ';' }
+        if (delimiterIndex >= 0) {
+            val key = trimmed.substring(0, delimiterIndex).trim()
+            val value = trimmed.substring(delimiterIndex + 1).trim()
+            return listOf(key, value).filter { it.isNotEmpty() }
+        }
+
+        val firstSpace = trimmed.indexOfFirst { it.isWhitespace() }
+        if (firstSpace < 0) return listOf(trimmed)
+
+        val key = trimmed.substring(0, firstSpace).trim()
+        val value = trimmed.substring(firstSpace + 1).trim()
+        return listOf(key, value).filter { it.isNotEmpty() }
     }
 
     private fun mapTokensToAttributes(tokens: List<String>, tag: String): Map<String, String> {
@@ -112,6 +141,7 @@ object FuzzyAttributeParser {
     private fun fuzzyMatchKey(rawKey: String): AttributeKey? {
         val normalizedKey = rawKey.lowercase()
             .replace("-", "_")
+            .replace(Regex("\\s+"), "_")
             .replace(".", "_")
             .replace(multipleUnderscoresRegex, "_")
             .replace(Regex("lay[ao0]ut"), "layout")
@@ -120,7 +150,7 @@ object FuzzyAttributeParser {
         val exactMatch = AttributeKey.findByAlias(normalizedKey)
         if (exactMatch != null) return exactMatch
 
-        if (normalizedKey.length < 2) return null
+        if (normalizedKey.length <= 2) return null
 
         val threshold = when {
             normalizedKey.length <= 3 -> 65
