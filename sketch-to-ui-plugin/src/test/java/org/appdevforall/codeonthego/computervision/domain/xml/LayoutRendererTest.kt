@@ -172,6 +172,34 @@ class LayoutRendererTest {
         assertFalse(xml.contains("""android:id="@+id/im_view_1""""))
     }
 
+    @Test
+    fun `spinner annotation id is used for widget id and generated entries array`() {
+        val dropdown = box("dropdown", "StateofResidence", x = 0, y = 0, w = 260, h = 52)
+        val context = XmlContext()
+
+        val renderer = LayoutRenderer(
+            context = context,
+            annotations = mapOf(
+                dropdown to "width:150dp height:75dp id:residencestate entries:[California,Oregon,washington]"
+            )
+        )
+
+        renderer.render(LayoutItem.SimpleView(dropdown))
+
+        val xml = context.toString()
+
+        assertTrue(xml.contains("""<TextView"""))
+        assertTrue(xml.contains("""android:text="StateofResidence""""))
+        assertTrue(xml.contains("""<Spinner"""))
+        assertTrue(xml.contains("""android:id="@+id/residencestate""""))
+        assertTrue(xml.contains("""android:layout_width="150dp""""))
+        assertTrue(xml.contains("""android:layout_height="75dp""""))
+        assertTrue(xml.contains("""android:entries="@array/residencestate_array""""))
+        assertEquals(listOf("California", "Oregon", "washington"), context.stringArrays["residencestate_array"])
+        assertFalse(xml.contains("""android:id="@+id/spinner_0""""))
+        assertFalse(xml.contains("""android:entries="@array/spinner_0_array""""))
+    }
+
     private fun checkboxBox(y: Int, text: String, checked: Boolean = false): ScaledBox {
         val label = if (checked) "checkbox_checked" else "checkbox_unchecked"
         return ScaledBox(

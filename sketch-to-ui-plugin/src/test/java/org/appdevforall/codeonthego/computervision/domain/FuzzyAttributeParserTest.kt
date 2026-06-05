@@ -122,6 +122,15 @@ class FuzzyAttributeParserTest {
     }
 
     @Test
+    fun `id value does not swallow following noisy key`() {
+        val annotation = "id:my_input textcalar black"
+        val result = FuzzyAttributeParser.parse(annotation, "TextView")
+
+        assertEquals("my_input", result["android:id"])
+        assertEquals("#000000", result["android:textColor"])
+    }
+
+    @Test
     fun `invalid textColor is omitted`() {
         val annotation = "textcolor: group1 | width: 100dp"
         val result = FuzzyAttributeParser.parse(annotation, "CheckBox")
@@ -315,11 +324,22 @@ class FuzzyAttributeParserTest {
     }
 
     @Test
-    fun `entries attribute maps to tools namespace`() {
+    fun `entries attribute maps to android namespace`() {
         val annotation = "entries: @array/items | width: 100dp"
         val result = FuzzyAttributeParser.parse(annotation, "Spinner")
 
-        assertEquals("@array/items", result["tools:entries"])
+        assertEquals("@array/items", result["android:entries"])
+    }
+
+    @Test
+    fun `spinner id width height and entries parse correctly`() {
+        val annotation = "width:150dp height:75dp id:residencestate entries:[California,Oregon,washington]"
+        val result = FuzzyAttributeParser.parse(annotation, "Spinner")
+
+        assertEquals("residencestate", result["android:id"])
+        assertEquals("150dp", result["android:layout_width"])
+        assertEquals("75dp", result["android:layout_height"])
+        assertEquals("California,Oregon,washington", result["android:entries"])
     }
 
     @Test

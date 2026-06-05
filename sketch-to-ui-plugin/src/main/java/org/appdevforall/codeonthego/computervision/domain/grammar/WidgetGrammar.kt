@@ -57,6 +57,7 @@ interface CompoundButtonGrammar : TextGrammar {
 object SpinnerGrammar : LayoutGrammar {
     override val tag = "Spinner"
     override val attributes = super.attributes + mapOf(
+        AttributeKey.ID.xmlName to PassThroughValidator,
         AttributeKey.TEXT.xmlName to PassThroughValidator,
         AttributeKey.ENTRIES.xmlName to EntriesValidator
     )
