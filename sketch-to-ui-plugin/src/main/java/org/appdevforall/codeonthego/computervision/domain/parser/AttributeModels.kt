@@ -77,7 +77,7 @@ enum class AttributeKey(
     val aliases: List<String>,
     val valueType: ValueType = ValueType.RAW
 ) {
-    WIDTH("android:layout_width", listOf("layout_width", "width"), ValueType.DIMENSION),
+    WIDTH("android:layout_width", listOf("layout_width", "width", "layout_idth", "layaut_width"), ValueType.DIMENSION),
     HEIGHT("android:layout_height", listOf("layout_height", "height"), ValueType.DIMENSION),
     ID("android:id", listOf("id"), ValueType.ID),
     TEXT("android:text", listOf("text"), ValueType.TEXT_CONTENT),
@@ -145,7 +145,7 @@ enum class AttributeKey(
     LAYOUT_MARGIN_RIGHT("android:layout_marginRight", listOf("layout_marginright", "layout_margin_right", "margin_right"), ValueType.DIMENSION),
 
     LAYOUT_WEIGHT("android:layout_weight", listOf("layout_weight", "weight"), ValueType.FLOAT),
-    LAYOUT_GRAVITY("android:layout_gravity", listOf("layout_gravity", "layaut_gravity")),
+    LAYOUT_GRAVITY("android:layout_gravity", listOf("layout_gravity", "layoutgravity", "layout_graity", "layoutgraity", "layaut_gravity", "layautgravity", "layaut_graity")),
     GRAVITY("android:gravity", listOf("gravity")),
     ORIENTATION("android:orientation", listOf("orientation")),
 

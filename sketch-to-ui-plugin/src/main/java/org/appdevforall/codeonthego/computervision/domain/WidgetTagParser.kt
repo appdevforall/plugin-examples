@@ -21,6 +21,11 @@ internal object WidgetTagParser {
         return normalizeTagText(cleaned).matches(tagRegex)
     }
 
+    fun isTagSequence(text: String): Boolean {
+        val tokens = text.trim().split(Regex("\\s+")).filter { it.isNotBlank() }
+        return tokens.isNotEmpty() && tokens.all(::isTag)
+    }
+
     private fun parseTagParts(match: MatchResult): Pair<String, String>? {
         val rawPrefix = match.groupValues[1]
         val prefix = normalizePrefix(rawPrefix)

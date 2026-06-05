@@ -3,14 +3,17 @@ package org.appdevforall.codeonthego.computervision.domain
 import android.graphics.RectF
 import com.google.mlkit.vision.text.Text
 import org.appdevforall.codeonthego.computervision.domain.model.DetectionResult
+import org.appdevforall.codeonthego.computervision.domain.model.SketchRegion
+import org.appdevforall.codeonthego.computervision.utils.MetadataDetector
 import org.appdevforall.codeonthego.computervision.utils.OcrTextAssembler.joinElementsWithTolerance
 
 class DetectionMerger(
     private val enrichedComponents: List<DetectionResult>,
     private val remainingYoloDetections: List<DetectionResult>,
-    private val fullImageTextBlocks: List<Text.TextBlock>
+    private val fullImageTextBlocks: List<Text.TextBlock>,
+    private val leftBoundPx: Float? = null,
+    private val rightBoundPx: Float? = null
 ) {
-
     private val containerLabels = setOf("card", "toolbar")
 
     fun merge(): List<DetectionResult> {
@@ -25,14 +28,17 @@ class DetectionMerger(
             val candidates = fullImageTextBlocks.filter { it !in usedTextBlocks }
             for (textBlock in candidates) {
                 val textBox = textBlock.boundingBox?.let { RectF(it) } ?: continue
-                if (container.boundingBox.contains(textBox)) {
+                val region = classify(textBox)
+                val isCanvasText = region == null || region == SketchRegion.CANVAS
+                if (isCanvasText && container.boundingBox.contains(textBox)) {
                     finalDetections.add(
                         DetectionResult(
                             boundingBox = textBox,
                             label = "text",
                             score = 0.99f,
                             text = textBlock.text.replace("\n", " "),
-                            isYolo = false
+                            isYolo = false,
+                            region = region
                         )
                     )
                     usedTextBlocks.add(textBlock)
@@ -45,12 +51,18 @@ class DetectionMerger(
             .flatMap { it.lines }
             .mapNotNull { line ->
                 line.boundingBox?.let { box ->
+                    val bounds = RectF(box)
+                    val region = classify(bounds)
+                    val text = joinElementsWithTolerance(line)
+                    val resolvedRegion = resolveCrossBoundaryTextRegion(region, text)
+                        ?: return@mapNotNull null
                     DetectionResult(
-                        boundingBox = RectF(box),
+                        boundingBox = bounds,
                         label = "text",
-                        score = 0.99f,
-                        text = joinElementsWithTolerance(line),
-                        isYolo = false
+                        score = if (resolvedRegion != SketchRegion.CANVAS) 0.98f else 0.99f,
+                        text = text,
+                        isYolo = false,
+                        region = resolvedRegion
                     )
                 }
             }
@@ -58,5 +70,20 @@ class DetectionMerger(
         finalDetections.addAll(orphanDetections)
 
         return finalDetections
+    }
+
+    private fun classify(bounds: RectF): SketchRegion? {
+        val left = leftBoundPx ?: return null
+        val right = rightBoundPx ?: return null
+        return SketchRegionClassifier.classify(bounds, left, right)
+    }
+
+    private fun resolveCrossBoundaryTextRegion(region: SketchRegion?, text: String): SketchRegion? {
+        if (region != SketchRegion.CROSS_BOUNDARY) return region
+        return if (MetadataDetector.isCanvasMetadata(text) || WidgetTagParser.isTagSequence(text)) {
+            null
+        } else {
+            SketchRegion.CANVAS
+        }
     }
 }
