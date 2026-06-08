@@ -105,7 +105,7 @@ object FuzzyAttributeParser {
         val currentValue = StringBuilder()
 
         for (token in tokens) {
-            val matchedKey = if (shouldTreatTokenAsValue(token, currentKey)) {
+            val matchedKey = if (shouldTreatTokenAsValue(token, currentKey, currentValue)) {
                 null
             } else {
                 fuzzyMatchKey(token)
@@ -124,10 +124,17 @@ object FuzzyAttributeParser {
         return result
     }
 
-    private fun shouldTreatTokenAsValue(token: String, currentKey: AttributeKey?): Boolean {
+    private fun shouldTreatTokenAsValue(
+        token: String,
+        currentKey: AttributeKey?,
+        currentValue: StringBuilder
+    ): Boolean {
         val lowerToken = token.trim().lowercase()
 
         return when {
+            currentKey == AttributeKey.ID &&
+                currentValue.isBlank() &&
+                AttributeKey.findByAlias(normalizeKeyToken(token)) == null -> true
             currentKey == AttributeKey.INPUT_TYPE && lowerToken in inputTypeValues -> true
             currentKey in setOf(AttributeKey.LAYOUT_GRAVITY, AttributeKey.GRAVITY) && lowerToken in GravityValueSet.values -> true
             currentKey?.valueType == ValueType.COLOR && isColorToken(lowerToken) -> true
@@ -163,13 +170,7 @@ object FuzzyAttributeParser {
     }
 
     private fun fuzzyMatchKey(rawKey: String): AttributeKey? {
-        val normalizedKey = rawKey.lowercase()
-            .replace("-", "_")
-            .replace(Regex("\\s+"), "_")
-            .replace(".", "_")
-            .replace(multipleUnderscoresRegex, "_")
-            .replace(Regex("lay[ao0]ut"), "layout")
-            .replace(Regex("(?<=^|_)[lt]d(?=$|_)"), "id")
+        val normalizedKey = normalizeKeyToken(rawKey)
 
         val exactMatch = AttributeKey.findByAlias(normalizedKey)
         if (exactMatch != null) return exactMatch
@@ -185,6 +186,16 @@ object FuzzyAttributeParser {
         val result = FuzzySearch.extractOne(normalizedKey, AttributeKey.allAliases)
 
         return if (result.score >= threshold) AttributeKey.findByAlias(result.string) else null
+    }
+
+    private fun normalizeKeyToken(rawKey: String): String {
+        return rawKey.lowercase()
+            .replace("-", "_")
+            .replace(Regex("\\s+"), "_")
+            .replace(".", "_")
+            .replace(multipleUnderscoresRegex, "_")
+            .replace(Regex("lay[ao0]ut"), "layout")
+            .replace(Regex("(?<=^|_)[lt]d(?=$|_)"), "id")
     }
 
     private fun resolveXmlAttribute(key: AttributeKey, value: String, tag: String): Pair<String, String> {
