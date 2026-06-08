@@ -1,0 +1,2 @@
+-keep class org.appdevforall.bookshelfplugin.** { *; }
+-keep class com.itsaky.androidide.plugins.** { *; }
