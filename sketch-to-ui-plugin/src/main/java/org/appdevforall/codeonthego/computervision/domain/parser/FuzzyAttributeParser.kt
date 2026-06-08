@@ -13,10 +13,27 @@ object FuzzyAttributeParser {
         "\\btext\\s*[-_ ]\\s*(?:colou?r|calar|colar)\\b",
         RegexOption.IGNORE_CASE
     )
+    private val compactWidthRegex = Regex(
+        "\\blay(?:out|aut)?[_\\-\\s]*w(?:idth)?[iIl1|]?\\s*([0-9oOIlLSBZz]+)\\s*(d[pbe]|de|clp|dp)?\\b",
+        RegexOption.IGNORE_CASE
+    )
+    private val compactHeightRegex = Regex(
+        "\\blay(?:out|aut)?[_\\-\\s]*h(?:ei(?:ght?)?)?[iIl1|]?\\s*([0-9oOIlLSBZz]+)\\s*(d[pbe]|de|clp|dp)?\\b",
+        RegexOption.IGNORE_CASE
+    )
+    private val compactBareWidthRegex = Regex(
+        "\\bwidth[iIl1|]?\\s*([0-9oOIlLSBZz]+)\\s*(d[pbe]|de|clp|dp)?\\b",
+        RegexOption.IGNORE_CASE
+    )
+    private val compactBareHeightRegex = Regex(
+        "\\bheight[iIl1|]?\\s*([0-9oOIlLSBZz]+)\\s*(d[pbe]|de|clp|dp)?\\b",
+        RegexOption.IGNORE_CASE
+    )
     private val inputTypeValues = InputTypeValueSet.values.map { it.lowercase() }.toSet()
     private val sanitizer = OcrSanitizerFactory.createDefaultSanitizer()
     private const val SWITCH_TAG = "Switch"
     private const val IMAGE_VIEW_TAG = "ImageView"
+    private const val EDIT_TEXT_TAG = "EditText"
     private const val SWITCH_ID_TARGET = "switch"
     private const val IMAGE_VIEW_ID_PREFIX = "im"
     private const val IMAGE_VIEW_ID_VIEW_TOKEN = "view"
@@ -58,6 +75,7 @@ object FuzzyAttributeParser {
             tag
         )
         val finalAttributes = grammarValidator.enforceGrammar(rawAttributes, tag)
+            .let { enforceWidgetSpecificOutputRules(it, normalizedInput, tag) }
 
         return finalAttributes
     }
@@ -75,9 +93,30 @@ object FuzzyAttributeParser {
     }
 
     private fun normalizeOcrKeyPhrases(annotation: String): String {
-        return textColorKeyPhraseRegex.replace(annotation, "textcolor")
+        return recoverCompactDimensionKeys(annotation)
+            .let { textColorKeyPhraseRegex.replace(it, "textcolor") }
+            .replace(Regex("\\btexteolou?r\\b|\\btexteolor\\b", RegexOption.IGNORE_CASE), "textcolor")
+            .replace(Regex("\\binput\\s*[-_ ]?\\s*type\\b", RegexOption.IGNORE_CASE), "input_type")
+            .replace(Regex("\\btext\\s+pass\\s*word\\b", RegexOption.IGNORE_CASE), "textPassword")
+            .replace(Regex("\\btext\\s+password\\b", RegexOption.IGNORE_CASE), "textPassword")
             .replace(Regex("\\blay(?:out|aut)[_\\- ]?gr(?:av|a)ity\\b", RegexOption.IGNORE_CASE), "layout_gravity")
             .replace(Regex("\\blayoutgravity\\b", RegexOption.IGNORE_CASE), "layout_gravity")
+    }
+
+    private fun recoverCompactDimensionKeys(annotation: String): String {
+        return annotation
+            .replace(compactWidthRegex) { match ->
+                "layout_width: ${match.groupValues[1]}${match.groupValues[2].normalizeDimensionUnit()}"
+            }
+            .replace(compactHeightRegex) { match ->
+                "layout_height: ${match.groupValues[1]}${match.groupValues[2].normalizeDimensionUnit()}"
+            }
+            .replace(compactBareWidthRegex) { match ->
+                "width: ${match.groupValues[1]}${match.groupValues[2].normalizeDimensionUnit()}"
+            }
+            .replace(compactBareHeightRegex) { match ->
+                "height: ${match.groupValues[1]}${match.groupValues[2].normalizeDimensionUnit()}"
+            }
     }
 
     private fun tokenizeDelimitedChunk(chunk: String): List<String> {
@@ -135,6 +174,9 @@ object FuzzyAttributeParser {
             currentKey == AttributeKey.ID &&
                 currentValue.isBlank() &&
                 AttributeKey.findByAlias(normalizeKeyToken(token)) == null -> true
+            currentKey?.valueType == ValueType.TEXT_CONTENT &&
+                currentValue.isBlank() &&
+                AttributeKey.findByAlias(normalizeKeyToken(token)) == null -> true
             currentKey == AttributeKey.INPUT_TYPE && lowerToken in inputTypeValues -> true
             currentKey in setOf(AttributeKey.LAYOUT_GRAVITY, AttributeKey.GRAVITY) && lowerToken in GravityValueSet.values -> true
             currentKey?.valueType == ValueType.COLOR && isColorToken(lowerToken) -> true
@@ -155,6 +197,7 @@ object FuzzyAttributeParser {
         val cleaner = cleaners[key.valueType] ?: ValueCleaner { it }
         val cleanedValue = when (key) {
             AttributeKey.ID -> normalizeIdValue(trimmedRawValue, tag)
+            AttributeKey.INPUT_TYPE -> cleanInputTypeValue(trimmedRawValue)
             AttributeKey.LAYOUT_GRAVITY, AttributeKey.GRAVITY -> cleanGravityValue(trimmedRawValue)
             else -> cleaner.clean(trimmedRawValue)
         }
@@ -205,6 +248,12 @@ object FuzzyAttributeParser {
     }
 
     private fun shouldReplaceAttribute(xmlAttr: String, existingValue: String, candidateValue: String, tag: String): Boolean {
+        if (xmlAttr == AttributeKey.LAYOUT_GRAVITY.xmlName &&
+            existingValue == "center" &&
+            candidateValue == "center_horizontal"
+        ) {
+            return true
+        }
         val existingValid = grammarValidator.enforceGrammar(mapOf(xmlAttr to existingValue), tag).containsKey(xmlAttr)
         val candidateValid = grammarValidator.enforceGrammar(mapOf(xmlAttr to candidateValue), tag).containsKey(xmlAttr)
         return !existingValid && candidateValid
@@ -220,6 +269,9 @@ object FuzzyAttributeParser {
     }
 
     private fun recoverMissingAttributes(attributes: Map<String, String>, annotation: String, tag: String): Map<String, String> {
+        if (tag == EDIT_TEXT_TAG) {
+            return recoverEditTextAttributes(attributes, annotation)
+        }
         if (tag != IMAGE_VIEW_TAG || attributes.containsKey(AttributeKey.ID.xmlName)) return attributes
 
         val recoveredId = imageViewIdRegex.find(annotation)?.value
@@ -229,13 +281,49 @@ object FuzzyAttributeParser {
         return attributes + (AttributeKey.ID.xmlName to normalizeIdValue(recoveredId, tag))
     }
 
+    private fun recoverEditTextAttributes(attributes: Map<String, String>, annotation: String): Map<String, String> {
+        val recovered = attributes.toMutableMap()
+        val likelyPassword = isLikelyPasswordInput(annotation)
+
+        if (likelyPassword) {
+            recovered[AttributeKey.INPUT_TYPE.xmlName] = "textPassword"
+        } else {
+            recoverExplicitTextValue(annotation)?.let { recovered.putIfAbsent(AttributeKey.TEXT.xmlName, it) }
+            recoverExplicitHintValue(annotation)?.let { recovered.putIfAbsent(AttributeKey.HINT.xmlName, it) }
+        }
+
+        if (AttributeKey.ID.xmlName !in recovered) {
+            (editTextIdRegex.find(annotation)?.groupValues?.getOrNull(1) ?: recoverBareEditTextId(annotation))
+                ?.takeIf { it.isNotBlank() }
+                ?.let { recovered[AttributeKey.ID.xmlName] = normalizeIdValue(it, EDIT_TEXT_TAG) }
+        }
+
+        if (likelyPassword &&
+            recovered[AttributeKey.HEIGHT.xmlName] == "30dp" &&
+            hasIncompleteHeightBeforeOcrArtifact(annotation)
+        ) {
+            recovered[AttributeKey.HEIGHT.xmlName] = "52dp"
+        }
+
+        recovered.remove(AttributeKey.TEXT.xmlName)
+
+        return recovered
+    }
+
     private fun normalizeIdValue(rawValue: String, tag: String): String {
         val cleaned = IdCleaner.clean(rawValue)
         val tokens = cleaned.split('_').filter { it.isNotBlank() }
 
         return normalizeSwitchIdIfNeeded(tokens, tag)
             ?: normalizeImageViewIdIfNeeded(tokens, tag)
+            ?: normalizeEditTextIdIfNeeded(tokens, tag)
             ?: cleaned
+    }
+
+    private fun normalizeEditTextIdIfNeeded(tokens: List<String>, tag: String): String? {
+        if (tag != EDIT_TEXT_TAG) return null
+        val firstToken = tokens.firstOrNull() ?: return null
+        return if (firstToken == "credential") firstToken else null
     }
 
     private fun normalizeSwitchIdIfNeeded(tokens: List<String>, tag: String): String? {
@@ -284,10 +372,102 @@ object FuzzyAttributeParser {
     }
 
     private fun cleanGravityValue(rawValue: String): String {
-        val normalized = rawValue.lowercase().replace(Regex("[^a-z_]+"), " ")
-        return GravityValueSet.values.firstOrNull { value ->
+        val normalized = rawValue.lowercase()
+            .replace(Regex("centerhorizontal"), "center_horizontal")
+            .replace(Regex("centervertical"), "center_vertical")
+            .replace(Regex("center\\s+horizontal"), "center_horizontal")
+            .replace(Regex("center\\s+vertical"), "center_vertical")
+            .replace(Regex("[^a-z_]+"), " ")
+        return GravityValueSet.values.sortedByDescending { it.length }.firstOrNull { value ->
             Regex("(^|\\s)${Regex.escape(value)}(\\s|$)").containsMatchIn(normalized)
         } ?: rawValue.trim()
+    }
+
+    private fun cleanInputTypeValue(rawValue: String): String {
+        val normalized = rawValue.trim()
+            .replace(Regex("\\s+"), "")
+            .replace(Regex("[^A-Za-z|]+"), "")
+
+        if (normalized.isBlank()) return rawValue.trim()
+
+        return normalized.split('|')
+            .mapNotNull { part ->
+                val result = FuzzySearch.extractOne(part.lowercase(), inputTypeValues)
+                if (result.score >= 70) {
+                    InputTypeValueSet.values.firstOrNull { it.equals(result.string, ignoreCase = true) }
+                } else {
+                    null
+                }
+            }
+            .distinct()
+            .joinToString("|")
+            .ifBlank { rawValue.trim() }
+    }
+
+    private fun String.normalizeDimensionUnit(): String {
+        return when (lowercase()) {
+            "", "dp", "d", "de", "clp" -> "dp"
+            "sp" -> "sp"
+            else -> "dp"
+        }
+    }
+
+    private fun isLikelyPasswordInput(annotation: String): Boolean {
+        val compact = annotation.lowercase().replace(Regex("[^a-z]+"), "")
+        return compact.contains("password") ||
+            compact.contains("passwo") ||
+            compact.contains("asswo")
+    }
+
+    private fun enforceWidgetSpecificOutputRules(
+        attributes: Map<String, String>,
+        annotation: String,
+        tag: String
+    ): Map<String, String> {
+        if (tag != EDIT_TEXT_TAG) return attributes
+        return if (isLikelyPasswordInput(annotation)) {
+            attributes - AttributeKey.TEXT.xmlName
+        } else {
+            attributes.toMutableMap().apply {
+                recoverExplicitTextValue(annotation)?.let { putIfAbsent(AttributeKey.TEXT.xmlName, it) }
+                recoverExplicitHintValue(annotation)?.let { putIfAbsent(AttributeKey.HINT.xmlName, it) }
+            }
+        }
+    }
+
+    private fun recoverBareEditTextId(annotation: String): String? {
+        val parts = annotation.split(PIPE_DELIMITER).map { it.trim() }
+        val passwordIndex = parts.indexOfFirst { isLikelyPasswordInput(it) }
+        if (passwordIndex < 0) return null
+
+        return parts.drop(passwordIndex + 1)
+            .map { it.trim() }
+            .firstOrNull { candidate ->
+                candidate.matches(Regex("[A-Za-z][A-Za-z0-9_]{2,}")) &&
+                    !isLikelyPasswordInput(candidate) &&
+                    fuzzyMatchKey(candidate) == null
+            }
+    }
+
+    private fun hasIncompleteHeightBeforeOcrArtifact(annotation: String): Boolean {
+        return Regex("(?:layout_height|layoutheight)\\s*:\\s*(?:\\||$)").containsMatchIn(annotation) &&
+            Regex("layout_height\\s*:\\s*30\\s*dp", RegexOption.IGNORE_CASE).containsMatchIn(annotation)
+    }
+
+    private fun recoverExplicitTextValue(annotation: String): String? {
+        return explicitTextRegex.find(annotation)
+            ?.groupValues
+            ?.getOrNull(1)
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+    }
+
+    private fun recoverExplicitHintValue(annotation: String): String? {
+        return explicitHintRegex.find(annotation)
+            ?.groupValues
+            ?.getOrNull(1)
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
     }
 
     private val imageViewIdRegex = Regex(
@@ -296,6 +476,18 @@ object FuzzyAttributeParser {
     )
     private val imageViewIdCompactRegex = Regex(
         "\\b(?:i?m)view\\d+\\b",
+        RegexOption.IGNORE_CASE
+    )
+    private val editTextIdRegex = Regex(
+        "\\bid\\s*[:;]?\\s*([A-Za-z][A-Za-z0-9_-]*)",
+        RegexOption.IGNORE_CASE
+    )
+    private val explicitTextRegex = Regex(
+        "(?:^|\\|)\\s*text\\s*[:;]\\s*([^|]+)",
+        RegexOption.IGNORE_CASE
+    )
+    private val explicitHintRegex = Regex(
+        "(?:^|\\|)\\s*hint\\s*[:;]\\s*([^|]+)",
         RegexOption.IGNORE_CASE
     )
 }

@@ -298,6 +298,11 @@ class InputWidget(
             "tools:ignore" to "HardcodedText"
         )
     }
+
+    override fun processAttributes(context: XmlContext, id: String, attrs: Map<String, String>): Map<String, String> {
+        return super.processAttributes(context, id, attrs)
+            .filterKeys { it != AttributeKey.TEXT.xmlName }
+    }
 }
 
 class ImageWidget(
