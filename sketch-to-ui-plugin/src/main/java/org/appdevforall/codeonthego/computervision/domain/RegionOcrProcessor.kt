@@ -8,6 +8,7 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import org.appdevforall.codeonthego.computervision.data.source.OcrSource
 import org.appdevforall.codeonthego.computervision.domain.model.DetectionResult
+import org.appdevforall.codeonthego.computervision.domain.model.SketchRegion
 import org.appdevforall.codeonthego.computervision.utils.BitmapUtils
 import org.appdevforall.codeonthego.computervision.utils.OcrTextAssembler
 
@@ -91,11 +92,11 @@ class RegionOcrProcessor(
         val results = mutableListOf<DetectionResult>()
 
         val leftRect = RectF(0f, 0f, width * leftGuidePct, height)
-        results.addAll(ocrCroppedRegion(bitmap, leftRect, 0f))
+        results.addAll(ocrCroppedRegion(bitmap, leftRect, 0f, SketchRegion.LEFT_METADATA))
 
         val rightOffsetX = width * rightGuidePct
         val rightRect = RectF(rightOffsetX, 0f, width, height)
-        results.addAll(ocrCroppedRegion(bitmap, rightRect, rightOffsetX))
+        results.addAll(ocrCroppedRegion(bitmap, rightRect, rightOffsetX, SketchRegion.RIGHT_METADATA))
 
         return results
     }
@@ -103,7 +104,8 @@ class RegionOcrProcessor(
     private suspend fun ocrCroppedRegion(
         bitmap: Bitmap,
         rect: RectF,
-        offsetX: Float
+        offsetX: Float,
+        region: SketchRegion
     ): List<DetectionResult> {
         val crop = BitmapUtils.cropRegion(bitmap, rect)
         if (crop === bitmap) return emptyList()
@@ -122,7 +124,8 @@ class RegionOcrProcessor(
                             label = "text",
                             score = 0.99f,
                             text = OcrTextAssembler.joinElementsWithTolerance(line),
-                            isYolo = false
+                            isYolo = false,
+                            region = region
                         )
                     }
                 }

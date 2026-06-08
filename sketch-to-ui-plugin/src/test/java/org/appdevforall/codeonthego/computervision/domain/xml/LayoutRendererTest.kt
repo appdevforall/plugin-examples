@@ -104,6 +104,74 @@ class LayoutRendererTest {
         assertTrue(!xml.contains("""android:id="@+id/rb_group_1_text_site_16sp""""))
     }
 
+    @Test
+    fun `switch and image metadata render recovered xml without tag text`() {
+        val switch = box("switch_off", "P-1 P-1", x = 0, y = 0, w = 80, h = 40)
+        val image = box("image_placeholder", "", x = 0, y = 60, w = 200, h = 100)
+        val context = XmlContext()
+
+        val renderer = LayoutRenderer(
+            context = context,
+            annotations = identityAnnotationMap(
+                switch to "layout_width: layaut_width: 00dp id: Switeh 1 id: Switeh 1 checked:felse checked:false",
+                image to "layout-idth: 200oP | layout.height: wrap content | src: images | layaut-graity: start w/ap iol: m_View 1"
+            )
+        )
+
+        renderer.render(LayoutItem.SimpleView(switch))
+        renderer.render(LayoutItem.SimpleView(image))
+
+        val xml = context.toString()
+
+        assertTrue(xml.contains("""<androidx.appcompat.widget.SwitchCompat"""))
+        assertTrue(xml.contains("""android:id="@+id/switch_1""""))
+        assertTrue(xml.contains("""android:layout_width="100dp""""))
+        assertTrue(xml.contains("""android:checked="false""""))
+        assertTrue(xml.contains("""android:text=""""))
+        assertFalse(xml.contains("""android:text="P-1 P-1""""))
+        assertTrue(xml.contains("""<ImageView"""))
+        assertTrue(xml.contains("""android:id="@+id/im_view_1""""))
+        assertTrue(xml.contains("""android:layout_gravity="start""""))
+        assertTrue(xml.contains("""android:src="@drawable/images""""))
+    }
+
+    @Test
+    fun `real switch labels remain visible`() {
+        val switch = box("switch_off", "WiFi", x = 0, y = 0, w = 80, h = 40)
+        val context = XmlContext()
+
+        val renderer = LayoutRenderer(
+            context = context,
+            annotations = emptyMap()
+        )
+
+        renderer.render(LayoutItem.SimpleView(switch))
+
+        val xml = context.toString()
+
+        assertTrue(xml.contains("""<androidx.appcompat.widget.SwitchCompat"""))
+        assertTrue(xml.contains("""android:text="WiFi""""))
+    }
+
+    @Test
+    fun `image without recoverable metadata keeps fallback id`() {
+        val image = box("image_placeholder", "", x = 0, y = 0, w = 200, h = 100)
+        val context = XmlContext()
+
+        val renderer = LayoutRenderer(
+            context = context,
+            annotations = emptyMap()
+        )
+
+        renderer.render(LayoutItem.SimpleView(image))
+
+        val xml = context.toString()
+
+        assertTrue(xml.contains("""<ImageView"""))
+        assertTrue(xml.contains("""android:id="@+id/image_placeholder_0""""))
+        assertFalse(xml.contains("""android:id="@+id/im_view_1""""))
+    }
+
     private fun checkboxBox(y: Int, text: String, checked: Boolean = false): ScaledBox {
         val label = if (checked) "checkbox_checked" else "checkbox_unchecked"
         return ScaledBox(
@@ -132,5 +200,51 @@ class LayoutRendererTest {
             centerY = y + 10,
             rect = Rect(0, y, 20, y + 20)
         )
+    }
+
+    private fun box(label: String, text: String, x: Int, y: Int, w: Int, h: Int): ScaledBox {
+        return ScaledBox(
+            label = label,
+            text = text,
+            x = x,
+            y = y,
+            w = w,
+            h = h,
+            centerX = x + w / 2,
+            centerY = y + h / 2,
+            rect = Rect(x, y, x + w, y + h)
+        )
+    }
+
+    private fun identityAnnotationMap(vararg pairs: Pair<ScaledBox, String>): Map<ScaledBox, String> {
+        return object : AbstractMap<ScaledBox, String>() {
+            override val entries: Set<Map.Entry<ScaledBox, String>> = object : AbstractSet<Map.Entry<ScaledBox, String>>() {
+                override val size: Int = pairs.size
+
+                override fun iterator(): Iterator<Map.Entry<ScaledBox, String>> {
+                    return pairs.map { (key, value) ->
+                        object : Map.Entry<ScaledBox, String> {
+                            override val key: ScaledBox = key
+                            override val value: String = value
+                        }
+                    }.iterator()
+                }
+            }
+
+            override fun get(key: ScaledBox): String? {
+                return pairs.firstOrNull { (candidate, _) ->
+                    candidate === key || candidate.sameTestBoxAs(key)
+                }?.second
+            }
+        }
+    }
+
+    private fun ScaledBox.sameTestBoxAs(other: ScaledBox): Boolean {
+        return label == other.label &&
+            text == other.text &&
+            x == other.x &&
+            y == other.y &&
+            w == other.w &&
+            h == other.h
     }
 }

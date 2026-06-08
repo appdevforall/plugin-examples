@@ -273,6 +273,32 @@ class FuzzyAttributeParserTest {
     }
 
     @Test
+    fun `switch id OCR and dropped leading width digit are recovered`() {
+        val result = FuzzyAttributeParser.parse(
+            "layout_width: layaut_width: 00dp id: Switeh 1 id: Switeh 1 checked:felse checked:false",
+            "Switch"
+        )
+
+        assertEquals("switch_1", result["android:id"])
+        assertEquals("100dp", result["android:layout_width"])
+        assertEquals("false", result["android:checked"])
+    }
+
+    @Test
+    fun `image view metadata recovers id layout gravity and drawable`() {
+        val result = FuzzyAttributeParser.parse(
+            "layout-idth: 200oP | layout.height: wrap content | src: images | layaut-graity: start w/ap iol: m_View 1",
+            "ImageView"
+        )
+
+        assertEquals("im_view_1", result["android:id"])
+        assertEquals("200dp", result["android:layout_width"])
+        assertEquals("wrap_content", result["android:layout_height"])
+        assertEquals("start", result["android:layout_gravity"])
+        assertEquals("@drawable/images", result["android:src"])
+    }
+
+    @Test
     fun `hex color values pass through unchanged`() {
         val annotation = "background: #FF5733 | width: 100dp"
         val result = FuzzyAttributeParser.parse(annotation, "TextView")

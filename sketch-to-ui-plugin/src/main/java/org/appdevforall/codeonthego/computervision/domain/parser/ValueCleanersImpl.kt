@@ -59,7 +59,7 @@ internal object DimensionCleaner : ValueCleaner {
 
         val numMatch = leadingNumberRegex.find(numericPart)?.value
             ?: return trimmedValue
-        val correctedNum = removeOcrTrailingZero(numMatch)
+        val correctedNum = removeOcrTrailingZero(numMatch).trimLeadingZeros()
 
         return "$correctedNum$originalUnit"
     }
@@ -67,6 +67,13 @@ internal object DimensionCleaner : ValueCleaner {
     private fun removeOcrTrailingZero(num: String): String {
         val isOcrArtifact = num.endsWith("0") && (num.toLongOrNull() ?: 0L) >= 1000L
         return if (isOcrArtifact) num.dropLast(1) else num
+    }
+
+    private fun String.trimLeadingZeros(): String {
+        val negative = startsWith("-")
+        val digits = if (negative) drop(1) else this
+        val trimmed = digits.trimStart('0').ifEmpty { "0" }
+        return if (negative) "-$trimmed" else trimmed
     }
 }
 
@@ -106,13 +113,11 @@ internal object ColorCleaner : ValueCleaner {
 }
 
 internal object IdCleaner : ValueCleaner {
-    private val ID_VOCABULARY = listOf("cb", "rb", "group", "checkbox", "radio", "btn", "button", "text", "view", "img", "image", "input")
+    private val ID_VOCABULARY = listOf("cb", "rb", "group", "checkbox", "radio", "btn", "button", "text", "view", "img", "image", "input", "switch")
     private val nonAlphanumericRegex = Regex("[^a-z0-9_]")
 
     override fun clean(rawValue: String): String {
-        val firstWord = rawValue.trim().split(Regex("\\s+")).firstOrNull() ?: rawValue
-
-        val cleaned = firstWord.lowercase()
+        val cleaned = rawValue.trim().lowercase()
             .replace(Regex("inm|rn|wm|nm")) { m -> if (m.value == "inm") "im" else "m" }
             .replace(nonAlphanumericRegex, "_")
             .replace(Regex("_+"), "_")
