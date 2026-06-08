@@ -39,7 +39,7 @@ internal object AttributeValueResolver {
         val widthLostLeadingOne = tag == SWITCH_TAG &&
             key == AttributeKey.WIDTH &&
             cleanedValue == "0dp" &&
-            Regex("^0{2}\\s*dp$", RegexOption.IGNORE_CASE).matches(rawValue.trim())
+            AttributeRegexPatterns.ZERO_ZERO_DP.matches(rawValue.trim())
 
         return if (widthLostLeadingOne) "100dp" else cleanedValue
     }

@@ -6,6 +6,12 @@ import java.lang.StringBuilder
 
 internal object AttributeTokenMapper {
     private const val PIPE_DELIMITER = "|"
+    private const val MIN_FUZZY_KEY_LENGTH = 3
+    private const val SHORT_KEY_MAX_LENGTH = 3
+    private const val MEDIUM_KEY_MAX_LENGTH = 6
+    private const val SHORT_KEY_FUZZY_THRESHOLD = 65
+    private const val MEDIUM_KEY_FUZZY_THRESHOLD = 75
+    private const val LONG_KEY_FUZZY_THRESHOLD = 80
     private val inputTypeValues = InputTypeValueSet.values.map { it.lowercase() }.toSet()
     private val grammarValidator = UiGrammarValidator()
     private val numericTypes = setOf(
@@ -21,7 +27,7 @@ internal object AttributeTokenMapper {
                 .flatMap(::tokenizeDelimitedChunk)
                 .filter { it.isNotEmpty() }
         } else {
-            annotation.split(Regex("[:;]|\\s+")).map { it.trim() }.filter { it.isNotEmpty() }
+            annotation.split(AttributeRegexPatterns.TOKEN_SPLIT).map { it.trim() }.filter { it.isNotEmpty() }
         }
     }
 
@@ -42,12 +48,12 @@ internal object AttributeTokenMapper {
         val exactMatch = AttributeKey.findByAlias(normalizedKey)
         if (exactMatch != null) return exactMatch
 
-        if (normalizedKey.length <= 2) return null
+        if (normalizedKey.length < MIN_FUZZY_KEY_LENGTH) return null
 
         val threshold = when {
-            normalizedKey.length <= 3 -> 65
-            normalizedKey.length <= 6 -> 75
-            else -> 80
+            normalizedKey.length <= SHORT_KEY_MAX_LENGTH -> SHORT_KEY_FUZZY_THRESHOLD
+            normalizedKey.length <= MEDIUM_KEY_MAX_LENGTH -> MEDIUM_KEY_FUZZY_THRESHOLD
+            else -> LONG_KEY_FUZZY_THRESHOLD
         }
 
         val result = FuzzySearch.extractOne(normalizedKey, AttributeKey.allAliases)
@@ -61,8 +67,8 @@ internal object AttributeTokenMapper {
             .replace(AttributeRegexPatterns.WHITESPACE, "_")
             .replace(".", "_")
             .replace(AttributeRegexPatterns.MULTIPLE_UNDERSCORES, "_")
-            .replace(Regex("lay[ao0]ut"), "layout")
-            .replace(Regex("(?<=^|_)[lt]d(?=$|_)"), "id")
+            .replace(AttributeRegexPatterns.LAYOUT_OCR_KEY, "layout")
+            .replace(AttributeRegexPatterns.OCR_ID_KEY, "id")
     }
 
     private fun tokenizeDelimitedChunk(chunk: String): List<String> {
@@ -108,7 +114,17 @@ internal object AttributeTokenMapper {
     }
 
     private fun isColorToken(token: String): Boolean {
-        return token.startsWith("#") || token.startsWith("@") || token in ColorCleaner.colorMap
+        return hasColorLiteralPrefix(token) ||
+            hasResourceReferencePrefix(token) ||
+            token in ColorCleaner.colorMap
+    }
+
+    private fun hasColorLiteralPrefix(token: String): Boolean {
+        return token.startsWith(AttributeRegexPatterns.COLOR_HEX_PREFIX)
+    }
+
+    private fun hasResourceReferencePrefix(token: String): Boolean {
+        return token.startsWith(AttributeRegexPatterns.RESOURCE_REFERENCE_PREFIX)
     }
 
     private fun resolveMatchedKey(token: String, state: MappingState): AttributeKey? {
