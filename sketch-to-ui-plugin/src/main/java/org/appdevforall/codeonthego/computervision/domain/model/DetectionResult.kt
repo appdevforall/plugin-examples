@@ -7,5 +7,6 @@ data class DetectionResult(
     val label: String,
     val score: Float,
     var text: String = "",
-    val isYolo: Boolean = true
+    val isYolo: Boolean = true,
+    val region: SketchRegion? = null
 )

@@ -7,7 +7,9 @@ import org.appdevforall.codeonthego.computervision.domain.DetectionMerger
 import org.appdevforall.codeonthego.computervision.domain.GenericBoxResolver
 import org.appdevforall.codeonthego.computervision.domain.MarginAnnotationParser
 import org.appdevforall.codeonthego.computervision.domain.RegionOcrProcessor
+import org.appdevforall.codeonthego.computervision.domain.SketchRegionClassifier
 import org.appdevforall.codeonthego.computervision.domain.model.DetectionResult
+import org.appdevforall.codeonthego.computervision.domain.model.SketchRegion
 import org.appdevforall.codeonthego.computervision.ui.CvOperation
 
 /**
@@ -32,7 +34,13 @@ class RunVisionUC(
     ): Result<VisionResult> = runCatching {
 
         onProgress(CvOperation.RunningYolo)
-        val rawDetections = repository.detectWidgets(bitmap).getOrThrow()
+        val leftBoundPx = bitmap.width * leftPct
+        val rightBoundPx = bitmap.width * rightPct
+        val rawDetections = SketchRegionClassifier.classifyDetections(
+            detections = repository.detectWidgets(bitmap).getOrThrow(),
+            leftBoundPx = leftBoundPx,
+            rightBoundPx = rightBoundPx
+        )
         val resolvedDetections = boxResolver.resolve(rawDetections)
 
         onProgress(CvOperation.RunningOcr)
@@ -42,16 +50,20 @@ class RunVisionUC(
         val mergedDetections = DetectionMerger(
             ocrResult.enrichedDetections,
             ocrResult.remainingDetections,
-            ocrResult.fullImageTextBlocks
+            ocrResult.fullImageTextBlocks,
+            leftBoundPx,
+            rightBoundPx
         ).merge()
 
-        val leftBound = bitmap.width * leftPct
-        val rightBound = bitmap.width * rightPct
         val canvasOnlyMerged = mergedDetections.filter { detection ->
-            detection.isYolo || detection.boundingBox.centerX() in leftBound..rightBound
+            detection.region == null || detection.region == SketchRegion.CANVAS
+        }
+        val fullImageMarginDetections = mergedDetections.filter { detection ->
+            !detection.isYolo &&
+                (detection.region == SketchRegion.LEFT_METADATA || detection.region == SketchRegion.RIGHT_METADATA)
         }
 
-        val allDetections = canvasOnlyMerged + ocrResult.marginDetections
+        val allDetections = canvasOnlyMerged + ocrResult.marginDetections + fullImageMarginDetections
 
         val (canvasDetections, annotationMap) = MarginAnnotationParser.parse(
             detections = allDetections,

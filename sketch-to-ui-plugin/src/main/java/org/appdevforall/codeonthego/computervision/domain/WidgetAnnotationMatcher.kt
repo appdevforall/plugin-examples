@@ -1,6 +1,8 @@
 package org.appdevforall.codeonthego.computervision.domain
 
 import org.appdevforall.codeonthego.computervision.domain.model.ScaledBox
+import java.util.Collections
+import java.util.IdentityHashMap
 
 class WidgetAnnotationMatcher {
     internal fun matchAnnotationsToElements(
@@ -8,8 +10,8 @@ class WidgetAnnotationMatcher {
         uiElements: List<ScaledBox>,
         annotations: Map<String, String>
     ): Map<ScaledBox, String> {
-        val finalAnnotations = mutableMapOf<ScaledBox, String>()
-        val claimedWidgets = mutableSetOf<ScaledBox>()
+        val finalAnnotations = IdentityHashMap<ScaledBox, String>()
+        val claimedWidgets = Collections.newSetFromMap(IdentityHashMap<ScaledBox, Boolean>())
 
         val deduplicatedTags = canvasTags
             .distinctBy { WidgetTagParser.normalizeTagText(it.text) }
@@ -63,6 +65,10 @@ class WidgetAnnotationMatcher {
     }
 
     internal fun isTag(text: String): Boolean = WidgetTagParser.isTag(text)
+
+    internal fun isTagLikeText(text: String): Boolean {
+        return WidgetTagParser.isTag(text) || WidgetTagParser.isTagSequence(text)
+    }
 
     private fun getTagType(tag: String): String? {
         return when {

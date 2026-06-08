@@ -1,11 +1,11 @@
 package org.appdevforall.codeonthego.computervision.domain
 
 import org.appdevforall.codeonthego.computervision.domain.model.DetectionResult
+import org.appdevforall.codeonthego.computervision.domain.model.SketchRegion
 import org.appdevforall.codeonthego.computervision.utils.MetadataDetector
 import kotlin.math.abs
 
 object MarginAnnotationParser {
-
     /**
      * Extracts canvas UI elements and parses margin annotations, linking them together.
      * * @param detections The full list of detections from YOLO and OCR.
@@ -52,15 +52,46 @@ object MarginAnnotationParser {
         val rightMargin = mutableListOf<DetectionResult>()
 
         for (detection in detections) {
+            if (detection.isInvalidWidgetTag()) {
+                continue
+            }
+            when (detection.region) {
+                SketchRegion.LEFT_METADATA -> {
+                    leftMargin.add(detection)
+                    continue
+                }
+                SketchRegion.RIGHT_METADATA -> {
+                    rightMargin.add(detection)
+                    continue
+                }
+                SketchRegion.CANVAS -> {
+                    canvas.add(detection)
+                    continue
+                }
+                SketchRegion.CROSS_BOUNDARY -> {
+                    if (detection.isRenderableCrossBoundaryText()) {
+                        canvas.add(detection)
+                    }
+                    continue
+                }
+                null -> Unit
+            }
+
             val isMetadata = MetadataDetector.isCanvasMetadata(detection.text)
             val centerX = centerX(detection)
 
-            when {
-                isMetadata && centerX < (imageWidth / 2f) -> leftMargin.add(detection)
-                isMetadata && centerX >= (imageWidth / 2f) -> rightMargin.add(detection)
-                centerX > leftMarginPx && centerX < rightMarginPx -> canvas.add(detection)
-                centerX <= leftMarginPx -> leftMargin.add(detection)
-                else -> rightMargin.add(detection)
+            val assignedRegion = when {
+                isMetadata && centerX < (imageWidth / 2f) -> SketchRegion.LEFT_METADATA
+                isMetadata && centerX >= (imageWidth / 2f) -> SketchRegion.RIGHT_METADATA
+                centerX > leftMarginPx && centerX < rightMarginPx -> SketchRegion.CANVAS
+                centerX <= leftMarginPx -> SketchRegion.LEFT_METADATA
+                else -> SketchRegion.RIGHT_METADATA
+            }
+            when (assignedRegion) {
+                SketchRegion.LEFT_METADATA -> leftMargin.add(detection)
+                SketchRegion.RIGHT_METADATA -> rightMargin.add(detection)
+                SketchRegion.CANVAS -> canvas.add(detection)
+                SketchRegion.CROSS_BOUNDARY -> Unit
             }
         }
 
@@ -72,7 +103,10 @@ object MarginAnnotationParser {
      */
     private fun extractCanvasTags(canvasDetections: List<DetectionResult>): List<Pair<String, DetectionResult>> {
         return canvasDetections.mapNotNull { det ->
-            WidgetTagParser.extractTag(det.text)?.let { (tag, _) -> tag to det }
+            if (!WidgetTagParser.isTag(det.text)) return@mapNotNull null
+            WidgetTagParser.extractTag(det.text)?.let { (tag, _) ->
+                tag to det
+            }
         }
     }
 
@@ -132,7 +166,7 @@ object MarginAnnotationParser {
 
         fun saveCurrentBlock() {
             if (currentTag != null) {
-                blocks.explicitAnnotations[currentTag!!] = currentText.toString().trim()
+                blocks.addExplicitAnnotation(currentTag!!, currentText.toString().trim())
             } else if (currentText.isNotBlank()) {
                 blocks.implicitBlocks.add(ParsedBlock(currentText.toString().trim(), blockStartY))
             }
@@ -153,11 +187,11 @@ object MarginAnnotationParser {
 
                 val trailing = extraction.second?.trim()
                 if (!trailing.isNullOrBlank() && WidgetTagParser.normalizeTagText(trailing) != currentTag) {
-                    currentText.append(trailing).append(" ")
+                    currentText.appendAnnotationFragment(trailing)
                 }
             } else {
                 if (currentText.isEmpty()) blockStartY = centerY(det)
-                currentText.append(text).append(" ")
+                currentText.appendAnnotationFragment(text)
             }
         }
         saveCurrentBlock()
@@ -222,10 +256,31 @@ object MarginAnnotationParser {
     private data class GroupedBlocks(
         val explicitAnnotations: MutableMap<String, String> = mutableMapOf(),
         val implicitBlocks: MutableList<ParsedBlock> = mutableListOf()
-    )
+    ) {
+        fun addExplicitAnnotation(tag: String, text: String) {
+            if (text.isBlank()) return
+            explicitAnnotations.merge(tag, text) { existing, newText -> "$existing | $newText" }
+        }
+    }
 
     private data class ParsedBlock(
         val annotationText: String,
         val centerY: Float
     )
+
+    private fun StringBuilder.appendAnnotationFragment(text: String) {
+        if (isNotBlank()) append(" | ")
+        append(text)
+    }
+
+    private fun DetectionResult.isInvalidWidgetTag(): Boolean {
+        return label == "widget_tag" && WidgetTagParser.extractTag(text) == null
+    }
+
+    private fun DetectionResult.isRenderableCrossBoundaryText(): Boolean {
+        return label == "text" &&
+            text.isNotBlank() &&
+            !MetadataDetector.isCanvasMetadata(text) &&
+            !WidgetTagParser.isTagSequence(text)
+    }
 }
