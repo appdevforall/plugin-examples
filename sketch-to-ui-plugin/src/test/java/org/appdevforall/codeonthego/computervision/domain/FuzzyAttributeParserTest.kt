@@ -363,6 +363,28 @@ class FuzzyAttributeParserTest {
     }
 
     @Test
+    fun `non password words do not trigger password recovery`() {
+        val classwork = FuzzyAttributeParser.parse("text: classwork | layout_height: 30dp", "EditText")
+        val masswork = FuzzyAttributeParser.parse("text: masswork | layout_height: 30dp", "EditText")
+
+        assertEquals("classwork", classwork["android:text"])
+        assertEquals("30dp", classwork["android:layout_height"])
+        assertNull(classwork["android:inputType"])
+        assertEquals("masswork", masswork["android:text"])
+        assertEquals("30dp", masswork["android:layout_height"])
+        assertNull(masswork["android:inputType"])
+    }
+
+    @Test
+    fun `non password edit text keeps explicit text`() {
+        val result = FuzzyAttributeParser.parse("id: display_name | text: Alice | hint: Name", "EditText")
+
+        assertEquals("display_name", result["android:id"])
+        assertEquals("Alice", result["android:text"])
+        assertEquals("Name", result["android:hint"])
+    }
+
+    @Test
     fun `center horizontal layout gravity is preserved`() {
         val annotation = "id: remember | layoutgravity:center | layoutgravity:centerhorizontal"
         val result = FuzzyAttributeParser.parse(annotation, "Switch")
