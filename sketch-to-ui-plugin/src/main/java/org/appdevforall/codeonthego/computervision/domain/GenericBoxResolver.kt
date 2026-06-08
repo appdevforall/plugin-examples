@@ -2,19 +2,27 @@ package org.appdevforall.codeonthego.computervision.domain
 
 import android.graphics.RectF
 import org.appdevforall.codeonthego.computervision.domain.model.DetectionResult
-import kotlin.math.hypot
 
 class GenericBoxResolver {
+    private companion object {
+        const val MIN_DROPDOWN_SYMBOL_SCORE = 0.70f
+        private const val SYMBOL_BOX_MARGIN_FACTOR = 0.20f
+        private const val SYMBOL_VERTICAL_MARGIN_FACTOR = 0.35f
+        private const val LEFT_EDGE_ZONE_END = 0.40f
+        private const val RIGHT_EDGE_ZONE_START = 0.60f
+    }
 
     fun resolve(detections: List<DetectionResult>): List<DetectionResult> {
-        val dropdownSymbols = detections.filter { it.label == "dropdown_symbol" }
+        val dropdownSymbols = detections.filter {
+            it.label == "dropdown_symbol" && it.score >= MIN_DROPDOWN_SYMBOL_SCORE
+        }
 
         return detections.mapNotNull { det ->
             when (det.label) {
                 "dropdown_symbol" -> null
                 "generic_box" -> {
                     val hasSymbolNearby = dropdownSymbols.any { symbol ->
-                        isNearby(det.boundingBox, symbol.boundingBox, 0.8f)
+                        isAcceptedDropdownSymbol(det.boundingBox, symbol.boundingBox)
                     }
                     det.copy(label = if (hasSymbolNearby) "dropdown" else "text_entry_box")
                 }
@@ -23,15 +31,21 @@ class GenericBoxResolver {
         }
     }
 
-    private fun isNearby(box1: RectF, box2: RectF, thresholdFactor: Float = 1.5f): Boolean {
-        val avgDim1 = (box1.width() + box1.height()) / 2f
-        val distanceThreshold = thresholdFactor * avgDim1
+    private fun isAcceptedDropdownSymbol(box: RectF, symbol: RectF): Boolean {
+        val boxWidth = box.right - box.left
+        val boxHeight = box.bottom - box.top
+        val symbolCenterX = (symbol.left + symbol.right) / 2f
+        val symbolCenterY = (symbol.top + symbol.bottom) / 2f
 
-        val distance = hypot(
-            (box1.centerX() - box2.centerX()).toDouble(),
-            (box1.centerY() - box2.centerY()).toDouble()
-        ).toFloat()
+        val horizontalMargin = boxWidth * SYMBOL_BOX_MARGIN_FACTOR
+        val verticalMargin = boxHeight * SYMBOL_VERTICAL_MARGIN_FACTOR
 
-        return distance < distanceThreshold
+        val centerInsideOrVeryClose = symbolCenterX in (box.left - horizontalMargin)..(box.right + horizontalMargin) &&
+            symbolCenterY in (box.top - verticalMargin)..(box.bottom + verticalMargin)
+        if (!centerInsideOrVeryClose) return false
+
+        val leftEdgeZoneEnd = box.left + (boxWidth * LEFT_EDGE_ZONE_END)
+        val rightEdgeZoneStart = box.left + (boxWidth * RIGHT_EDGE_ZONE_START)
+        return symbolCenterX <= leftEdgeZoneEnd || symbolCenterX >= rightEdgeZoneStart
     }
 }
