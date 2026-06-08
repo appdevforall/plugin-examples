@@ -238,16 +238,29 @@ internal object TextStyleCleaner : ValueCleaner {
 }
 
 internal object GravityCleaner : ValueCleaner {
+    private const val CENTER_HORIZONTAL = "center_horizontal"
+    private const val CENTER_VERTICAL = "center_vertical"
+    private const val GRAVITY_TOKEN_SEPARATOR = " "
+    private val centerHorizontalCompactRegex = Regex("centerhorizontal")
+    private val centerVerticalCompactRegex = Regex("centervertical")
+    private val centerHorizontalSpacedRegex = Regex("center\\s+horizontal")
+    private val centerVerticalSpacedRegex = Regex("center\\s+vertical")
+    private val gravityUnsafeCharsRegex = Regex("[^a-z_]+")
+
     override fun clean(rawValue: String): String {
         val normalized = rawValue.lowercase()
-            .replace(Regex("centerhorizontal"), "center_horizontal")
-            .replace(Regex("centervertical"), "center_vertical")
-            .replace(Regex("center\\s+horizontal"), "center_horizontal")
-            .replace(Regex("center\\s+vertical"), "center_vertical")
-            .replace(Regex("[^a-z_]+"), " ")
+            .replace(centerHorizontalCompactRegex, CENTER_HORIZONTAL)
+            .replace(centerVerticalCompactRegex, CENTER_VERTICAL)
+            .replace(centerHorizontalSpacedRegex, CENTER_HORIZONTAL)
+            .replace(centerVerticalSpacedRegex, CENTER_VERTICAL)
+            .replace(gravityUnsafeCharsRegex, GRAVITY_TOKEN_SEPARATOR)
         return GravityValueSet.values.sortedByDescending { it.length }.firstOrNull { value ->
-            Regex("(^|\\s)${Regex.escape(value)}(\\s|$)").containsMatchIn(normalized)
+            wholeGravityValueRegex(value).containsMatchIn(normalized)
         } ?: rawValue.trim()
+    }
+
+    private fun wholeGravityValueRegex(value: String): Regex {
+        return Regex("(^|\\s)${Regex.escape(value)}(\\s|$)")
     }
 }
 
