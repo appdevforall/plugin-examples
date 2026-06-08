@@ -154,6 +154,79 @@ class LayoutRendererTest {
     }
 
     @Test
+    fun `switch preserves center horizontal gravity and normalizes remember me label`() {
+        val switch = box("switch_off", "Rememberme", x = 0, y = 0, w = 80, h = 40)
+        val context = XmlContext()
+
+        val renderer = LayoutRenderer(
+            context = context,
+            annotations = identityAnnotationMap(
+                switch to "id: remember | layoutgravity:center | layoutgravity:centerhorizontal"
+            )
+        )
+
+        renderer.render(LayoutItem.SimpleView(switch))
+
+        val xml = context.toString()
+
+        assertTrue(xml.contains("""<androidx.appcompat.widget.SwitchCompat"""))
+        assertTrue(xml.contains("""android:id="@+id/remember""""))
+        assertTrue(xml.contains("""android:layout_gravity="center_horizontal""""))
+        assertTrue(xml.contains("""android:text="Remember me""""))
+        assertFalse(xml.contains("""android:layout_gravity="center""""))
+    }
+
+    @Test
+    fun `radio group keeps option labels when group annotation has text color`() {
+        val first = radioBox(y = 0, text = "Vanilla")
+        val second = radioBox(y = 20, text = "Chocolate")
+        val third = radioBox(y = 40, text = "Strawberry")
+        val context = XmlContext()
+
+        val renderer = LayoutRenderer(
+            context = context,
+            annotations = identityAnnotationMap(
+                first to "texteolor:blue | textSize:16sp"
+            )
+        )
+
+        renderer.render(LayoutItem.RadioGroup(listOf(first, second, third), "vertical"))
+
+        val xml = context.toString()
+
+        assertTrue(xml.contains("""android:text="Vanilla""""))
+        assertTrue(xml.contains("""android:text="Chocolate""""))
+        assertTrue(xml.contains("""android:text="Strawberry""""))
+        assertFalse(xml.contains("""android:text="blue""""))
+        assertEquals(3, Regex("""android:textColor="#0000FF"""").findAll(xml).count())
+        assertEquals(3, Regex("""android:textSize="16sp"""").findAll(xml).count())
+    }
+
+    @Test
+    fun `image compact height annotation renders recovered height`() {
+        val image = box("image_placeholder", "", x = 0, y = 0, w = 200, h = 100)
+        val context = XmlContext()
+
+        val renderer = LayoutRenderer(
+            context = context,
+            annotations = identityAnnotationMap(
+                image to "width:64dp | heighti64de | id: img_logo | src:logo.png"
+            )
+        )
+
+        renderer.render(LayoutItem.SimpleView(image))
+
+        val xml = context.toString()
+
+        assertTrue(xml.contains("""<ImageView"""))
+        assertTrue(xml.contains("""android:id="@+id/img_logo""""))
+        assertTrue(xml.contains("""android:layout_width="64dp""""))
+        assertTrue(xml.contains("""android:layout_height="64dp""""))
+        assertTrue(xml.contains("""android:src="@drawable/logo""""))
+        assertFalse(xml.contains("""android:layout_height="1dp""""))
+    }
+
+    @Test
     fun `image without recoverable metadata keeps fallback id`() {
         val image = box("image_placeholder", "", x = 0, y = 0, w = 200, h = 100)
         val context = XmlContext()
