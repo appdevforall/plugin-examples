@@ -6,8 +6,6 @@ import org.appdevforall.codeonthego.computervision.domain.model.SketchRegion
 import org.appdevforall.codeonthego.computervision.domain.xml.AndroidXmlGenerator
 import org.appdevforall.codeonthego.computervision.utils.MetadataDetector
 import org.appdevforall.codeonthego.computervision.utils.buildPlaceholderOverrides
-import java.util.Collections
-import java.util.IdentityHashMap
 import kotlin.comparisons.compareBy
 
 class YoloToXmlConverter(
@@ -75,47 +73,7 @@ class YoloToXmlConverter(
                 }
             }
 
-        return collapseOverlappingTextInputs(candidates)
-    }
-
-    private fun collapseOverlappingTextInputs(candidates: List<DetectionResult>): List<DetectionResult> {
-        val textInputs = candidates.filter { it.label == "text_entry_box" }
-        if (textInputs.size <= 1) return candidates
-
-        val collapsedInputs = mutableListOf<DetectionResult>()
-        val visited = Collections.newSetFromMap(IdentityHashMap<DetectionResult, Boolean>())
-
-        for (input in textInputs.sortedByDescending { it.area }) {
-            if (input in visited) continue
-
-            val cluster = textInputs.filter { other ->
-                other !in visited && input.overlapsTextInputDuplicate(other)
-            }
-            visited.addAll(cluster)
-            collapsedInputs.add(cluster.maxWith(compareBy<DetectionResult> { it.area }.thenBy { it.score }))
-        }
-
-        return candidates.filter { candidate ->
-            candidate.label != "text_entry_box" || collapsedInputs.any { it === candidate }
-        }
-    }
-
-    private fun DetectionResult.overlapsTextInputDuplicate(other: DetectionResult): Boolean {
-        if (this === other) return true
-        val intersectionWidth = minOf(boundingBox.right, other.boundingBox.right) -
-            maxOf(boundingBox.left, other.boundingBox.left)
-        val intersectionHeight = minOf(boundingBox.bottom, other.boundingBox.bottom) -
-            maxOf(boundingBox.top, other.boundingBox.top)
-        if (intersectionWidth <= 0f || intersectionHeight <= 0f) return false
-
-        val intersectionArea = intersectionWidth * intersectionHeight
-        val smallerArea = minOf(area, other.area)
-        val unionArea = area + other.area - intersectionArea
-        val containedOverlap = intersectionArea / smallerArea
-        val intersectionOverUnion = intersectionArea / unionArea
-
-        return containedOverlap >= TEXT_ENTRY_CONTAINMENT_THRESHOLD ||
-            intersectionOverUnion >= TEXT_ENTRY_IOU_THRESHOLD
+        return TextInputDetectionCollapser.collapse(candidates)
     }
 
     private fun scaleDetections(
@@ -201,9 +159,6 @@ class YoloToXmlConverter(
     private val ScaledBox.area: Int
         get() = w * h
 
-    private val DetectionResult.area: Float
-        get() = (boundingBox.right - boundingBox.left) * (boundingBox.bottom - boundingBox.top)
-
     private fun DetectionResult.isInvalidWidgetTag(): Boolean {
         return label == "widget_tag" && WidgetTagParser.extractTag(text) == null
     }
@@ -220,9 +175,6 @@ class YoloToXmlConverter(
     }
 
     companion object {
-        private const val TEXT_ENTRY_CONTAINMENT_THRESHOLD = 0.85f
-        private const val TEXT_ENTRY_IOU_THRESHOLD = 0.50f
-
         fun generateXmlLayout(
             detections: List<DetectionResult>,
             annotations: Map<String, String>,

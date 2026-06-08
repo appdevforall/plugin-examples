@@ -11,13 +11,11 @@ internal object TextContentCleaner : ValueCleaner {
         "\\s+(?:B|P|D|T|C|R|SW|S)\\s+(?=(?:B|P|D|T|C|R|SW|S)\\s*-\\s*[A-Z0-9_]+\\s*$)",
         RegexOption.IGNORE_CASE
     )
-    private val multipleWhitespaceRegex = Regex("\\s+")
-
     override fun clean(rawValue: String): String {
         return rawValue
             .replace(trailingRepeatedPrefixRegex, " ")
             .replace(trailingWidgetTagRegex, "")
-            .replace(multipleWhitespaceRegex, " ")
+            .replace(AttributeRegexPatterns.WHITESPACE, " ")
             .trim()
     }
 }
@@ -113,17 +111,35 @@ internal object ColorCleaner : ValueCleaner {
 }
 
 internal object IdCleaner : ValueCleaner {
+    private const val SWITCH_TAG = "Switch"
+    private const val IMAGE_VIEW_TAG = "ImageView"
+    private const val SWITCH_ID_TARGET = "switch"
+    private const val IMAGE_VIEW_ID_PREFIX = "im"
+    private const val IMAGE_VIEW_ID_VIEW_TOKEN = "view"
+    private const val SWITCH_ID_OCR_THRESHOLD = 70
+    private const val IMAGE_VIEW_ID_OCR_THRESHOLD = 80
     private val ID_VOCABULARY = listOf("cb", "rb", "group", "checkbox", "radio", "btn", "button", "text", "view", "img", "image", "input", "switch")
-    private val nonAlphanumericRegex = Regex("[^a-z0-9_]")
+    private val switchIdTargets = listOf(SWITCH_ID_TARGET)
+    private val imageViewIdPrefixTargets = listOf(IMAGE_VIEW_ID_PREFIX, "img", "image")
+    private val imageViewIdViewTargets = listOf(IMAGE_VIEW_ID_VIEW_TOKEN)
 
     override fun clean(rawValue: String): String {
         val cleaned = rawValue.trim().lowercase()
-            .replace(Regex("inm|rn|wm|nm")) { m -> if (m.value == "inm") "im" else "m" }
-            .replace(nonAlphanumericRegex, "_")
-            .replace(Regex("_+"), "_")
+            .replace(AttributeRegexPatterns.OCR_IM_OR_M_CONFUSION) { m -> if (m.value == "inm") "im" else "m" }
+            .replace(AttributeRegexPatterns.RESOURCE_NAME_UNSAFE_CHARS, "_")
+            .replace(AttributeRegexPatterns.MULTIPLE_UNDERSCORES, "_")
             .trim('_')
 
         return normalizeKnownIdVocabulary(cleaned)
+    }
+
+    fun clean(rawValue: String, tag: String): String {
+        val cleaned = clean(rawValue)
+        val tokens = cleaned.split('_').filter { it.isNotBlank() }
+
+        return normalizeSwitchIdIfNeeded(tokens, tag)
+            ?: normalizeImageViewIdIfNeeded(tokens, tag)
+            ?: cleaned
     }
 
     private fun normalizeKnownIdVocabulary(identifier: String): String {
@@ -142,6 +158,51 @@ internal object IdCleaner : ValueCleaner {
         }
         return listOf(token)
     }
+
+    private fun normalizeSwitchIdIfNeeded(tokens: List<String>, tag: String): String? {
+        if (tag != SWITCH_TAG || !isSwitchIdOcrCandidate(tokens)) return null
+        return buildId(SWITCH_ID_TARGET, extractTrailingNumber(tokens))
+    }
+
+    private fun isSwitchIdOcrCandidate(tokens: List<String>): Boolean {
+        val firstToken = tokens.firstOrNull() ?: return false
+        return fuzzyTokenScore(firstToken, switchIdTargets) >= SWITCH_ID_OCR_THRESHOLD
+    }
+
+    private fun normalizeImageViewIdIfNeeded(tokens: List<String>, tag: String): String? {
+        if (tag != IMAGE_VIEW_TAG || !isImageViewIdOcrCandidate(tokens)) return null
+        return buildId(IMAGE_VIEW_ID_PREFIX, IMAGE_VIEW_ID_VIEW_TOKEN, extractTrailingNumber(tokens))
+    }
+
+    private fun isImageViewIdOcrCandidate(tokens: List<String>): Boolean {
+        if (tokens.isEmpty()) return false
+        val hasImagePrefix = tokens.any(::isImageViewPrefixToken)
+        val hasViewToken = tokens.any(::isImageViewViewToken)
+        return hasImagePrefix && hasViewToken
+    }
+
+    private fun isImageViewPrefixToken(token: String): Boolean {
+        return token == "m" ||
+            token in imageViewIdPrefixTargets ||
+            fuzzyTokenScore(token, imageViewIdPrefixTargets) >= IMAGE_VIEW_ID_OCR_THRESHOLD
+    }
+
+    private fun isImageViewViewToken(token: String): Boolean {
+        return token in imageViewIdViewTargets ||
+            fuzzyTokenScore(token, imageViewIdViewTargets) >= IMAGE_VIEW_ID_OCR_THRESHOLD
+    }
+
+    private fun extractTrailingNumber(tokens: List<String>): String? {
+        return tokens.lastOrNull()?.takeIf { token -> token.all(Char::isDigit) }
+    }
+
+    private fun buildId(vararg parts: String?): String {
+        return parts.filterNotNull().joinToString("_")
+    }
+
+    private fun fuzzyTokenScore(token: String, targets: List<String>): Int {
+        return FuzzySearch.extractOne(token, targets).score
+    }
 }
 
 internal object DrawableCleaner : ValueCleaner {
@@ -150,15 +211,15 @@ internal object DrawableCleaner : ValueCleaner {
 
         val cleaned = rawValue.lowercase()
             .replace(Regex("\\.(png|jpg|jpeg|webp|xml|svg)$"), "")
-            .replace(Regex("inm|rn|wm|nm")) { m -> if (m.value == "inm") "im" else "m" }
-            .replace(Regex("[^a-z0-9_]"), "_")
-            .replace(Regex("_+"), "_")
+            .replace(AttributeRegexPatterns.OCR_IM_OR_M_CONFUSION) { m -> if (m.value == "inm") "im" else "m" }
+            .replace(AttributeRegexPatterns.RESOURCE_NAME_UNSAFE_CHARS, "_")
+            .replace(AttributeRegexPatterns.MULTIPLE_UNDERSCORES, "_")
             .trim('_')
 
         val finalCleaned = cleaned
             .replace("im_age", "image")
             .replace(Regex("(^|_)im($|_)"), "$1image$2")
-            .replace(Regex("_+"), "_")
+            .replace(AttributeRegexPatterns.MULTIPLE_UNDERSCORES, "_")
             .trim('_')
         return if (finalCleaned.isEmpty()) rawValue else "@drawable/$finalCleaned"
     }
@@ -173,6 +234,45 @@ internal object TextStyleCleaner : ValueCleaner {
 
         val result = FuzzySearch.extractOne(normalizedValue, TEXT_STYLE_VALUES)
         return if (result.score >= 60) result.string else rawValue
+    }
+}
+
+internal object GravityCleaner : ValueCleaner {
+    override fun clean(rawValue: String): String {
+        val normalized = rawValue.lowercase()
+            .replace(Regex("centerhorizontal"), "center_horizontal")
+            .replace(Regex("centervertical"), "center_vertical")
+            .replace(Regex("center\\s+horizontal"), "center_horizontal")
+            .replace(Regex("center\\s+vertical"), "center_vertical")
+            .replace(Regex("[^a-z_]+"), " ")
+        return GravityValueSet.values.sortedByDescending { it.length }.firstOrNull { value ->
+            Regex("(^|\\s)${Regex.escape(value)}(\\s|$)").containsMatchIn(normalized)
+        } ?: rawValue.trim()
+    }
+}
+
+internal object InputTypeCleaner : ValueCleaner {
+    private val inputTypeValues = InputTypeValueSet.values.map { it.lowercase() }.toSet()
+
+    override fun clean(rawValue: String): String {
+        val normalized = rawValue.trim()
+            .replace(AttributeRegexPatterns.WHITESPACE, "")
+            .replace(Regex("[^A-Za-z|]+"), "")
+
+        if (normalized.isBlank()) return rawValue.trim()
+
+        return normalized.split('|')
+            .mapNotNull { part ->
+                val result = FuzzySearch.extractOne(part.lowercase(), inputTypeValues)
+                if (result.score >= 70) {
+                    InputTypeValueSet.values.firstOrNull { it.equals(result.string, ignoreCase = true) }
+                } else {
+                    null
+                }
+            }
+            .distinct()
+            .joinToString("|")
+            .ifBlank { rawValue.trim() }
     }
 }
 

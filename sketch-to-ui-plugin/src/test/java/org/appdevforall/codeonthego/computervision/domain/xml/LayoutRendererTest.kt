@@ -177,6 +177,52 @@ class LayoutRendererTest {
     }
 
     @Test
+    fun `edit text renders explicit non password text`() {
+        val input = box("text_entry_box", "", x = 0, y = 0, w = 200, h = 52)
+        val context = XmlContext()
+
+        val renderer = LayoutRenderer(
+            context = context,
+            annotations = identityAnnotationMap(
+                input to "id: display_name | text: Alice | hint: Name"
+            )
+        )
+
+        renderer.render(LayoutItem.SimpleView(input))
+
+        val xml = context.toString()
+
+        assertTrue(xml.contains("""<EditText"""))
+        assertTrue(xml.contains("""android:id="@+id/display_name""""))
+        assertTrue(xml.contains("""android:text="Alice""""))
+        assertTrue(xml.contains("""android:hint="Name""""))
+    }
+
+    @Test
+    fun `password edit text does not render metadata text`() {
+        val input = box("text_entry_box", "Password", x = 0, y = 0, w = 200, h = 52)
+        val context = XmlContext()
+
+        val renderer = LayoutRenderer(
+            context = context,
+            annotations = identityAnnotationMap(
+                input to "layoutwidth | layoutwidthi20O0dp | layoutheight: | layoutheight30 | t | extassword | textPassword | credential | ieredeetal"
+            )
+        )
+
+        renderer.render(LayoutItem.SimpleView(input))
+
+        val xml = context.toString()
+
+        assertTrue(xml.contains("""<EditText"""))
+        assertTrue(xml.contains("""android:id="@+id/credential""""))
+        assertTrue(xml.contains("""android:inputType="textPassword""""))
+        assertTrue(xml.contains("""android:hint="Password""""))
+        assertFalse(xml.contains("""android:text=""""))
+        assertFalse(xml.contains("credential ieredeetal"))
+    }
+
+    @Test
     fun `radio group keeps option labels when group annotation has text color`() {
         val first = radioBox(y = 0, text = "Vanilla")
         val second = radioBox(y = 20, text = "Chocolate")

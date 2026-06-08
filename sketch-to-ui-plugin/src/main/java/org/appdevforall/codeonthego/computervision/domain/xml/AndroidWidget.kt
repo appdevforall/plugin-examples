@@ -267,6 +267,7 @@ class SwitchWidget(
         val attrs = mutableMapOf<String, String>()
         val switchText = parsedAttrs[AttributeKey.TEXT.xmlName]
             ?: box.text.trim().takeIf { it.isVisibleSwitchLabel(box.label) }
+                ?.normalizeCollapsedSwitchLabel()
             ?: ""
 
         attrs[AttributeKey.TEXT.xmlName] = switchText
@@ -280,6 +281,10 @@ class SwitchWidget(
 
     private fun String.isVisibleSwitchLabel(label: String): Boolean {
         return isNotEmpty() && this != label && !WidgetTagParser.isTagSequence(this)
+    }
+
+    private fun String.normalizeCollapsedSwitchLabel(): String {
+        return replace(Regex("\\bRememberme\\b", RegexOption.IGNORE_CASE), "Remember me")
     }
 }
 
@@ -301,7 +306,15 @@ class InputWidget(
 
     override fun processAttributes(context: XmlContext, id: String, attrs: Map<String, String>): Map<String, String> {
         return super.processAttributes(context, id, attrs)
-            .filterKeys { it != AttributeKey.TEXT.xmlName }
+            .filterNot { (key, value) ->
+                key == AttributeKey.TEXT.xmlName && shouldSuppressText(value, attrs)
+            }
+            .toMap()
+    }
+
+    private fun shouldSuppressText(text: String, attrs: Map<String, String>): Boolean {
+        return attrs[AttributeKey.INPUT_TYPE.xmlName]?.contains("textPassword", ignoreCase = true) == true ||
+            text.contains(Regex("\\b(?:layout|inputtype|textpassword|textcolor|textsize)\\b", RegexOption.IGNORE_CASE))
     }
 }
 

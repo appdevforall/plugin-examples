@@ -76,6 +76,7 @@ class WidgetFactory(
         val groupId = resolveRadioGroupId(fullGroupAttrs["android:id"]?.substringAfterLast('/'))
 
         val groupStructuralAttrs = setOf("android:id", "android:layout_width", "android:layout_height", "android:orientation")
+        // Group metadata can contain style attributes; visible option labels must stay with each RadioButton's OCR text.
         val sharedAttrs = fullGroupAttrs.filterKeys {
             it !in groupStructuralAttrs && it != AttributeKey.TEXT.xmlName
         }

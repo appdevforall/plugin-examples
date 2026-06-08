@@ -329,6 +329,33 @@ class YoloToXmlConverterTest {
         assertTrue(xml.contains("""android:id="@+id/last_name""""))
     }
 
+    @Test
+    fun `transitive overlapping text entry boxes collapse to one edit text`() {
+        val detections = listOf(
+            detection("text_entry_box", "Password", 250f, 200f, 350f, 252f, region = SketchRegion.CANVAS),
+            detection("text_entry_box", "Password", 280f, 200f, 380f, 252f, region = SketchRegion.CANVAS),
+            detection("text_entry_box", "Password", 310f, 200f, 410f, 252f, region = SketchRegion.CANVAS),
+            detection("text", "T-1", 215f, 212f, 245f, 234f, isYolo = false, region = SketchRegion.CANVAS)
+        )
+        val annotations = mapOf(
+            "T-1" to "id: credential | layout_width: 200dp | layout_height: 52dp | inputType: textPassword"
+        )
+
+        val (xml, _) = YoloToXmlConverter.generateXmlLayout(
+            detections = detections,
+            annotations = annotations,
+            sourceImageWidth = 1000,
+            sourceImageHeight = 1000,
+            targetDpWidth = 1000,
+            targetDpHeight = 1000,
+            wrapInScroll = false
+        )
+
+        assertEquals(1, Regex("<EditText\\b").findAll(xml).count())
+        assertTrue(xml.contains("""android:id="@+id/credential""""))
+        assertFalse(xml.contains("""android:orientation="horizontal""""))
+    }
+
     private fun detection(
         label: String,
         text: String,

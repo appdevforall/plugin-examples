@@ -1,6 +1,61 @@
 package org.appdevforall.codeonthego.computervision.domain.parser.sanitizer
 
 
+class AttributeKeyPhraseSanitizer : DictionaryRegexSanitizer() {
+    override val rawRules = mapOf(
+        "\\btext\\s*[-_ ]\\s*(?:colou?r|calar|colar)\\b" to "textcolor",
+        "\\btexteolou?r\\b|\\btexteolor\\b" to "textcolor",
+        "\\binput\\s*[-_ ]?\\s*type\\b" to "input_type",
+        "\\btext\\s+pass\\s*word\\b" to "textPassword",
+        "\\btext\\s+password\\b" to "textPassword",
+        "\\blay(?:out|aut)[_\\- ]?gr(?:av|a)ity\\b" to "layout_gravity",
+        "\\blayoutgravity\\b" to "layout_gravity"
+    )
+}
+
+class CompactDimensionSanitizer : OcrSanitizer {
+    private val compactWidthRegex = Regex(
+        "\\blay(?:out|aut)?[_\\-\\s]*w(?:idth)?[iIl1|]?\\s*([0-9oOIlLSBZz]+)\\s*(d[pbe]|de|clp|dp)?\\b",
+        RegexOption.IGNORE_CASE
+    )
+    private val compactHeightRegex = Regex(
+        "\\blay(?:out|aut)?[_\\-\\s]*h(?:ei(?:ght?)?)?[iIl1|]?\\s*([0-9oOIlLSBZz]+)\\s*(d[pbe]|de|clp|dp)?\\b",
+        RegexOption.IGNORE_CASE
+    )
+    private val compactBareWidthRegex = Regex(
+        "\\bwidth[iIl1|]?\\s*([0-9oOIlLSBZz]+)\\s*(d[pbe]|de|clp|dp)?\\b",
+        RegexOption.IGNORE_CASE
+    )
+    private val compactBareHeightRegex = Regex(
+        "\\bheight[iIl1|]?\\s*([0-9oOIlLSBZz]+)\\s*(d[pbe]|de|clp|dp)?\\b",
+        RegexOption.IGNORE_CASE
+    )
+
+    override fun sanitize(input: String): String {
+        return input
+            .replace(compactWidthRegex) { match ->
+                "layout_width: ${match.groupValues[1]}${match.groupValues[2].normalizeDimensionUnit()}"
+            }
+            .replace(compactHeightRegex) { match ->
+                "layout_height: ${match.groupValues[1]}${match.groupValues[2].normalizeDimensionUnit()}"
+            }
+            .replace(compactBareWidthRegex) { match ->
+                "width: ${match.groupValues[1]}${match.groupValues[2].normalizeDimensionUnit()}"
+            }
+            .replace(compactBareHeightRegex) { match ->
+                "height: ${match.groupValues[1]}${match.groupValues[2].normalizeDimensionUnit()}"
+            }
+    }
+
+    private fun String.normalizeDimensionUnit(): String {
+        return when (lowercase()) {
+            "", "dp", "d", "de", "clp" -> "dp"
+            "sp" -> "sp"
+            else -> "dp"
+        }
+    }
+}
+
 class ColorSanitizer : DictionaryRegexSanitizer() {
     override val rawRules = mapOf(
         "backgroundired" to "background: red",
