@@ -154,7 +154,7 @@ class LayoutRendererTest {
     }
 
     @Test
-    fun `switch preserves center horizontal gravity and normalizes remember me label`() {
+    fun `Given_switch_with_center_gravity_and_noisy_label_When_rendered_Then_gravity_and_label_are_normalized`() {
         val switch = box("switch_off", "Rememberme", x = 0, y = 0, w = 80, h = 40)
         val context = XmlContext()
 
@@ -177,7 +177,7 @@ class LayoutRendererTest {
     }
 
     @Test
-    fun `edit text renders explicit non password text`() {
+    fun `Given_non_password_EditText_with_explicit_text_When_rendered_Then_text_is_included`() {
         val input = box("text_entry_box", "", x = 0, y = 0, w = 200, h = 52)
         val context = XmlContext()
 
@@ -199,7 +199,7 @@ class LayoutRendererTest {
     }
 
     @Test
-    fun `password edit text does not render metadata text`() {
+    fun `Given_password_EditText_with_metadata_text_When_rendered_Then_metadata_text_is_excluded`() {
         val input = box("text_entry_box", "Password", x = 0, y = 0, w = 200, h = 52)
         val context = XmlContext()
 
@@ -223,7 +223,7 @@ class LayoutRendererTest {
     }
 
     @Test
-    fun `radio group keeps option labels when group annotation has text color`() {
+    fun `Given_radio_group_with_text_color_annotation_When_rendered_Then_option_labels_are_preserved`() {
         val first = radioBox(y = 0, text = "Vanilla")
         val second = radioBox(y = 20, text = "Chocolate")
         val third = radioBox(y = 40, text = "Strawberry")
@@ -249,7 +249,7 @@ class LayoutRendererTest {
     }
 
     @Test
-    fun `image compact height annotation renders recovered height`() {
+    fun `Given_image_with_compact_height_annotation_When_rendered_Then_recovered_height_is_included`() {
         val image = box("image_placeholder", "", x = 0, y = 0, w = 200, h = 100)
         val context = XmlContext()
 

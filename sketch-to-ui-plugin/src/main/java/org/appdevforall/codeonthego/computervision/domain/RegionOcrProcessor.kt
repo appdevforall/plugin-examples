@@ -87,6 +87,7 @@ class RegionOcrProcessor(
         }.awaitAll()
     }
 
+    /** Converts percentage guides into pixel crop rectangles for both metadata margins. */
     private suspend fun runMarginOcr(
         bitmap: Bitmap,
         leftGuidePct: Float,
@@ -106,6 +107,7 @@ class RegionOcrProcessor(
         return results
     }
 
+    /** Translates OCR boxes from cropped-region coordinates back into source-image coordinates. */
     private suspend fun ocrCroppedRegion(
         bitmap: Bitmap,
         rect: RectF,

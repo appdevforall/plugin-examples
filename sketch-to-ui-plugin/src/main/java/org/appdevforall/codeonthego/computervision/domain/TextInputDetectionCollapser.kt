@@ -9,6 +9,7 @@ object TextInputDetectionCollapser {
     private const val TEXT_ENTRY_CONTAINMENT_THRESHOLD = 0.85f
     private const val TEXT_ENTRY_IOU_THRESHOLD = 0.50f
 
+    /** Selects the largest, then highest-confidence detection from each overlapping input group. */
     fun collapse(candidates: List<DetectionResult>): List<DetectionResult> {
         val textInputs = candidates.filter { it.label == TEXT_ENTRY_LABEL }
         if (textInputs.size <= 1) return candidates
@@ -54,6 +55,7 @@ object TextInputDetectionCollapser {
         }
     }
 
+    /** Compares containment and intersection-over-union ratios to detect duplicate text inputs. */
     private fun DetectionResult.overlapsTextInputDuplicate(other: DetectionResult): Boolean {
         if (this === other) return true
         val intersectionWidth = minOf(boundingBox.right, other.boundingBox.right) -
@@ -72,6 +74,7 @@ object TextInputDetectionCollapser {
             intersectionOverUnion >= TEXT_ENTRY_IOU_THRESHOLD
     }
 
+    /** Calculates the detection bounding-box area. */
     private val DetectionResult.area: Float
         get() = (boundingBox.right - boundingBox.left) * (boundingBox.bottom - boundingBox.top)
 }

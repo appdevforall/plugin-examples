@@ -268,7 +268,7 @@ class YoloToXmlConverterTest {
     }
 
     @Test
-    fun `overlapping password text entry boxes collapse to one edit text with parsed metadata`() {
+    fun `Given_overlapping_password_text_entries_When_converted_Then_one_EditText_with_metadata_is_generated`() {
         val detections = listOf(
             detection("text_entry_box", "Email", 250f, 100f, 550f, 150f, region = SketchRegion.CANVAS),
             detection("text_entry_box", "Password", 250f, 200f, 550f, 252f, region = SketchRegion.CANVAS),
@@ -305,7 +305,7 @@ class YoloToXmlConverterTest {
     }
 
     @Test
-    fun `compact degraded T-2 metadata recovers password edit text from same prefix evidence`() {
+    fun `Given_degraded_password_metadata_When_converted_Then_same_prefix_evidence_recovers_EditText`() {
         val detections = listOf(
             detection("text_entry_box", "Email", 250f, 100f, 550f, 152f, region = SketchRegion.CANVAS),
             detection("text_entry_box", "Password", 250f, 200f, 550f, 203f, region = SketchRegion.CANVAS),
@@ -338,7 +338,7 @@ class YoloToXmlConverterTest {
     }
 
     @Test
-    fun `same prefix dimension recovery does not cross widget groups`() {
+    fun `Given_same_prefix_dimension_evidence_When_converted_Then_recovery_does_not_cross_widget_groups`() {
         val annotations = MetadataAnnotationRecovery.resolve(
             mapOf(
                 "B-1" to "layoutheight:52dp",
@@ -352,7 +352,7 @@ class YoloToXmlConverterTest {
     }
 
     @Test
-    fun `same prefix dimension recovery does not override valid explicit value`() {
+    fun `Given_valid_explicit_dimension_When_same_prefix_dimension_is_recovered_Then_explicit_value_is_preserved`() {
         val annotations = MetadataAnnotationRecovery.resolve(
             mapOf(
                 "T-1" to "layoutheight:52dp",
@@ -366,7 +366,7 @@ class YoloToXmlConverterTest {
     }
 
     @Test
-    fun `nearby distinct text entry boxes are not collapsed`() {
+    fun `Given_nearby_distinct_text_entries_When_converted_Then_entries_are_not_collapsed`() {
         val detections = listOf(
             detection("text_entry_box", "First", 250f, 100f, 450f, 152f, region = SketchRegion.CANVAS),
             detection("text_entry_box", "Last", 470f, 100f, 670f, 152f, region = SketchRegion.CANVAS),
@@ -395,7 +395,7 @@ class YoloToXmlConverterTest {
     }
 
     @Test
-    fun `transitive overlapping text entry boxes collapse to one edit text`() {
+    fun `Given_transitively_overlapping_text_entries_When_converted_Then_one_EditText_is_generated`() {
         val detections = listOf(
             detection("text_entry_box", "Password", 250f, 200f, 350f, 252f, region = SketchRegion.CANVAS),
             detection("text_entry_box", "Password", 280f, 200f, 380f, 252f, region = SketchRegion.CANVAS),
@@ -423,7 +423,7 @@ class YoloToXmlConverterTest {
     }
 
     @Test
-    fun `margin crop metadata takes priority without reordering by score`() {
+    fun `Given_margin_crop_and_full_image_metadata_When_parsed_Then_margin_crop_has_priority_without_score_reordering`() {
         val detections = listOf(
             detection("text", "B-1", 250f, 200f, 280f, 225f, isYolo = false, region = SketchRegion.CANVAS),
             detection("text", "B-1", 20f, 200f, 60f, 225f, isYolo = false, region = SketchRegion.LEFT_METADATA)
@@ -450,7 +450,7 @@ class YoloToXmlConverterTest {
     }
 
     @Test
-    fun `duplicate OCR sources recover ids only from clean candidate for same widget`() {
+    fun `Given_duplicate_OCR_sources_When_ids_are_recovered_Then_clean_same_widget_candidate_is_used`() {
         val detections = listOf(
             detection("text", "T-1", 250f, 100f, 280f, 125f, isYolo = false, region = SketchRegion.CANVAS),
             detection("text", "SW-1", 250f, 200f, 290f, 225f, isYolo = false, region = SketchRegion.CANVAS),
@@ -479,7 +479,7 @@ class YoloToXmlConverterTest {
     }
 
     @Test
-    fun `score differences do not move OCR lines into another annotation block`() {
+    fun `Given_OCR_lines_with_different_scores_When_parsed_Then_lines_remain_in_their_annotation_block`() {
         val detections = listOf(
             detection("text", "B-1", 250f, 100f, 280f, 125f, isYolo = false, region = SketchRegion.CANVAS),
             detection("text", "B-2", 250f, 200f, 280f, 225f, isYolo = false, region = SketchRegion.CANVAS),
@@ -496,7 +496,7 @@ class YoloToXmlConverterTest {
     }
 
     @Test
-    fun `recoverable noisy metadata generates corrected widget xml`() {
+    fun `Given_recoverable_noisy_metadata_When_converted_Then_corrected_widget_XML_is_generated`() {
         val detections = listOf(
             detection("text_entry_box", "Password", 250f, 100f, 550f, 152f, region = SketchRegion.CANVAS),
             detection("switch_off", "", 250f, 220f, 400f, 272f, region = SketchRegion.CANVAS),
@@ -538,7 +538,7 @@ class YoloToXmlConverterTest {
     }
 
     @Test
-    fun `similar login sketch keeps same block metadata recovery consistent`() {
+    fun `Given_similar_login_sketch_When_converted_Then_same_block_metadata_recovery_is_consistent`() {
         val detections = listOf(
             detection("text_entry_box", "Email", 250f, 100f, 550f, 152f, region = SketchRegion.CANVAS),
             detection("text_entry_box", "Password", 250f, 200f, 550f, 252f, region = SketchRegion.CANVAS),
@@ -606,7 +606,7 @@ class YoloToXmlConverterTest {
     }
 
     @Test
-    fun `separate adjacent image dimension OCR line recovers square xml`() {
+    fun `Given_adjacent_image_dimension_OCR_line_When_converted_Then_square_image_XML_is_recovered`() {
         val detections = listOf(
             detection("image_placeholder", "", 250f, 460f, 314f, 524f, region = SketchRegion.CANVAS),
             detection("text", "P-1", 210f, 470f, 240f, 495f, isYolo = false, region = SketchRegion.CANVAS),

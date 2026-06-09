@@ -6,7 +6,7 @@ import org.junit.Test
 class SmartBoundaryDetectorTest {
 
     @Test
-    fun `detects boundaries between left metadata canvas and right metadata clusters`() {
+    fun `Given_three_projection_clusters_When_boundaries_are_detected_Then_metadata_and_canvas_are_separated`() {
         val projection = projection(
             width = 600,
             30..120 to 10f,
@@ -21,7 +21,7 @@ class SmartBoundaryDetectorTest {
     }
 
     @Test
-    fun `adapts to wider sketch with different metadata column widths`() {
+    fun `Given_wider_sketch_with_different_metadata_widths_When_boundaries_are_detected_Then_bounds_adapt`() {
         val projection = projection(
             width = 1200,
             40..245 to 9f,
@@ -36,7 +36,7 @@ class SmartBoundaryDetectorTest {
     }
 
     @Test
-    fun `adapts when metadata columns are narrow and canvas is wide`() {
+    fun `Given_narrow_metadata_and_wide_canvas_When_boundaries_are_detected_Then_bounds_adapt`() {
         val projection = projection(
             width = 900,
             35..95 to 8f,
@@ -51,7 +51,7 @@ class SmartBoundaryDetectorTest {
     }
 
     @Test
-    fun `does not choose large internal canvas gap before right metadata`() {
+    fun `Given_large_internal_canvas_gap_When_boundaries_are_detected_Then_right_metadata_separator_is_selected`() {
         val projection = projection(
             width = 700,
             35..130 to 10f,
@@ -68,7 +68,7 @@ class SmartBoundaryDetectorTest {
     }
 
     @Test
-    fun `falls back to gap based bounds when three clusters cannot be found`() {
+    fun `Given_projection_without_three_clusters_When_boundaries_are_detected_Then_gap_based_bounds_are_used`() {
         val projection = projection(
             width = 600,
             40..150 to 10f,
@@ -82,7 +82,7 @@ class SmartBoundaryDetectorTest {
     }
 
     @Test
-    fun `regression keeps right boundary out of central canvas for observed proportions`() {
+    fun `Given_observed_projection_proportions_When_boundaries_are_detected_Then_right_boundary_stays_outside_canvas`() {
         val projection = projection(
             width = 785,
             29..155 to 10f,

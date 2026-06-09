@@ -1,8 +1,9 @@
 package org.appdevforall.codeonthego.computervision.domain.parser.recovery
 
 import org.appdevforall.codeonthego.computervision.domain.parser.AttributeKey
-import org.appdevforall.codeonthego.computervision.domain.parser.DrawableCleaner
-import org.appdevforall.codeonthego.computervision.domain.parser.IdCleaner
+import org.appdevforall.codeonthego.computervision.domain.parser.AttributeRegexPatterns
+import org.appdevforall.codeonthego.computervision.domain.parser.cleaner.DrawableCleaner
+import org.appdevforall.codeonthego.computervision.domain.parser.cleaner.IdCleaner
 
 internal object WidgetAttributeRecovery {
     private const val EDIT_TEXT_TAG = "EditText"
@@ -91,19 +92,10 @@ internal object WidgetAttributeRecovery {
         return DrawableCleaner.clean(rawDrawable).substringAfterLast('/')
     }
 
-    private val imageViewIdRegex = Regex(
-        "\\b(?:i?m)[_\\s-]+view[_\\s-]+\\d+\\b",
-        RegexOption.IGNORE_CASE
-    )
-    private val imageViewIdCompactRegex = Regex(
-        "\\b(?:i?m)view\\d+\\b",
-        RegexOption.IGNORE_CASE
-    )
-    private val explicitIdRegex = Regex("\\bid\\s*:\\s*([a-z0-9_-]+)", RegexOption.IGNORE_CASE)
-    private val adjacentRepeatedDimensionRegex = Regex(
-        "\\b(?:width|height|layout_width|layout_height)\\s*:\\s*([0-9]+)\\s*(?:dp|de|do)(?:\\s+|\\s*\\|\\s*)\\1\\s*(?:dp|de|do)\\b",
-        RegexOption.IGNORE_CASE
-    )
-    private val compactImageIdRegex = Regex("^img([a-z0-9]+)$")
-    private val srcRegex = Regex("\\bsrc\\s*:\\s*(?:@drawable/)?([a-z0-9_-]+)", RegexOption.IGNORE_CASE)
+    private val imageViewIdRegex = AttributeRegexPatterns.IMAGE_VIEW_ID_TOKENS
+    private val imageViewIdCompactRegex = AttributeRegexPatterns.IMAGE_VIEW_ID_COMPACT
+    private val explicitIdRegex = AttributeRegexPatterns.EXPLICIT_LOWER_ID
+    private val adjacentRepeatedDimensionRegex = AttributeRegexPatterns.ADJACENT_REPEATED_DIMENSION
+    private val compactImageIdRegex = AttributeRegexPatterns.COMPACT_IMAGE_ID
+    private val srcRegex = AttributeRegexPatterns.EXPLICIT_SRC
 }
