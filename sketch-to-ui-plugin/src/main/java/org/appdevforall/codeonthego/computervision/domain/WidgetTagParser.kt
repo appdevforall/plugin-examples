@@ -5,6 +5,15 @@ package org.appdevforall.codeonthego.computervision.domain
  * Handles common OCR misreads and formatting inconsistencies.
  */
 internal object WidgetTagParser {
+    private const val BUTTON_TAG = "Button"
+    private const val CHECK_BOX_TAG = "CheckBox"
+    private const val EDIT_TEXT_TAG = "EditText"
+    private const val IMAGE_VIEW_TAG = "ImageView"
+    private const val RADIO_BUTTON_TAG = "RadioButton"
+    private const val SPINNER_TAG = "Spinner"
+    private const val SWITCH_TAG = "Switch"
+    private const val VIEW_TAG = "View"
+
     private val tagRegex = Regex("^(?i)(B|P|D|T|C|R|SW|S)-[A-Z0-9_]+$")
     private val tagExtractRegex = Regex("^(?i)(B|P|D|T|C|R|SW|S|8|8W|S8)([\\s\\-_.,|/]*)([A-Z0-9_\\-]+)")
     private val VALID_PREFIXES = setOf("B", "P", "D", "T", "C", "R", "SW", "S")
@@ -96,6 +105,20 @@ internal object WidgetTagParser {
      * Extracts the numeric or alphanumeric identifier part of the tag (the part after the hyphen).
      */
     fun extractOrdinal(tag: String): Int? = tag.substringAfter('-', "").toIntOrNull()
+
+    fun androidTagFor(tag: String): String {
+        val normalized = normalizeTagText(tag)
+        return when {
+            normalized.startsWith("T-") -> EDIT_TEXT_TAG
+            normalized.startsWith("B-") -> BUTTON_TAG
+            normalized.startsWith("P-") -> IMAGE_VIEW_TAG
+            normalized.startsWith("SW-") -> SWITCH_TAG
+            normalized.startsWith("C-") -> CHECK_BOX_TAG
+            normalized.startsWith("R-") -> RADIO_BUTTON_TAG
+            normalized.startsWith("D-") -> SPINNER_TAG
+            else -> VIEW_TAG
+        }
+    }
 
     /**
      * Cleans up the token suffix. If the token consists entirely of numbers or OCR artifacts,

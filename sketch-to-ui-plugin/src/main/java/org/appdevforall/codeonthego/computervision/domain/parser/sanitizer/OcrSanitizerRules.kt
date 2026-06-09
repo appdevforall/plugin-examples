@@ -1,5 +1,7 @@
 package org.appdevforall.codeonthego.computervision.domain.parser.sanitizer
 
+import org.appdevforall.codeonthego.computervision.domain.parser.AttributeKey
+
 
 class AttributeKeyPhraseSanitizer : DictionaryRegexSanitizer() {
     override val rawRules = mapOf(
@@ -9,7 +11,8 @@ class AttributeKeyPhraseSanitizer : DictionaryRegexSanitizer() {
         "\\btext\\s+pass\\s*word\\b" to "textPassword",
         "\\btext\\s+password\\b" to "textPassword",
         "\\blay(?:out|aut)[_\\- ]?gr(?:av|a)ity\\b" to "layout_gravity",
-        "\\blayoutgravity\\b" to "layout_gravity"
+        "\\blayoutgravity\\b" to "layout_gravity",
+        "\\blayout[_\\- ]*heiqht\\b" to "layout_height"
     )
 }
 
@@ -37,14 +40,21 @@ class CompactDimensionSanitizer : OcrSanitizer {
                 "layout_width: ${match.groupValues[1]}${match.groupValues[2].normalizeDimensionUnit()}"
             }
             .replace(compactHeightRegex) { match ->
-                "layout_height: ${match.groupValues[1]}${match.groupValues[2].normalizeDimensionUnit()}"
+                match.toDimensionReplacement("layout_height")
             }
             .replace(compactBareWidthRegex) { match ->
                 "width: ${match.groupValues[1]}${match.groupValues[2].normalizeDimensionUnit()}"
             }
             .replace(compactBareHeightRegex) { match ->
-                "height: ${match.groupValues[1]}${match.groupValues[2].normalizeDimensionUnit()}"
+                match.toDimensionReplacement("height")
             }
+    }
+
+    private fun MatchResult.toDimensionReplacement(key: String): String {
+        val rawNumber = groupValues[1]
+        val rawUnit = groupValues[2]
+        if (rawUnit.isBlank() && value.count(Char::isDigit) <= MAX_LOW_CONFIDENCE_UNITLESS_HEIGHT_DIGITS) return ""
+        return "$key: ${rawNumber}${rawUnit.normalizeDimensionUnit()}"
     }
 
     private fun String.normalizeDimensionUnit(): String {
@@ -53,6 +63,10 @@ class CompactDimensionSanitizer : OcrSanitizer {
             "sp" -> "sp"
             else -> "dp"
         }
+    }
+
+    private companion object {
+        private const val MAX_LOW_CONFIDENCE_UNITLESS_HEIGHT_DIGITS = 2
     }
 }
 
@@ -86,9 +100,14 @@ class MarginPaddingSanitizer : DictionaryRegexSanitizer() {
 }
 
 class StructureSanitizer : DictionaryRegexSanitizer() {
+    private val idKeyPattern = AttributeKey.ID.aliases
+        .filterNot { it == AttributeKey.ID.aliases.first() }
+        .sortedByDescending { it.length }
+        .joinToString("|")
+
     override val rawRules = mapOf(
         "horizontal\\s+gravity\\s*:\\s*center\\s+layout" to "layout_gravity: center_horizontal",
-        "\\b[ilL][dl]\\b\\s*[:;]?" to "id: ",
+        "\\b(?:$idKeyPattern)\\b\\s*[:;]" to "id: ",
         "\\bS[ec][rt]\\b\\s*[:;]?" to "src: "
     )
 }

@@ -353,13 +353,83 @@ class FuzzyAttributeParserTest {
     @Test
     fun `noisy password text input annotation parses correctly`() {
         val annotation = "layoutwidth | layoutwidthi20O0dp | layoutheight: | layoutheight30 | t | extassword | textPassword | credential | ieredeetal"
-        val result = FuzzyAttributeParser.parse(annotation, "EditText")
+        val resolved = MetadataAnnotationRecovery.resolve(
+            mapOf(
+                "T-1" to "layoutwidth:200dp | layoutheight:52dp | hint:Email | id:user_email",
+                "T-2" to annotation
+            )
+        ).getValue("T-2")
+        val result = FuzzyAttributeParser.parse(resolved, "EditText")
 
         assertEquals("200dp", result["android:layout_width"])
         assertEquals("52dp", result["android:layout_height"])
-        assertEquals("credential", result["android:id"])
+        assertNull(result["android:id"])
         assertEquals("textPassword", result["android:inputType"])
         assertNull(result["android:text"])
+    }
+
+    @Test
+    fun `unitless compact height fragments are not finalized as dimensions`() {
+        assertNull(FuzzyAttributeParser.parse("layoutheight3", "EditText")["android:layout_height"])
+        assertNull(FuzzyAttributeParser.parse("layoutheight30", "EditText")["android:layout_height"])
+    }
+
+    @Test
+    fun `valid explicit height remains valid`() {
+        val result = FuzzyAttributeParser.parse("layout_height:30dp", "EditText")
+
+        assertEquals("30dp", result["android:layout_height"])
+    }
+
+    @Test
+    fun `password recovery is scoped to edit text`() {
+        listOf("Button", "Switch", "ImageView", "RadioGroup").forEach { tag ->
+            val result = FuzzyAttributeParser.parse("vextPassword | extassword", tag)
+
+            assertNull(result["android:inputType"])
+        }
+    }
+
+    @Test
+    fun `single random unkeyed password token is not used as id`() {
+        val result = FuzzyAttributeParser.parse("vextPassword | randomword", "EditText")
+
+        assertNull(result["android:id"])
+        assertEquals("textPassword", result["android:inputType"])
+    }
+
+    @Test
+    fun `random unkeyed words are not used as ids`() {
+        val resolved = MetadataAnnotationRecovery.resolve(
+            mapOf("SW-1" to "layout_width:100dp | remember me | maybe later")
+        ).getValue("SW-1")
+        val result = FuzzyAttributeParser.parse(resolved, "Switch")
+
+        assertNull(result["android:id"])
+    }
+
+    @Test
+    fun `hint does not absorb failed id fragments`() {
+        val resolved = MetadataAnnotationRecovery.resolve(
+            mapOf("T-1" to "hint:Email | icl useremail | id:user_email")
+        ).getValue("T-1")
+        val result = FuzzyAttributeParser.parse(resolved, "EditText")
+
+        assertEquals("Email", result["android:hint"])
+        assertEquals("user_email", result["android:id"])
+    }
+
+    @Test
+    fun `same block id recovery prefers clean candidate without semantic correction`() {
+        val recovered = MetadataAnnotationRecovery.resolve(
+            mapOf(
+                "SW-1" to "id:remenber | idi remember | idiremember",
+                "SW-2" to "id:remenber"
+            )
+        )
+
+        assertEquals("remember", FuzzyAttributeParser.parse(recovered.getValue("SW-1"), "Switch")["android:id"])
+        assertEquals("remenber", FuzzyAttributeParser.parse(recovered.getValue("SW-2"), "Switch")["android:id"])
     }
 
     @Test
@@ -412,6 +482,93 @@ class FuzzyAttributeParserTest {
         assertEquals("64dp", result["android:layout_height"])
         assertEquals("img_logo", result["android:id"])
         assertEquals("@drawable/logo", result["android:src"])
+    }
+
+    @Test
+    fun `clean dimension source is not overridden by noisy duplicate`() {
+        val result = FuzzyAttributeParser.parse(
+            "layoutwidth:150dp | layoutwidth:15Ddp",
+            "Button"
+        )
+
+        assertEquals("150dp", result["android:layout_width"])
+    }
+
+    @Test
+    fun `custom ids are not semantically corrected`() {
+        val ids = listOf("reminder", "remembered", "credentials", "credential_store", "remenber")
+
+        ids.forEach { id ->
+            assertEquals(id, FuzzyAttributeParser.parse("id:$id", "Switch")["android:id"])
+        }
+        assertNull(FuzzyAttributeParser.parse("sd:submit_button", "Button")["android:id"])
+    }
+
+    @Test
+    fun `dimension OCR mistakes are normalized`() {
+        assertEquals("80dp", FuzzyAttributeParser.parse("width:8Odp", "Button")["android:layout_width"])
+        assertEquals("50dp", FuzzyAttributeParser.parse("height:50de", "Button")["android:layout_height"])
+        assertEquals("75dp", FuzzyAttributeParser.parse("height:75do", "Button")["android:layout_height"])
+    }
+
+    @Test
+    fun `attribute key OCR mistakes are normalized`() {
+        val result = FuzzyAttributeParser.parse(
+            "layout_widthi100dp | layoutheiqht:52dp",
+            "Switch"
+        )
+
+        assertEquals("100dp", result["android:layout_width"])
+        assertEquals("52dp", result["android:layout_height"])
+    }
+
+    @Test
+    fun `repeated image dimension recovers square placeholder`() {
+        val result = FuzzyAttributeParser.parse(
+            "height:64dp | 64dp | id:imglogo | src:logo.png",
+            "ImageView"
+        )
+
+        assertEquals("64dp", result["android:layout_width"])
+        assertEquals("64dp", result["android:layout_height"])
+        assertEquals("img_logo", result["android:id"])
+        assertEquals("@drawable/logo", result["android:src"])
+    }
+
+    @Test
+    fun `repeated image width recovers square placeholder height`() {
+        val result = FuzzyAttributeParser.parse(
+            "width:64dp 64dp id:imglogo src:logo.png",
+            "ImageView"
+        )
+
+        assertEquals("64dp", result["android:layout_width"])
+        assertEquals("64dp", result["android:layout_height"])
+        assertEquals("img_logo", result["android:id"])
+        assertEquals("@drawable/logo", result["android:src"])
+    }
+
+    @Test
+    fun `unrelated repeated image dimension does not recover square placeholder`() {
+        val annotations = listOf(
+            "height:64dp padding:64dp id:imglogo src:logo.png",
+            "height:64dp margin:64dp id:imglogo src:logo.png",
+            "height:64dp textSize:64sp id:imglogo src:logo.png"
+        )
+
+        annotations.forEach { annotation ->
+            val result = FuzzyAttributeParser.parse(annotation, "ImageView")
+            assertNull(result["android:layout_width"])
+            assertEquals("64dp", result["android:layout_height"])
+        }
+    }
+
+    @Test
+    fun `valid compact image ids remain unchanged without drawable corroboration`() {
+        assertEquals("imgur_logo", FuzzyAttributeParser.parse("id:imgur_logo", "ImageView")["android:id"])
+        assertEquals("imagebutton", FuzzyAttributeParser.parse("id:imagebutton", "ImageView")["android:id"])
+        assertEquals("image_cache", FuzzyAttributeParser.parse("id:image_cache", "ImageView")["android:id"])
+        assertEquals("imglogo", FuzzyAttributeParser.parse("id:imglogo", "ImageView")["android:id"])
     }
 
     @Test

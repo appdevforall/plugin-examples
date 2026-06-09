@@ -21,6 +21,7 @@ internal object AttributeValueResolver {
 
     fun resolve(key: AttributeKey, rawValue: String, tag: String): ResolvedAttribute? {
         val trimmedRawValue = rawValue.trim()
+        if (key.valueType == ValueType.DIMENSION && trimmedRawValue.isLowConfidenceDimensionFragment()) return null
         val cleaner = cleaners[key.valueType] ?: ValueCleaner { it }
         val cleanedValue = when (key) {
             AttributeKey.ID -> IdCleaner.clean(trimmedRawValue, tag)
@@ -33,6 +34,15 @@ internal object AttributeValueResolver {
 
         val recoveredValue = recoverSwitchWidth(key, rawValue, cleanedValue, tag)
         return resolveXmlAttribute(key, recoveredValue, tag)
+    }
+
+    private fun String.isLowConfidenceDimensionFragment(): Boolean {
+        val compact = lowercase().replace(Regex("[^a-z0-9]"), "")
+        val hasDimensionKeyText = compact.contains("layoutheight") ||
+            compact.contains("layoutheiqht") ||
+            compact.contains("height")
+        val hasUnit = Regex("(dp|de|do|clp)\\b", RegexOption.IGNORE_CASE).containsMatchIn(this)
+        return hasDimensionKeyText && !hasUnit
     }
 
     private fun recoverSwitchWidth(key: AttributeKey, rawValue: String, cleanedValue: String, tag: String): String {
