@@ -10,6 +10,7 @@ See the official [plugin documentation](https://www.appdevforall.org/codeonthego
 | -------------------------------------------------- | ----------------------------------------------------------------- |
 | [`Beepy/`](Beepy/)                                 | Plays a sound when a build starts, succeeds, or fails.            |
 | [`apk-viewer/`](apk-viewer/)                       | Inspects an APK's contents and surfaces a structural breakdown.   |
+| [`bookshelf/`](bookshelf/)                         | Adds reference textbooks (C, C++, Java, Kotlin, Android) accessible from CoGo's in-IDE Bookshelf help page. |
 | [`markdown-preview/`](markdown-preview/)           | Renders Markdown files with a live preview pane in the editor.    |
 | [`keystore-generator/`](keystore-generator/)       | Generates signing keystores from inside the IDE.                  |
 | [`snippets/`](snippets/)                           | Adds user-managed code snippets with prefix-triggered expansions. |
