@@ -1,6 +1,7 @@
 package org.appdevforall.codeonthego.computervision.domain.parser.sanitizer
 
 import org.appdevforall.codeonthego.computervision.domain.parser.AttributeKey
+import org.appdevforall.codeonthego.computervision.domain.parser.AttributeRegexPatterns
 
 
 class AttributeKeyPhraseSanitizer : DictionaryRegexSanitizer() {
@@ -17,39 +18,23 @@ class AttributeKeyPhraseSanitizer : DictionaryRegexSanitizer() {
 }
 
 class CompactDimensionSanitizer : OcrSanitizer {
-    private val compactWidthRegex = Regex(
-        "\\blay(?:out|aut)?[_\\-\\s]*w(?:idth)?[iIl1|]?\\s*([0-9oOIlLSBZz]+)\\s*(d[pbe]|de|clp|dp)?\\b",
-        RegexOption.IGNORE_CASE
-    )
-    private val compactHeightRegex = Regex(
-        "\\blay(?:out|aut)?[_\\-\\s]*h(?:ei(?:ght?)?)?[iIl1|]?\\s*([0-9oOIlLSBZz]+)\\s*(d[pbe]|de|clp|dp)?\\b",
-        RegexOption.IGNORE_CASE
-    )
-    private val compactBareWidthRegex = Regex(
-        "\\bwidth[iIl1|]?\\s*([0-9oOIlLSBZz]+)\\s*(d[pbe]|de|clp|dp)?\\b",
-        RegexOption.IGNORE_CASE
-    )
-    private val compactBareHeightRegex = Regex(
-        "\\bheight[iIl1|]?\\s*([0-9oOIlLSBZz]+)\\s*(d[pbe]|de|clp|dp)?\\b",
-        RegexOption.IGNORE_CASE
-    )
-
     override fun sanitize(input: String): String {
         return input
-            .replace(compactWidthRegex) { match ->
+            .replace(AttributeRegexPatterns.COMPACT_LAYOUT_WIDTH) { match ->
                 "layout_width: ${match.groupValues[1]}${match.groupValues[2].normalizeDimensionUnit()}"
             }
-            .replace(compactHeightRegex) { match ->
+            .replace(AttributeRegexPatterns.COMPACT_LAYOUT_HEIGHT) { match ->
                 match.toDimensionReplacement("layout_height")
             }
-            .replace(compactBareWidthRegex) { match ->
+            .replace(AttributeRegexPatterns.COMPACT_BARE_WIDTH) { match ->
                 "width: ${match.groupValues[1]}${match.groupValues[2].normalizeDimensionUnit()}"
             }
-            .replace(compactBareHeightRegex) { match ->
+            .replace(AttributeRegexPatterns.COMPACT_BARE_HEIGHT) { match ->
                 match.toDimensionReplacement("height")
             }
     }
 
+    /** Rejects short unitless heights by counting their detected numeric characters. */
     private fun MatchResult.toDimensionReplacement(key: String): String {
         val rawNumber = groupValues[1]
         val rawUnit = groupValues[2]

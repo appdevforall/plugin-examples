@@ -57,6 +57,7 @@ class YoloToXmlConverter(
         )
     }
 
+    /** Groups switches by vertical center bands before collapsing duplicate text-input detections. */
     private fun extractUiCandidates(detections: List<DetectionResult>): List<DetectionResult> {
         val candidates = detections
             .filterNot { it.isInvalidWidgetTag() }
@@ -143,6 +144,7 @@ class YoloToXmlConverter(
         return label.startsWith("image_placeholder")
     }
 
+    /** Compares area, horizontal overlap, and vertical gap to identify duplicate image placeholders. */
     private fun ScaledBox.isLikelyDuplicateOf(annotated: ScaledBox): Boolean {
         val maxDuplicateArea = annotated.area * 0.35
         val verticalGap = when {
@@ -156,6 +158,7 @@ class YoloToXmlConverter(
             verticalGap <= annotated.h / 2
     }
 
+    /** Calculates the scaled box area in target DP units. */
     private val ScaledBox.area: Int
         get() = w * h
 

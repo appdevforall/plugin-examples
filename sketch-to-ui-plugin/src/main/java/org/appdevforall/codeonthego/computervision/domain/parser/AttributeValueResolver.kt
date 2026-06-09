@@ -1,5 +1,17 @@
 package org.appdevforall.codeonthego.computervision.domain.parser
 
+import org.appdevforall.codeonthego.computervision.domain.parser.cleaner.ColorCleaner
+import org.appdevforall.codeonthego.computervision.domain.parser.cleaner.DimensionCleaner
+import org.appdevforall.codeonthego.computervision.domain.parser.cleaner.DrawableCleaner
+import org.appdevforall.codeonthego.computervision.domain.parser.cleaner.FloatCleaner
+import org.appdevforall.codeonthego.computervision.domain.parser.cleaner.GravityCleaner
+import org.appdevforall.codeonthego.computervision.domain.parser.cleaner.IdCleaner
+import org.appdevforall.codeonthego.computervision.domain.parser.cleaner.InputTypeCleaner
+import org.appdevforall.codeonthego.computervision.domain.parser.cleaner.NumberCleaner
+import org.appdevforall.codeonthego.computervision.domain.parser.cleaner.SpDimensionCleaner
+import org.appdevforall.codeonthego.computervision.domain.parser.cleaner.TextContentCleaner
+import org.appdevforall.codeonthego.computervision.domain.parser.cleaner.TextStyleCleaner
+
 internal data class ResolvedAttribute(val xmlAttr: String, val value: String)
 
 internal object AttributeValueResolver {
@@ -37,11 +49,11 @@ internal object AttributeValueResolver {
     }
 
     private fun String.isLowConfidenceDimensionFragment(): Boolean {
-        val compact = lowercase().replace(Regex("[^a-z0-9]"), "")
+        val compact = lowercase().replace(AttributeRegexPatterns.NON_ALPHANUMERIC_LOWER, "")
         val hasDimensionKeyText = compact.contains("layoutheight") ||
             compact.contains("layoutheiqht") ||
             compact.contains("height")
-        val hasUnit = Regex("(dp|de|do|clp)\\b", RegexOption.IGNORE_CASE).containsMatchIn(this)
+        val hasUnit = AttributeRegexPatterns.COMPACT_DIMENSION_UNIT.containsMatchIn(this)
         return hasDimensionKeyText && !hasUnit
     }
 
