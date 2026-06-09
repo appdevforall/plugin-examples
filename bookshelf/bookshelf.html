@@ -57,7 +57,7 @@
 
 <header>
   <h1>Bookshelf Plugin</h1>
-  <p class="subtitle">Offline reference textbooks inside Code on the Go's in-IDE help</p>
+  <p class="subtitle">Offline reference textbooks inside Code On The Go's in-IDE help</p>
   <div class="meta">Author: App Dev for All &middot; Package: <code>org.appdevforall.bookshelfplugin</code></div>
 </header>
 
@@ -78,7 +78,7 @@
   <p>
     Bookshelf bundles a small curated library of programming reference
     textbooks &mdash; covering C, C++, Java, Kotlin, Android, and Pebble
-    templates &mdash; and installs them into Code on the Go's existing in-IDE
+    templates &mdash; and installs them into Code On The Go's existing in-IDE
     Bookshelf help page. Before the plugin is installed, the Bookshelf entries
     display a placeholder PDF; after installation, the same entries open the
     real book. Uninstalling restores the placeholders.
@@ -93,7 +93,7 @@
 <section id="functionality">
   <h2>2. Core Functionality</h2>
   <p>
-    On install, Bookshelf swaps eight placeholder PDF rows in CoGo's
+    On install, Bookshelf swaps eight placeholder PDF rows in Code On The Go's
     documentation database for the corresponding compressed textbook. On
     uninstall, the rows revert to the placeholder. The books shipped today
     are:
@@ -115,7 +115,7 @@
   </table>
   <p>
     Each book is delivered as a brotli-compressed PDF (<code>.pdf.br</code>) to
-    keep the bundled <code>.cgp</code> small; CoGo's documentation viewer
+    keep the bundled <code>.cgp</code> small; Code On The Go's documentation viewer
     decompresses on read.
   </p>
 </section>
@@ -156,7 +156,7 @@
     deletes them, and recreates each one by copying the host's
     <code>t/textbookPlaceholder.pdf</code> row (and its fragments) back into the
     original path. This relies on the placeholder row already existing in the
-    schema, which is the case in CoGo's stock <code>documentation.db</code>.
+    schema, which is the case in Code On The Go's stock <code>documentation.db</code>.
   </p>
   <p>
     <code>getTier3DocsAssetPath()</code> returns <code>null</code> on purpose:
@@ -168,7 +168,7 @@
 <section id="usage">
   <h2>4. Usage</h2>
   <ol>
-    <li>Open Code on the Go's <strong>Plugin Manager</strong>.</li>
+    <li>Open Code On The Go's <strong>Plugin Manager</strong>.</li>
     <li>Install the <code>bookshelf.cgp</code> artifact (either from a local
         file or from the plugin catalog if it has been published there).</li>
     <li>Open <strong>Help &rarr; Bookshelf</strong> in the IDE.</li>
@@ -188,7 +188,7 @@
         install or read time &mdash; everything ships inside the
         <code>.cgp</code>.</li>
     <li><strong>Curated.</strong> Eight widely-cited free programming
-        textbooks, hand-picked for relevance to the languages most CoGo
+        textbooks, hand-picked for relevance to the languages most Code On The Go
         users write.</li>
     <li><strong>Non-destructive.</strong> Uninstall restores the host's
         placeholder PDFs, leaving no orphan database state behind.</li>
@@ -210,13 +210,13 @@
     front matter of each book for the specific terms.
   </p>
   <p>
-    The plugin code itself is part of the Code on the Go plugin examples
+    The plugin code itself is part of the Code On The Go plugin examples
     repository.
   </p>
 </section>
 
 <footer>
-  Bookshelf for Code on the Go &middot; App Dev for All
+  Bookshelf for Code On The Go &middot; App Dev for All
 </footer>
 
 </body>

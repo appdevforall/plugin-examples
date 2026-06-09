@@ -19,7 +19,7 @@
 
         <meta-data
             android:name="plugin.description"
-            android:value="Adds reference materials and textbooks that you can access from the Bookshelf page in CoGo's help." />
+            android:value="Adds reference materials and textbooks that you can access from the Bookshelf page in Code On The Go's help." />
 
         <meta-data
             android:name="plugin.author"
