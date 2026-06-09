@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bookshelf Plugin Documentation</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --fg: #000000;
+    --accent: #8b4513;
+    --accent-light: #f6ece1;
+    --border: #d0d7de;
+    --code-bg: #f4f6f8;
+    --table-stripe: #f8fafb;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--fg);
+    background: var(--bg);
+    line-height: 1.6;
+    max-width: 52rem;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+  }
+  header { border-bottom: 3px solid var(--accent); padding-bottom: 1.2rem; margin-bottom: 2rem; }
+  header h1 { font-size: 2rem; color: var(--accent); }
+  header p.subtitle { color: #555; margin-top: 0.3rem; }
+  header .meta { font-size: 0.85rem; color: #777; margin-top: 0.5rem; }
+  nav { background: var(--accent-light); border: 1px solid var(--border); border-radius: 6px; padding: 1rem 1.5rem; margin-bottom: 2.5rem; }
+  nav h2 { font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); margin-bottom: 0.5rem; }
+  nav ol { padding-left: 1.3rem; }
+  nav li { margin: 0.25rem 0; }
+  nav a { color: var(--accent); text-decoration: none; }
+  nav a:hover { text-decoration: underline; }
+  section { margin-bottom: 2.5rem; }
+  h2 { font-size: 1.4rem; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; margin-bottom: 1rem; }
+  h3 { font-size: 1.1rem; margin: 1.2rem 0 0.5rem; }
+  p, li { margin-bottom: 0.5rem; }
+  ul, ol { padding-left: 1.4rem; }
+  code {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    background: var(--code-bg);
+    padding: 0.15em 0.35em;
+    border-radius: 3px;
+    font-size: 0.9em;
+  }
+  table { width: 100%; border-collapse: collapse; margin: 0.8rem 0 1rem; font-size: 0.95rem; }
+  th, td { text-align: left; padding: 0.55rem 0.8rem; border: 1px solid var(--border); }
+  th { background: var(--accent-light); font-weight: 600; }
+  tr:nth-child(even) td { background: var(--table-stripe); }
+  footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: 0.85rem; color: #777; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Bookshelf Plugin</h1>
+  <p class="subtitle">Offline reference textbooks inside Code on the Go's in-IDE help</p>
+  <div class="meta">Author: App Dev for All &middot; Package: <code>org.appdevforall.bookshelfplugin</code></div>
+</header>
+
+<nav>
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#overview">Executive Overview</a></li>
+    <li><a href="#functionality">Core Functionality</a></li>
+    <li><a href="#architecture">Technical Architecture</a></li>
+    <li><a href="#usage">Usage</a></li>
+    <li><a href="#benefits">Key Benefits</a></li>
+    <li><a href="#attribution">Attribution &amp; License</a></li>
+  </ol>
+</nav>
+
+<section id="overview">
+  <h2>1. Executive Overview</h2>
+  <p>
+    Bookshelf bundles a small curated library of programming reference
+    textbooks &mdash; covering C, C++, Java, Kotlin, Android, and Pebble
+    templates &mdash; and installs them into Code on the Go's existing in-IDE
+    Bookshelf help page. Before the plugin is installed, the Bookshelf entries
+    display a placeholder PDF; after installation, the same entries open the
+    real book. Uninstalling restores the placeholders.
+  </p>
+  <p>
+    The plugin is read-only on the network and ships every book bundled inside
+    the <code>.cgp</code>, so it works offline once installed. No accounts, no
+    downloads, no telemetry.
+  </p>
+</section>
+
+<section id="functionality">
+  <h2>2. Core Functionality</h2>
+  <p>
+    On install, Bookshelf swaps eight placeholder PDF rows in CoGo's
+    documentation database for the corresponding compressed textbook. On
+    uninstall, the rows revert to the placeholder. The books shipped today
+    are:
+  </p>
+  <table>
+    <thead>
+      <tr><th>Topic</th><th>Title</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Android</td><td>Android Notes for Professionals</td></tr>
+      <tr><td>C</td><td>Beej's Guide to C Programming</td></tr>
+      <tr><td>C++</td><td>Modern C++ Tutorial (Ou Changkun)</td></tr>
+      <tr><td>Java (intro)</td><td>Java, Java, Java</td></tr>
+      <tr><td>Java (OO)</td><td>Java, Java, Java &mdash; Object-Oriented Problem Solving</td></tr>
+      <tr><td>Java (reference)</td><td>Java Notes for Professionals</td></tr>
+      <tr><td>Kotlin</td><td>Kotlin Notes for Professionals</td></tr>
+      <tr><td>Templating</td><td>Pebble Template Guide</td></tr>
+    </tbody>
+  </table>
+  <p>
+    Each book is delivered as a brotli-compressed PDF (<code>.pdf.br</code>) to
+    keep the bundled <code>.cgp</code> small; CoGo's documentation viewer
+    decompresses on read.
+  </p>
+</section>
+
+<section id="architecture">
+  <h2>3. Technical Architecture</h2>
+  <p>
+    Bookshelf implements two interfaces from <code>plugin-api</code>:
+    <code>IPlugin</code> for lifecycle and
+    <code>DocumentationExtension</code> for the install/uninstall hooks.
+  </p>
+  <p>
+    Installation logic lives in <code>onDocumentationInstall()</code>. It opens
+    the IDE's <code>documentation.db</code> SQLite database via
+    <code>SQLiteDatabase.openDatabase(&hellip;, OPEN_READWRITE)</code>,
+    enumerates <code>assets/books/*.pdf.br</code> from the plugin's own
+    asset bundle, and for each book:
+  </p>
+  <ol>
+    <li>Reads the pre-compressed bytes through
+        <code>ResourceManager.openPluginAsset(&hellip;)</code>.</li>
+    <li>Deletes any rows at the target path (and its
+        <code>&lt;path&gt;-N</code> fragments) from the
+        <code>Content</code> table.</li>
+    <li>Inserts the brotli-compressed payload, chunked into 1&nbsp;MiB
+        rows when larger than the chunk size, with content type ID
+        <code>14</code> (which the host schema reserves for
+        <code>application/pdf</code> with brotli compression).</li>
+  </ol>
+  <p>
+    The entire batch runs inside a single transaction; if anything fails the
+    transaction is rolled back so the documentation database is never left
+    half-mutated.
+  </p>
+  <p>
+    Uninstall (<code>onDocumentationUninstall()</code>) queries the same table
+    for rows under <code>bookshelf/org.appdevforall.bookshelfplugin/%.pdf</code>,
+    deletes them, and recreates each one by copying the host's
+    <code>t/textbookPlaceholder.pdf</code> row (and its fragments) back into the
+    original path. This relies on the placeholder row already existing in the
+    schema, which is the case in CoGo's stock <code>documentation.db</code>.
+  </p>
+  <p>
+    <code>getTier3DocsAssetPath()</code> returns <code>null</code> on purpose:
+    the host's default Tier-3 asset insert would race with Bookshelf's manual
+    database writes, so the plugin opts out of the automated path.
+  </p>
+</section>
+
+<section id="usage">
+  <h2>4. Usage</h2>
+  <ol>
+    <li>Open Code on the Go's <strong>Plugin Manager</strong>.</li>
+    <li>Install the <code>bookshelf.cgp</code> artifact (either from a local
+        file or from the plugin catalog if it has been published there).</li>
+    <li>Open <strong>Help &rarr; Bookshelf</strong> in the IDE.</li>
+    <li>Select any of the eight titles &mdash; each opens the real PDF
+        directly inside the help viewer.</li>
+  </ol>
+  <p>
+    To revert, uninstall the plugin from the same Plugin Manager view; the
+    Bookshelf entries return to their placeholder PDF.
+  </p>
+</section>
+
+<section id="benefits">
+  <h2>5. Key Benefits</h2>
+  <ul>
+    <li><strong>Offline-first.</strong> No network access is required at
+        install or read time &mdash; everything ships inside the
+        <code>.cgp</code>.</li>
+    <li><strong>Curated.</strong> Eight widely-cited free programming
+        textbooks, hand-picked for relevance to the languages most CoGo
+        users write.</li>
+    <li><strong>Non-destructive.</strong> Uninstall restores the host's
+        placeholder PDFs, leaving no orphan database state behind.</li>
+    <li><strong>Compact.</strong> All eight books fit into roughly
+        24&nbsp;MiB of brotli-compressed payload, decompressed on demand by
+        the host viewer.</li>
+    <li><strong>Permissioned narrowly.</strong> Requests only
+        <code>filesystem.read</code>, <code>filesystem.write</code>, and
+        <code>ide.environment.write</code>; no network or shell access.</li>
+  </ul>
+</section>
+
+<section id="attribution">
+  <h2>6. Attribution &amp; License</h2>
+  <p>
+    Each bundled textbook retains its original author and license. The
+    Bookshelf plugin redistributes the PDFs under the terms each author
+    granted (Creative Commons or equivalent permissive licenses); see the
+    front matter of each book for the specific terms.
+  </p>
+  <p>
+    The plugin code itself is part of the Code on the Go plugin examples
+    repository.
+  </p>
+</section>
+
+<footer>
+  Bookshelf for Code on the Go &middot; App Dev for All
+</footer>
+
+</body>
+</html>
