@@ -3,6 +3,7 @@ package org.appdevforall.codeonthego.computervision.domain
 import android.graphics.RectF
 import com.google.mlkit.vision.text.Text
 import org.appdevforall.codeonthego.computervision.domain.model.DetectionResult
+import org.appdevforall.codeonthego.computervision.domain.model.MetadataOcrSource
 import org.appdevforall.codeonthego.computervision.domain.model.SketchRegion
 import org.appdevforall.codeonthego.computervision.utils.MetadataDetector
 import org.appdevforall.codeonthego.computervision.utils.OcrTextAssembler.joinElementsWithTolerance
@@ -62,7 +63,8 @@ class DetectionMerger(
                         score = if (resolvedRegion != SketchRegion.CANVAS) 0.98f else 0.99f,
                         text = text,
                         isYolo = false,
-                        region = resolvedRegion
+                        region = resolvedRegion,
+                        metadataSource = MetadataOcrSource.FULL_IMAGE
                     )
                 }
             }

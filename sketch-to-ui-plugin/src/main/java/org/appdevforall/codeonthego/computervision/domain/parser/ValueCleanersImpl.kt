@@ -11,10 +11,18 @@ internal object TextContentCleaner : ValueCleaner {
         "\\s+(?:B|P|D|T|C|R|SW|S)\\s+(?=(?:B|P|D|T|C|R|SW|S)\\s*-\\s*[A-Z0-9_]+\\s*$)",
         RegexOption.IGNORE_CASE
     )
+    private val idKeyPattern = AttributeKey.ID.aliases
+        .sortedByDescending { it.length }
+        .joinToString("|")
+    private val trailingFailedIdFragmentRegex = Regex(
+        "\\s+(?:$idKeyPattern)\\s+[A-Za-z][A-Za-z0-9_-]*\\s*$",
+        RegexOption.IGNORE_CASE
+    )
     override fun clean(rawValue: String): String {
         return rawValue
             .replace(trailingRepeatedPrefixRegex, " ")
             .replace(trailingWidgetTagRegex, "")
+            .replace(trailingFailedIdFragmentRegex, "")
             .replace(AttributeRegexPatterns.WHITESPACE, " ")
             .trim()
     }
@@ -53,6 +61,7 @@ internal object DimensionCleaner : ValueCleaner {
 
         val firstToken = trimmedValue.substringBefore(" ")
         val rawNumber = firstToken.removeSuffix(originalUnit).trim()
+            .let { number -> if (unitMatch != null && number.endsWith("d")) number.dropLast(1) + "0" else number }
         val numericPart = NumberCleaner.clean(rawNumber)
 
         val numMatch = leadingNumberRegex.find(numericPart)?.value
@@ -151,6 +160,9 @@ internal object IdCleaner : ValueCleaner {
     private fun normalizeIdToken(token: String): List<String> {
         if (token.isBlank()) return emptyList()
         if (token.all(Char::isDigit)) return listOf(token)
+        if ((token.startsWith("img") && token != "img") || (token.startsWith("image") && token != "image")) {
+            return listOf(token)
+        }
 
         val exactMatch = FuzzySearch.extractOne(token, ID_VOCABULARY)
         if (exactMatch.score >= 80 && kotlin.math.abs(token.length - exactMatch.string.length) <= 2) {

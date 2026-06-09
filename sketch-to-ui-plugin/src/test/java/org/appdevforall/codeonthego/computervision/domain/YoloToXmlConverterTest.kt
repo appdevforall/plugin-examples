@@ -2,10 +2,12 @@ package org.appdevforall.codeonthego.computervision.domain
 
 import android.graphics.RectF
 import org.appdevforall.codeonthego.computervision.domain.model.DetectionResult
+import org.appdevforall.codeonthego.computervision.domain.model.MetadataOcrSource
 import org.appdevforall.codeonthego.computervision.domain.model.SketchRegion
 import org.appdevforall.codeonthego.computervision.domain.parser.FuzzyAttributeParser
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -82,7 +84,7 @@ class YoloToXmlConverterTest {
             leftGuidePct = 0.20f,
             rightGuidePct = 0.60f
         )
-        val parsed = FuzzyAttributeParser.parse(annotationMap["P-1"], "ImageView")
+        val parsed = FuzzyAttributeParser.parse(annotationMap.getValue("P-1"), "ImageView")
         val (xml, _) = YoloToXmlConverter.generateXmlLayout(
             detections = canvasDetections,
             annotations = annotationMap,
@@ -279,10 +281,11 @@ class YoloToXmlConverterTest {
             "T-1" to "layout_width: 200dp | layout_height: 52dp | id: email | inputType: textEmailAddress",
             "T-2" to "layoutwidth | layoutwidthi20O0dp | layoutheight: | layoutheight30 | t | extassword | textPassword | credential | ieredeetal"
         )
+        val resolvedAnnotations = MetadataAnnotationRecovery.resolve(annotations)
 
         val (xml, _) = YoloToXmlConverter.generateXmlLayout(
             detections = detections,
-            annotations = annotations,
+            annotations = resolvedAnnotations,
             sourceImageWidth = 1000,
             sourceImageHeight = 1000,
             targetDpWidth = 1000,
@@ -291,7 +294,7 @@ class YoloToXmlConverterTest {
         )
 
         assertEquals(2, Regex("<EditText\\b").findAll(xml).count())
-        assertTrue(xml.contains("""android:id="@+id/credential""""))
+        assertFalse(xml.contains("""android:id="@+id/credential""""))
         assertTrue(xml.contains("""android:layout_width="200dp""""))
         assertTrue(xml.contains("""android:layout_height="52dp""""))
         assertTrue(xml.contains("""android:inputType="textPassword""""))
@@ -299,6 +302,67 @@ class YoloToXmlConverterTest {
         assertFalse(xml.contains("""android:text="credential"""))
         assertFalse(xml.contains("""ieredeetal"""))
         assertFalse(xml.contains("""android:orientation="horizontal""""))
+    }
+
+    @Test
+    fun `compact degraded T-2 metadata recovers password edit text from same prefix evidence`() {
+        val detections = listOf(
+            detection("text_entry_box", "Email", 250f, 100f, 550f, 152f, region = SketchRegion.CANVAS),
+            detection("text_entry_box", "Password", 250f, 200f, 550f, 203f, region = SketchRegion.CANVAS),
+            detection("text", "T-1", 215f, 112f, 245f, 134f, isYolo = false, region = SketchRegion.CANVAS),
+            detection("text", "T-2", 215f, 212f, 245f, 234f, isYolo = false, region = SketchRegion.CANVAS)
+        )
+        val annotations = mapOf(
+            "T-1" to "layoutwidth:200dp | layoutheight:52dp | hint:Email | id:user_email",
+            "T-2" to "layoutwidthi200dp | layoutheight3 | vextPassword | credental | layoutwidthi20O0dp | layoutheight30 | extassword | credential"
+        )
+        val resolvedAnnotations = MetadataAnnotationRecovery.resolve(annotations)
+
+        val (xml, _) = YoloToXmlConverter.generateXmlLayout(
+            detections = detections,
+            annotations = resolvedAnnotations,
+            sourceImageWidth = 1000,
+            sourceImageHeight = 1000,
+            targetDpWidth = 1000,
+            targetDpHeight = 1000,
+            wrapInScroll = false
+        )
+
+        val editTexts = xmlBlocks(xml, "EditText")
+        val secondEditText = editTexts[1]
+        assertAttribute(secondEditText, "android:layout_width", "200dp")
+        assertAttribute(secondEditText, "android:layout_height", "52dp")
+        assertAttribute(secondEditText, "android:hint", "Password")
+        assertAttribute(secondEditText, "android:inputType", "textPassword")
+        assertFalse(secondEditText.contains("""android:layout_height="3dp""""))
+    }
+
+    @Test
+    fun `same prefix dimension recovery does not cross widget groups`() {
+        val annotations = MetadataAnnotationRecovery.resolve(
+            mapOf(
+                "B-1" to "layoutheight:52dp",
+                "T-2" to "layoutheight3 | vextPassword | credental"
+            )
+        )
+
+        val parsed = FuzzyAttributeParser.parse(annotations.getValue("T-2"), "EditText")
+
+        assertNull(parsed["android:layout_height"])
+    }
+
+    @Test
+    fun `same prefix dimension recovery does not override valid explicit value`() {
+        val annotations = MetadataAnnotationRecovery.resolve(
+            mapOf(
+                "T-1" to "layoutheight:52dp",
+                "T-2" to "layout_height:30dp | vextPassword | credential | credential_input"
+            )
+        )
+
+        val parsed = FuzzyAttributeParser.parse(annotations.getValue("T-2"), "EditText")
+
+        assertEquals("30dp", parsed["android:layout_height"])
     }
 
     @Test
@@ -313,10 +377,11 @@ class YoloToXmlConverterTest {
             "T-1" to "id: first_name | layout_width: 120dp | layout_height: 52dp",
             "T-2" to "id: last_name | layout_width: 120dp | layout_height: 52dp"
         )
+        val resolvedAnnotations = MetadataAnnotationRecovery.resolve(annotations)
 
         val (xml, _) = YoloToXmlConverter.generateXmlLayout(
             detections = detections,
-            annotations = annotations,
+            annotations = resolvedAnnotations,
             sourceImageWidth = 1000,
             sourceImageHeight = 1000,
             targetDpWidth = 1000,
@@ -340,10 +405,11 @@ class YoloToXmlConverterTest {
         val annotations = mapOf(
             "T-1" to "id: credential | layout_width: 200dp | layout_height: 52dp | inputType: textPassword"
         )
+        val resolvedAnnotations = MetadataAnnotationRecovery.resolve(annotations)
 
         val (xml, _) = YoloToXmlConverter.generateXmlLayout(
             detections = detections,
-            annotations = annotations,
+            annotations = resolvedAnnotations,
             sourceImageWidth = 1000,
             sourceImageHeight = 1000,
             targetDpWidth = 1000,
@@ -354,6 +420,218 @@ class YoloToXmlConverterTest {
         assertEquals(1, Regex("<EditText\\b").findAll(xml).count())
         assertTrue(xml.contains("""android:id="@+id/credential""""))
         assertFalse(xml.contains("""android:orientation="horizontal""""))
+    }
+
+    @Test
+    fun `margin crop metadata takes priority without reordering by score`() {
+        val detections = listOf(
+            detection("text", "B-1", 250f, 200f, 280f, 225f, isYolo = false, region = SketchRegion.CANVAS),
+            detection("text", "B-1", 20f, 200f, 60f, 225f, isYolo = false, region = SketchRegion.LEFT_METADATA)
+                .copy(score = 0.70f, metadataSource = MetadataOcrSource.MARGIN_CROP),
+            detection("text", "layoutwidth:15Ddp", 20f, 230f, 180f, 255f, isYolo = false, region = SketchRegion.LEFT_METADATA)
+                .copy(score = 0.70f, metadataSource = MetadataOcrSource.MARGIN_CROP),
+            detection("text", "layoutwidth:150dp", 20f, 260f, 180f, 285f, isYolo = false, region = SketchRegion.LEFT_METADATA)
+                .copy(score = 0.70f, metadataSource = MetadataOcrSource.MARGIN_CROP),
+            detection("text", "B-1", 20f, 100f, 60f, 125f, isYolo = false, region = SketchRegion.LEFT_METADATA)
+                .copy(score = 0.99f, metadataSource = MetadataOcrSource.FULL_IMAGE),
+            detection("text", "layoutwidth:120dp", 20f, 130f, 180f, 155f, isYolo = false, region = SketchRegion.LEFT_METADATA)
+                .copy(score = 0.99f, metadataSource = MetadataOcrSource.FULL_IMAGE)
+        )
+
+        val (_, annotations) = MarginAnnotationParser.parse(
+            detections = detections,
+            imageWidth = 1000,
+            leftGuidePct = 0.20f,
+            rightGuidePct = 0.80f
+        )
+        val parsed = FuzzyAttributeParser.parse(annotations.getValue("B-1"), "Button")
+
+        assertEquals("150dp", parsed["android:layout_width"])
+    }
+
+    @Test
+    fun `duplicate OCR sources recover ids only from clean candidate for same widget`() {
+        val detections = listOf(
+            detection("text", "T-1", 250f, 100f, 280f, 125f, isYolo = false, region = SketchRegion.CANVAS),
+            detection("text", "SW-1", 250f, 200f, 290f, 225f, isYolo = false, region = SketchRegion.CANVAS),
+            detection("text", "T-1", 20f, 100f, 60f, 125f, isYolo = false, region = SketchRegion.LEFT_METADATA)
+                .copy(metadataSource = MetadataOcrSource.MARGIN_CROP),
+            detection("text", "id:credential", 20f, 130f, 170f, 155f, isYolo = false, region = SketchRegion.LEFT_METADATA)
+                .copy(metadataSource = MetadataOcrSource.MARGIN_CROP),
+            detection("text", "SW-1", 20f, 200f, 70f, 225f, isYolo = false, region = SketchRegion.LEFT_METADATA)
+                .copy(metadataSource = MetadataOcrSource.MARGIN_CROP),
+            detection("text", "id:remember", 20f, 230f, 170f, 255f, isYolo = false, region = SketchRegion.LEFT_METADATA)
+                .copy(metadataSource = MetadataOcrSource.MARGIN_CROP),
+            detection("text", "T-1", 700f, 100f, 740f, 125f, isYolo = false, region = SketchRegion.RIGHT_METADATA)
+                .copy(metadataSource = MetadataOcrSource.FULL_IMAGE),
+            detection("text", "idl:eredential", 700f, 130f, 850f, 155f, isYolo = false, region = SketchRegion.RIGHT_METADATA)
+                .copy(metadataSource = MetadataOcrSource.FULL_IMAGE),
+            detection("text", "SW-1", 700f, 200f, 750f, 225f, isYolo = false, region = SketchRegion.RIGHT_METADATA)
+                .copy(metadataSource = MetadataOcrSource.FULL_IMAGE),
+            detection("text", "id:remenber", 700f, 230f, 850f, 255f, isYolo = false, region = SketchRegion.RIGHT_METADATA)
+                .copy(metadataSource = MetadataOcrSource.FULL_IMAGE)
+        )
+
+        val (_, annotations) = MarginAnnotationParser.parse(detections, 1000, 0.20f, 0.80f)
+
+        assertEquals("credential", FuzzyAttributeParser.parse(annotations.getValue("T-1"), "EditText")["android:id"])
+        assertEquals("remember", FuzzyAttributeParser.parse(annotations.getValue("SW-1"), "Switch")["android:id"])
+    }
+
+    @Test
+    fun `score differences do not move OCR lines into another annotation block`() {
+        val detections = listOf(
+            detection("text", "B-1", 250f, 100f, 280f, 125f, isYolo = false, region = SketchRegion.CANVAS),
+            detection("text", "B-2", 250f, 200f, 280f, 225f, isYolo = false, region = SketchRegion.CANVAS),
+            detection("text", "B-1", 20f, 100f, 60f, 125f, isYolo = false, region = SketchRegion.LEFT_METADATA).copy(score = 0.50f),
+            detection("text", "width:100dp", 20f, 130f, 170f, 155f, isYolo = false, region = SketchRegion.LEFT_METADATA).copy(score = 0.99f),
+            detection("text", "B-2", 20f, 200f, 60f, 225f, isYolo = false, region = SketchRegion.LEFT_METADATA).copy(score = 0.99f),
+            detection("text", "width:200dp", 20f, 230f, 170f, 255f, isYolo = false, region = SketchRegion.LEFT_METADATA).copy(score = 0.50f)
+        )
+
+        val (_, annotations) = MarginAnnotationParser.parse(detections, 1000, 0.20f, 0.80f)
+
+        assertEquals("100dp", FuzzyAttributeParser.parse(annotations.getValue("B-1"), "Button")["android:layout_width"])
+        assertEquals("200dp", FuzzyAttributeParser.parse(annotations.getValue("B-2"), "Button")["android:layout_width"])
+    }
+
+    @Test
+    fun `recoverable noisy metadata generates corrected widget xml`() {
+        val detections = listOf(
+            detection("text_entry_box", "Password", 250f, 100f, 550f, 152f, region = SketchRegion.CANVAS),
+            detection("switch_off", "", 250f, 220f, 400f, 272f, region = SketchRegion.CANVAS),
+            detection("button", "Submit", 250f, 340f, 450f, 390f, region = SketchRegion.CANVAS),
+            detection("image_placeholder", "", 250f, 460f, 314f, 524f, region = SketchRegion.CANVAS),
+            detection("text", "T-1", 210f, 110f, 240f, 135f, isYolo = false, region = SketchRegion.CANVAS),
+            detection("text", "SW-1", 200f, 230f, 240f, 255f, isYolo = false, region = SketchRegion.CANVAS),
+            detection("text", "B-1", 210f, 350f, 240f, 375f, isYolo = false, region = SketchRegion.CANVAS),
+            detection("text", "P-1", 210f, 470f, 240f, 495f, isYolo = false, region = SketchRegion.CANVAS)
+        )
+        val annotations = mapOf(
+            "T-1" to "layoutwidth:200dp | layoutheiqht:52dp | id:credential | idl:eredential | inputtype:textPassword",
+            "SW-1" to "layout_widthi100dp | layoutheiqht:52dp | id:remember | id:remenber | layoutgravity:centerhorizontal",
+            "B-1" to "layoutwidth:150dp | layoutwidth:15Ddp | height:50de | background:red",
+            "P-1" to "height:64dp 64dp id:imglogo | src:logo"
+        )
+        val resolvedAnnotations = MetadataAnnotationRecovery.resolve(annotations)
+
+        val (xml, _) = YoloToXmlConverter.generateXmlLayout(
+            detections = detections,
+            annotations = resolvedAnnotations,
+            sourceImageWidth = 1000,
+            sourceImageHeight = 1000,
+            targetDpWidth = 1000,
+            targetDpHeight = 1000,
+            wrapInScroll = false
+        )
+
+        assertTrue(xml.contains("""android:id="@+id/credential""""))
+        assertTrue(xml.contains("""android:inputType="textPassword""""))
+        assertTrue(xml.contains("""android:id="@+id/remember""""))
+        assertTrue(xml.contains("""android:layout_gravity="center_horizontal""""))
+        assertTrue(xml.contains("""android:layout_width="150dp""""))
+        assertTrue(xml.contains("""android:layout_height="50dp""""))
+        assertTrue(xml.contains("""app:backgroundTint="#FF0000""""))
+        assertTrue(xml.contains("""android:id="@+id/img_logo""""))
+        assertEquals(2, Regex("""android:layout_width="64dp"|android:layout_height="64dp"""").findAll(xml).count())
+        assertTrue(xml.contains("""android:src="@drawable/logo""""))
+    }
+
+    @Test
+    fun `similar login sketch keeps same block metadata recovery consistent`() {
+        val detections = listOf(
+            detection("text_entry_box", "Email", 250f, 100f, 550f, 152f, region = SketchRegion.CANVAS),
+            detection("text_entry_box", "Password", 250f, 200f, 550f, 252f, region = SketchRegion.CANVAS),
+            detection("switch_off", "Rememberme", 250f, 310f, 400f, 362f, region = SketchRegion.CANVAS),
+            detection("image_placeholder", "", 250f, 430f, 314f, 494f, region = SketchRegion.CANVAS),
+            detection("text", "T-1", 210f, 110f, 240f, 135f, isYolo = false, region = SketchRegion.CANVAS),
+            detection("text", "T-2", 210f, 210f, 240f, 235f, isYolo = false, region = SketchRegion.CANVAS),
+            detection("text", "SW-1", 200f, 320f, 240f, 345f, isYolo = false, region = SketchRegion.CANVAS),
+            detection("text", "P-1", 210f, 440f, 240f, 465f, isYolo = false, region = SketchRegion.CANVAS),
+            detection("text", "T-1", 20f, 100f, 60f, 125f, isYolo = false, region = SketchRegion.LEFT_METADATA),
+            detection("text", "layoutwidth:200dp", 20f, 130f, 180f, 155f, isYolo = false, region = SketchRegion.LEFT_METADATA),
+            detection("text", "layoutheight:52dp", 20f, 160f, 180f, 185f, isYolo = false, region = SketchRegion.LEFT_METADATA),
+            detection("text", "hint:Email", 20f, 190f, 160f, 215f, isYolo = false, region = SketchRegion.LEFT_METADATA),
+            detection("text", "icl useremail", 20f, 220f, 180f, 245f, isYolo = false, region = SketchRegion.LEFT_METADATA),
+            detection("text", "id:user_email", 20f, 250f, 180f, 275f, isYolo = false, region = SketchRegion.LEFT_METADATA),
+            detection("text", "T-2", 20f, 300f, 60f, 325f, isYolo = false, region = SketchRegion.LEFT_METADATA),
+            detection("text", "layoutwidthi200dp", 20f, 330f, 180f, 355f, isYolo = false, region = SketchRegion.LEFT_METADATA),
+            detection("text", "layoutheight3", 20f, 360f, 160f, 385f, isYolo = false, region = SketchRegion.LEFT_METADATA),
+            detection("text", "vextPassword", 20f, 390f, 160f, 415f, isYolo = false, region = SketchRegion.LEFT_METADATA),
+            detection("text", "credential", 20f, 420f, 160f, 445f, isYolo = false, region = SketchRegion.LEFT_METADATA),
+            detection("text", "SW-1", 700f, 310f, 750f, 335f, isYolo = false, region = SketchRegion.RIGHT_METADATA),
+            detection("text", "layout_widthi100dp", 700f, 340f, 880f, 365f, isYolo = false, region = SketchRegion.RIGHT_METADATA),
+            detection("text", "layoutheight:52dp", 700f, 370f, 880f, 395f, isYolo = false, region = SketchRegion.RIGHT_METADATA),
+            detection("text", "id:remenber", 700f, 400f, 850f, 425f, isYolo = false, region = SketchRegion.RIGHT_METADATA),
+            detection("text", "idi remember", 700f, 430f, 850f, 455f, isYolo = false, region = SketchRegion.RIGHT_METADATA),
+            detection("text", "idiremember", 700f, 460f, 850f, 485f, isYolo = false, region = SketchRegion.RIGHT_METADATA),
+            detection("text", "layoutgravity:centerhorizontal", 700f, 490f, 950f, 515f, isYolo = false, region = SketchRegion.RIGHT_METADATA),
+            detection("text", "P-1", 700f, 550f, 750f, 575f, isYolo = false, region = SketchRegion.RIGHT_METADATA),
+            detection("text", "height:64dp", 700f, 580f, 850f, 605f, isYolo = false, region = SketchRegion.RIGHT_METADATA),
+            detection("text", "64dp", 700f, 610f, 760f, 635f, isYolo = false, region = SketchRegion.RIGHT_METADATA),
+            detection("text", "id:imglogo", 700f, 640f, 850f, 665f, isYolo = false, region = SketchRegion.RIGHT_METADATA),
+            detection("text", "src:logo.png", 700f, 670f, 850f, 695f, isYolo = false, region = SketchRegion.RIGHT_METADATA)
+        )
+
+        val (canvas, annotations) = MarginAnnotationParser.parse(detections, 1000, 0.20f, 0.80f)
+        val (xml, _) = YoloToXmlConverter.generateXmlLayout(
+            detections = canvas,
+            annotations = annotations,
+            sourceImageWidth = 1000,
+            sourceImageHeight = 1000,
+            targetDpWidth = 1000,
+            targetDpHeight = 1000,
+            wrapInScroll = false
+        )
+
+        val editTexts = xmlBlocks(xml, "EditText")
+        val firstEditText = editTexts[0]
+        val secondEditText = editTexts[1]
+        val switch = xmlBlocks(xml, "androidx.appcompat.widget.SwitchCompat").single()
+        val image = xmlBlocks(xml, "ImageView").single()
+
+        assertAttribute(firstEditText, "android:id", "@+id/user_email")
+        assertAttribute(firstEditText, "android:hint", "Email")
+        assertFalse(firstEditText.contains("Email icl useremail"))
+        assertAttribute(secondEditText, "android:layout_width", "200dp")
+        assertAttribute(secondEditText, "android:layout_height", "52dp")
+        assertAttribute(secondEditText, "android:hint", "Password")
+        assertAttribute(secondEditText, "android:inputType", "textPassword")
+        assertAttribute(switch, "android:id", "@+id/remember")
+        assertFalse(switch.contains("""android:id="@+id/switch_0""""))
+        assertAttribute(image, "android:id", "@+id/img_logo")
+        assertAttribute(image, "android:layout_width", "64dp")
+        assertAttribute(image, "android:layout_height", "64dp")
+        assertAttribute(image, "android:src", "@drawable/logo")
+    }
+
+    @Test
+    fun `separate adjacent image dimension OCR line recovers square xml`() {
+        val detections = listOf(
+            detection("image_placeholder", "", 250f, 460f, 314f, 524f, region = SketchRegion.CANVAS),
+            detection("text", "P-1", 210f, 470f, 240f, 495f, isYolo = false, region = SketchRegion.CANVAS),
+            detection("text", "P-1", 20f, 460f, 60f, 485f, isYolo = false, region = SketchRegion.LEFT_METADATA),
+            detection("text", "height:64dp", 20f, 490f, 160f, 515f, isYolo = false, region = SketchRegion.LEFT_METADATA),
+            detection("text", "64dp", 20f, 520f, 80f, 545f, isYolo = false, region = SketchRegion.LEFT_METADATA),
+            detection("text", "id:imglogo", 20f, 550f, 150f, 575f, isYolo = false, region = SketchRegion.LEFT_METADATA),
+            detection("text", "src:logo.png", 20f, 580f, 160f, 605f, isYolo = false, region = SketchRegion.LEFT_METADATA)
+        )
+        val (canvas, annotations) = MarginAnnotationParser.parse(detections, 1000, 0.20f, 0.80f)
+
+        val (xml, _) = YoloToXmlConverter.generateXmlLayout(
+            detections = canvas,
+            annotations = annotations,
+            sourceImageWidth = 1000,
+            sourceImageHeight = 1000,
+            targetDpWidth = 1000,
+            targetDpHeight = 1000,
+            wrapInScroll = false
+        )
+
+        assertTrue(xml.contains("""android:id="@+id/img_logo""""))
+        assertTrue(xml.contains("""android:layout_width="64dp""""))
+        assertTrue(xml.contains("""android:layout_height="64dp""""))
+        assertTrue(xml.contains("""android:src="@drawable/logo""""))
     }
 
     private fun detection(
@@ -379,5 +657,13 @@ class YoloToXmlConverterTest {
             isYolo = isYolo,
             region = region
         )
+    }
+
+    private fun xmlBlocks(xml: String, tag: String): List<String> {
+        return Regex("<${Regex.escape(tag)}\\b[\\s\\S]*?/>").findAll(xml).map { it.value }.toList()
+    }
+
+    private fun assertAttribute(block: String, name: String, value: String) {
+        assertTrue(block.contains("""$name="$value""""))
     }
 }

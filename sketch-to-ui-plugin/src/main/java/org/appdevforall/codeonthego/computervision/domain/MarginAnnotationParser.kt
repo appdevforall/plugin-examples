@@ -1,7 +1,9 @@
 package org.appdevforall.codeonthego.computervision.domain
 
 import org.appdevforall.codeonthego.computervision.domain.model.DetectionResult
+import org.appdevforall.codeonthego.computervision.domain.model.MetadataOcrSource
 import org.appdevforall.codeonthego.computervision.domain.model.SketchRegion
+import org.appdevforall.codeonthego.computervision.domain.parser.AttributeKey
 import org.appdevforall.codeonthego.computervision.utils.MetadataDetector
 import kotlin.math.abs
 
@@ -25,11 +27,11 @@ object MarginAnnotationParser {
         val distribution = distributeDetections(sanitizedDetections, imageWidth, leftGuidePct, rightGuidePct)
         val canvasTags = extractCanvasTags(distribution.canvas)
 
-        val annotationMap = parseMarginsGlobally(
+        val annotationMap = MetadataAnnotationRecovery.resolve(parseMarginsGlobally(
             leftMargin = distribution.leftMargin,
             rightMargin = distribution.rightMargin,
             canvasTags = canvasTags
-        )
+        ))
 
         return Pair(distribution.canvas, annotationMap)
     }
@@ -120,15 +122,13 @@ object MarginAnnotationParser {
         rightMargin: List<DetectionResult>,
         canvasTags: List<Pair<String, DetectionResult>>
     ): Map<String, String> {
-        val leftBlocks = extractBlocks(leftMargin.sortedBy { it.boundingBox.top })
-        val rightBlocks = extractBlocks(rightMargin.sortedBy { it.boundingBox.top })
+        val leftBlocks = extractBlocksBySource(leftMargin)
+        val rightBlocks = extractBlocksBySource(rightMargin)
 
-        val globalExplicitAnnotations = mergeAnnotations(
-            leftBlocks.explicitAnnotations,
-            rightBlocks.explicitAnnotations
-        )
+        val allSourceBlocks = leftBlocks + rightBlocks
+        val globalExplicitAnnotations = mergeExplicitAnnotations(allSourceBlocks)
 
-        val allImplicitBlocks = leftBlocks.implicitBlocks + rightBlocks.implicitBlocks
+        val allImplicitBlocks = allSourceBlocks.flatMap { it.blocks.implicitBlocks }
 
         val resolvedImplicitAnnotations = resolveImplicitBlocks(
             implicitBlocks = allImplicitBlocks,
@@ -137,6 +137,112 @@ object MarginAnnotationParser {
         )
 
         return mergeAnnotations(globalExplicitAnnotations, resolvedImplicitAnnotations)
+    }
+
+    private fun extractBlocksBySource(detections: List<DetectionResult>): List<SourcedBlocks> {
+        return detections.groupBy { it.metadataSource }
+            .map { (source, sourceDetections) ->
+                SourcedBlocks(source, extractBlocks(sourceDetections.sortedBy { it.boundingBox.top }))
+            }
+    }
+
+    private fun mergeExplicitAnnotations(sourceBlocks: List<SourcedBlocks>): MutableMap<String, String> {
+        return sourceBlocks
+            .sortedBy { it.source.priority }
+            .flatMap { sourced ->
+                sourced.blocks.explicitAnnotations.map { (tag, annotation) ->
+                    tag to SourcedAnnotation(annotation, sourced.source)
+                }
+            }
+            .groupBy({ it.first }, { it.second })
+            .mapValues { (_, candidates) -> mergeAnnotationFragments(candidates) }
+            .toMutableMap()
+    }
+
+    /**
+     * Combines duplicate annotations for the same widget while keeping one selected fragment per key.
+     *
+     * Margin-crop OCR is preferred over full-image OCR, except same-priority dimension fragments can
+     * be replaced by a less noisy candidate.
+     */
+    private fun mergeAnnotationFragments(candidates: List<SourcedAnnotation>): String {
+        val fragments = candidates.toSourcedFragments()
+        return buildMergedAnnotation(
+            keyedFragments = fragments.selectBestKeyedFragments(),
+            unkeyedFragments = fragments.uniqueUnkeyedFragments()
+        )
+    }
+
+    private fun List<SourcedAnnotation>.toSourcedFragments(): List<SourcedFragment> {
+        return sortedBy { it.source.priority }.flatMap { candidate ->
+            candidate.text.groupAdjacentDimensionFragments().map { fragment ->
+                SourcedFragment(
+                    text = fragment,
+                    key = normalizedAttributeKey(fragment),
+                    sourcePriority = candidate.source.priority
+                )
+            }
+        }
+    }
+
+    private fun List<SourcedFragment>.selectBestKeyedFragments(): List<SelectedFragment> {
+        return filter { it.key != null }
+            .groupBy { it.key.orEmpty() }
+            .map { (key, fragments) -> fragments.bestFragmentFor(key) }
+    }
+
+    private fun List<SourcedFragment>.bestFragmentFor(key: String): SelectedFragment {
+        return map { SelectedFragment(it.text, it.sourcePriority) }
+            .reduce { currentBest, candidate ->
+                if (candidate.isBetterThan(currentBest, key)) candidate else currentBest
+            }
+    }
+
+    private fun List<SourcedFragment>.uniqueUnkeyedFragments(): List<String> {
+        return filter { it.key == null }
+            .map { it.text }
+            .distinct()
+    }
+
+    private fun buildMergedAnnotation(
+        keyedFragments: List<SelectedFragment>,
+        unkeyedFragments: List<String>
+    ): String {
+        return (keyedFragments.map { it.text } + unkeyedFragments).joinToString(" | ")
+    }
+
+    private fun String.groupAdjacentDimensionFragments(): List<String> {
+        val fragments = split('|').map(String::trim).filter(String::isNotEmpty)
+        return fragments.fold(mutableListOf()) { grouped, fragment ->
+            grouped.appendGroupedFragment(fragment)
+            grouped
+        }
+    }
+
+    private fun MutableList<String>.appendGroupedFragment(fragment: String) {
+        val previous = lastOrNull()
+        if (previous != null && shouldJoinUnlabeledDimension(previous, fragment)) {
+            this[lastIndex] = "$previous $fragment"
+        } else {
+            add(fragment)
+        }
+    }
+
+    private fun shouldJoinUnlabeledDimension(previous: String, fragment: String): Boolean {
+        return normalizedAttributeKey(previous) in DIMENSION_KEYS &&
+            UNLABELED_DIMENSION.matches(fragment)
+    }
+
+    private fun normalizedAttributeKey(fragment: String): String? {
+        val rawKey = ATTRIBUTE_KEY_PREFIX.find(fragment)?.groupValues?.get(1) ?: return null
+        val compactKey = rawKey.lowercase().replace(Regex("[^a-z]"), "")
+        return when {
+            compactKey.startsWith("layoutwidth") -> AttributeKey.WIDTH.aliases.first()
+            compactKey.startsWith("layoutheight") || compactKey.startsWith("layoutheiqht") -> AttributeKey.HEIGHT.aliases.first()
+            compactKey in AttributeKey.ID.aliases -> AttributeKey.ID.aliases.first()
+            compactKey.isNotBlank() -> compactKey
+            else -> null
+        }
     }
 
     /**
@@ -268,6 +374,40 @@ object MarginAnnotationParser {
         val centerY: Float
     )
 
+    private data class SourcedBlocks(
+        val source: MetadataOcrSource?,
+        val blocks: GroupedBlocks
+    )
+
+    private data class SourcedAnnotation(
+        val text: String,
+        val source: MetadataOcrSource?
+    )
+
+    private data class SourcedFragment(
+        val text: String,
+        val key: String?,
+        val sourcePriority: Int
+    )
+
+    private data class SelectedFragment(
+        val text: String,
+        val sourcePriority: Int
+    ) {
+        fun isBetterThan(existing: SelectedFragment, key: String): Boolean {
+            if (sourcePriority != existing.sourcePriority) return sourcePriority < existing.sourcePriority
+            if (key !in DIMENSION_KEYS) return false
+            return dimensionNoiseScore(text) < dimensionNoiseScore(existing.text)
+        }
+    }
+
+    private val MetadataOcrSource?.priority: Int
+        get() = when (this) {
+            MetadataOcrSource.MARGIN_CROP -> 0
+            null -> 1
+            MetadataOcrSource.FULL_IMAGE -> 2
+        }
+
     private fun StringBuilder.appendAnnotationFragment(text: String) {
         if (isNotBlank()) append(" | ")
         append(text)
@@ -282,5 +422,14 @@ object MarginAnnotationParser {
             text.isNotBlank() &&
             !MetadataDetector.isCanvasMetadata(text) &&
             !WidgetTagParser.isTagSequence(text)
+    }
+
+    private val ATTRIBUTE_KEY_PREFIX = Regex("^\\s*([a-zA-Z_\\- ]+?)(?=\\s*[:;]|\\d)")
+    private val DIMENSION_KEYS = AttributeKey.WIDTH.aliases.take(2).toSet() + AttributeKey.HEIGHT.aliases
+    private val DIMENSION_OCR_NOISE = Regex("(?<=\\d)[DOIl](?=\\s*(?:dp|de|do)\\b)", RegexOption.IGNORE_CASE)
+    private val UNLABELED_DIMENSION = Regex("^[0-9]+\\s*(?:dp|de|do)$", RegexOption.IGNORE_CASE)
+
+    private fun dimensionNoiseScore(fragment: String): Int {
+        return DIMENSION_OCR_NOISE.findAll(fragment).count()
     }
 }

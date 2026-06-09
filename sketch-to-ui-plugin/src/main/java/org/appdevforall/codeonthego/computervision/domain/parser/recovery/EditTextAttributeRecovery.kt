@@ -25,13 +25,6 @@ internal object EditTextAttributeRecovery {
                 ?.let { recovered[AttributeKey.ID.xmlName] = IdCleaner.clean(it, EDIT_TEXT_TAG) }
         }
 
-        if (likelyPassword &&
-            recovered[AttributeKey.HEIGHT.xmlName] == "30dp" &&
-            hasIncompleteHeightBeforeOcrArtifact(annotation)
-        ) {
-            recovered[AttributeKey.HEIGHT.xmlName] = "52dp"
-        }
-
         if (likelyPassword || hasMetadataTextLeakage(recovered[AttributeKey.TEXT.xmlName])) {
             recovered.remove(AttributeKey.TEXT.xmlName)
         }
@@ -54,6 +47,7 @@ internal object EditTextAttributeRecovery {
         val compact = annotation.lowercase().replace(Regex("[^a-z]+"), "")
         return compact.contains("textpassword") ||
             compact.contains("inputtypetextpassword") ||
+            compact.contains("password") ||
             annotation.split(PIPE_DELIMITER)
                 .map { it.trim().lowercase() }
                 .any { it == "password" || it == "textpassword" }
@@ -69,18 +63,17 @@ internal object EditTextAttributeRecovery {
         val passwordIndex = parts.indexOfFirst { isLikelyPasswordInput(it) }
         if (passwordIndex < 0) return null
 
-        return parts.drop(passwordIndex + 1)
+        val candidates = parts.drop(passwordIndex + 1)
             .map { it.trim() }
-            .firstOrNull { candidate ->
+            .filter { candidate ->
                 candidate.matches(Regex("[A-Za-z][A-Za-z0-9_]{2,}")) &&
                     !isLikelyPasswordInput(candidate) &&
                     AttributeTokenMapper.fuzzyMatchKey(candidate) == null
             }
-    }
 
-    private fun hasIncompleteHeightBeforeOcrArtifact(annotation: String): Boolean {
-        return Regex("(?:layout_height|layoutheight)\\s*:\\s*(?:\\||$)").containsMatchIn(annotation) &&
-            Regex("layout_height\\s*:\\s*30\\s*dp", RegexOption.IGNORE_CASE).containsMatchIn(annotation)
+        if (candidates.size < MIN_UNKEYED_ID_CORROBORATION_COUNT) return null
+        val longestLength = candidates.maxOfOrNull { it.length } ?: return null
+        return candidates.filter { it.length == longestLength }.singleOrNull()
     }
 
     private fun recoverExplicitTextValue(annotation: String): String? {
@@ -111,4 +104,6 @@ internal object EditTextAttributeRecovery {
         "(?:^|\\|)\\s*hint\\s*[:;]\\s*([^|]+)",
         RegexOption.IGNORE_CASE
     )
+
+    private const val MIN_UNKEYED_ID_CORROBORATION_COUNT = 2
 }
