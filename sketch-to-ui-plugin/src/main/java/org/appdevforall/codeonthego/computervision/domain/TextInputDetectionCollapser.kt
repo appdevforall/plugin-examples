@@ -23,8 +23,7 @@ object TextInputDetectionCollapser {
     }
 
     private fun List<DetectionResult>.connectedComponents(): List<List<DetectionResult>> {
-        val visited = toIdentitySet()
-        visited.clear()
+        val visited: MutableSet<DetectionResult> = Collections.newSetFromMap(IdentityHashMap())
 
         return mapNotNull { input ->
             if (input in visited) return@mapNotNull null
