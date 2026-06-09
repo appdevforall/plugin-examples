@@ -67,6 +67,12 @@ This is intentional — the `application`-as-library packaging trips those check
 
 Some plugins (currently `ndk-installer-plugin`) register a `downloadAssets` task that fetches a tarball at build time with MD5 verification. `scripts/update-libs.sh` runs it automatically before `assemblePlugin` when the build file references it.
 
+## Verification
+
+**`./gradlew assemblePlugin` succeeding is not verification** — it only proves the plugin compiles and packages. Real verification for these plugins is device-level: push the built `.cgp` to a connected emulator/device, install through CoGo's Plugin Manager, exercise the feature end-to-end, and observe the expected behavior (UI element appears, file written, build hook fires, DB row replaced, etc.).
+
+If device verification isn't possible in-session, say so explicitly rather than calling the change verified. Build success is necessary but never sufficient — this applies especially to plugins that mutate IDE state (`documentation.db`, settings, filesystem, project structure).
+
 ## Adding a new plugin
 
 1. Copy `random-xkcd/` — it's the canonical starting template (small but complete, includes the in-IDE help HTML pattern that submissions are expected to follow).
@@ -77,3 +83,5 @@ Some plugins (currently `ndk-installer-plugin`) register a `downloadAssets` task
 ## Plugin review skill
 
 `.claude/skills/plugin-review/` contains the `cogo-plugin-review` skill — invoke via `/plugin-review` or `/cotg-plugin-review` when the user asks to review, audit, or check a CoGo plugin for submission readiness. It builds, audits security, and scores against the submission rubric.
+
+**Proactively offer `/plugin-review`** (don't wait for the user to ask) after any substantive change to a plugin: importing a new plugin folder, modifying dependencies, touching the `IPlugin`/`PluginContext` API surface, adding shipped assets, or updating `libs/`. It has caught real defects (resource leaks, missing manifest entries, missing in-IDE help HTML) that aren't visible from a clean `assemblePlugin` build.
