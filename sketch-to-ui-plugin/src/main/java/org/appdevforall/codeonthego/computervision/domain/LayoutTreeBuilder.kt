@@ -13,6 +13,8 @@ import kotlin.math.max
 object LayoutTreeBuilder {
     private const val OVERLAP_THRESHOLD = 0.6
     private const val VERTICAL_ALIGN_THRESHOLD = 20
+    private const val SAME_COLUMN_X_THRESHOLD = 24
+    private const val MIN_HORIZONTAL_GAP = 24
 
     fun buildLayoutTree(boxes: List<ScaledBox>): List<LayoutItem> {
         val rows = groupIntoRows(boxes)
@@ -39,10 +41,16 @@ object LayoutTreeBuilder {
             if (!isCheckboxRow && verticalCheckboxRun.isNotEmpty()) flushRuns()
 
             when {
-                isRadioRow && row.size == 1 -> verticalRadioRun.add(row.first())
-                isRadioRow -> items.add(LayoutItem.RadioGroup(row, "horizontal"))
-                isCheckboxRow && row.size == 1 -> verticalCheckboxRun.add(row.first())
-                isCheckboxRow -> items.add(LayoutItem.CheckboxGroup(row, "horizontal"))
+                isRadioRow && shouldTreatAsVerticalRun(row) -> verticalRadioRun.addAll(row.sortedBy { it.y })
+                isRadioRow -> {
+                    flushRuns()
+                    items.add(LayoutItem.RadioGroup(row.sortedBy { it.x }, "horizontal"))
+                }
+                isCheckboxRow && shouldTreatAsVerticalRun(row) -> verticalCheckboxRun.addAll(row.sortedBy { it.y })
+                isCheckboxRow -> {
+                    flushRuns()
+                    items.add(LayoutItem.CheckboxGroup(row.sortedBy { it.x }, "horizontal"))
+                }
                 else -> {
                     flushRuns()
                     if (row.size == 1) {
@@ -56,6 +64,26 @@ object LayoutTreeBuilder {
         flushRuns()
 
         return items
+    }
+
+    private fun shouldTreatAsVerticalRun(row: List<ScaledBox>): Boolean {
+        if (row.size == 1) return true
+
+        val sortedByY = row.sortedBy { it.y }
+        val minX = row.minOf { it.x }
+        val maxX = row.maxOf { it.x }
+        val sameColumn = maxX - minX <= SAME_COLUMN_X_THRESHOLD
+
+        if (sameColumn) return true
+
+        val hasRealHorizontalSpacing = sortedByY
+            .zipWithNext()
+            .all { (current, next) ->
+                val horizontalGap = next.x - (current.x + current.w)
+                horizontalGap >= MIN_HORIZONTAL_GAP
+            }
+
+        return !hasRealHorizontalSpacing
     }
 
     private fun groupIntoRows(boxes: List<ScaledBox>): List<List<ScaledBox>> {
