@@ -1,5 +1,6 @@
 package org.appdevforall.codeonthego.computervision.domain
 
+import org.appdevforall.codeonthego.computervision.domain.model.DetectionLabels
 import org.appdevforall.codeonthego.computervision.domain.model.LayoutItem
 import org.appdevforall.codeonthego.computervision.domain.model.ScaledBox
 import kotlin.math.abs
@@ -101,11 +102,9 @@ object LayoutTreeBuilder {
         return rows.sortedBy { it.top }.map { it.boxes.sortedBy(ScaledBox::x) }
     }
 
-    private fun isRadioButton(box: ScaledBox): Boolean =
-        box.label == "radio_button_unchecked" || box.label == "radio_button_checked"
+    private fun isRadioButton(box: ScaledBox): Boolean = DetectionLabels.isRadioButton(box.label)
 
-    private fun isCheckbox(box: ScaledBox): Boolean =
-        box.label == "checkbox_unchecked" || box.label == "checkbox_checked"
+    private fun isCheckbox(box: ScaledBox): Boolean = DetectionLabels.isCheckbox(box.label)
 
     private class LayoutRow(initialBox: ScaledBox) {
         private val _boxes = mutableListOf(initialBox)

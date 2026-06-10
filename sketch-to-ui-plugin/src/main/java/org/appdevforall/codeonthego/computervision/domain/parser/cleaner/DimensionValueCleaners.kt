@@ -2,60 +2,26 @@ package org.appdevforall.codeonthego.computervision.domain.parser.cleaner
 
 import me.xdrop.fuzzywuzzy.FuzzySearch
 import org.appdevforall.codeonthego.computervision.domain.parser.AttributeRegexPatterns
+import org.appdevforall.codeonthego.computervision.domain.parser.DimensionUnits
 import org.appdevforall.codeonthego.computervision.domain.parser.DimensionValueSet
 import org.appdevforall.codeonthego.computervision.domain.parser.ValueCleaner
 
 internal object DimensionCleaner : ValueCleaner {
     private const val FUZZY_DIMENSION_THRESHOLD = 60
     private const val OCR_TRAILING_ZERO_MIN_VALUE = 1000L
-
-    private const val DP_UNIT = "dp"
-    private const val SP_UNIT = "sp"
-    private const val PX_UNIT = "px"
-    private const val IN_UNIT = "in"
-    private const val MM_UNIT = "mm"
-    private const val PT_UNIT = "pt"
-
-    private const val OCR_SP_UNIT = "5p"
-    private const val OCR_DUPLICATED_DP_UNIT = "ddp"
-    private const val OCR_DP_ZERO_UNIT = "d0"
-    private const val OCR_DP_LETTER_O_UNIT = "do"
-    private const val OCR_DP_LETTER_E_UNIT = "de"
-
     private const val OCR_DP_NOISE_D = 'd'
     private const val OCR_DP_NOISE_P = 'p'
-
-    private val noisyDimensionSuffixes = listOf(
-        OCR_DUPLICATED_DP_UNIT,
-        DP_UNIT,
-        OCR_DP_ZERO_UNIT,
-        OCR_DP_LETTER_O_UNIT,
-        OCR_DP_LETTER_E_UNIT,
-        SP_UNIT,
-        OCR_SP_UNIT,
-        PX_UNIT,
-        IN_UNIT,
-        MM_UNIT,
-        PT_UNIT
-    )
 
     /** Resolves dimensions using fuzzy scores and numeric OCR corrections. */
     override fun clean(rawValue: String): String {
         val trimmedValue = rawValue.trim().lowercase()
         val normalized = trimmedValue.replace(" ", "_")
 
-        if (DimensionValueSet.matchKeywords.any { it in normalized }) {
-            return DimensionValueSet.MATCH_PARENT
-        }
-
-        if (DimensionValueSet.wrapKeywords.any { it in normalized }) {
-            return DimensionValueSet.WRAP_CONTENT
-        }
+        if (DimensionValueSet.matchKeywords.any { it in normalized }) return DimensionValueSet.MATCH_PARENT
+        if (DimensionValueSet.wrapKeywords.any { it in normalized }) return DimensionValueSet.WRAP_CONTENT
 
         val fuzzyResult = FuzzySearch.extractOne(normalized, DimensionValueSet.values)
-        if (fuzzyResult.score >= FUZZY_DIMENSION_THRESHOLD) {
-            return fuzzyResult.string
-        }
+        if (fuzzyResult.score >= FUZZY_DIMENSION_THRESHOLD) return fuzzyResult.string
 
         val compactValue = trimmedValue
             .replace(" ", "")
@@ -75,18 +41,21 @@ internal object DimensionCleaner : ValueCleaner {
 
     private fun resolveDimensionUnit(value: String): String {
         return when {
-            value.endsWith(SP_UNIT) || value.endsWith(OCR_SP_UNIT) -> SP_UNIT
-            value.endsWith(PX_UNIT) -> PX_UNIT
-            value.endsWith(IN_UNIT) -> IN_UNIT
-            value.endsWith(MM_UNIT) -> MM_UNIT
-            value.endsWith(PT_UNIT) -> PT_UNIT
-            else -> DP_UNIT
+            value.endsWith(DimensionUnits.SP) ||
+                value.endsWith(DimensionUnits.OCR_SP) -> DimensionUnits.SP
+
+            value.endsWith(DimensionUnits.PX) -> DimensionUnits.PX
+            value.endsWith(DimensionUnits.IN) -> DimensionUnits.IN
+            value.endsWith(DimensionUnits.MM) -> DimensionUnits.MM
+            value.endsWith(DimensionUnits.PT) -> DimensionUnits.PT
+
+            else -> DimensionUnits.DP
         }
     }
 
     private fun removeDimensionUnitNoise(value: String): String {
-        val cleaned = noisyDimensionSuffixes
-            .firstOrNull { suffix -> value.endsWith(suffix) }
+        val cleaned = DimensionUnits.noisySuffixes
+            .firstOrNull { value.endsWith(it) }
             ?.let { suffix -> value.removeSuffix(suffix) }
             ?: value
 
@@ -97,10 +66,7 @@ internal object DimensionCleaner : ValueCleaner {
 
     /** Removes a likely OCR-added trailing zero from unusually large dimensions. */
     private fun removeOcrTrailingZero(num: String): String {
-        val numericValue = num.toLongOrNull() ?: 0L
-        val isOcrArtifact = num.endsWith("0") &&
-            numericValue >= OCR_TRAILING_ZERO_MIN_VALUE
-
+        val isOcrArtifact = num.endsWith("0") && (num.toLongOrNull() ?: 0L) >= OCR_TRAILING_ZERO_MIN_VALUE
         return if (isOcrArtifact) num.dropLast(1) else num
     }
 
@@ -115,20 +81,9 @@ internal object DimensionCleaner : ValueCleaner {
 }
 
 internal object SpDimensionCleaner : ValueCleaner {
-    private const val SP_UNIT = "sp"
-
     override fun clean(rawValue: String): String {
-        val normalized = rawValue
-            .lowercase()
-            .replace(" ", "")
-            .replace(AttributeRegexPatterns.SP_SUFFIX, "")
-
+        val normalized = rawValue.lowercase().replace(" ", "").replace(AttributeRegexPatterns.SP_SUFFIX, "")
         val numericPart = NumberCleaner.clean(normalized.replace("_", ""))
-
-        return if (numericPart != normalized) {
-            "$numericPart$SP_UNIT"
-        } else {
-            rawValue
-        }
+        return if (numericPart != normalized) "$numericPart${DimensionUnits.SP}" else rawValue
     }
 }

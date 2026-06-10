@@ -14,6 +14,23 @@ android {
     namespace = "com.appdevforall.sketchtoui.plugin"
     compileSdk = 35
 
+    sourceSets {
+        getByName("main") {
+            java.srcDirs(
+                "src/main/java",
+                "src/main/kotlin"
+            )
+        }
+
+        getByName("test") {
+            java.srcDirs(
+                "src/test/java",
+                "src/test/kotlin",
+                "test/java"
+            )
+        }
+    }
+
     defaultConfig {
         applicationId = "com.appdevforall.sketchtoui.plugin"
         minSdk = 28
