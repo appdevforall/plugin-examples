@@ -58,7 +58,7 @@ class YoloToXmlConverter(
     }
 
     private fun extractUiCandidates(detections: List<DetectionResult>): List<DetectionResult> {
-        return detections
+        val candidates = detections
             .filterNot { it.isInvalidWidgetTag() }
             .filter { (it.isYolo || it.label == "text") && it.label != "widget_tag" }
             .filter { it.isCanvasRenderable() }
@@ -72,6 +72,8 @@ class YoloToXmlConverter(
                     "${it.label}:${it.boundingBox.left}:${it.boundingBox.top}:${it.boundingBox.right}:${it.boundingBox.bottom}"
                 }
             }
+
+        return TextInputDetectionCollapser.collapse(candidates)
     }
 
     private fun scaleDetections(

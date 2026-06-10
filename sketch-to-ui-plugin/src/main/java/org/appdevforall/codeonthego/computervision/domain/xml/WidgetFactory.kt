@@ -76,12 +76,18 @@ class WidgetFactory(
         val groupId = resolveRadioGroupId(fullGroupAttrs["android:id"]?.substringAfterLast('/'))
 
         val groupStructuralAttrs = setOf("android:id", "android:layout_width", "android:layout_height", "android:orientation")
-        val sharedAttrs = fullGroupAttrs.filterKeys { it !in groupStructuralAttrs }
+        // Group metadata can contain style attributes; visible option labels must stay with each RadioButton's OCR text.
+        val sharedAttrs = fullGroupAttrs.filterKeys {
+            it !in groupStructuralAttrs && it != AttributeKey.TEXT.xmlName
+        }
 
         var checkedId: String? = null
 
         val children = item.boxes.mapIndexed { index, box ->
             val parsedAttrs = (sharedAttrs + FuzzyAttributeParser.parse(annotations[box], "RadioButton")).toMutableMap()
+            if (box.text.isNotBlank()) {
+                parsedAttrs.remove(AttributeKey.TEXT.xmlName)
+            }
 
             if (parsedAttrs["android:id"] == fullGroupAttrs["android:id"]) {
                 parsedAttrs.remove("android:id")
