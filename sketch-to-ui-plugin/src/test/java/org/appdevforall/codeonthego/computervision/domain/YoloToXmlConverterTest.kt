@@ -265,6 +265,97 @@ class YoloToXmlConverterTest {
         assertTrue(xml.contains("""android:id="@+id/image_placeholder_0""""))
     }
 
+    @Test
+    fun `overlapping password text entry boxes collapse to one edit text with parsed metadata`() {
+        val detections = listOf(
+            detection("text_entry_box", "Email", 250f, 100f, 550f, 150f, region = SketchRegion.CANVAS),
+            detection("text_entry_box", "Password", 250f, 200f, 550f, 252f, region = SketchRegion.CANVAS),
+            detection("text_entry_box", "Password", 260f, 205f, 540f, 248f, region = SketchRegion.CANVAS),
+            detection("text_entry_box", "Password", 248f, 198f, 552f, 254f, region = SketchRegion.CANVAS),
+            detection("text", "T-1", 215f, 112f, 245f, 134f, isYolo = false, region = SketchRegion.CANVAS),
+            detection("text", "T-2", 215f, 212f, 245f, 234f, isYolo = false, region = SketchRegion.CANVAS)
+        )
+        val annotations = mapOf(
+            "T-1" to "layout_width: 200dp | layout_height: 52dp | id: email | inputType: textEmailAddress",
+            "T-2" to "layoutwidth | layoutwidthi20O0dp | layoutheight: | layoutheight30 | t | extassword | textPassword | credential | ieredeetal"
+        )
+
+        val (xml, _) = YoloToXmlConverter.generateXmlLayout(
+            detections = detections,
+            annotations = annotations,
+            sourceImageWidth = 1000,
+            sourceImageHeight = 1000,
+            targetDpWidth = 1000,
+            targetDpHeight = 1000,
+            wrapInScroll = false
+        )
+
+        assertEquals(2, Regex("<EditText\\b").findAll(xml).count())
+        assertTrue(xml.contains("""android:id="@+id/credential""""))
+        assertTrue(xml.contains("""android:layout_width="200dp""""))
+        assertTrue(xml.contains("""android:layout_height="52dp""""))
+        assertTrue(xml.contains("""android:inputType="textPassword""""))
+        assertTrue(xml.contains("""android:hint="Password""""))
+        assertFalse(xml.contains("""android:text="credential"""))
+        assertFalse(xml.contains("""ieredeetal"""))
+        assertFalse(xml.contains("""android:orientation="horizontal""""))
+    }
+
+    @Test
+    fun `nearby distinct text entry boxes are not collapsed`() {
+        val detections = listOf(
+            detection("text_entry_box", "First", 250f, 100f, 450f, 152f, region = SketchRegion.CANVAS),
+            detection("text_entry_box", "Last", 470f, 100f, 670f, 152f, region = SketchRegion.CANVAS),
+            detection("text", "T-1", 215f, 112f, 245f, 134f, isYolo = false, region = SketchRegion.CANVAS),
+            detection("text", "T-2", 435f, 112f, 465f, 134f, isYolo = false, region = SketchRegion.CANVAS)
+        )
+        val annotations = mapOf(
+            "T-1" to "id: first_name | layout_width: 120dp | layout_height: 52dp",
+            "T-2" to "id: last_name | layout_width: 120dp | layout_height: 52dp"
+        )
+
+        val (xml, _) = YoloToXmlConverter.generateXmlLayout(
+            detections = detections,
+            annotations = annotations,
+            sourceImageWidth = 1000,
+            sourceImageHeight = 1000,
+            targetDpWidth = 1000,
+            targetDpHeight = 1000,
+            wrapInScroll = false
+        )
+
+        assertEquals(2, Regex("<EditText\\b").findAll(xml).count())
+        assertTrue(xml.contains("""android:id="@+id/first_name""""))
+        assertTrue(xml.contains("""android:id="@+id/last_name""""))
+    }
+
+    @Test
+    fun `transitive overlapping text entry boxes collapse to one edit text`() {
+        val detections = listOf(
+            detection("text_entry_box", "Password", 250f, 200f, 350f, 252f, region = SketchRegion.CANVAS),
+            detection("text_entry_box", "Password", 280f, 200f, 380f, 252f, region = SketchRegion.CANVAS),
+            detection("text_entry_box", "Password", 310f, 200f, 410f, 252f, region = SketchRegion.CANVAS),
+            detection("text", "T-1", 215f, 212f, 245f, 234f, isYolo = false, region = SketchRegion.CANVAS)
+        )
+        val annotations = mapOf(
+            "T-1" to "id: credential | layout_width: 200dp | layout_height: 52dp | inputType: textPassword"
+        )
+
+        val (xml, _) = YoloToXmlConverter.generateXmlLayout(
+            detections = detections,
+            annotations = annotations,
+            sourceImageWidth = 1000,
+            sourceImageHeight = 1000,
+            targetDpWidth = 1000,
+            targetDpHeight = 1000,
+            wrapInScroll = false
+        )
+
+        assertEquals(1, Regex("<EditText\\b").findAll(xml).count())
+        assertTrue(xml.contains("""android:id="@+id/credential""""))
+        assertFalse(xml.contains("""android:orientation="horizontal""""))
+    }
+
     private fun detection(
         label: String,
         text: String,

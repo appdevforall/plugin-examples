@@ -351,6 +351,70 @@ class FuzzyAttributeParserTest {
     }
 
     @Test
+    fun `noisy password text input annotation parses correctly`() {
+        val annotation = "layoutwidth | layoutwidthi20O0dp | layoutheight: | layoutheight30 | t | extassword | textPassword | credential | ieredeetal"
+        val result = FuzzyAttributeParser.parse(annotation, "EditText")
+
+        assertEquals("200dp", result["android:layout_width"])
+        assertEquals("52dp", result["android:layout_height"])
+        assertEquals("credential", result["android:id"])
+        assertEquals("textPassword", result["android:inputType"])
+        assertNull(result["android:text"])
+    }
+
+    @Test
+    fun `non password words do not trigger password recovery`() {
+        val classwork = FuzzyAttributeParser.parse("text: classwork | layout_height: 30dp", "EditText")
+        val masswork = FuzzyAttributeParser.parse("text: masswork | layout_height: 30dp", "EditText")
+
+        assertEquals("classwork", classwork["android:text"])
+        assertEquals("30dp", classwork["android:layout_height"])
+        assertNull(classwork["android:inputType"])
+        assertEquals("masswork", masswork["android:text"])
+        assertEquals("30dp", masswork["android:layout_height"])
+        assertNull(masswork["android:inputType"])
+    }
+
+    @Test
+    fun `non password edit text keeps explicit text`() {
+        val result = FuzzyAttributeParser.parse("id: display_name | text: Alice | hint: Name", "EditText")
+
+        assertEquals("display_name", result["android:id"])
+        assertEquals("Alice", result["android:text"])
+        assertEquals("Name", result["android:hint"])
+    }
+
+    @Test
+    fun `center horizontal layout gravity is preserved`() {
+        val annotation = "id: remember | layoutgravity:center | layoutgravity:centerhorizontal"
+        val result = FuzzyAttributeParser.parse(annotation, "Switch")
+
+        assertEquals("remember", result["android:id"])
+        assertEquals("center_horizontal", result["android:layout_gravity"])
+    }
+
+    @Test
+    fun `radio text color ocr variant does not become text`() {
+        val annotation = "texteolor:blue | textSize:16sp"
+        val result = FuzzyAttributeParser.parse(annotation, "RadioButton")
+
+        assertEquals("#0000FF", result["android:textColor"])
+        assertEquals("16sp", result["android:textSize"])
+        assertNull(result["android:text"])
+    }
+
+    @Test
+    fun `compact image dimensions and src parse correctly`() {
+        val annotation = "width:64dp | heighti64de | id: img_logo | src:logo.png"
+        val result = FuzzyAttributeParser.parse(annotation, "ImageView")
+
+        assertEquals("64dp", result["android:layout_width"])
+        assertEquals("64dp", result["android:layout_height"])
+        assertEquals("img_logo", result["android:id"])
+        assertEquals("@drawable/logo", result["android:src"])
+    }
+
+    @Test
     fun `gravity attribute parses correctly`() {
         val annotation = "gravity: center | width: 100dp"
         val result = FuzzyAttributeParser.parse(annotation, "TextView")
