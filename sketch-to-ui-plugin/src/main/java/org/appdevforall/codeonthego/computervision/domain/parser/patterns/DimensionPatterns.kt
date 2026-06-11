@@ -13,9 +13,6 @@ internal object DimensionPatterns {
     /** Extracts the first signed decimal number from OCR text. */
     val SIGNED_DECIMAL = Regex("-?\\d+\\.?\\d*")
 
-    /** Finds supported Android dimension units at the end of a value. */
-    val DIMENSION_UNIT_SUFFIX = Regex("(dp|sp|px|in|mm|pt)$")
-
     /** Removes OCR variants of an `sp` suffix before text-size cleanup. */
     val SP_SUFFIX = Regex("(sp|5p)$")
 
@@ -68,10 +65,11 @@ internal object DimensionPatterns {
         return Regex("\\b$aliases[iIl1|]?[0-9oOIlLSBZz]+\\s*(?:dp|de|do|clp)\\b", RegexOption.IGNORE_CASE)
     }
 
-    /** Matches OCR variants of the layout width attribute key. */
-    const val LAYOUT_WIDTH_OCR = "[il]ay[a-z]*[-_.\\s]*w[a-z0-9]*\\.?\\s*[:;]\\s*"
-    /** Matches OCR variants of the layout height attribute key. */
-    const val LAYOUT_HEIGHT_OCR = "[il]ay[a-z]*[-_.\\s]*hei[a-z0-9]*\\.?\\s*[:;]\\s*"
+    /** Matches OCR variants of the layout width attribute key with common separators. */
+    const val LAYOUT_WIDTH_OCR = "[il]ay[a-z]*[-_.\\s]*w[a-z0-9]*\\.?\\s*[:;.]\\s*"
+
+    /** Matches OCR variants of the layout height attribute key with common separators. */
+    const val LAYOUT_HEIGHT_OCR = "[il]ay[a-z]*[-_.\\s]*hei[a-z0-9]*\\.?\\s*[:;.]\\s*"
     /** Matches OCR variants of the match_parent dimension value. */
     const val MATCH_PARENT_OCR = "m?w?at[ce]h[-_\\s]?p[ar]+ent"
 }
