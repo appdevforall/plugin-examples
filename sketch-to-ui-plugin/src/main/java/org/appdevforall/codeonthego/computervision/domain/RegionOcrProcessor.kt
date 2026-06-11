@@ -8,6 +8,7 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import org.appdevforall.codeonthego.computervision.data.source.OcrSource
 import org.appdevforall.codeonthego.computervision.domain.model.DetectionResult
+import org.appdevforall.codeonthego.computervision.domain.model.MetadataOcrSource
 import org.appdevforall.codeonthego.computervision.domain.model.SketchRegion
 import org.appdevforall.codeonthego.computervision.utils.BitmapUtils
 import org.appdevforall.codeonthego.computervision.utils.OcrTextAssembler
@@ -52,11 +53,15 @@ class RegionOcrProcessor(
         val marginOcrDeferred = async { runMarginOcr(originalBitmap, leftGuidePct, rightGuidePct) }
         val fullImageOcrDeferred = async { runFullImageOcr(originalBitmap) }
 
+        val enriched = widgetOcrDeferred.await()
+        val margin = marginOcrDeferred.await()
+        val fullImageBlocks = fullImageOcrDeferred.await()
+
         RegionOcrResult(
-            enrichedDetections = widgetOcrDeferred.await(),
+            enrichedDetections = enriched,
             remainingDetections = remaining,
-            marginDetections = marginOcrDeferred.await(),
-            fullImageTextBlocks = fullImageOcrDeferred.await()
+            marginDetections = margin,
+            fullImageTextBlocks = fullImageBlocks
         )
     }
 
@@ -82,6 +87,7 @@ class RegionOcrProcessor(
         }.awaitAll()
     }
 
+    /** Converts percentage guides into pixel crop rectangles for both metadata margins. */
     private suspend fun runMarginOcr(
         bitmap: Bitmap,
         leftGuidePct: Float,
@@ -101,6 +107,7 @@ class RegionOcrProcessor(
         return results
     }
 
+    /** Translates OCR boxes from cropped-region coordinates back into source-image coordinates. */
     private suspend fun ocrCroppedRegion(
         bitmap: Bitmap,
         rect: RectF,
@@ -125,7 +132,8 @@ class RegionOcrProcessor(
                             score = 0.99f,
                             text = OcrTextAssembler.joinElementsWithTolerance(line),
                             isYolo = false,
-                            region = region
+                            region = region,
+                            metadataSource = MetadataOcrSource.MARGIN_CROP
                         )
                     }
                 }

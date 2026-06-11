@@ -79,7 +79,7 @@ enum class AttributeKey(
 ) {
     WIDTH("android:layout_width", listOf("layout_width", "width", "layout_idth", "layaut_width"), ValueType.DIMENSION),
     HEIGHT("android:layout_height", listOf("layout_height", "height"), ValueType.DIMENSION),
-    ID("android:id", listOf("id"), ValueType.ID),
+    ID("android:id", listOf("id", "idl", "idi", "icl", "ld"), ValueType.ID),
     TEXT("android:text", listOf("text"), ValueType.TEXT_CONTENT),
     HINT("android:hint", listOf("hint"), ValueType.TEXT_CONTENT),
     BACKGROUND("android:background", listOf("background", "bg"), ValueType.COLOR),
