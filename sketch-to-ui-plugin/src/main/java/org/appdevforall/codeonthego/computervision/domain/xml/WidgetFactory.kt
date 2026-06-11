@@ -178,6 +178,7 @@ class WidgetFactory(
         return cleaned.takeIf { it.isNotBlank() && !it.equals("dropdown", ignoreCase = true) }
     }
 
+    /** Calculates the non-negative horizontal gap to the next box as an end margin. */
     private fun getMarginEndForHorizontalGap(boxes: List<ScaledBox>, currentIndex: Int): Map<String, String> {
         if (currentIndex >= boxes.lastIndex) return emptyMap()
         val currentBox = boxes[currentIndex]

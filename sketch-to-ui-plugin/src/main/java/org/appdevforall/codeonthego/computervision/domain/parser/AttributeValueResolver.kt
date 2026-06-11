@@ -1,5 +1,17 @@
 package org.appdevforall.codeonthego.computervision.domain.parser
 
+import org.appdevforall.codeonthego.computervision.domain.parser.cleaner.ColorCleaner
+import org.appdevforall.codeonthego.computervision.domain.parser.cleaner.DimensionCleaner
+import org.appdevforall.codeonthego.computervision.domain.parser.cleaner.DrawableCleaner
+import org.appdevforall.codeonthego.computervision.domain.parser.cleaner.FloatCleaner
+import org.appdevforall.codeonthego.computervision.domain.parser.cleaner.GravityCleaner
+import org.appdevforall.codeonthego.computervision.domain.parser.cleaner.IdCleaner
+import org.appdevforall.codeonthego.computervision.domain.parser.cleaner.InputTypeCleaner
+import org.appdevforall.codeonthego.computervision.domain.parser.cleaner.NumberCleaner
+import org.appdevforall.codeonthego.computervision.domain.parser.cleaner.SpDimensionCleaner
+import org.appdevforall.codeonthego.computervision.domain.parser.cleaner.TextContentCleaner
+import org.appdevforall.codeonthego.computervision.domain.parser.cleaner.TextStyleCleaner
+
 internal data class ResolvedAttribute(val xmlAttr: String, val value: String)
 
 internal object AttributeValueResolver {
@@ -21,6 +33,7 @@ internal object AttributeValueResolver {
 
     fun resolve(key: AttributeKey, rawValue: String, tag: String): ResolvedAttribute? {
         val trimmedRawValue = rawValue.trim()
+        if (key.valueType == ValueType.DIMENSION && trimmedRawValue.isLowConfidenceDimensionFragment()) return null
         val cleaner = cleaners[key.valueType] ?: ValueCleaner { it }
         val cleanedValue = when (key) {
             AttributeKey.ID -> IdCleaner.clean(trimmedRawValue, tag)
@@ -33,6 +46,15 @@ internal object AttributeValueResolver {
 
         val recoveredValue = recoverSwitchWidth(key, rawValue, cleanedValue, tag)
         return resolveXmlAttribute(key, recoveredValue, tag)
+    }
+
+    private fun String.isLowConfidenceDimensionFragment(): Boolean {
+        val compact = lowercase().replace(AttributeRegexPatterns.NON_ALPHANUMERIC_LOWER, "")
+        val hasDimensionKeyText = compact.contains("layoutheight") ||
+            compact.contains("layoutheiqht") ||
+            compact.contains("height")
+        val hasUnit = AttributeRegexPatterns.COMPACT_DIMENSION_UNIT.containsMatchIn(this)
+        return hasDimensionKeyText && !hasUnit
     }
 
     private fun recoverSwitchWidth(key: AttributeKey, rawValue: String, cleanedValue: String, tag: String): String {

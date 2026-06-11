@@ -351,19 +351,89 @@ class FuzzyAttributeParserTest {
     }
 
     @Test
-    fun `noisy password text input annotation parses correctly`() {
+    fun `Given_noisy_password_annotation_When_parsed_Then_password_attributes_are_recovered`() {
         val annotation = "layoutwidth | layoutwidthi20O0dp | layoutheight: | layoutheight30 | t | extassword | textPassword | credential | ieredeetal"
-        val result = FuzzyAttributeParser.parse(annotation, "EditText")
+        val resolved = MetadataAnnotationRecovery.resolve(
+            mapOf(
+                "T-1" to "layoutwidth:200dp | layoutheight:52dp | hint:Email | id:user_email",
+                "T-2" to annotation
+            )
+        ).getValue("T-2")
+        val result = FuzzyAttributeParser.parse(resolved, "EditText")
 
         assertEquals("200dp", result["android:layout_width"])
         assertEquals("52dp", result["android:layout_height"])
-        assertEquals("credential", result["android:id"])
+        assertNull(result["android:id"])
         assertEquals("textPassword", result["android:inputType"])
         assertNull(result["android:text"])
     }
 
     @Test
-    fun `non password words do not trigger password recovery`() {
+    fun `Given_unitless_compact_height_When_parsed_Then_dimension_is_not_finalized`() {
+        assertNull(FuzzyAttributeParser.parse("layoutheight3", "EditText")["android:layout_height"])
+        assertNull(FuzzyAttributeParser.parse("layoutheight30", "EditText")["android:layout_height"])
+    }
+
+    @Test
+    fun `Given_valid_explicit_height_When_parsed_Then_height_remains_valid`() {
+        val result = FuzzyAttributeParser.parse("layout_height:30dp", "EditText")
+
+        assertEquals("30dp", result["android:layout_height"])
+    }
+
+    @Test
+    fun `Given_password_metadata_for_non_EditText_When_parsed_Then_input_type_is_not_recovered`() {
+        listOf("Button", "Switch", "ImageView", "RadioGroup").forEach { tag ->
+            val result = FuzzyAttributeParser.parse("vextPassword | extassword", tag)
+
+            assertNull(result["android:inputType"])
+        }
+    }
+
+    @Test
+    fun `Given_password_and_random_unkeyed_token_When_parsed_Then_random_token_is_not_used_as_id`() {
+        val result = FuzzyAttributeParser.parse("vextPassword | randomword", "EditText")
+
+        assertNull(result["android:id"])
+        assertEquals("textPassword", result["android:inputType"])
+    }
+
+    @Test
+    fun `Given_random_unkeyed_words_When_parsed_Then_id_is_not_recovered`() {
+        val resolved = MetadataAnnotationRecovery.resolve(
+            mapOf("SW-1" to "layout_width:100dp | remember me | maybe later")
+        ).getValue("SW-1")
+        val result = FuzzyAttributeParser.parse(resolved, "Switch")
+
+        assertNull(result["android:id"])
+    }
+
+    @Test
+    fun `Given_hint_and_failed_id_fragments_When_parsed_Then_hint_excludes_id_fragments`() {
+        val resolved = MetadataAnnotationRecovery.resolve(
+            mapOf("T-1" to "hint:Email | icl useremail | id:user_email")
+        ).getValue("T-1")
+        val result = FuzzyAttributeParser.parse(resolved, "EditText")
+
+        assertEquals("Email", result["android:hint"])
+        assertEquals("user_email", result["android:id"])
+    }
+
+    @Test
+    fun `Given_same_block_id_candidates_When_recovered_Then_clean_candidate_is_preferred_without_semantic_correction`() {
+        val recovered = MetadataAnnotationRecovery.resolve(
+            mapOf(
+                "SW-1" to "id:remenber | idi remember | idiremember",
+                "SW-2" to "id:remenber"
+            )
+        )
+
+        assertEquals("remember", FuzzyAttributeParser.parse(recovered.getValue("SW-1"), "Switch")["android:id"])
+        assertEquals("remenber", FuzzyAttributeParser.parse(recovered.getValue("SW-2"), "Switch")["android:id"])
+    }
+
+    @Test
+    fun `Given_non_password_words_When_parsed_Then_password_input_type_is_not_recovered`() {
         val classwork = FuzzyAttributeParser.parse("text: classwork | layout_height: 30dp", "EditText")
         val masswork = FuzzyAttributeParser.parse("text: masswork | layout_height: 30dp", "EditText")
 
@@ -376,7 +446,7 @@ class FuzzyAttributeParserTest {
     }
 
     @Test
-    fun `non password edit text keeps explicit text`() {
+    fun `Given_non_password_EditText_with_explicit_text_When_parsed_Then_text_is_preserved`() {
         val result = FuzzyAttributeParser.parse("id: display_name | text: Alice | hint: Name", "EditText")
 
         assertEquals("display_name", result["android:id"])
@@ -385,7 +455,7 @@ class FuzzyAttributeParserTest {
     }
 
     @Test
-    fun `center horizontal layout gravity is preserved`() {
+    fun `Given_center_horizontal_layout_gravity_When_parsed_Then_gravity_is_preserved`() {
         val annotation = "id: remember | layoutgravity:center | layoutgravity:centerhorizontal"
         val result = FuzzyAttributeParser.parse(annotation, "Switch")
 
@@ -394,7 +464,7 @@ class FuzzyAttributeParserTest {
     }
 
     @Test
-    fun `radio text color ocr variant does not become text`() {
+    fun `Given_radio_text_color_OCR_variant_When_parsed_Then_it_does_not_become_text`() {
         val annotation = "texteolor:blue | textSize:16sp"
         val result = FuzzyAttributeParser.parse(annotation, "RadioButton")
 
@@ -404,7 +474,7 @@ class FuzzyAttributeParserTest {
     }
 
     @Test
-    fun `compact image dimensions and src parse correctly`() {
+    fun `Given_compact_image_dimensions_and_source_When_parsed_Then_image_attributes_are_recovered`() {
         val annotation = "width:64dp | heighti64de | id: img_logo | src:logo.png"
         val result = FuzzyAttributeParser.parse(annotation, "ImageView")
 
@@ -412,6 +482,93 @@ class FuzzyAttributeParserTest {
         assertEquals("64dp", result["android:layout_height"])
         assertEquals("img_logo", result["android:id"])
         assertEquals("@drawable/logo", result["android:src"])
+    }
+
+    @Test
+    fun `Given_clean_and_noisy_duplicate_dimensions_When_parsed_Then_clean_dimension_is_preserved`() {
+        val result = FuzzyAttributeParser.parse(
+            "layoutwidth:150dp | layoutwidth:15Ddp",
+            "Button"
+        )
+
+        assertEquals("150dp", result["android:layout_width"])
+    }
+
+    @Test
+    fun `Given_custom_ids_When_parsed_Then_ids_are_not_semantically_corrected`() {
+        val ids = listOf("reminder", "remembered", "credentials", "credential_store", "remenber")
+
+        ids.forEach { id ->
+            assertEquals(id, FuzzyAttributeParser.parse("id:$id", "Switch")["android:id"])
+        }
+        assertNull(FuzzyAttributeParser.parse("sd:submit_button", "Button")["android:id"])
+    }
+
+    @Test
+    fun `Given_dimension_OCR_mistakes_When_parsed_Then_dimensions_are_normalized`() {
+        assertEquals("80dp", FuzzyAttributeParser.parse("width:8Odp", "Button")["android:layout_width"])
+        assertEquals("50dp", FuzzyAttributeParser.parse("height:50de", "Button")["android:layout_height"])
+        assertEquals("75dp", FuzzyAttributeParser.parse("height:75do", "Button")["android:layout_height"])
+    }
+
+    @Test
+    fun `Given_attribute_key_OCR_mistakes_When_parsed_Then_keys_are_normalized`() {
+        val result = FuzzyAttributeParser.parse(
+            "layout_widthi100dp | layoutheiqht:52dp",
+            "Switch"
+        )
+
+        assertEquals("100dp", result["android:layout_width"])
+        assertEquals("52dp", result["android:layout_height"])
+    }
+
+    @Test
+    fun `Given_repeated_image_dimension_When_parsed_Then_square_placeholder_is_recovered`() {
+        val result = FuzzyAttributeParser.parse(
+            "height:64dp | 64dp | id:imglogo | src:logo.png",
+            "ImageView"
+        )
+
+        assertEquals("64dp", result["android:layout_width"])
+        assertEquals("64dp", result["android:layout_height"])
+        assertEquals("img_logo", result["android:id"])
+        assertEquals("@drawable/logo", result["android:src"])
+    }
+
+    @Test
+    fun `Given_repeated_image_width_When_parsed_Then_square_placeholder_height_is_recovered`() {
+        val result = FuzzyAttributeParser.parse(
+            "width:64dp 64dp id:imglogo src:logo.png",
+            "ImageView"
+        )
+
+        assertEquals("64dp", result["android:layout_width"])
+        assertEquals("64dp", result["android:layout_height"])
+        assertEquals("img_logo", result["android:id"])
+        assertEquals("@drawable/logo", result["android:src"])
+    }
+
+    @Test
+    fun `Given_unrelated_repeated_image_dimension_When_parsed_Then_square_placeholder_is_not_recovered`() {
+        val annotations = listOf(
+            "height:64dp padding:64dp id:imglogo src:logo.png",
+            "height:64dp margin:64dp id:imglogo src:logo.png",
+            "height:64dp textSize:64sp id:imglogo src:logo.png"
+        )
+
+        annotations.forEach { annotation ->
+            val result = FuzzyAttributeParser.parse(annotation, "ImageView")
+            assertNull(result["android:layout_width"])
+            assertEquals("64dp", result["android:layout_height"])
+        }
+    }
+
+    @Test
+    fun `Given_valid_compact_image_id_without_drawable_When_parsed_Then_id_remains_unchanged`() {
+        assertEquals("imgur_logo", FuzzyAttributeParser.parse("id:imgur_logo", "ImageView")["android:id"])
+        assertEquals("imagebutton", FuzzyAttributeParser.parse("id:imagebutton", "ImageView")["android:id"])
+        assertEquals("image_cache", FuzzyAttributeParser.parse("id:image_cache", "ImageView")["android:id"])
+        assertEquals("imglogo", FuzzyAttributeParser.parse("id:imglogo", "ImageView")["android:id"])
     }
 
     @Test

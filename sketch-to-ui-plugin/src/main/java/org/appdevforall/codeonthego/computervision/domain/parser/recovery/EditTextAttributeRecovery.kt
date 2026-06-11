@@ -1,8 +1,9 @@
 package org.appdevforall.codeonthego.computervision.domain.parser.recovery
 
 import org.appdevforall.codeonthego.computervision.domain.parser.AttributeKey
+import org.appdevforall.codeonthego.computervision.domain.parser.AttributeRegexPatterns
 import org.appdevforall.codeonthego.computervision.domain.parser.AttributeTokenMapper
-import org.appdevforall.codeonthego.computervision.domain.parser.IdCleaner
+import org.appdevforall.codeonthego.computervision.domain.parser.cleaner.IdCleaner
 
 internal object EditTextAttributeRecovery {
     private const val EDIT_TEXT_TAG = "EditText"
@@ -25,13 +26,6 @@ internal object EditTextAttributeRecovery {
                 ?.let { recovered[AttributeKey.ID.xmlName] = IdCleaner.clean(it, EDIT_TEXT_TAG) }
         }
 
-        if (likelyPassword &&
-            recovered[AttributeKey.HEIGHT.xmlName] == "30dp" &&
-            hasIncompleteHeightBeforeOcrArtifact(annotation)
-        ) {
-            recovered[AttributeKey.HEIGHT.xmlName] = "52dp"
-        }
-
         if (likelyPassword || hasMetadataTextLeakage(recovered[AttributeKey.TEXT.xmlName])) {
             recovered.remove(AttributeKey.TEXT.xmlName)
         }
@@ -51,9 +45,10 @@ internal object EditTextAttributeRecovery {
     }
 
     private fun isLikelyPasswordInput(annotation: String): Boolean {
-        val compact = annotation.lowercase().replace(Regex("[^a-z]+"), "")
+        val compact = annotation.lowercase().replace(AttributeRegexPatterns.NON_LETTERS, "")
         return compact.contains("textpassword") ||
             compact.contains("inputtypetextpassword") ||
+            compact.contains("password") ||
             annotation.split(PIPE_DELIMITER)
                 .map { it.trim().lowercase() }
                 .any { it == "password" || it == "textpassword" }
@@ -61,26 +56,26 @@ internal object EditTextAttributeRecovery {
 
     private fun hasMetadataTextLeakage(text: String?): Boolean {
         if (text.isNullOrBlank()) return false
-        return text.contains(Regex("\\b(?:layout|inputtype|textpassword)\\b", RegexOption.IGNORE_CASE))
+        return text.contains(AttributeRegexPatterns.EDIT_TEXT_METADATA_LEAKAGE)
     }
 
+    /** Selects a uniquely longest repeated unkeyed ID candidate after password metadata. */
     private fun recoverBareEditTextId(annotation: String): String? {
         val parts = annotation.split(PIPE_DELIMITER).map { it.trim() }
         val passwordIndex = parts.indexOfFirst { isLikelyPasswordInput(it) }
         if (passwordIndex < 0) return null
 
-        return parts.drop(passwordIndex + 1)
+        val candidates = parts.drop(passwordIndex + 1)
             .map { it.trim() }
-            .firstOrNull { candidate ->
-                candidate.matches(Regex("[A-Za-z][A-Za-z0-9_]{2,}")) &&
+            .filter { candidate ->
+                candidate.matches(AttributeRegexPatterns.BARE_EDIT_TEXT_ID_CANDIDATE) &&
                     !isLikelyPasswordInput(candidate) &&
                     AttributeTokenMapper.fuzzyMatchKey(candidate) == null
             }
-    }
 
-    private fun hasIncompleteHeightBeforeOcrArtifact(annotation: String): Boolean {
-        return Regex("(?:layout_height|layoutheight)\\s*:\\s*(?:\\||$)").containsMatchIn(annotation) &&
-            Regex("layout_height\\s*:\\s*30\\s*dp", RegexOption.IGNORE_CASE).containsMatchIn(annotation)
+        if (candidates.size < MIN_UNKEYED_ID_CORROBORATION_COUNT) return null
+        val longestLength = candidates.maxOfOrNull { it.length } ?: return null
+        return candidates.filter { it.length == longestLength }.singleOrNull()
     }
 
     private fun recoverExplicitTextValue(annotation: String): String? {
@@ -99,16 +94,9 @@ internal object EditTextAttributeRecovery {
             ?.takeIf { it.isNotBlank() }
     }
 
-    private val editTextIdRegex = Regex(
-        "\\bid\\s*[:;]?\\s*([A-Za-z][A-Za-z0-9_-]*)",
-        RegexOption.IGNORE_CASE
-    )
-    private val explicitTextRegex = Regex(
-        "(?:^|\\|)\\s*text\\s*[:;]\\s*([^|]+)",
-        RegexOption.IGNORE_CASE
-    )
-    private val explicitHintRegex = Regex(
-        "(?:^|\\|)\\s*hint\\s*[:;]\\s*([^|]+)",
-        RegexOption.IGNORE_CASE
-    )
+    private val editTextIdRegex = AttributeRegexPatterns.keyedIdValue(AttributeKey.ID.aliases.first())
+    private val explicitTextRegex = AttributeRegexPatterns.EXPLICIT_TEXT_FRAGMENT
+    private val explicitHintRegex = AttributeRegexPatterns.EXPLICIT_HINT_FRAGMENT
+
+    private const val MIN_UNKEYED_ID_CORROBORATION_COUNT = 2
 }

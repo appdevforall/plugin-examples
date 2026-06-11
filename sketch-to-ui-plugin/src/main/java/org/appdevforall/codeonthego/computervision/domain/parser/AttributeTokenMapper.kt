@@ -2,6 +2,7 @@ package org.appdevforall.codeonthego.computervision.domain.parser
 
 import me.xdrop.fuzzywuzzy.FuzzySearch
 import org.appdevforall.codeonthego.computervision.domain.grammar.UiGrammarValidator
+import org.appdevforall.codeonthego.computervision.domain.parser.cleaner.ColorCleaner
 import java.lang.StringBuilder
 
 internal object AttributeTokenMapper {
@@ -42,6 +43,7 @@ internal object AttributeTokenMapper {
         return state.attributes
     }
 
+    /** Selects a fuzzy-match threshold from key length and returns a sufficiently similar key. */
     fun fuzzyMatchKey(rawKey: String): AttributeKey? {
         val normalizedKey = normalizeKeyToken(rawKey)
 
