@@ -1,37 +1,42 @@
 package org.appdevforall.codeonthego.computervision.domain.parser.sanitizer
 
 import org.appdevforall.codeonthego.computervision.domain.parser.AttributeKey
-import org.appdevforall.codeonthego.computervision.domain.parser.AttributeRegexPatterns
+import org.appdevforall.codeonthego.computervision.domain.parser.patterns.AttributeKeyPatterns
+import org.appdevforall.codeonthego.computervision.domain.parser.patterns.ColorPatterns
+import org.appdevforall.codeonthego.computervision.domain.parser.patterns.DimensionPatterns
+import org.appdevforall.codeonthego.computervision.domain.parser.patterns.SpacingPatterns
+import org.appdevforall.codeonthego.computervision.domain.parser.patterns.StructurePatterns
+import org.appdevforall.codeonthego.computervision.domain.parser.patterns.TextPatterns
 
 
 class AttributeKeyPhraseSanitizer : DictionaryRegexSanitizer() {
     override val rawRules = mapOf(
-        "\\btext\\s*[-_ ]\\s*(?:colou?r|calar|colar)\\b" to "textcolor",
-        "\\btexteolou?r\\b|\\btexteolor\\b" to "textcolor",
-        "\\binput\\s*[-_ ]?\\s*type\\b" to "input_type",
-        "\\btext\\s+pass\\s*word\\b" to "textPassword",
-        "\\btext\\s+password\\b" to "textPassword",
-        "\\blay(?:out|aut)[_\\- ]?gr(?:av|a)ity\\b" to "layout_gravity",
-        "\\blayoutgravity\\b" to "layout_gravity",
-        "\\blayout[_\\- ]*heiqht\\b" to "layout_height",
-        "\\bentries\\s*[iIl1]\\s*(?=\\[)" to "entries: ",
-        "\\bentries\\s*[:=;]?\\s*(?=\\[)" to "entries: "
+        AttributeKeyPatterns.TEXT_COLOR_SPACED to "textcolor",
+        AttributeKeyPatterns.TEXT_COLOR_COMPACT_OCR to "textcolor",
+        AttributeKeyPatterns.INPUT_TYPE to "input_type",
+        AttributeKeyPatterns.TEXT_PASS_WORD to "textPassword",
+        AttributeKeyPatterns.TEXT_PASSWORD to "textPassword",
+        AttributeKeyPatterns.LAYOUT_GRAVITY_OCR to "layout_gravity",
+        AttributeKeyPatterns.LAYOUT_GRAVITY_COMPACT to "layout_gravity",
+        AttributeKeyPatterns.LAYOUT_HEIGHT_OCR to "layout_height",
+        AttributeKeyPatterns.ENTRIES_WITH_OCR_I_BEFORE_BRACKET to "entries: ",
+        AttributeKeyPatterns.ENTRIES_BEFORE_BRACKET to "entries: "
     )
 }
 
 class CompactDimensionSanitizer : OcrSanitizer {
     override fun sanitize(input: String): String {
         return input
-            .replace(AttributeRegexPatterns.COMPACT_LAYOUT_WIDTH) { match ->
+            .replace(DimensionPatterns.COMPACT_LAYOUT_WIDTH) { match ->
                 "layout_width: ${match.groupValues[1]}${match.groupValues[2].normalizeDimensionUnit()}"
             }
-            .replace(AttributeRegexPatterns.COMPACT_LAYOUT_HEIGHT) { match ->
+            .replace(DimensionPatterns.COMPACT_LAYOUT_HEIGHT) { match ->
                 match.toDimensionReplacement("layout_height")
             }
-            .replace(AttributeRegexPatterns.COMPACT_BARE_WIDTH) { match ->
+            .replace(DimensionPatterns.COMPACT_BARE_WIDTH) { match ->
                 "width: ${match.groupValues[1]}${match.groupValues[2].normalizeDimensionUnit()}"
             }
-            .replace(AttributeRegexPatterns.COMPACT_BARE_HEIGHT) { match ->
+            .replace(DimensionPatterns.COMPACT_BARE_HEIGHT) { match ->
                 match.toDimensionReplacement("height")
             }
     }
@@ -59,30 +64,30 @@ class CompactDimensionSanitizer : OcrSanitizer {
 
 class ColorSanitizer : DictionaryRegexSanitizer() {
     override val rawRules = mapOf(
-        "backgroundired" to "background: red",
-        "backgroundred" to "background: red",
-        "\\bback[a-z]*[-_.]?\\s*[:;]\\s*" to "background: "
+        ColorPatterns.BACKGROUND_I_RED to "background: red",
+        ColorPatterns.BACKGROUND_RED to "background: red",
+        ColorPatterns.BACKGROUND_KEY_OCR to "background: "
     )
 }
 
 class TextAttributeSanitizer : DictionaryRegexSanitizer() {
     override val rawRules = mapOf(
-        "text\\s*st[yj]l?e?" to "text_style"
+        TextPatterns.TEXT_STYLE_OCR to "text_style"
     )
 }
 
 class DimensionSanitizer : DictionaryRegexSanitizer() {
     override val rawRules = mapOf(
-        "[il]ay[a-z]*[-_.\\s]*w[a-z0-9]*\\.?\\s*[:;]\\s*" to "layout_width: ",
-        "[il]ay[a-z]*[-_.\\s]*hei[a-z0-9]*\\.?\\s*[:;]\\s*" to "layout_height: ",
-        "m?w?at[ce]h[-_\\s]?p[ar]+ent" to "match_parent"
+        DimensionPatterns.LAYOUT_WIDTH_OCR to "layout_width: ",
+        DimensionPatterns.LAYOUT_HEIGHT_OCR to "layout_height: ",
+        DimensionPatterns.MATCH_PARENT_OCR to "match_parent"
     )
 }
 
 class MarginPaddingSanitizer : DictionaryRegexSanitizer() {
     override val rawRules = mapOf(
-        "layout_margin\\s+(top|bottom|start|end|left|right)" to "layout_margin_$1",
-        "padding\\s+(top|bottom|start|end|left|right)" to "padding_$1"
+        SpacingPatterns.LAYOUT_MARGIN_SIDE to "layout_margin_$1",
+        SpacingPatterns.PADDING_SIDE to "padding_$1"
     )
 }
 
@@ -93,8 +98,8 @@ class StructureSanitizer : DictionaryRegexSanitizer() {
         .joinToString("|")
 
     override val rawRules = mapOf(
-        "horizontal\\s+gravity\\s*:\\s*center\\s+layout" to "layout_gravity: center_horizontal",
-        "\\b(?:$idKeyPattern)\\b\\s*[:;]" to "id: ",
-        "\\bS[ec][rt]\\b\\s*[:;]?" to "src: "
+        StructurePatterns.HORIZONTAL_GRAVITY_CENTER_LAYOUT to "layout_gravity: center_horizontal",
+        StructurePatterns.idKeyWithSeparator(idKeyPattern) to "id: ",
+        StructurePatterns.SRC_KEY_OCR to "src: "
     )
 }

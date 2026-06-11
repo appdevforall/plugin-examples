@@ -1,8 +1,8 @@
 package org.appdevforall.codeonthego.computervision.domain.parser.cleaner
 
 import me.xdrop.fuzzywuzzy.FuzzySearch
-import org.appdevforall.codeonthego.computervision.domain.parser.AttributeRegexPatterns
 import org.appdevforall.codeonthego.computervision.domain.parser.ValueCleaner
+import org.appdevforall.codeonthego.computervision.domain.parser.patterns.ColorPatterns
 
 internal object ColorCleaner : ValueCleaner {
     val colorMap = mapOf(
@@ -24,7 +24,7 @@ internal object ColorCleaner : ValueCleaner {
         if (rawValue.startsWith("#") || rawValue.startsWith("@")) return rawValue
 
         val normalizedValue = rawValue.lowercase()
-            .replace(AttributeRegexPatterns.NON_LETTER_OR_UNDERSCORE, "")
+            .replace(ColorPatterns.NON_LETTER_OR_UNDERSCORE, "")
             .replace(" ", "_")
         val exactColor = colorMap[normalizedValue]
         if (exactColor != null) return exactColor

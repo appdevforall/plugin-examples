@@ -2,8 +2,10 @@ package org.appdevforall.codeonthego.computervision.domain.parser.cleaner
 
 import kotlin.math.abs
 import me.xdrop.fuzzywuzzy.FuzzySearch
-import org.appdevforall.codeonthego.computervision.domain.parser.AttributeRegexPatterns
 import org.appdevforall.codeonthego.computervision.domain.parser.ValueCleaner
+import org.appdevforall.codeonthego.computervision.domain.parser.patterns.AttributeKeyPatterns
+import org.appdevforall.codeonthego.computervision.domain.parser.patterns.CoreParserPatterns
+import org.appdevforall.codeonthego.computervision.domain.parser.patterns.ResourceNamePatterns
 
 internal object IdCleaner : ValueCleaner {
     private const val SWITCH_TAG = "Switch"
@@ -23,11 +25,11 @@ internal object IdCleaner : ValueCleaner {
 
     override fun clean(rawValue: String): String {
         val cleaned = rawValue.trim().lowercase()
-            .replace(AttributeRegexPatterns.OCR_IM_OR_M_CONFUSION) { match ->
+            .replace(AttributeKeyPatterns.OCR_IM_OR_M_CONFUSION) { match ->
                 if (match.value == "inm") "im" else "m"
             }
-            .replace(AttributeRegexPatterns.RESOURCE_NAME_UNSAFE_CHARS, "_")
-            .replace(AttributeRegexPatterns.MULTIPLE_UNDERSCORES, "_")
+            .replace(ResourceNamePatterns.RESOURCE_NAME_UNSAFE_CHARS, "_")
+            .replace(CoreParserPatterns.MULTIPLE_UNDERSCORES, "_")
             .trim('_')
 
         return normalizeKnownIdVocabulary(cleaned)

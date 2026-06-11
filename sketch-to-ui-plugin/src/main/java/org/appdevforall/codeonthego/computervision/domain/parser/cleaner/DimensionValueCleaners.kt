@@ -1,10 +1,10 @@
 package org.appdevforall.codeonthego.computervision.domain.parser.cleaner
 
 import me.xdrop.fuzzywuzzy.FuzzySearch
-import org.appdevforall.codeonthego.computervision.domain.parser.AttributeRegexPatterns
 import org.appdevforall.codeonthego.computervision.domain.parser.DimensionUnits
 import org.appdevforall.codeonthego.computervision.domain.parser.DimensionValueSet
 import org.appdevforall.codeonthego.computervision.domain.parser.ValueCleaner
+import org.appdevforall.codeonthego.computervision.domain.parser.patterns.DimensionPatterns
 
 internal object DimensionCleaner : ValueCleaner {
     private const val FUZZY_DIMENSION_THRESHOLD = 60
@@ -31,7 +31,7 @@ internal object DimensionCleaner : ValueCleaner {
         val rawNumber = removeDimensionUnitNoise(compactValue)
 
         val numericPart = NumberCleaner.clean(rawNumber)
-        val numMatch = AttributeRegexPatterns.LEADING_SIGNED_INTEGER.find(numericPart)?.value
+        val numMatch = DimensionPatterns.LEADING_SIGNED_INTEGER.find(numericPart)?.value
             ?: return trimmedValue
 
         val correctedNum = removeOcrTrailingZero(numMatch).trimLeadingZeros()
@@ -82,7 +82,7 @@ internal object DimensionCleaner : ValueCleaner {
 
 internal object SpDimensionCleaner : ValueCleaner {
     override fun clean(rawValue: String): String {
-        val normalized = rawValue.lowercase().replace(" ", "").replace(AttributeRegexPatterns.SP_SUFFIX, "")
+        val normalized = rawValue.lowercase().replace(" ", "").replace(DimensionPatterns.SP_SUFFIX, "")
         val numericPart = NumberCleaner.clean(normalized.replace("_", ""))
         return if (numericPart != normalized) "$numericPart${DimensionUnits.SP}" else rawValue
     }

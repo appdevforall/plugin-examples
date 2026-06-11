@@ -1,7 +1,7 @@
 package org.appdevforall.codeonthego.computervision.domain.metadata.recovery
 
 import org.appdevforall.codeonthego.computervision.domain.parser.AttributeKey
-import org.appdevforall.codeonthego.computervision.domain.parser.AttributeRegexPatterns
+import org.appdevforall.codeonthego.computervision.domain.parser.patterns.TextPatterns
 
 internal object PasswordMetadataRecovery {
     private const val EDIT_TEXT_TAG = "EditText"
@@ -16,7 +16,7 @@ internal object PasswordMetadataRecovery {
 
     private fun String.containsPasswordLikeFragment(): Boolean {
         return lowercase()
-            .replace(AttributeRegexPatterns.NON_LETTERS, "")
+            .replace(TextPatterns.NON_LETTERS, "")
             .contains("password")
     }
 }
