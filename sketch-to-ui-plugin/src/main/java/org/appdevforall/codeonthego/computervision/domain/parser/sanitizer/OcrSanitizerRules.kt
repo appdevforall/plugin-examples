@@ -13,7 +13,9 @@ class AttributeKeyPhraseSanitizer : DictionaryRegexSanitizer() {
         "\\btext\\s+password\\b" to "textPassword",
         "\\blay(?:out|aut)[_\\- ]?gr(?:av|a)ity\\b" to "layout_gravity",
         "\\blayoutgravity\\b" to "layout_gravity",
-        "\\blayout[_\\- ]*heiqht\\b" to "layout_height"
+        "\\blayout[_\\- ]*heiqht\\b" to "layout_height",
+        "\\bentries\\s*[iIl1]\\s*(?=\\[)" to "entries: ",
+        "\\bentries\\s*[:=;]?\\s*(?=\\[)" to "entries: "
     )
 }
 
