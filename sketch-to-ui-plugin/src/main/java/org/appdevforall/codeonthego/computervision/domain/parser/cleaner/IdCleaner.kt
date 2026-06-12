@@ -2,31 +2,29 @@ package org.appdevforall.codeonthego.computervision.domain.parser.cleaner
 
 import kotlin.math.abs
 import me.xdrop.fuzzywuzzy.FuzzySearch
+import org.appdevforall.codeonthego.computervision.domain.model.WidgetTypes
 import org.appdevforall.codeonthego.computervision.domain.parser.ValueCleaner
 import org.appdevforall.codeonthego.computervision.domain.parser.patterns.AttributeKeyPatterns
 import org.appdevforall.codeonthego.computervision.domain.parser.patterns.CoreParserPatterns
+import org.appdevforall.codeonthego.computervision.domain.parser.patterns.IdPatterns
 import org.appdevforall.codeonthego.computervision.domain.parser.patterns.ResourceNamePatterns
+import org.appdevforall.codeonthego.computervision.domain.xml.AndroidWidgetTags
 
 internal object IdCleaner : ValueCleaner {
-    private const val SWITCH_TAG = "Switch"
-    private const val IMAGE_VIEW_TAG = "ImageView"
-    private const val SWITCH_ID_TARGET = "switch"
-    private const val IMAGE_VIEW_ID_PREFIX = "im"
-    private const val IMAGE_VIEW_ID_VIEW_TOKEN = "view"
     private const val SWITCH_ID_OCR_THRESHOLD = 70
     private const val IMAGE_VIEW_ID_OCR_THRESHOLD = 80
     private val idVocabulary = listOf(
-        "cb", "rb", "group", "checkbox", "radio", "btn", "button", "text", "view",
-        "img", "image", "input", "switch"
+        "cb", "rb", "group", "checkbox", "radio", "btn", "button", "text", IdPatterns.IMAGE_VIEW_ID_VIEW_TOKEN,
+        "img", "image", "input", WidgetTypes.SWITCH
     )
-    private val switchIdTargets = listOf(SWITCH_ID_TARGET)
-    private val imageViewIdPrefixTargets = listOf(IMAGE_VIEW_ID_PREFIX, "img", "image")
-    private val imageViewIdViewTargets = listOf(IMAGE_VIEW_ID_VIEW_TOKEN)
+    private val switchIdTargets = listOf(WidgetTypes.SWITCH)
+    private val imageViewIdPrefixTargets = listOf(IdPatterns.IMAGE_VIEW_ID_PREFIX, "img", "image")
+    private val imageViewIdViewTargets = listOf(IdPatterns.IMAGE_VIEW_ID_VIEW_TOKEN)
 
     override fun clean(rawValue: String): String {
         val cleaned = rawValue.trim().lowercase()
             .replace(AttributeKeyPatterns.OCR_IM_OR_M_CONFUSION) { match ->
-                if (match.value == "inm") "im" else "m"
+                if (match.value == "inm") IdPatterns.IMAGE_VIEW_ID_PREFIX else "m"
             }
             .replace(ResourceNamePatterns.RESOURCE_NAME_UNSAFE_CHARS, "_")
             .replace(CoreParserPatterns.MULTIPLE_UNDERSCORES, "_")
@@ -39,7 +37,7 @@ internal object IdCleaner : ValueCleaner {
         val cleaned = clean(rawValue)
         val tokens = cleaned.split('_').filter { it.isNotBlank() }
         return normalizeSwitchIdIfNeeded(tokens, tag)
-            ?: normalizeImageViewIdIfNeeded(tokens, tag)
+            ?: normalizeImageViewId(rawValue, tokens, tag)
             ?: cleaned
     }
 
@@ -65,8 +63,8 @@ internal object IdCleaner : ValueCleaner {
     }
 
     private fun normalizeSwitchIdIfNeeded(tokens: List<String>, tag: String): String? {
-        if (tag != SWITCH_TAG || !isSwitchIdOcrCandidate(tokens)) return null
-        return buildId(SWITCH_ID_TARGET, extractTrailingNumber(tokens))
+        if (tag != AndroidWidgetTags.SWITCH || !isSwitchIdOcrCandidate(tokens)) return null
+        return buildId(WidgetTypes.SWITCH, extractTrailingNumber(tokens))
     }
 
     /** Accepts a switch ID candidate when its fuzzy score reaches the switch threshold. */
@@ -75,9 +73,32 @@ internal object IdCleaner : ValueCleaner {
         return fuzzyTokenScore(firstToken, switchIdTargets) >= SWITCH_ID_OCR_THRESHOLD
     }
 
-    private fun normalizeImageViewIdIfNeeded(tokens: List<String>, tag: String): String? {
-        if (tag != IMAGE_VIEW_TAG || !isImageViewIdOcrCandidate(tokens)) return null
-        return buildId(IMAGE_VIEW_ID_PREFIX, IMAGE_VIEW_ID_VIEW_TOKEN, extractTrailingNumber(tokens))
+    private fun normalizeImageViewId(rawValue: String, tokens: List<String>, tag: String): String? {
+        if (tag != AndroidWidgetTags.IMAGE_VIEW) return null
+
+        return removeLeakedImagePrefixIfNeeded(rawValue, tokens)
+            ?: recoverGenericImageViewIdIfNeeded(tokens)
+    }
+
+    private fun removeLeakedImagePrefixIfNeeded(
+        rawValue: String,
+        tokens: List<String>
+    ): String? {
+        if (tokens.size < 3) return null
+        if (!rawValue.trim().contains(CoreParserPatterns.WHITESPACE)) return null
+        if (tokens.first() !in imageViewIdPrefixTargets) return null
+
+        val remainingTokens = tokens.drop(1)
+        val remainingId = remainingTokens.joinToString("_")
+
+        return remainingId.takeIf {
+            remainingTokens.firstOrNull() in imageViewIdPrefixTargets
+        }
+    }
+
+    private fun recoverGenericImageViewIdIfNeeded(tokens: List<String>): String? {
+        if (!isImageViewIdOcrCandidate(tokens)) return null
+        return buildId(IdPatterns.IMAGE_VIEW_ID_PREFIX, IdPatterns.IMAGE_VIEW_ID_VIEW_TOKEN, extractTrailingNumber(tokens))
     }
 
     private fun isImageViewIdOcrCandidate(tokens: List<String>): Boolean {
