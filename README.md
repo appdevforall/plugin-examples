@@ -18,6 +18,7 @@ See the official [plugin documentation](https://www.appdevforall.org/codeonthego
 | [`icons-repository/`](icons-repository/)           | Browse a bundled Material icon catalog and import any icon as a Vector Drawable into the active project. |
 | [`client-time-tracker/`](client-time-tracker/)                       | Tracks billable coding sessions per project and generates PDF/Excel/CSV invoices. |
 | [`python-tools/`](python-tools/)                   | Adds Python + Flask project templates, with on-device Python install and run/install/test actions. |
+| [`maps/`](maps/)                                   | Offline OpenStreetMap: a "Maps" bottom-sheet tab to download OSM tiles and bundle them into your project for offline use. |
 
 ## Building a plugin
 
