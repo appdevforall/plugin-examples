@@ -1,8 +1,10 @@
 package org.appdevforall.codeonthego.computervision.domain.margin
 
 import org.appdevforall.codeonthego.computervision.domain.parser.AttributeKey
-import org.appdevforall.codeonthego.computervision.domain.parser.AttributeRegexPatterns
 import org.appdevforall.codeonthego.computervision.domain.model.MetadataOcrSource
+import org.appdevforall.codeonthego.computervision.domain.parser.patterns.CoreParserPatterns
+import org.appdevforall.codeonthego.computervision.domain.parser.patterns.DimensionPatterns
+import org.appdevforall.codeonthego.computervision.domain.parser.patterns.TextPatterns
 
 /**
  * Merges duplicate explicit annotations while selecting the strongest fragment for each key.
@@ -61,12 +63,12 @@ internal object ExplicitAnnotationMerger {
 
     private fun shouldJoinUnlabeledDimension(previous: String, fragment: String): Boolean {
         return normalizedAttributeKey(previous) in DIMENSION_KEYS &&
-            AttributeRegexPatterns.UNLABELED_DIMENSION.matches(fragment)
+            DimensionPatterns.UNLABELED_DIMENSION.matches(fragment)
     }
 
     private fun normalizedAttributeKey(fragment: String): String? {
-        val rawKey = AttributeRegexPatterns.ATTRIBUTE_KEY_PREFIX.find(fragment)?.groupValues?.get(1) ?: return null
-        val compactKey = rawKey.lowercase().replace(AttributeRegexPatterns.NON_LETTERS, "")
+        val rawKey = CoreParserPatterns.ATTRIBUTE_KEY_PREFIX.find(fragment)?.groupValues?.get(1) ?: return null
+        val compactKey = rawKey.lowercase().replace(TextPatterns.NON_LETTERS, "")
         return when {
             compactKey.startsWith("layoutwidth") -> AttributeKey.WIDTH.aliases.first()
             compactKey.startsWith("layoutheight") || compactKey.startsWith("layoutheiqht") ->
@@ -94,6 +96,6 @@ internal object ExplicitAnnotationMerger {
 
     /** Counts OCR noise characters embedded in a dimension fragment. */
     private fun dimensionNoiseScore(fragment: String): Int {
-        return AttributeRegexPatterns.DIMENSION_OCR_NOISE.findAll(fragment).count()
+        return DimensionPatterns.DIMENSION_OCR_NOISE.findAll(fragment).count()
     }
 }

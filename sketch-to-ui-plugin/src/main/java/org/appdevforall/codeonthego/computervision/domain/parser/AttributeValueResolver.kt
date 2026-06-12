@@ -11,6 +11,8 @@ import org.appdevforall.codeonthego.computervision.domain.parser.cleaner.NumberC
 import org.appdevforall.codeonthego.computervision.domain.parser.cleaner.SpDimensionCleaner
 import org.appdevforall.codeonthego.computervision.domain.parser.cleaner.TextContentCleaner
 import org.appdevforall.codeonthego.computervision.domain.parser.cleaner.TextStyleCleaner
+import org.appdevforall.codeonthego.computervision.domain.parser.patterns.DimensionPatterns
+import org.appdevforall.codeonthego.computervision.domain.parser.patterns.ResourceNamePatterns
 
 internal data class ResolvedAttribute(val xmlAttr: String, val value: String)
 
@@ -49,11 +51,11 @@ internal object AttributeValueResolver {
     }
 
     private fun String.isLowConfidenceDimensionFragment(): Boolean {
-        val compact = lowercase().replace(AttributeRegexPatterns.NON_ALPHANUMERIC_LOWER, "")
+        val compact = lowercase().replace(ResourceNamePatterns.NON_ALPHANUMERIC_LOWER, "")
         val hasDimensionKeyText = compact.contains("layoutheight") ||
             compact.contains("layoutheiqht") ||
             compact.contains("height")
-        val hasUnit = AttributeRegexPatterns.COMPACT_DIMENSION_UNIT.containsMatchIn(this)
+        val hasUnit = DimensionPatterns.COMPACT_DIMENSION_UNIT.containsMatchIn(this)
         return hasDimensionKeyText && !hasUnit
     }
 
@@ -61,7 +63,7 @@ internal object AttributeValueResolver {
         val widthLostLeadingOne = tag == SWITCH_TAG &&
             key == AttributeKey.WIDTH &&
             cleanedValue == "0dp" &&
-            AttributeRegexPatterns.ZERO_ZERO_DP.matches(rawValue.trim())
+            DimensionPatterns.ZERO_ZERO_DP.matches(rawValue.trim())
 
         return if (widthLostLeadingOne) "100dp" else cleanedValue
     }

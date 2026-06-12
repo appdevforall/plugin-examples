@@ -1,8 +1,8 @@
 package org.appdevforall.codeonthego.computervision.domain.metadata.recovery
 
 import org.appdevforall.codeonthego.computervision.domain.parser.AttributeKey
-import org.appdevforall.codeonthego.computervision.domain.parser.AttributeRegexPatterns
 import org.appdevforall.codeonthego.computervision.domain.parser.cleaner.IdCleaner
+import org.appdevforall.codeonthego.computervision.domain.parser.patterns.IdPatterns
 
 internal object SameBlockIdRecovery {
     private const val ANNOTATION_SEPARATOR = "|"
@@ -65,6 +65,6 @@ internal object SameBlockIdRecovery {
     private val idKeyPattern = AttributeKey.ID.aliases
         .sortedByDescending(String::length)
         .joinToString("|")
-    private val keyedIdRegex = AttributeRegexPatterns.keyedIdValue(idKeyPattern)
-    private val compactIdRegex = AttributeRegexPatterns.compactIdValue(idKeyPattern)
+    private val keyedIdRegex = IdPatterns.keyedIdValue(idKeyPattern)
+    private val compactIdRegex = IdPatterns.compactIdValue(idKeyPattern)
 }
