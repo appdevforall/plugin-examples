@@ -1,5 +1,6 @@
 package org.appdevforall.codeonthego.computervision.domain
 
+import org.appdevforall.codeonthego.computervision.domain.model.DetectionLabels
 import org.appdevforall.codeonthego.computervision.domain.model.ScaledBox
 import org.appdevforall.codeonthego.computervision.utils.TextCleaner.cleanTextPreservingLeadingO
 import org.appdevforall.codeonthego.computervision.utils.TextCleaner.cleanTextStrippingLeadingO
@@ -68,11 +69,9 @@ object TextAssociator {
     }
 
     private fun isLabelableWidget(box: ScaledBox): Boolean {
-        return box.label in setOf(
-            "radio_button_unchecked", "radio_button_checked",
-            "checkbox_unchecked", "checkbox_checked",
-            "switch_on", "switch_off"
-        )
+        return DetectionLabels.isRadioButton(box.label) ||
+            DetectionLabels.isCheckbox(box.label) ||
+            DetectionLabels.isSwitch(box.label)
     }
 
     private fun cleanWidgetText(widget: ScaledBox, rawText: String): String {

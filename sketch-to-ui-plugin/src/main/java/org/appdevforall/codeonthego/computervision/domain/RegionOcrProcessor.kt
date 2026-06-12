@@ -7,6 +7,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import org.appdevforall.codeonthego.computervision.data.source.OcrSource
+import org.appdevforall.codeonthego.computervision.domain.model.DetectionLabels
 import org.appdevforall.codeonthego.computervision.domain.model.DetectionResult
 import org.appdevforall.codeonthego.computervision.domain.model.MetadataOcrSource
 import org.appdevforall.codeonthego.computervision.domain.model.SketchRegion
@@ -19,18 +20,18 @@ class RegionOcrProcessor(
 ) {
 
     private val interactiveLabels = setOf(
-        "button",
-        "switch_on",
-        "switch_off",
-        "text_entry_box",
-        "dropdown",
-        "checkbox_checked",
-        "checkbox_unchecked",
-        "radio_button_checked",
-        "radio_button_unchecked",
-        "slider",
-        "image_placeholder",
-        "widget_tag"
+        DetectionLabels.BUTTON,
+        DetectionLabels.SWITCH_ON,
+        DetectionLabels.SWITCH_OFF,
+        DetectionLabels.TEXT_ENTRY_BOX,
+        DetectionLabels.DROPDOWN,
+        DetectionLabels.CHECKBOX_CHECKED,
+        DetectionLabels.CHECKBOX_UNCHECKED,
+        DetectionLabels.RADIO_BUTTON_CHECKED,
+        DetectionLabels.RADIO_BUTTON_UNCHECKED,
+        DetectionLabels.SLIDER,
+        DetectionLabels.IMAGE_PLACEHOLDER,
+        DetectionLabels.WIDGET_TAG
     )
 
     data class RegionOcrResult(
@@ -128,7 +129,7 @@ class RegionOcrProcessor(
                                 box.right + offsetX,
                                 box.bottom + rect.top
                             ),
-                            label = "text",
+                            label = DetectionLabels.TEXT,
                             score = 0.99f,
                             text = OcrTextAssembler.joinElementsWithTolerance(line),
                             isYolo = false,
