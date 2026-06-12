@@ -1,9 +1,10 @@
 package org.appdevforall.codeonthego.computervision.domain.parser.recovery
 
 import org.appdevforall.codeonthego.computervision.domain.parser.AttributeKey
-import org.appdevforall.codeonthego.computervision.domain.parser.AttributeRegexPatterns
 import org.appdevforall.codeonthego.computervision.domain.parser.AttributeTokenMapper
 import org.appdevforall.codeonthego.computervision.domain.parser.cleaner.IdCleaner
+import org.appdevforall.codeonthego.computervision.domain.parser.patterns.IdPatterns
+import org.appdevforall.codeonthego.computervision.domain.parser.patterns.TextPatterns
 
 internal object EditTextAttributeRecovery {
     private const val EDIT_TEXT_TAG = "EditText"
@@ -45,7 +46,7 @@ internal object EditTextAttributeRecovery {
     }
 
     private fun isLikelyPasswordInput(annotation: String): Boolean {
-        val compact = annotation.lowercase().replace(AttributeRegexPatterns.NON_LETTERS, "")
+        val compact = annotation.lowercase().replace(TextPatterns.NON_LETTERS, "")
         return compact.contains("textpassword") ||
             compact.contains("inputtypetextpassword") ||
             compact.contains("password") ||
@@ -56,7 +57,7 @@ internal object EditTextAttributeRecovery {
 
     private fun hasMetadataTextLeakage(text: String?): Boolean {
         if (text.isNullOrBlank()) return false
-        return text.contains(AttributeRegexPatterns.EDIT_TEXT_METADATA_LEAKAGE)
+        return text.contains(TextPatterns.EDIT_TEXT_METADATA_LEAKAGE)
     }
 
     /** Selects a uniquely longest repeated unkeyed ID candidate after password metadata. */
@@ -68,7 +69,7 @@ internal object EditTextAttributeRecovery {
         val candidates = parts.drop(passwordIndex + 1)
             .map { it.trim() }
             .filter { candidate ->
-                candidate.matches(AttributeRegexPatterns.BARE_EDIT_TEXT_ID_CANDIDATE) &&
+                candidate.matches(IdPatterns.BARE_EDIT_TEXT_ID_CANDIDATE) &&
                     !isLikelyPasswordInput(candidate) &&
                     AttributeTokenMapper.fuzzyMatchKey(candidate) == null
             }
@@ -94,9 +95,9 @@ internal object EditTextAttributeRecovery {
             ?.takeIf { it.isNotBlank() }
     }
 
-    private val editTextIdRegex = AttributeRegexPatterns.keyedIdValue(AttributeKey.ID.aliases.first())
-    private val explicitTextRegex = AttributeRegexPatterns.EXPLICIT_TEXT_FRAGMENT
-    private val explicitHintRegex = AttributeRegexPatterns.EXPLICIT_HINT_FRAGMENT
+    private val editTextIdRegex = IdPatterns.keyedIdValue(AttributeKey.ID.aliases.first())
+    private val explicitTextRegex = TextPatterns.EXPLICIT_TEXT_FRAGMENT
+    private val explicitHintRegex = TextPatterns.EXPLICIT_HINT_FRAGMENT
 
     private const val MIN_UNKEYED_ID_CORROBORATION_COUNT = 2
 }

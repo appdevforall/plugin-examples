@@ -1,7 +1,7 @@
 package org.appdevforall.codeonthego.computervision.domain.parser.cleaner
 
-import org.appdevforall.codeonthego.computervision.domain.parser.AttributeRegexPatterns
 import org.appdevforall.codeonthego.computervision.domain.parser.ValueCleaner
+import org.appdevforall.codeonthego.computervision.domain.parser.patterns.DimensionPatterns
 
 internal object NumberCleaner : ValueCleaner {
     private val ocrCharMap = mapOf(
@@ -13,12 +13,12 @@ internal object NumberCleaner : ValueCleaner {
 
     override fun clean(rawValue: String): String {
         val translated = rawValue.map { ocrCharMap[it.uppercaseChar()] ?: it }.joinToString("")
-        return AttributeRegexPatterns.SIGNED_INTEGER.find(translated)?.value ?: rawValue
+        return DimensionPatterns.SIGNED_INTEGER.find(translated)?.value ?: rawValue
     }
 }
 
 internal object FloatCleaner : ValueCleaner {
     override fun clean(rawValue: String): String {
-        return AttributeRegexPatterns.SIGNED_DECIMAL.find(rawValue)?.value ?: rawValue
+        return DimensionPatterns.SIGNED_DECIMAL.find(rawValue)?.value ?: rawValue
     }
 }

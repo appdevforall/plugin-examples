@@ -1,9 +1,12 @@
 package org.appdevforall.codeonthego.computervision.domain.parser.recovery
 
 import org.appdevforall.codeonthego.computervision.domain.parser.AttributeKey
-import org.appdevforall.codeonthego.computervision.domain.parser.AttributeRegexPatterns
 import org.appdevforall.codeonthego.computervision.domain.parser.cleaner.DrawableCleaner
 import org.appdevforall.codeonthego.computervision.domain.parser.cleaner.IdCleaner
+import org.appdevforall.codeonthego.computervision.domain.parser.patterns.DimensionPatterns
+import org.appdevforall.codeonthego.computervision.domain.parser.patterns.DrawablePatterns
+import org.appdevforall.codeonthego.computervision.domain.parser.patterns.IdPatterns
+import org.appdevforall.codeonthego.computervision.domain.parser.patterns.ImageViewPatterns
 
 internal object WidgetAttributeRecovery {
     private const val EDIT_TEXT_TAG = "EditText"
@@ -92,10 +95,10 @@ internal object WidgetAttributeRecovery {
         return DrawableCleaner.clean(rawDrawable).substringAfterLast('/')
     }
 
-    private val imageViewIdRegex = AttributeRegexPatterns.IMAGE_VIEW_ID_TOKENS
-    private val imageViewIdCompactRegex = AttributeRegexPatterns.IMAGE_VIEW_ID_COMPACT
-    private val explicitIdRegex = AttributeRegexPatterns.EXPLICIT_LOWER_ID
-    private val adjacentRepeatedDimensionRegex = AttributeRegexPatterns.ADJACENT_REPEATED_DIMENSION
-    private val compactImageIdRegex = AttributeRegexPatterns.COMPACT_IMAGE_ID
-    private val srcRegex = AttributeRegexPatterns.EXPLICIT_SRC
+    private val imageViewIdRegex = ImageViewPatterns.IMAGE_VIEW_ID_TOKENS
+    private val imageViewIdCompactRegex = ImageViewPatterns.IMAGE_VIEW_ID_COMPACT
+    private val explicitIdRegex = IdPatterns.EXPLICIT_LOWER_ID
+    private val adjacentRepeatedDimensionRegex = DimensionPatterns.ADJACENT_REPEATED_DIMENSION
+    private val compactImageIdRegex = ImageViewPatterns.COMPACT_IMAGE_ID
+    private val srcRegex = DrawablePatterns.EXPLICIT_SRC
 }

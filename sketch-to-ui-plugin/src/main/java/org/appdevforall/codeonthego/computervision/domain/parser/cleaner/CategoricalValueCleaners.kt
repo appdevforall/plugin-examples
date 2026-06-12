@@ -1,10 +1,12 @@
 package org.appdevforall.codeonthego.computervision.domain.parser.cleaner
 
 import me.xdrop.fuzzywuzzy.FuzzySearch
-import org.appdevforall.codeonthego.computervision.domain.parser.AttributeRegexPatterns
 import org.appdevforall.codeonthego.computervision.domain.parser.GravityValueSet
 import org.appdevforall.codeonthego.computervision.domain.parser.InputTypeValueSet
 import org.appdevforall.codeonthego.computervision.domain.parser.ValueCleaner
+import org.appdevforall.codeonthego.computervision.domain.parser.patterns.CoreParserPatterns
+import org.appdevforall.codeonthego.computervision.domain.parser.patterns.GravityPatterns
+import org.appdevforall.codeonthego.computervision.domain.parser.patterns.InputTypePatterns
 
 internal object TextStyleCleaner : ValueCleaner {
     private val textStyleValues = listOf("normal", "bold", "italic", "bold|italic")
@@ -26,13 +28,13 @@ internal object GravityCleaner : ValueCleaner {
 
     override fun clean(rawValue: String): String {
         val normalized = rawValue.lowercase()
-            .replace(AttributeRegexPatterns.CENTER_HORIZONTAL_COMPACT, CENTER_HORIZONTAL)
-            .replace(AttributeRegexPatterns.CENTER_VERTICAL_COMPACT, CENTER_VERTICAL)
-            .replace(AttributeRegexPatterns.CENTER_HORIZONTAL_SPACED, CENTER_HORIZONTAL)
-            .replace(AttributeRegexPatterns.CENTER_VERTICAL_SPACED, CENTER_VERTICAL)
-            .replace(AttributeRegexPatterns.GRAVITY_UNSAFE_CHARS, GRAVITY_TOKEN_SEPARATOR)
+            .replace(GravityPatterns.CENTER_HORIZONTAL_COMPACT, CENTER_HORIZONTAL)
+            .replace(GravityPatterns.CENTER_VERTICAL_COMPACT, CENTER_VERTICAL)
+            .replace(GravityPatterns.CENTER_HORIZONTAL_SPACED, CENTER_HORIZONTAL)
+            .replace(GravityPatterns.CENTER_VERTICAL_SPACED, CENTER_VERTICAL)
+            .replace(GravityPatterns.GRAVITY_UNSAFE_CHARS, GRAVITY_TOKEN_SEPARATOR)
         return GravityValueSet.values.sortedByDescending { it.length }.firstOrNull { value ->
-            AttributeRegexPatterns.wholeGravityValue(value).containsMatchIn(normalized)
+            GravityPatterns.wholeGravityValue(value).containsMatchIn(normalized)
         } ?: rawValue.trim()
     }
 }
@@ -43,8 +45,8 @@ internal object InputTypeCleaner : ValueCleaner {
     /** Selects supported input types whose fuzzy scores meet the acceptance threshold. */
     override fun clean(rawValue: String): String {
         val normalized = rawValue.trim()
-            .replace(AttributeRegexPatterns.WHITESPACE, "")
-            .replace(AttributeRegexPatterns.INPUT_TYPE_UNSAFE_CHARS, "")
+            .replace(CoreParserPatterns.WHITESPACE, "")
+            .replace(InputTypePatterns.INPUT_TYPE_UNSAFE_CHARS, "")
         if (normalized.isBlank()) return rawValue.trim()
 
         return normalized.split('|')

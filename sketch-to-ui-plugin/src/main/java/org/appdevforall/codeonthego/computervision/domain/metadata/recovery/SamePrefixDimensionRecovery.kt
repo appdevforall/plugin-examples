@@ -1,7 +1,7 @@
 package org.appdevforall.codeonthego.computervision.domain.metadata.recovery
 
 import org.appdevforall.codeonthego.computervision.domain.parser.AttributeKey
-import org.appdevforall.codeonthego.computervision.domain.parser.AttributeRegexPatterns
+import org.appdevforall.codeonthego.computervision.domain.parser.patterns.DimensionPatterns
 
 internal object SamePrefixDimensionRecovery {
     private val dimensionKeys = listOf(AttributeKey.WIDTH, AttributeKey.HEIGHT)
@@ -44,7 +44,7 @@ internal object SamePrefixDimensionRecovery {
             AttributeKey.HEIGHT -> "(?:layout[_-]?height|layoutheight|layoutheiqht|height)"
             else -> return false
         }
-        return AttributeRegexPatterns.explicitDimensionWithUnit(aliases).containsMatchIn(rawText) ||
-            AttributeRegexPatterns.compactDimensionWithUnit(aliases).containsMatchIn(rawText)
+        return DimensionPatterns.explicitDimensionWithUnit(aliases).containsMatchIn(rawText) ||
+            DimensionPatterns.compactDimensionWithUnit(aliases).containsMatchIn(rawText)
     }
 }

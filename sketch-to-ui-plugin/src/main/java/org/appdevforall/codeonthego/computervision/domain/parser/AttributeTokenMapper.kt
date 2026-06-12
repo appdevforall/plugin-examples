@@ -3,6 +3,9 @@ package org.appdevforall.codeonthego.computervision.domain.parser
 import me.xdrop.fuzzywuzzy.FuzzySearch
 import org.appdevforall.codeonthego.computervision.domain.grammar.UiGrammarValidator
 import org.appdevforall.codeonthego.computervision.domain.parser.cleaner.ColorCleaner
+import org.appdevforall.codeonthego.computervision.domain.parser.patterns.AttributeKeyPatterns
+import org.appdevforall.codeonthego.computervision.domain.parser.patterns.ColorPatterns
+import org.appdevforall.codeonthego.computervision.domain.parser.patterns.CoreParserPatterns
 import java.lang.StringBuilder
 
 internal object AttributeTokenMapper {
@@ -28,7 +31,7 @@ internal object AttributeTokenMapper {
                 .flatMap(::tokenizeDelimitedChunk)
                 .filter { it.isNotEmpty() }
         } else {
-            annotation.split(AttributeRegexPatterns.TOKEN_SPLIT).map { it.trim() }.filter { it.isNotEmpty() }
+            annotation.split(CoreParserPatterns.TOKEN_SPLIT).map { it.trim() }.filter { it.isNotEmpty() }
         }
     }
 
@@ -66,11 +69,11 @@ internal object AttributeTokenMapper {
     fun normalizeKeyToken(rawKey: String): String {
         return rawKey.lowercase()
             .replace("-", "_")
-            .replace(AttributeRegexPatterns.WHITESPACE, "_")
+            .replace(CoreParserPatterns.WHITESPACE, "_")
             .replace(".", "_")
-            .replace(AttributeRegexPatterns.MULTIPLE_UNDERSCORES, "_")
-            .replace(AttributeRegexPatterns.LAYOUT_OCR_KEY, "layout")
-            .replace(AttributeRegexPatterns.OCR_ID_KEY, "id")
+            .replace(CoreParserPatterns.MULTIPLE_UNDERSCORES, "_")
+            .replace(AttributeKeyPatterns.LAYOUT_OCR_KEY, "layout")
+            .replace(AttributeKeyPatterns.OCR_ID_KEY, "id")
     }
 
     private fun tokenizeDelimitedChunk(chunk: String): List<String> {
@@ -122,11 +125,11 @@ internal object AttributeTokenMapper {
     }
 
     private fun hasColorLiteralPrefix(token: String): Boolean {
-        return token.startsWith(AttributeRegexPatterns.COLOR_HEX_PREFIX)
+        return token.startsWith(ColorPatterns.COLOR_HEX_PREFIX)
     }
 
     private fun hasResourceReferencePrefix(token: String): Boolean {
-        return token.startsWith(AttributeRegexPatterns.RESOURCE_REFERENCE_PREFIX)
+        return token.startsWith(ColorPatterns.RESOURCE_REFERENCE_PREFIX)
     }
 
     private fun resolveMatchedKey(token: String, state: MappingState): AttributeKey? {
