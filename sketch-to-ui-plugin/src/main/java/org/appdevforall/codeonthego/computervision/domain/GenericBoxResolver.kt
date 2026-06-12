@@ -1,6 +1,7 @@
 package org.appdevforall.codeonthego.computervision.domain
 
 import android.graphics.RectF
+import org.appdevforall.codeonthego.computervision.domain.model.DetectionLabels
 import org.appdevforall.codeonthego.computervision.domain.model.DetectionResult
 
 class GenericBoxResolver {
@@ -14,17 +15,17 @@ class GenericBoxResolver {
 
     fun resolve(detections: List<DetectionResult>): List<DetectionResult> {
         val dropdownSymbols = detections.filter {
-            it.label == "dropdown_symbol" && it.score >= MIN_DROPDOWN_SYMBOL_SCORE
+            it.label == DetectionLabels.DROPDOWN_SYMBOL && it.score >= MIN_DROPDOWN_SYMBOL_SCORE
         }
 
         return detections.mapNotNull { det ->
             when (det.label) {
-                "dropdown_symbol" -> null
-                "generic_box" -> {
+                DetectionLabels.DROPDOWN_SYMBOL -> null
+                DetectionLabels.GENERIC_BOX -> {
                     val hasSymbolNearby = dropdownSymbols.any { symbol ->
                         isAcceptedDropdownSymbol(det.boundingBox, symbol.boundingBox)
                     }
-                    det.copy(label = if (hasSymbolNearby) "dropdown" else "text_entry_box")
+                    det.copy(label = if (hasSymbolNearby) DetectionLabels.DROPDOWN else DetectionLabels.TEXT_ENTRY_BOX)
                 }
                 else -> det
             }
