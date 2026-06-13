@@ -1,0 +1,13 @@
+{
+  "extraKnownMarketplaces": {
+    "common-agent-setup": {
+      "source": {
+        "source": "github",
+        "repo": "appdevforall/common-agent-setup"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "adfa-agent@common-agent-setup": true
+  }
+}
