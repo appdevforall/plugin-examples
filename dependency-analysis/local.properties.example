@@ -1,0 +1,8 @@
+# Copy this file to local.properties and point sdk.dir at your Android SDK.
+# local.properties is git-ignored (it holds machine-specific paths and must
+# never be committed). The Android Gradle plugin reads sdk.dir from it.
+#
+#   cp local.properties.example local.properties
+#   # then edit sdk.dir below
+#
+sdk.dir=/path/to/your/Android/sdk

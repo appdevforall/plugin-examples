@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Dependency Analysis</string>
+    <string name="da_tab_title">Dependencies</string>
+
+    <!-- Intro / empty state -->
+    <string name="da_intro_eyebrow">Dependency Analysis</string>
+    <string name="da_intro_title">Audit your Gradle dependencies</string>
+    <string name="da_intro_body">Run a full dependency health check on the open project. We report dependencies that are unused, used but undeclared (transitive), or declared on the wrong configuration — then offer a one-tap fix.</string>
+    <string name="da_action_analyze">Analyze dependencies</string>
+    <string name="da_action_reanalyze">Re-analyze</string>
+
+    <!-- Running -->
+    <string name="da_running_eyebrow">Running</string>
+    <string name="da_running_title">Analyzing dependencies…</string>
+    <string name="da_running_body">Running :buildHealth. The first run configures the build and may take a minute.</string>
+    <string name="da_action_cancel">Cancel</string>
+
+    <!-- Results group headers -->
+    <string name="da_group_unused">Unused</string>
+    <string name="da_group_undeclared">Undeclared transitive</string>
+    <string name="da_group_misconfigured">Misconfigured</string>
+    <string name="da_group_unused_hint">Declared but not used — safe to remove.</string>
+    <string name="da_group_undeclared_hint">Used directly but only present transitively — declare them.</string>
+    <string name="da_group_misconfigured_hint">Declared on the wrong configuration — move them.</string>
+
+    <!-- Results summary -->
+    <string name="da_results_eyebrow">Results</string>
+    <string name="da_results_title">Dependency advice</string>
+    <string name="da_count_unused">unused</string>
+    <string name="da_count_undeclared">undeclared</string>
+    <string name="da_count_misconfigured">misconfigured</string>
+    <string name="da_advice_change_format">%1$s → %2$s</string>
+    <string name="da_action_fix">Fix dependencies</string>
+
+    <!-- Clean state -->
+    <string name="da_clean_eyebrow">All clear</string>
+    <string name="da_clean_title">No dependency issues found</string>
+    <string name="da_clean_body">Your declared dependencies match what the code actually uses.</string>
+
+    <!-- Fix confirm -->
+    <string name="da_fix_confirm_eyebrow">Apply fixes</string>
+    <string name="da_fix_confirm_title">Apply all recommended fixes?</string>
+    <string name="da_fix_confirm_body">This edits your build.gradle file(s) in place — removing unused dependencies, adding undeclared ones, and moving misconfigured ones. We re-analyze afterward to confirm.</string>
+    <string name="da_fix_confirm_apply">Apply fixes</string>
+
+    <!-- Applied summary -->
+    <string name="da_applied_eyebrow">Fixes applied</string>
+    <string name="da_applied_title">Dependencies updated</string>
+    <string name="da_count_removed">removed</string>
+    <string name="da_count_added">added</string>
+    <string name="da_count_reconfigured">reconfigured</string>
+    <string name="da_applied_reload_buffer">An open build.gradle was changed on disk — reload it to see the edits.</string>
+    <string name="da_action_done">Done</string>
+
+    <!-- Setup needed -->
+    <string name="da_setup_eyebrow">Setup needed</string>
+    <string name="da_setup_title">No analyzable project</string>
+    <string name="da_setup_body">Open a Gradle project with an Android or JVM module before running dependency analysis.</string>
+
+    <!-- Errors -->
+    <string name="da_error_eyebrow">Analysis failed</string>
+    <string name="da_error_title">Couldn\'t analyze dependencies</string>
+    <string name="da_error_no_project">No project is open. Open a project and try again.</string>
+    <string name="da_error_cancelled">Analysis cancelled.</string>
+
+    <!-- Help -->
+    <string name="da_help_summary">Audit Gradle dependencies — find unused, undeclared-transitive, and misconfigured deps, then fix them in one tap.</string>
+</resources>

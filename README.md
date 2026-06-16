@@ -17,6 +17,7 @@ See the official [plugin documentation](https://www.appdevforall.org/codeonthego
 | [`icons-repository/`](icons-repository/)           | Browse a bundled Material icon catalog and import any icon as a Vector Drawable into the active project. |
 | [`client-time-tracker/`](client-time-tracker/)                       | Tracks billable coding sessions per project and generates PDF/Excel/CSV invoices. |
 | [`python-tools/`](python-tools/)                   | Adds Python + Flask project templates, with on-device Python install and run/install/test actions. |
+| [`dependency-analysis/`](dependency-analysis/)     | Audits Gradle dependencies via the Dependency Analysis Gradle Plugin (`:buildHealth`) — reports unused, undeclared-transitive, and misconfigured deps and applies fixes in one tap. |
 
 ## Building a plugin
 

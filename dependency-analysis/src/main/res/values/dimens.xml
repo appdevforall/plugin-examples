@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="space_xs">4dp</dimen>
+    <dimen name="space_sm">8dp</dimen>
+    <dimen name="space_md">12dp</dimen>
+    <dimen name="space_lg">16dp</dimen>
+    <dimen name="space_xl">24dp</dimen>
+    <dimen name="space_xxl">32dp</dimen>
+    <dimen name="space_xxxl">48dp</dimen>
+
+    <dimen name="radius_sm">4dp</dimen>
+    <dimen name="radius_md">8dp</dimen>
+    <dimen name="radius_lg">12dp</dimen>
+    <dimen name="radius_xl">16dp</dimen>
+
+    <dimen name="border_hairline">1dp</dimen>
+    <dimen name="border_accent">3dp</dimen>
+
+    <dimen name="text_micro">11sp</dimen>
+    <dimen name="text_small">13sp</dimen>
+    <dimen name="text_body">15sp</dimen>
+    <dimen name="text_subtitle">17sp</dimen>
+    <dimen name="text_title">22sp</dimen>
+    <dimen name="text_display">34sp</dimen>
+
+    <dimen name="touch_target_min">48dp</dimen>
+    <dimen name="live_dot_size">8dp</dimen>
+    <dimen name="row_height_min">64dp</dimen>
+</resources>

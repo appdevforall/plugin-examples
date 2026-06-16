@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Bottom-sheet tab body for Dependency Analysis.
+
+     SCAFFOLD: root container + intro state. The UI agent adds the running,
+     results, clean, setup-needed, and error states (per BlueWave idiom: hairline
+     PluginCard rows, Plugin.Text.Label eyebrows, Plugin.Text.Mono* counts) and
+     the Analyze / Fix action wiring. ThemeOverlay.Plugin on the root makes the
+     plugin's button + color attributes win over the host theme. -->
+<androidx.core.widget.NestedScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:theme="@style/ThemeOverlay.Plugin"
+    android:background="@color/plugin_surface"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingHorizontal="@dimen/space_xl"
+        android:paddingTop="@dimen/space_xl"
+        android:paddingBottom="@dimen/space_xl">
+
+        <TextView
+            android:id="@+id/da_eyebrow"
+            style="@style/Plugin.Text.Label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/da_intro_eyebrow" />
+
+        <TextView
+            android:id="@+id/da_title"
+            style="@style/Plugin.Text.Title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/space_sm"
+            android:text="@string/da_intro_title" />
+
+        <TextView
+            android:id="@+id/da_body"
+            style="@style/Plugin.Text.BodyMuted"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/space_md"
+            android:text="@string/da_intro_body" />
+
+        <!-- Results / state container the UI agent populates dynamically. -->
+        <FrameLayout
+            android:id="@+id/da_content"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/space_lg" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/da_action_primary"
+            style="@style/PluginButton.Filled"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/space_xl"
+            android:text="@string/da_action_analyze" />
+
+    </LinearLayout>
+
+</androidx.core.widget.NestedScrollView>

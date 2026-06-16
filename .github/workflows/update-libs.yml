@@ -60,6 +60,7 @@ jobs:
           declare -A MAP=(
             ["apk-viewer"]="apk-analyzer.cgp"
             ["Beepy"]="beepy.cgp"
+            ["dependency-analysis"]="dependency-analysis.cgp"
             ["keystore-generator"]="keystore-generator.cgp"
             ["markdown-preview"]="markdown-previewer.cgp"
             ["ndk-installer-plugin"]="ndk-installer.cgp"

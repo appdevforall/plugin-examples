@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- BlueWave palette, dark mode. -->
+
+    <!-- Primary (BlueWave) -->
+    <color name="plugin_primary">#B1C5FF</color>
+    <color name="plugin_on_primary">#172E60</color>
+    <color name="plugin_primary_container">#2F4578</color>
+    <color name="plugin_on_primary_container">#DAE2FF</color>
+
+    <!-- Secondary (neutral) -->
+    <color name="plugin_secondary">#D4D4D4</color>
+    <color name="plugin_on_secondary">#0A0A0A</color>
+    <color name="plugin_secondary_container">#171717</color>
+    <color name="plugin_on_secondary_container">#FAFAFA</color>
+
+    <!-- Surfaces -->
+    <color name="plugin_surface">#0A0A0A</color>
+    <color name="plugin_on_surface">#FAFAFA</color>
+    <color name="plugin_surface_variant">#171717</color>
+    <color name="plugin_on_surface_variant">#A3A3A3</color>
+    <color name="plugin_surface_dim">#000000</color>
+
+    <!-- Outlines -->
+    <color name="plugin_outline">#525252</color>
+    <color name="plugin_outline_variant">#262626</color>
+
+    <!-- Error (misconfigured counts) -->
+    <color name="plugin_error">#FCA5A5</color>
+    <color name="plugin_on_error">#5A1F1F</color>
+    <color name="plugin_error_container">#5A1F1F</color>
+    <color name="plugin_on_error_container">#FECACA</color>
+
+    <!-- Success (removed / added counts) -->
+    <color name="plugin_success">#86EFAC</color>
+    <color name="plugin_success_container">#14532D</color>
+
+    <!-- Text emphasis -->
+    <color name="plugin_text_muted">#A3A3A3</color>
+    <color name="plugin_text_subtle">#525252</color>
+
+    <!-- Ripple -->
+    <color name="plugin_ripple">#1FFAFAFA</color>
+</resources>

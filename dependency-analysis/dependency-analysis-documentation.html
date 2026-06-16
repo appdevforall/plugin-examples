@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dependency Analysis Plugin Documentation</title>
+<style>
+  :root {
+    --bg: #fdfdfd;
+    --fg: #1a1a1a;
+    --accent: #485d92;
+    --accent-light: #dae2ff;
+    --border: #d0d7de;
+    --code-bg: #f4f6f8;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--fg);
+    background: var(--bg);
+    line-height: 1.6;
+    max-width: 52rem;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+  }
+  header { border-bottom: 3px solid var(--accent); padding-bottom: 1.2rem; margin-bottom: 2rem; }
+  header h1 { font-size: 2rem; color: var(--accent); }
+  header p.subtitle { color: #555; margin-top: 0.3rem; }
+  header .meta { font-size: 0.85rem; color: #777; margin-top: 0.5rem; }
+  nav { background: var(--accent-light); border: 1px solid var(--border); border-radius: 6px; padding: 1rem 1.5rem; margin-bottom: 2.5rem; }
+  nav h2 { font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); margin-bottom: 0.5rem; }
+  nav ol { padding-left: 1.3rem; }
+  nav li { margin: 0.25rem 0; }
+  nav a { color: var(--accent); text-decoration: none; }
+  nav a:hover { text-decoration: underline; }
+  section { margin-bottom: 2.5rem; }
+  h2 { font-size: 1.4rem; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; margin-bottom: 1rem; }
+  h3 { font-size: 1.1rem; margin: 1.2rem 0 0.5rem; }
+  p, li { margin-bottom: 0.5rem; }
+  ul, ol { padding-left: 1.4rem; }
+  code {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    background: var(--code-bg);
+    padding: 0.15em 0.35em;
+    border-radius: 3px;
+    font-size: 0.9em;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1rem 1.2rem;
+    overflow-x: auto;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    margin: 0.8rem 0 1rem;
+  }
+  pre code { background: none; padding: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 0.8rem 0; }
+  th, td { border: 1px solid var(--border); padding: 0.45rem 0.6rem; text-align: left; font-size: 0.92rem; }
+  th { background: var(--accent-light); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Dependency Analysis</h1>
+  <p class="subtitle">Audit and fix your project's Gradle dependencies from inside Code on the Go.</p>
+  <p class="meta">A reference plugin by App Dev For All.</p>
+</header>
+
+<nav>
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#what">What it does</a></li>
+    <li><a href="#advice">The three kinds of advice</a></li>
+    <li><a href="#run">Running an analysis</a></li>
+    <li><a href="#fix">The one-tap fix</a></li>
+    <li><a href="#perms">Permissions &amp; bundling</a></li>
+  </ol>
+</nav>
+
+<section id="what">
+  <h2>1. What it does</h2>
+  <p>Dependency Analysis runs the
+  <a href="https://github.com/autonomousapps/dependency-analysis-gradle-plugin">autonomousapps
+  Dependency Analysis Gradle Plugin</a> (DAGP) against the open project and
+  reports dependencies that are unused, used-but-undeclared (transitive), or
+  declared on the wrong configuration. A single <strong>Fix dependencies</strong>
+  action applies DAGP's recommended edits and re-analyzes.</p>
+</section>
+
+<section id="advice">
+  <h2>2. The three kinds of advice</h2>
+  <table>
+    <tr><th>Category</th><th>Meaning</th><th>Recommended action</th></tr>
+    <tr><td>Unused</td><td>Declared but not referenced by code.</td><td>Remove the declaration.</td></tr>
+    <tr><td>Undeclared transitive</td><td>Used directly but only present transitively.</td><td>Declare it explicitly.</td></tr>
+    <tr><td>Misconfigured</td><td>On the wrong configuration (e.g. <code>api</code> vs <code>implementation</code>).</td><td>Move it.</td></tr>
+  </table>
+</section>
+
+<section id="run">
+  <h2>3. Running an analysis</h2>
+  <p>Open the <strong>Dependencies</strong> tab in the editor bottom sheet and
+  tap <strong>Analyze dependencies</strong>. The plugin runs Gradle's
+  <code>:buildHealth</code> task with a generated init script that applies DAGP
+  on the fly — your build files are not touched. Advice is read from:</p>
+  <pre><code>build/reports/dependency-analysis/build-health-report.json</code></pre>
+</section>
+
+<section id="fix">
+  <h2>4. The one-tap fix</h2>
+  <p>Tapping <strong>Fix dependencies</strong> confirms, then delegates to
+  DAGP's <code>:fixDependencies</code> task, which rewrites your
+  <code>build.gradle</code>(<code>.kts</code>) files in place. The plugin then
+  re-runs the analysis and shows a post-apply summary of how many dependencies
+  were removed, added, and reconfigured. No build-file diff is synthesized —
+  Gradle performs the edits and the re-analysis confirms the result.</p>
+  <p>Kotlin DSL rewriting is reliable; Groovy DSL rewriting is best-effort. If a
+  <code>build.gradle</code> is open in the editor during a fix, reload it to see
+  the on-disk edits.</p>
+</section>
+
+<section id="perms">
+  <h2>5. Permissions &amp; bundling</h2>
+  <p>The plugin declares exactly <code>system.commands</code> (to run the Gradle
+  tasks) and <code>filesystem.read</code> (to read the report). It does not
+  request network access: DAGP and its dependencies are bundled with the plugin
+  so analysis works offline. Bundled third-party libraries are listed in the
+  plugin's <code>THIRD_PARTY_LICENSES</code> asset.</p>
+</section>
+
+</body>
+</html>

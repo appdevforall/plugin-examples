@@ -1,0 +1,28 @@
+THIRD-PARTY SOFTWARE NOTICES AND LICENSES
+=========================================
+
+The Dependency Analysis plugin bundles the autonomousapps Dependency Analysis
+Gradle Plugin (DAGP) and its runtime dependencies under assets/dagp-repo/ so
+that dependency analysis works offline on-device. Those artifacts are
+redistributed under their respective open-source licenses.
+
+PLACEHOLDER — the data-layer agent must replace this file with the complete,
+per-artifact license enumeration that matches the exact jars actually bundled in
+assets/dagp-repo/ for the pinned DAGP version (see data/DagpConfig.kt). Every
+bundled artifact and its license MUST be listed; the repo's packaging blocks
+strip META-INF/LICENSE from jars, so licenses are shipped as this explicit asset.
+
+Expected artifacts and licenses (from the DAGP 3.15.0 POM; confirm against the
+resolved set):
+
+  com.autonomousapps:dependency-analysis-gradle-plugin   Apache-2.0
+  com.autonomousapps:graph-support                       Apache-2.0
+  com.autonomousapps:variant-artifacts                   Apache-2.0
+  com.autonomousapps:kotlin-editor-relocated             Apache-2.0
+  com.google.guava:guava                                 Apache-2.0
+  com.github.ben-manes.caffeine:caffeine                 Apache-2.0
+  org.ow2.asm:asm (relocated)                            BSD-3-Clause
+  org.antlr (relocated)                                  BSD-3-Clause
+  com.squareup.moshi:moshi (+ kotlin, sealed)            Apache-2.0
+  com.squareup.okio:okio-jvm                             Apache-2.0
+  org.jetbrains.kotlin:kotlin-stdlib / -reflect / -metadata-jvm   Apache-2.0

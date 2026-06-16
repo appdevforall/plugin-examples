@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Dependency Analysis Plugin — Guide</title>
+    <link rel="stylesheet" href="css/walkthrough.css">
+</head>
+<body>
+
+<h1>Dependency Analysis</h1>
+<p class="lede">Audit your project's Gradle dependencies from inside Code
+on the Go, and fix the easy wins in one tap. This page explains what the
+plugin reports, how it runs, and what the one-tap fix actually does.</p>
+
+<div class="callout">
+    <b>What it does.</b> Runs the
+    <a href="https://github.com/autonomousapps/dependency-analysis-gradle-plugin">Dependency
+    Analysis Gradle Plugin</a> (DAGP) against the open project and surfaces
+    three kinds of advice: <em>unused</em>, <em>undeclared transitive</em>,
+    and <em>misconfigured</em> dependencies. A one-tap <b>Fix dependencies</b>
+    applies DAGP's recommended edits and re-analyzes.
+</div>
+
+<h2>1. The three kinds of advice</h2>
+<ul>
+    <li><b>Unused</b> — declared in a <code>build.gradle</code> but not
+        referenced by your code. Safe to remove; shrinks your build graph.</li>
+    <li><b>Undeclared transitive</b> — used directly in your code but only
+        present because some <em>other</em> dependency drags it in. You should
+        declare it explicitly so an upstream change can't silently break you.</li>
+    <li><b>Misconfigured</b> — declared on the wrong configuration, e.g.
+        <code>api</code> where <code>implementation</code> would do. Tightening
+        this speeds up incremental builds.</li>
+</ul>
+
+<h2>2. How analysis runs</h2>
+<p class="why"><b>Why you care:</b> the plugin doesn't edit your build files
+to analyze. It runs Gradle's <code>:buildHealth</code> task with a generated
+init script that applies DAGP to your project on the fly, so analysis is
+non-invasive. The advice is read back from
+<code>build/reports/dependency-analysis/build-health-report.json</code>.</p>
+<p>DAGP and its libraries are bundled with the plugin, so analysis works
+offline — no network fetch the first time you run it.</p>
+
+<h2>3. The one-tap fix</h2>
+<p class="why"><b>Why you care:</b> applying advice by hand across many
+modules is tedious. <b>Fix dependencies</b> delegates to DAGP's
+<code>:fixDependencies</code> task, which rewrites your
+<code>build.gradle</code>(<code>.kts</code>) files in place — removing unused
+declarations, adding undeclared ones, and moving misconfigured ones.</p>
+<div class="callout">
+    <b>Before it writes.</b> You confirm first ("Apply N fixes? edits
+    app/build.gradle"). After the rewrite the plugin re-runs the analysis and
+    shows you a summary: how many dependencies were removed, added, and
+    reconfigured.
+</div>
+<p class="muted">Note: rewriting Kotlin DSL build files is reliable; Groovy
+DSL rewriting is best-effort and may skip files with complex logic. If a
+<code>build.gradle</code> is open in the editor when the fix runs, reload it
+to pick up the on-disk edits.</p>
+
+<h2>4. Permissions</h2>
+<p>This plugin requests exactly two permissions:
+<code>system.commands</code> (to run the two Gradle tasks) and
+<code>filesystem.read</code> (to read the report). It does not request network
+access — everything it needs is bundled — and it does not write files itself;
+the build-file edits are performed by Gradle.</p>
+
+<hr>
+<p class="muted">Dependency Analysis is a reference plugin by App Dev For All.
+It bundles the autonomousapps Dependency Analysis Gradle Plugin and its
+dependencies under their respective open-source licenses; see
+THIRD_PARTY_LICENSES in the plugin assets.</p>
+
+</body>
+</html>

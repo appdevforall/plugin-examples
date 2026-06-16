@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application
+        android:label="@string/app_name"
+        android:theme="@style/PluginTheme">
+
+        <!-- Plugin metadata -->
+        <meta-data
+            android:name="plugin.id"
+            android:value="org.appdevforall.dependencyanalysis" />
+
+        <meta-data
+            android:name="plugin.name"
+            android:value="Dependency Analysis" />
+
+        <meta-data
+            android:name="plugin.version"
+            android:value="${pluginVersion}" />
+
+        <meta-data
+            android:name="plugin.description"
+            android:value="Audit your project's Gradle dependencies. Runs the Dependency Analysis Gradle Plugin (:buildHealth) and reports unused, undeclared-transitive, and misconfigured dependencies. One tap applies the recommended fixes via :fixDependencies and re-analyzes." />
+
+        <meta-data
+            android:name="plugin.author"
+            android:value="App Dev For All" />
+
+        <!-- Floor only: this is the host-IDE API version, not the user project's
+             Gradle/AGP version. The plugin uses IdeCommandService / IdeProjectService
+             / IdeFileService, all present since 1.0.0, so 1.0.0 is the justified
+             minimum. (DAGP's own Gradle 8.11 / AGP 8.10.0 requirement is a
+             user-project concern surfaced at run time, not a host-version gate.) -->
+        <meta-data
+            android:name="plugin.min_ide_version"
+            android:value="1.0.0" />
+
+        <!-- Exactly the permissions exercised:
+             - system.commands : gates IdeCommandService, which runs the two
+               Gradle tasks (:buildHealth and :fixDependencies). The file edits
+               are performed by Gradle (:fixDependencies), not by the plugin, so
+               filesystem.write / project.structure are NOT requested.
+             - filesystem.read : reads DAGP's build-health-report.json from the
+               project's build/ directory via IdeFileService.
+             No network.access: DAGP and its transitive jars are bundled offline
+             under assets/, resolved from a file:// init-script repository. -->
+        <meta-data
+            android:name="plugin.permissions"
+            android:value="system.commands,filesystem.read" />
+
+        <meta-data
+            android:name="plugin.main_class"
+            android:value="org.appdevforall.dependencyanalysis.DependencyAnalysisPlugin" />
+
+        <!-- Plugin Manager icons. Required for debug builds; release skips this
+             check. Paths are inside the .cgp (APK) zip — assets/ entries land at
+             exactly this path because the build system bundles assets verbatim. -->
+        <meta-data
+            android:name="plugin.icon_day"
+            android:value="assets/icon_day.png" />
+        <meta-data
+            android:name="plugin.icon_night"
+            android:value="assets/icon_night.png" />
+
+    </application>
+
+</manifest>
