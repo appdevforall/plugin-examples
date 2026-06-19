@@ -29,6 +29,23 @@ Plugins use only the public `plugin-api` and `lsp/api` surfaces. Reflection agai
 
 Helps potential users of the plugin to decide if they want to download and install it
 
+## 6.7 Tooltips and in-app help
+
+Help must be available *inside* the running IDE, not only in the standalone 6.6 page. Code On The Go uses a three-tier help model and plugins are expected to participate fully:
+
+- **Tier 1 (brief)** and **Tier 2 (more detail)** are delivered as tooltips. A user long-presses any UI element and sees a brief summary, then "See More" for detail.
+- **Tier 3 (full)** is an exhaustive in-app web page reached from a button on the tooltip, served from the bundled documentation database — no network required.
+
+Requirements:
+
+- The plugin implements `DocumentationExtension` and returns its `plugin_<pluginId>` category from `getTooltipCategory()`.
+- **Every UI element the plugin contributes has a tooltip.** Each `NavigationItem`, `MenuItem`, `TabItem`, FAB/toolbar action, and `EditorTabItem` carries a `tooltipTag` (or `tooltip` for `EditorTabItem`); any custom `View` the plugin shows is wired to the tooltip system. No contributed element may be left without help.
+- Every `tooltipTag` resolves to a `PluginTooltipEntry` returned from `getTooltipEntries()` — no dangling tags. Each entry provides a Tier 1 `summary` and a Tier 2 `detail`.
+- **Complete help is available within the app.** The plugin ships a Tier 3 bundle via `getTier3DocsAssetPath()` that comprehensively covers its functionality, and tooltips link to it through `PluginTooltipButton`s. Tier 3 must work offline (served locally); it is not a link out to the public internet.
+- Tooltip and Tier 3 content is in English and readable (light background, dark body text), consistent with 6.6.
+
+This is distinct from 6.6: 6.6 is the install-decision page that ships at the plugin's top level; 6.7 is the in-IDE tooltip + Tier 3 help wired through `DocumentationExtension`. A plugin can pass 6.6 and still fail 6.7.
+
 ## Manifest
 
 The manifest must declare every extension, every permission, the supported IDE version range, and the minimum Android SDK level.
@@ -53,9 +70,16 @@ Extracted from `libs/plugin-api.jar`. Verify against the JAR shipped with the pr
 - `UIExtension` — contributes UI (sidebar nav, editor tabs)
 - `EditorTabExtension` — `getMainEditorTabs()` returns `EditorTabItem`s
 - `BuildActionExtension` — contributes build actions
-- `DocumentationExtension`
+- `DocumentationExtension` — contributes tooltips + Tier 3 help (see clause 6.7)
 - `EditorExtension`
 - `ProjectExtension`
+
+### Tooltip / help API surface (`com.itsaky.androidide.plugins.extensions.*`)
+- `DocumentationExtension` — `getTooltipCategory()`, `getTooltipEntries(): List<PluginTooltipEntry>`, `getTier3DocsAssetPath(): String?`, `onDocumentationInstall()`, `onDocumentationUninstall()`
+- `PluginTooltipEntry(tag, summary /* Tier 1 */, detail /* Tier 2 */, buttons)`
+- `PluginTooltipButton(description, uri /* links to Tier 3 */, order, directPath)`
+- Per-element tooltip fields: `NavigationItem.tooltipTag`, `MenuItem.tooltipTag`, `TabItem.tooltipTag`, `EditorTabItem.tooltip`
+- `com.itsaky.androidide.plugins.services.IdeTooltipService` — `showTooltip(anchorView, [category,] tag)` for tooltips on custom views
 
 ### Lifecycle hooks (`com.itsaky.androidide.plugins.IPlugin`)
 - `initialize(PluginContext)` — set up state

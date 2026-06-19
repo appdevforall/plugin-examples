@@ -1,6 +1,6 @@
 ---
 name: cogo-plugin-review
-description: Review a Code on the Go (CoGo or cotg) plugin project for submission readiness — verify the assemblePlugin build, audit actual security risks, and score the code against the submission rubric (compatibility, resource discipline, build reproducibility, native binaries, reflection ban, manifest completeness). Use when the user asks to review, audit, or check a Code On The Go plugin repo.
+description: Review a Code on the Go (CoGo or cotg) plugin project for submission readiness — verify the assemblePlugin build, audit actual security risks, and score the code against the submission rubric (compatibility, resource discipline, build reproducibility, native binaries, reflection ban, html documentation, tooltips and in-app help, manifest completeness). Use when the user asks to review, audit, or check a Code On The Go plugin repo.
 metadata:
   author: Hal Eisen
   keywords:
@@ -99,6 +99,17 @@ Search the source tree:
 - Must be written in English
 - Must be at the top-level of the plugin. Must have the same name as the plugin with the .html extension
 
+#### 6.7 Tooltips and in-app help
+Code On The Go has a three-tier in-IDE help model: Tier 1 (brief) and Tier 2 (more detail) are tooltips; Tier 3 is a full offline web page reached from a button on the tooltip. Plugins participate through `DocumentationExtension` (all symbols verifiable in `plugin-api.jar`). This is separate from the 6.6 install-decision page — grade them independently.
+
+- **Implements the extension**: confirm the main class (or one of the plugin's classes) implements `DocumentationExtension`. `grep -rlE 'DocumentationExtension' src --include='*.kt' --include='*.java'`. Absent → **Fail** (no in-app help at all).
+- **Every UI element has a tooltip**: reuse the extension enumeration from *Manifest completeness* below. For each contributed `NavigationItem` / `MenuItem` / `TabItem` / FAB / toolbar action, confirm `tooltipTag` is set; for each `EditorTabItem`, confirm `tooltip` is set. Any custom `View` the plugin shows (dialog, fragment, bottom sheet) must be wired to the tooltip system (`IdeTooltipService.showTooltip(...)` or `View.displayTooltipOnLongPress(...)`). One or more contributed elements with no tooltip → **Fail** ("all UI elements" is the bar); a stray non-interactive view missing one → **Partial**.
+- **No dangling tags**: collect every `tooltipTag`/`tooltip` value used on UI elements and every `PluginTooltipButton` referenced, then confirm each has a matching `PluginTooltipEntry.tag` returned from `getTooltipEntries()`. A tag with no entry (or an entry with empty `summary`) → **Fail**. `getTooltipCategory()` should return the `plugin_<pluginId>` form.
+- **Tier 1 + Tier 2 present**: each `PluginTooltipEntry` should supply a non-empty `summary` (Tier 1) and a `detail` (Tier 2). Summary-only entries across the board → **Partial**.
+- **Complete in-app help (Tier 3)**: `getTier3DocsAssetPath()` returns non-null AND the named `assets/<path>/` directory exists with real HTML content (not a stub), and at least one `PluginTooltipButton.uri` links into it. Tier 3 must be served locally/offline — a button that only opens a public `https://` URL is not in-app help. Missing or stub Tier 3 → **Fail**; present but thin/partial coverage → **Partial**.
+- Tooltips are wired in code via `DocumentationExtension`, **not** through an `AndroidManifest` `plugin.*` key — do not flag the absence of a manifest entry for documentation.
+- Content must be English and readable (light background, dark text), same as 6.6.
+
 #### Manifest completeness
 - **Every extension**: enumerate what the main class returns from `getMainEditorTabs()`, `getSideMenuItems()`, `getMainMenuItems()`, `getFabActions()`, `getToolbarActions()`, `getContextMenuItems()`, etc. Each contributed extension type must have a corresponding `plugin.*` meta-data entry (e.g. `plugin.sidebar_items`, `plugin.editor_tabs`). Returning items from a method without declaring the corresponding manifest entry is a fail.
 - **Every permission**: every `plugin.*` permission actually used by code paths must appear in `plugin.permissions` (comma-separated). Cross-reference against the permission keys enumerated in `plugin-api.jar`'s `PluginPermission` enum (currently: `filesystem.read`, `filesystem.write`, `network.access`, `system.commands`, `ide.settings`, `ide.environment.write`, `project.structure`, `native.code`).
@@ -121,6 +132,7 @@ One combined report, three sections:
    | 6.4 Native binaries | … | … |
    | 6.5 No reflection | … | … |
    | 6.6 Html documentation | … | … |
+   | 6.7 Tooltips & in-app help | … | … |
    | Manifest declarations | … | … |
 
 End with **Overall verdict**: green-light / conditional (list blockers) / block. A Fail on any clause is a blocker; a Partial is conditional.
