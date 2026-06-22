@@ -485,6 +485,26 @@ class FuzzyAttributeParserTest {
     }
 
     @Test
+    fun `Given_leaked_image_prefix_before_image_id_When_parsed_Then_clean_image_id_is_used`() {
+        val annotation = "height:64do | width:64dp | src:logo.png | icl:img. | img_logo"
+        val result = FuzzyAttributeParser.parse(annotation, "ImageView")
+
+        assertEquals("64dp", result["android:layout_height"])
+        assertEquals("64dp", result["android:layout_width"])
+        assertEquals("@drawable/logo", result["android:src"])
+        assertEquals("img_logo", result["android:id"])
+    }
+
+    @Test
+    fun `Given_explicit_image_ids_When_parsed_Then_ids_are_not_duplicated_or_rewritten`() {
+        val ids = listOf("img_logo", "user_email", "rb_flavor", "logo_image", "profile_img")
+
+        ids.forEach { id ->
+            assertEquals(id, FuzzyAttributeParser.parse("id:$id", "ImageView")["android:id"])
+        }
+    }
+
+    @Test
     fun `Given_clean_and_noisy_duplicate_dimensions_When_parsed_Then_clean_dimension_is_preserved`() {
         val result = FuzzyAttributeParser.parse(
             "layoutwidth:150dp | layoutwidth:15Ddp",
