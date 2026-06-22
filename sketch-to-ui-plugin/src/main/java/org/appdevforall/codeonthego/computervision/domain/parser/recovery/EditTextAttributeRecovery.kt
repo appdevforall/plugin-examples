@@ -60,7 +60,7 @@ internal object EditTextAttributeRecovery {
         return text.contains(TextPatterns.EDIT_TEXT_METADATA_LEAKAGE)
     }
 
-    /** Selects a uniquely longest repeated unkeyed ID candidate after password metadata. */
+    /** Selects an unkeyed ID candidate after password metadata while keeping single-token noise out. */
     private fun recoverBareEditTextId(annotation: String): String? {
         val parts = annotation.split(PIPE_DELIMITER).map { it.trim() }
         val passwordIndex = parts.indexOfFirst { isLikelyPasswordInput(it) }
@@ -76,7 +76,8 @@ internal object EditTextAttributeRecovery {
 
         if (candidates.size < MIN_UNKEYED_ID_CORROBORATION_COUNT) return null
         val longestLength = candidates.maxOfOrNull { it.length } ?: return null
-        return candidates.filter { it.length == longestLength }.singleOrNull()
+        return candidates.singleOrNull { it.length == longestLength }
+            ?: candidates.firstOrNull()
     }
 
     private fun recoverExplicitTextValue(annotation: String): String? {

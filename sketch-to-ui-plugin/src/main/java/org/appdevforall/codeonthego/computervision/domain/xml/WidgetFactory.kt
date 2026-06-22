@@ -2,18 +2,20 @@ package org.appdevforall.codeonthego.computervision.domain.xml
 
 import org.appdevforall.codeonthego.computervision.domain.model.LayoutItem
 import org.appdevforall.codeonthego.computervision.domain.model.ScaledBox
+import org.appdevforall.codeonthego.computervision.domain.model.DetectionLabels
 import org.appdevforall.codeonthego.computervision.domain.parser.AttributeKey
 import org.appdevforall.codeonthego.computervision.domain.parser.FuzzyAttributeParser
+import org.appdevforall.codeonthego.computervision.domain.parser.patterns.IdPatterns
+import org.appdevforall.codeonthego.computervision.domain.parser.patterns.ResourceNamePatterns
 
 class WidgetFactory(
     private val context: XmlContext,
     private val annotations: Map<ScaledBox, String>,
     private val selectedImageOverrides: Map<ScaledBox, String> = emptyMap()
 ) {
-    private val checkboxGroupIdPattern = Regex("^cb_group_\\d+$")
     private val radioChildGroupIdPatterns = listOf(
-        Regex("^rb_group(?:_\\d+)?(?:_|$).*"),
-        Regex("^radio_group(?:_\\d+)?(?:_|$).*")
+        IdPatterns.RADIO_BUTTON_GROUP_CHILD_ID,
+        IdPatterns.RADIO_GROUP_CHILD_ID
     )
 
     fun createWidgets(item: LayoutItem): List<AndroidWidget> = when (item) {
@@ -40,11 +42,11 @@ class WidgetFactory(
         val widgets = mutableListOf<AndroidWidget>()
 
         val dropdownTitle = box.text
-            .takeIf { box.label == "dropdown" }
+            .takeIf { box.label == DetectionLabels.DROPDOWN }
             ?.let(::extractDropdownTitle)
 
         if (dropdownTitle != null) {
-            val titleBox = box.copy(label = "text", text = dropdownTitle)
+            val titleBox = box.copy(label = DetectionLabels.TEXT, text = dropdownTitle)
 
             val titleAttrs = mapOf(
                 AttributeKey.WIDTH.xmlName to AndroidConstants.WRAP_CONTENT,
@@ -71,11 +73,16 @@ class WidgetFactory(
 
     private fun createRadioGroup(item: LayoutItem.RadioGroup): List<AndroidWidget> {
         val groupAnnotation = item.boxes.firstNotNullOfOrNull { annotations[it] }
-        val fullGroupAttrs = FuzzyAttributeParser.parse(groupAnnotation, "RadioGroup")
+        val fullGroupAttrs = FuzzyAttributeParser.parse(groupAnnotation, AndroidWidgetTags.RADIO_GROUP)
 
-        val groupId = resolveRadioGroupId(fullGroupAttrs["android:id"]?.substringAfterLast('/'))
+        val groupId = resolveRadioGroupId(fullGroupAttrs[AttributeKey.ID.xmlName]?.substringAfterLast('/'))
 
-        val groupStructuralAttrs = setOf("android:id", "android:layout_width", "android:layout_height", "android:orientation")
+        val groupStructuralAttrs = setOf(
+            AttributeKey.ID.xmlName,
+            AttributeKey.WIDTH.xmlName,
+            AttributeKey.HEIGHT.xmlName,
+            AttributeKey.ORIENTATION.xmlName
+        )
         // Group metadata can contain style attributes; visible option labels must stay with each RadioButton's OCR text.
         val sharedAttrs = fullGroupAttrs.filterKeys {
             it !in groupStructuralAttrs && it != AttributeKey.TEXT.xmlName
@@ -84,63 +91,68 @@ class WidgetFactory(
         var checkedId: String? = null
 
         val children = item.boxes.mapIndexed { index, box ->
-            val parsedAttrs = (sharedAttrs + FuzzyAttributeParser.parse(annotations[box], "RadioButton")).toMutableMap()
+            val childAnnotation = annotations[box]
+            val childAttrs = FuzzyAttributeParser.parse(childAnnotation, AndroidWidgetTags.RADIO_BUTTON)
+                .filterKeys { key -> childAnnotation != groupAnnotation || key !in groupStructuralAttrs }
+            val parsedAttrs = (sharedAttrs + childAttrs).toMutableMap()
             if (box.text.isNotBlank()) {
                 parsedAttrs.remove(AttributeKey.TEXT.xmlName)
             }
 
-            if (parsedAttrs["android:id"] == fullGroupAttrs["android:id"]) {
-                parsedAttrs.remove("android:id")
+            if (parsedAttrs[AttributeKey.ID.xmlName] == fullGroupAttrs[AttributeKey.ID.xmlName]) {
+                parsedAttrs.remove(AttributeKey.ID.xmlName)
             }
 
-            val requestedId = parsedAttrs["android:id"]?.substringAfterLast('/')
+            val requestedId = parsedAttrs[AttributeKey.ID.xmlName]?.substringAfterLast('/')
             val childId = if (requestedId != null && radioChildGroupIdPatterns.any { it.matches(requestedId) }) {
-                context.nextId("radio_button")
+                context.nextId(AndroidIdLabels.RADIO_BUTTON)
             } else {
-                context.resolveId(requestedId, "radio_button")
+                context.resolveId(requestedId, AndroidIdLabels.RADIO_BUTTON)
             }
 
-            val isChecked = box.label == "radio_button_checked" || parsedAttrs["android:checked"]?.equals("true", ignoreCase = true) == true
+            val isChecked = box.label == DetectionLabels.RADIO_BUTTON_CHECKED ||
+                parsedAttrs[AttributeKey.CHECKED.xmlName]?.equals(AndroidConstants.TRUE, ignoreCase = true) == true
             if (isChecked) {
                 checkedId = childId
-                parsedAttrs["android:checked"] = "true"
+                parsedAttrs[AttributeKey.CHECKED.xmlName] = AndroidConstants.TRUE
             } else {
-                parsedAttrs["android:checked"] = "false"
+                parsedAttrs[AttributeKey.CHECKED.xmlName] = AndroidConstants.FALSE
             }
 
-            val extraAttrs = if (item.orientation == "horizontal") {
+            val extraAttrs = if (item.orientation == AndroidConstants.ORIENTATION_HORIZONTAL) {
                 getMarginEndForHorizontalGap(item.boxes, index)
             } else emptyMap()
 
             createSimpleWidget(box, parsedAttrsOverride = parsedAttrs, idOverride = childId, extraAttrs = extraAttrs)
         }
 
-        val textStyleAttrs = setOf("android:textColor", "android:textSize", "android:textStyle", "android:fontFamily")
+        val textStyleAttrs = setOf(
+            AttributeKey.TEXT_COLOR.xmlName,
+            AttributeKey.TEXT_SIZE.xmlName,
+            AttributeKey.TEXT_STYLE.xmlName,
+            AttributeKey.FONT_FAMILY.xmlName
+        )
         val groupFinalAttrs = fullGroupAttrs.filterKeys { it !in textStyleAttrs }.toMutableMap()
-        groupFinalAttrs["android:id"] = groupId
+        groupFinalAttrs[AttributeKey.ID.xmlName] = groupId
 
         return listOf(RadioGroupWidget(groupFinalAttrs, children, item.orientation, checkedId))
     }
 
     private fun createCheckboxGroup(item: LayoutItem.CheckboxGroup): List<AndroidWidget> {
         val groupAnnotation = item.boxes.firstNotNullOfOrNull { annotations[it] }
-        val parsedAttrs = FuzzyAttributeParser.parse(groupAnnotation, "CheckBox")
+        val parsedAttrs = FuzzyAttributeParser.parse(groupAnnotation, AndroidWidgetTags.CHECK_BOX)
 
-        val requestedId = parsedAttrs["android:id"]?.substringAfterLast('/')
-        val baseId = if (requestedId != null && checkboxGroupIdPattern.matches(requestedId)) {
-            context.resolveId(requestedId, "cb_group")
-        } else {
-            context.nextId("cb_group", initialIndex = 1)
-        }
+        val requestedId = parsedAttrs[AttributeKey.ID.xmlName]?.substringAfterLast('/')
+        val baseId = resolveCheckboxGroupId(requestedId)
 
         return item.boxes.mapIndexed { index, box ->
             val suffix = ('a' + index).toString()
             val childId = "${baseId}_$suffix"
 
             val safeAttrs = parsedAttrs.toMutableMap()
-            safeAttrs.remove("android:id")
+            safeAttrs.remove(AttributeKey.ID.xmlName)
 
-            val extraAttrs = if (item.orientation == "horizontal") {
+            val extraAttrs = if (item.orientation == AndroidConstants.ORIENTATION_HORIZONTAL) {
                 getMarginEndForHorizontalGap(item.boxes, index)
             } else emptyMap()
 
@@ -160,7 +172,7 @@ class WidgetFactory(
             ?: FuzzyAttributeParser.parse(rawAnnotation, tag).toMutableMap()
 
         selectedImageOverrides[box]?.let { drawableReference ->
-            parsedAttrs["android:src"] = drawableReference
+            parsedAttrs[AttributeKey.SRC.xmlName] = drawableReference
         }
 
         return AndroidWidget.create(box, parsedAttrs).apply {
@@ -175,7 +187,7 @@ class WidgetFactory(
             .replace(Regex("^[vV]\\s+"), "")
             .trim()
 
-        return cleaned.takeIf { it.isNotBlank() && !it.equals("dropdown", ignoreCase = true) }
+        return cleaned.takeIf { it.isNotBlank() && !it.equals(DetectionLabels.DROPDOWN, ignoreCase = true) }
     }
 
     /** Calculates the non-negative horizontal gap to the next box as an end margin. */
@@ -184,7 +196,7 @@ class WidgetFactory(
         val currentBox = boxes[currentIndex]
         val nextBox = boxes[currentIndex + 1]
         val gap = maxOf(0, nextBox.x - (currentBox.x + currentBox.w))
-        return mapOf("android:layout_marginEnd" to "${gap}dp")
+        return mapOf(AttributeKey.LAYOUT_MARGIN_END.xmlName to "${gap}dp")
     }
 
     private fun resolveRadioGroupId(requestedId: String?): String {
@@ -192,10 +204,28 @@ class WidgetFactory(
         if (requestedId != null) {
             val normalizedId = requestedId.lowercase()
             when {
-                normalizedId.startsWith("radio_grou") -> cleanId = "radio_group"
-                normalizedId.startsWith("rb_grou") || normalizedId.startsWith("rb_group") -> cleanId = "rb_group"
+                normalizedId.startsWith("radio_grou") -> cleanId = AndroidIdLabels.RADIO_GROUP
+                normalizedId.startsWith("rb_grou") || normalizedId.startsWith(AndroidIdLabels.RADIO_BUTTON_GROUP) ->
+                    cleanId = AndroidIdLabels.RADIO_BUTTON_GROUP
             }
         }
-        return context.resolveId(cleanId, "radio_group")
+        return context.resolveId(cleanId, AndroidIdLabels.RADIO_GROUP)
+    }
+
+    private fun resolveCheckboxGroupId(requestedId: String?): String {
+        if (requestedId == null) return context.nextId(AndroidIdLabels.CHECKBOX_GROUP, initialIndex = 1)
+        if (IdPatterns.CHECKBOX_GROUP_ID.matches(requestedId)) {
+            return context.resolveId(requestedId, AndroidIdLabels.CHECKBOX_GROUP)
+        }
+
+        val compactId = requestedId.lowercase().replace(ResourceNamePatterns.NON_ALPHANUMERIC_LOWER, "")
+        val recoveredSuffix = IdPatterns.COMPACT_CHECKBOX_GROUP_ID.matchEntire(compactId)?.groupValues?.getOrNull(1)
+        val cleanId = recoveredSuffix?.let { "${AndroidIdLabels.CHECKBOX_GROUP}_$it" }
+
+        return if (cleanId != null) {
+            context.resolveId(cleanId, AndroidIdLabels.CHECKBOX_GROUP)
+        } else {
+            context.nextId(AndroidIdLabels.CHECKBOX_GROUP, initialIndex = 1)
+        }
     }
 }
