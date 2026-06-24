@@ -18,6 +18,11 @@ import android.widget.RadioButton
 import android.widget.RadioGroup
 import android.widget.TextView
 import android.widget.Toast
+import android.graphics.Color
+import android.view.ViewGroup.MarginLayoutParams
+import com.google.android.material.chip.Chip
+import com.google.android.material.chip.ChipGroup
+import java.io.File
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
@@ -30,6 +35,7 @@ import com.itsaky.androidide.plugins.aiassistant.viewmodel.ChatViewModel
 import com.itsaky.androidide.plugins.services.LlmInferenceService
 import com.itsaky.androidide.plugins.IPlugin
 import com.itsaky.androidide.plugins.PluginContext
+import com.itsaky.androidide.plugins.aiassistant.tool.ApprovalResult
 import kotlinx.coroutines.launch
 
 /**
@@ -43,11 +49,12 @@ class ChatFragment : Fragment() {
     private lateinit var inputEditText: EditText
     private lateinit var sendButton: Button
     private lateinit var statusTextView: TextView
-    private lateinit var progressBar: ProgressBar
-    private lateinit var clearButton: Button
     private lateinit var settingsButton: ImageButton
     private lateinit var chatAdapter: ChatAdapter
     private lateinit var markwon: Markwon
+    private lateinit var chipGroup: ChipGroup
+    private lateinit var addContextButton: ImageButton
+    private val contextFiles = mutableListOf<File>()
 
 
     override fun onCreateView(
@@ -145,39 +152,51 @@ class ChatFragment : Fragment() {
 
         mainContainer.addView(toolbar)
 
-        // Status bar
+        // Status bar (only for errors and backend availability)
         statusTextView = TextView(requireContext()).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             )
-            text = "Ready"
             textSize = 14f
             setPadding(8, 8, 8, 8)
+            visibility = View.GONE
         }
         mainContainer.addView(statusTextView)
 
-        // Progress bar
-        progressBar = ProgressBar(requireContext()).apply {
+        // Context chips container
+        val contextContainer = LinearLayout(requireContext()).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             )
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(8, 0, 8, 0)
             visibility = View.GONE
         }
-        mainContainer.addView(progressBar)
 
-        // Clear button
-        clearButton = Button(requireContext()).apply {
+        chipGroup = ChipGroup(requireContext()).apply {
             layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
+                0,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                1f
+            )
+        }
+        contextContainer.addView(chipGroup)
+
+        addContextButton = ImageButton(requireContext()).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             )
-            text = "Clear Chat"
-            setOnClickListener { onClearClicked() }
-            setPadding(8, 8, 8, 8)
+            setImageResource(android.R.drawable.ic_input_add)
+            background = null
+            setPadding(16, 16, 16, 16)
+            setOnClickListener { showFilePicker() }
         }
-        mainContainer.addView(clearButton)
+        contextContainer.addView(addContextButton)
+
+        mainContainer.addView(contextContainer)
 
         // Messages RecyclerView
         // Use plugin context for adapter to ensure proper resource inflation
@@ -255,35 +274,102 @@ class ChatFragment : Fragment() {
                 sendButton.isEnabled = isAvailable && viewModel.agentState.value is AgentState.Idle
                 if (!isAvailable) {
                     statusTextView.text = "No LLM backend available. Configure AI Core plugin."
-                } else if (statusTextView.text == "No LLM backend available. Configure AI Core plugin.") {
-                    statusTextView.text = "Ready"
+                    statusTextView.visibility = View.VISIBLE
+                } else {
+                    statusTextView.visibility = View.GONE
+                }
+            }
+        }
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewModel.pendingApprovalRequest.collect { request ->
+                if (request != null) {
+                    showApprovalDialog(request)
                 }
             }
         }
     }
 
+    private fun showApprovalDialog(request: com.itsaky.androidide.plugins.aiassistant.tool.ApprovalRequest) {
+        val dialog = ApprovalDialogFragment.newInstance(request) { result ->
+            viewModel.submitApproval(result)
+        }
+        dialog.show(parentFragmentManager, "approval_dialog")
+    }
+
+    private fun showFilePicker() {
+        // Start from AndroidIDE projects directory by default
+        val startPath = "/storage/emulated/0/AndroidIDEProjects"
+
+        val dialog = FilePickerDialogFragment.newInstance(startPath) { files ->
+            addContextFiles(files)
+        }
+        dialog.show(parentFragmentManager, "file_picker")
+    }
+
+    private fun addContextFiles(files: List<File>) {
+        files.forEach { file ->
+            if (!contextFiles.contains(file)) {
+                contextFiles.add(file)
+                addChipForFile(file)
+            }
+        }
+        updateContextVisibility()
+        viewModel.setContextFiles(contextFiles)
+    }
+
+    private fun addChipForFile(file: File) {
+        val chip = Chip(requireContext()).apply {
+            text = file.name
+            isCloseIconVisible = true
+            setOnCloseIconClickListener {
+                contextFiles.remove(file)
+                chipGroup.removeView(this)
+                updateContextVisibility()
+                viewModel.setContextFiles(contextFiles)
+            }
+        }
+        chipGroup.addView(chip)
+    }
+
+    private fun updateContextVisibility() {
+        val contextContainer = chipGroup.parent as? LinearLayout
+        contextContainer?.visibility = if (contextFiles.isEmpty()) View.GONE else View.VISIBLE
+    }
+
     private fun updateStatusUI(state: AgentState) {
         when (state) {
             is AgentState.Idle -> {
-                statusTextView.text = "Ready"
-                progressBar.visibility = View.GONE
+                statusTextView.visibility = View.GONE
                 sendButton.isEnabled = viewModel.isBackendAvailable.value
             }
+            is AgentState.Initializing -> {
+                statusTextView.text = state.message
+                statusTextView.visibility = View.VISIBLE
+                sendButton.isEnabled = false
+            }
+            is AgentState.Thinking -> {
+                statusTextView.text = state.thought
+                statusTextView.visibility = View.VISIBLE
+                sendButton.isEnabled = false
+            }
+            is AgentState.Executing -> {
+                statusTextView.text = "Step ${state.currentStepIndex + 1} of ${state.totalSteps}: ${state.description}"
+                statusTextView.visibility = View.VISIBLE
+                sendButton.isEnabled = false
+            }
             is AgentState.Processing -> {
-                statusTextView.text = "Processing: ${state.message}"
-                progressBar.visibility = View.VISIBLE
+                statusTextView.visibility = View.GONE
                 sendButton.isEnabled = false
             }
             is AgentState.Cancelling -> {
-                statusTextView.text = "Cancelling..."
-                progressBar.visibility = View.VISIBLE
+                statusTextView.visibility = View.GONE
                 sendButton.isEnabled = false
             }
             is AgentState.Error -> {
-                statusTextView.text = "Error: ${state.message}"
-                progressBar.visibility = View.GONE
+                // Errors are now shown as messages in the list, not in status bar
+                statusTextView.visibility = View.GONE
                 sendButton.isEnabled = viewModel.isBackendAvailable.value
-                Toast.makeText(requireContext(), "Error: ${state.message}", Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -323,10 +409,15 @@ class ChatFragment : Fragment() {
 
     private fun showSettingsMenu(anchor: View) {
         val popup = PopupMenu(requireContext(), anchor)
-        popup.menu.add(0, 1, 0, "Settings")
+        popup.menu.add(0, 1, 0, "Clear chat")
+        popup.menu.add(0, 2, 0, "Settings")
         popup.setOnMenuItemClickListener { item ->
             when (item.itemId) {
                 1 -> {
+                    onClearClicked()
+                    true
+                }
+                2 -> {
                     openSettingsFragment()
                     true
                 }

@@ -53,6 +53,7 @@ class ChatAdapter(
         val messageContent: TextView = view.findViewById(R.id.message_content)
         val messageMetadataContainer: LinearLayout = view.findViewById(R.id.message_metadata_container)
         val messageTimestamp: TextView = view.findViewById(R.id.message_timestamp)
+        val generatingDots: TextView = view.findViewById(R.id.generating_dots)
         val messageDuration: TextView = view.findViewById(R.id.message_duration)
         val btnRetry: Button = view.findViewById(R.id.btn_retry)
     }
@@ -106,20 +107,36 @@ class ChatAdapter(
             // Handle payload update
             val payload = payloads[0]
             if (payload is TextUpdatePayload && holder is DefaultMessageViewHolder) {
+                val message = getItem(position)
                 // Only update the text content and status, don't rebind everything
                 when (payload.status) {
                     MessageStatus.LOADING -> {
                         holder.loadingIndicator.visibility = View.VISIBLE
                         holder.messageContent.visibility = View.GONE
+                        holder.generatingDots.visibility = View.GONE
                     }
-                    MessageStatus.SENT, MessageStatus.COMPLETED -> {
+                    MessageStatus.SENT -> {
                         holder.loadingIndicator.visibility = View.GONE
                         holder.messageContent.visibility = View.VISIBLE
+                        markwon.setMarkdown(holder.messageContent, payload.text)
+
+                        // Show dots animation for AGENT messages being generated
+                        if (message.sender == Sender.AGENT && message.durationMs == null) {
+                            animateGeneratingDots(holder)
+                        } else {
+                            holder.generatingDots.visibility = View.GONE
+                        }
+                    }
+                    MessageStatus.COMPLETED -> {
+                        holder.loadingIndicator.visibility = View.GONE
+                        holder.messageContent.visibility = View.VISIBLE
+                        holder.generatingDots.visibility = View.GONE
                         markwon.setMarkdown(holder.messageContent, payload.text)
                     }
                     MessageStatus.ERROR -> {
                         holder.loadingIndicator.visibility = View.GONE
                         holder.messageContent.visibility = View.VISIBLE
+                        holder.generatingDots.visibility = View.GONE
                         holder.messageContent.text = payload.text
                     }
                 }
@@ -151,10 +168,25 @@ class ChatAdapter(
                 holder.btnRetry.visibility = View.GONE
                 holder.messageMetadataContainer.visibility = View.GONE
             }
-            MessageStatus.SENT, MessageStatus.COMPLETED -> {
+            MessageStatus.SENT -> {
                 holder.loadingIndicator.visibility = View.GONE
                 holder.messageContent.visibility = View.VISIBLE
                 holder.btnRetry.visibility = View.GONE
+                markwon.setMarkdown(holder.messageContent, message.text)
+                updateMessageMetadata(holder, message)
+
+                // Show dots animation for AGENT messages being generated
+                if (message.sender == Sender.AGENT && message.durationMs == null) {
+                    animateGeneratingDots(holder)
+                } else {
+                    holder.generatingDots.visibility = View.GONE
+                }
+            }
+            MessageStatus.COMPLETED -> {
+                holder.loadingIndicator.visibility = View.GONE
+                holder.messageContent.visibility = View.VISIBLE
+                holder.btnRetry.visibility = View.GONE
+                holder.generatingDots.visibility = View.GONE
                 markwon.setMarkdown(holder.messageContent, message.text)
                 updateMessageMetadata(holder, message)
             }
@@ -162,6 +194,7 @@ class ChatAdapter(
                 holder.loadingIndicator.visibility = View.GONE
                 holder.messageContent.visibility = View.VISIBLE
                 holder.btnRetry.visibility = View.VISIBLE
+                holder.generatingDots.visibility = View.GONE
                 holder.messageContent.text = message.text
                 if (message.sender == Sender.SYSTEM) {
                     holder.btnRetry.text = "Open AI Settings"
@@ -205,6 +238,24 @@ class ChatAdapter(
             holder.messageContent.visibility = View.GONE
             holder.expandIcon.rotation = 0f
         }
+    }
+
+    private fun animateGeneratingDots(holder: DefaultMessageViewHolder) {
+        holder.generatingDots.visibility = View.VISIBLE
+        val dotStates = arrayOf(".", "..", "...")
+        var currentIndex = 0
+
+        val handler = android.os.Handler(android.os.Looper.getMainLooper())
+        val runnable = object : Runnable {
+            override fun run() {
+                if (holder.generatingDots.visibility == View.VISIBLE) {
+                    holder.generatingDots.text = dotStates[currentIndex]
+                    currentIndex = (currentIndex + 1) % dotStates.size
+                    handler.postDelayed(this, 500)
+                }
+            }
+        }
+        handler.post(runnable)
     }
 
     private fun createPreview(rawText: String): String {

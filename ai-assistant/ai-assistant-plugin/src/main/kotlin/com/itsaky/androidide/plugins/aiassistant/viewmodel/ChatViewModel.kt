@@ -7,6 +7,17 @@ import com.itsaky.androidide.plugins.aiassistant.models.AgentState
 import com.itsaky.androidide.plugins.aiassistant.models.ChatMessage
 import com.itsaky.androidide.plugins.aiassistant.models.MessageStatus
 import com.itsaky.androidide.plugins.aiassistant.models.Sender
+import com.itsaky.androidide.plugins.aiassistant.tool.Executor
+import com.itsaky.androidide.plugins.aiassistant.tool.ToolApprovalManager
+import com.itsaky.androidide.plugins.aiassistant.tool.ToolCall
+import com.itsaky.androidide.plugins.aiassistant.tool.ToolRouter
+import com.itsaky.androidide.plugins.aiassistant.tool.ApprovalRequest
+import com.itsaky.androidide.plugins.aiassistant.tool.ApprovalResult
+import com.itsaky.androidide.plugins.aiassistant.tool.handlers.CreateFileHandler
+import com.itsaky.androidide.plugins.aiassistant.tool.handlers.ListFilesHandler
+import com.itsaky.androidide.plugins.aiassistant.tool.handlers.ReadFileHandler
+import com.itsaky.androidide.plugins.aiassistant.tool.handlers.SearchProjectHandler
+import com.itsaky.androidide.plugins.aiassistant.tool.handlers.UpdateFileHandler
 import com.itsaky.androidide.plugins.services.LlmInferenceService
 import com.itsaky.androidide.plugins.services.SharedServices
 import kotlinx.coroutines.Dispatchers
@@ -15,6 +26,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import org.json.JSONObject
+import java.io.File
 import java.util.UUID
 
 /**
@@ -46,6 +59,153 @@ class ChatViewModel(
     val isBackendAvailable: StateFlow<Boolean> = _isBackendAvailable.asStateFlow()
 
     private var currentBackendId: String = "local" // Default to local backend
+
+    // Tool execution infrastructure
+    private val approvalManager = ToolApprovalManager()
+    private val toolRouter: ToolRouter
+    private val executor: Executor
+
+    private val _pendingApprovalRequest = MutableStateFlow<ApprovalRequest?>(null)
+    val pendingApprovalRequest: StateFlow<ApprovalRequest?> = _pendingApprovalRequest.asStateFlow()
+
+    private var contextFiles = listOf<File>()
+
+    init {
+        // Initialize tool handlers
+        val context = getContext()
+        val handlers = if (context != null) {
+            listOf(
+                ReadFileHandler(context),
+                ListFilesHandler(context),
+                SearchProjectHandler(context),
+                CreateFileHandler(context),
+                UpdateFileHandler(context)
+            )
+        } else {
+            emptyList()
+        }
+
+        toolRouter = ToolRouter(handlers)
+        executor = Executor(toolRouter, approvalManager)
+
+        // Monitor approval requests
+        viewModelScope.launch {
+            while (true) {
+                delay(100) // Poll every 100ms
+                val request = approvalManager.getCurrentApprovalRequest()
+                if (request != _pendingApprovalRequest.value) {
+                    _pendingApprovalRequest.value = request
+                }
+            }
+        }
+    }
+
+    /**
+     * Submit user's approval decision.
+     */
+    fun submitApproval(result: ApprovalResult) {
+        approvalManager.submitApproval(result)
+        _pendingApprovalRequest.value = null
+    }
+
+    /**
+     * Set context files to include in prompts.
+     */
+    fun setContextFiles(files: List<File>) {
+        contextFiles = files
+    }
+
+    /**
+     * Build context string from selected files.
+     */
+    private fun buildContextString(): String {
+        if (contextFiles.isEmpty()) return ""
+
+        val contextBuilder = StringBuilder()
+        contextBuilder.append("\n\nCONTEXT FILES:\n\n")
+
+        contextFiles.forEach { file ->
+            if (file.exists() && file.isFile) {
+                try {
+                    val content = file.readText()
+                    contextBuilder.append("=== ${file.name} ===\n")
+                    contextBuilder.append(content)
+                    contextBuilder.append("\n\n")
+                } catch (e: Exception) {
+                    android.util.Log.e("ChatViewModel", "Error reading context file ${file.name}: ${e.message}")
+                }
+            }
+        }
+
+        return contextBuilder.toString()
+    }
+
+    /**
+     * Parse tool calls from text.
+     * Looks for JSON objects with tool call structure.
+     */
+    private fun parseToolCalls(text: String): List<ToolCall> {
+        val toolCalls = mutableListOf<ToolCall>()
+
+        // Look for tool call patterns: {"tool":"name","args":{...}}
+        val toolCallRegex = Regex("""<tool_call>\s*(\{[^}]+\})\s*</tool_call>""")
+        val matches = toolCallRegex.findAll(text)
+
+        for (match in matches) {
+            try {
+                val jsonStr = match.groupValues[1]
+                val json = JSONObject(jsonStr)
+                val toolName = json.optString("tool") ?: json.optString("name") ?: continue
+                val argsJson = json.optJSONObject("args") ?: json.optJSONObject("arguments") ?: JSONObject()
+
+                val args = mutableMapOf<String, Any?>()
+                val keys = argsJson.keys()
+                while (keys.hasNext()) {
+                    val key = keys.next()
+                    args[key] = argsJson.get(key)
+                }
+
+                toolCalls.add(ToolCall(toolName, args))
+            } catch (e: Exception) {
+                android.util.Log.e("ChatViewModel", "Error parsing tool call: ${e.message}")
+            }
+        }
+
+        return toolCalls
+    }
+
+    /**
+     * Execute tool calls and add results to chat.
+     */
+    private suspend fun executeToolCalls(toolCalls: List<ToolCall>) {
+        if (toolCalls.isEmpty()) return
+
+        _agentState.value = AgentState.Executing(
+            currentStepIndex = 0,
+            totalSteps = toolCalls.size,
+            description = toolCalls.first().name
+        )
+
+        val results = executor.execute(toolCalls)
+
+        // Add tool results as messages
+        results.forEachIndexed { index, result ->
+            val toolCall = toolCalls[index]
+            val resultMessage = ChatMessage(
+                id = UUID.randomUUID().toString(),
+                text = if (result.success) {
+                    "${toolCall.name}: ${result.message}\n${result.data ?: ""}"
+                } else {
+                    "${toolCall.name} failed: ${result.message}\n${result.error_details ?: ""}"
+                },
+                sender = Sender.TOOL,
+                status = if (result.success) MessageStatus.SENT else MessageStatus.ERROR
+            )
+            _messages.value = _messages.value + resultMessage
+        }
+
+        _agentState.value = AgentState.Idle
+    }
 
     /**
      * Check if any LLM backend is available.
@@ -165,11 +325,20 @@ class ChatViewModel(
                     systemPrompt = "You are a helpful coding assistant integrated into AndroidIDE."
                 }
 
+                // Build message with context if any files are selected
+                val messageWithContext = buildString {
+                    append(userMessage)
+                    val context = buildContextString()
+                    if (context.isNotEmpty()) {
+                        append(context)
+                    }
+                }
+
                 // Accumulated response text
                 val responseBuilder = StringBuilder()
 
                 // Use streaming API with callback
-                llmService.generateStreaming(userMessage, config, object : LlmInferenceService.StreamCallback {
+                llmService.generateStreaming(messageWithContext, config, object : LlmInferenceService.StreamCallback {
                     override fun onToken(token: String) {
                         viewModelScope.launch(Dispatchers.Main) {
                             // Accumulate token
@@ -187,23 +356,34 @@ class ChatViewModel(
                     }
 
                     override fun onComplete(response: LlmInferenceService.LlmResponse) {
-                        viewModelScope.launch(Dispatchers.Main) {
+                        viewModelScope.launch(Dispatchers.IO) {
                             val durationMs = System.currentTimeMillis() - startTime
+                            val finalText = responseBuilder.toString()
 
                             // Mark message as completed with final text
-                            _messages.value = _messages.value.map { msg ->
-                                if (msg.id == agentMessageId) {
-                                    msg.copy(
-                                        text = responseBuilder.toString(),
-                                        status = MessageStatus.COMPLETED,
-                                        durationMs = durationMs
-                                    )
-                                } else {
-                                    msg
+                            launch(Dispatchers.Main) {
+                                _messages.value = _messages.value.map { msg ->
+                                    if (msg.id == agentMessageId) {
+                                        msg.copy(
+                                            text = finalText,
+                                            status = MessageStatus.COMPLETED,
+                                            durationMs = durationMs
+                                        )
+                                    } else {
+                                        msg
+                                    }
                                 }
                             }
 
-                            _agentState.value = AgentState.Idle
+                            // Parse and execute tool calls if any
+                            val toolCalls = parseToolCalls(finalText)
+                            if (toolCalls.isNotEmpty()) {
+                                executeToolCalls(toolCalls)
+                            } else {
+                                launch(Dispatchers.Main) {
+                                    _agentState.value = AgentState.Idle
+                                }
+                            }
                         }
                     }
 

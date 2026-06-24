@@ -36,3 +36,18 @@
 -keepattributes *Annotation*
 -keepattributes Signature
 -keepattributes Exceptions
+
+# Keep Kotlin lambdas and function types - CRITICAL for TabItem.fragmentFactory
+-keep class kotlin.jvm.functions.** { *; }
+-keep class kotlin.jvm.internal.** { *; }
+-keepclassmembers class ** {
+    kotlin.jvm.functions.Function0 fragmentFactory;
+}
+
+# Don't obfuscate lambda implementations
+-keep class **$$Lambda$* { *; }
+
+# Keep synthetic methods (lambdas)
+-keepclassmembers class * {
+    synthetic <methods>;
+}
