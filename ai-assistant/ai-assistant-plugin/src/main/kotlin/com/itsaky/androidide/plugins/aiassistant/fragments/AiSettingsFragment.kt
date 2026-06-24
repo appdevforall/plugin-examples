@@ -30,6 +30,14 @@ class AiSettingsFragment : DialogFragment() {
     private lateinit var backendSpinner: Spinner
     private lateinit var backendSpecificContainer: FrameLayout
 
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        // Disable Material transitions to avoid resource loading issues
+        // Plugin uses compileOnly dependencies, so Material transition resources aren't bundled
+        enterTransition = null
+        exitTransition = null
+    }
+
     private val filePickerLauncher =
         registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
             uri?.let {

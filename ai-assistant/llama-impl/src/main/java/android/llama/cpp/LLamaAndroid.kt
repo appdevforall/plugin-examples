@@ -34,8 +34,14 @@ private object NativeLibraryLoader {
                 loaded = true
                 log.info("Successfully loaded llama-android native library")
             } catch (e: UnsatisfiedLinkError) {
-                log.error("Failed to load llama-android native library", e)
-                throw e
+                // Check if the error is because library is already loaded by another ClassLoader
+                if (e.message?.contains("already opened") == true) {
+                    log.warn("Native library already loaded by another ClassLoader - continuing anyway")
+                    loaded = true // Mark as loaded to prevent retries
+                } else {
+                    log.error("Failed to load llama-android native library", e)
+                    throw e
+                }
             }
         }
     }
@@ -325,7 +331,7 @@ class LLamaAndroid : ILlamaController {
         private class IntVar(value: Int) {
             @Volatile
             var value: Int = value
-                private set
+                // Removed private set to allow JNI to call getValue()
 
             fun inc() {
                 synchronized(this) {

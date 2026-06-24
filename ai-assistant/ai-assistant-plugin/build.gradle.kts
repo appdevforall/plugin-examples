@@ -20,10 +20,21 @@ android {
         versionName = "2.0.0"
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = file("${System.getProperty("user.home")}/.android/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
         release {
-            isMinifyEnabled = true
-            isShrinkResources = true
+            // Disable minification to avoid lambda obfuscation issues with ClassLoader isolation
+            isMinifyEnabled = false
+            isShrinkResources = false
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
@@ -49,13 +60,13 @@ android {
 dependencies {
     compileOnly(project(":plugin-api"))
 
-    implementation("androidx.appcompat:appcompat:1.6.1")
-    implementation("androidx.fragment:fragment-ktx:1.6.2")
-    implementation("com.google.android.material:material:1.10.0")
-    implementation("org.jetbrains.kotlin:kotlin-stdlib:2.3.0")
-    implementation("androidx.recyclerview:recyclerview:1.3.2")
+    // Use app's androidx libraries to avoid ClassLoader conflicts
+    compileOnly("androidx.appcompat:appcompat:1.6.1")
+    compileOnly("androidx.fragment:fragment-ktx:1.6.2")
+    compileOnly("com.google.android.material:material:1.10.0")
+    compileOnly("androidx.recyclerview:recyclerview:1.3.2")
 
-    // Markdown rendering
+    // Markdown rendering - plugin-specific library
     implementation("io.noties.markwon:core:4.6.2")
 
     // Plugin dependencies are loaded at runtime by the plugin manager
