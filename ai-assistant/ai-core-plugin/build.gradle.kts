@@ -1,6 +1,6 @@
 plugins {
-    id("com.android.application") version "8.13.2"
-    id("org.jetbrains.kotlin.android") version "2.3.0"
+    id("com.android.application")
+    id("org.jetbrains.kotlin.android")
     id("com.itsaky.androidide.plugins.build")
 }
 
@@ -57,6 +57,4 @@ dependencies {
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("io.mockk:mockk:1.13.8")
-    testImplementation(project(":plugin-api"))
-    testImplementation(project(":plugin-manager"))
 }

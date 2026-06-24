@@ -1,6 +1,8 @@
-# AI Assistant Plugins for AndroidIDE
+# AI Assistant Plugins for CodeOnTheGo
 
-A collection of AI-powered plugins that enable on-device LLM inference and intelligent code assistance in AndroidIDE.
+A collection of AI-powered plugins that enable on-device LLM inference and intelligent code assistance in CodeOnTheGo (AndroidIDE).
+
+> **📖 New Builder? Start with [BUILDING.md](BUILDING.md)** for complete setup instructions including llama.cpp dependency.
 
 ## Overview
 
@@ -8,11 +10,24 @@ This is a multi-module project containing plugins that work together to provide 
 
 ### Modules
 
-1. **plugin-api** - AndroidIDE Plugin SDK (shared dependency)
+1. **plugin-api** - CodeOnTheGo Plugin SDK (shared dependency)
 2. **llama-api** - Kotlin interfaces for llama.cpp integration
 3. **llama-impl** - Native implementation of llama.cpp for Android with JNI bindings
 4. **ai-core-plugin** - Backend plugin providing LLM inference services
 5. **ai-assistant-plugin** - Frontend plugin with chat UI for AI interaction
+
+### llama.cpp Dependency
+
+This project requires [llama.cpp](https://github.com/ggml-org/llama.cpp) to be cloned as a **sibling directory** to plugin-examples:
+
+```
+cogo/
+├── plugin-examples/        # This repo
+│   └── ai-assistant/
+└── llama.cpp/              # Required: clone from https://github.com/ggml-org/llama.cpp
+```
+
+See [BUILDING.md](BUILDING.md) for detailed setup instructions.
 
 ### Architecture
 
@@ -50,26 +65,35 @@ This is a multi-module project containing plugins that work together to provide 
 
 ## Building
 
-### Prerequisites
+> **📖 See [BUILDING.md](BUILDING.md)** for complete build instructions, including:
+> - llama.cpp setup and dependency resolution
+> - NDK installation and configuration
+> - Troubleshooting common build issues
+> - Development workflow tips
 
+### Quick Start
+
+**Prerequisites:**
 - Android SDK (API 33+)
-- NDK for native code compilation
+- Android NDK (r26+)
 - JDK 17+
+- **llama.cpp** cloned in sibling directory (see [BUILDING.md](BUILDING.md#step-1-clone-llamacpp))
 
-### Build Commands
+**Build Commands:**
 
 ```bash
-# Build AI Core plugin (backend)
-./gradlew :ai-core-plugin:assembleV8Debug
+# 1. Clone llama.cpp (if not already done)
+cd .. && git clone https://github.com/ggml-org/llama.cpp.git && cd ai-assistant
 
-# Build AI Assistant plugin (frontend)
-./gradlew :ai-assistant-plugin:assembleV8Debug
-
-# Build all plugins
+# 2. Build plugins
 ./gradlew assembleV8Debug
+
+# 3. Rename outputs to .cgp
+mv ai-core-plugin/build/outputs/apk/v8/debug/*.apk ai-core-plugin.cgp
+mv ai-assistant-plugin/build/outputs/apk/v8/debug/*.apk ai-assistant-plugin.cgp
 ```
 
-Output APKs:
+**Output Locations:**
 - `ai-core-plugin/build/outputs/apk/v8/debug/ai-core-plugin-v8-debug.apk`
 - `ai-assistant-plugin/build/outputs/apk/v8/debug/ai-assistant-plugin-v8-debug.apk`
 
