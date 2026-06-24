@@ -142,17 +142,18 @@ class ChatViewModel(
                 )
                 _messages.value = _messages.value + userChatMessage
 
-                // Add loading message for agent
-                val loadingMessage = ChatMessage(
-                    id = UUID.randomUUID().toString(),
+                // Add empty agent message that will be updated with streaming tokens
+                val agentMessageId = UUID.randomUUID().toString()
+                val agentMessage = ChatMessage(
+                    id = agentMessageId,
                     text = "",
                     sender = Sender.AGENT,
-                    status = MessageStatus.LOADING
+                    status = MessageStatus.SENT  // SENT so text is visible immediately
                 )
-                _messages.value = _messages.value + loadingMessage
+                _messages.value = _messages.value + agentMessage
 
                 // Set processing state
-                _agentState.value = AgentState.Processing("Thinking...")
+                _agentState.value = AgentState.Processing("Generating...")
 
                 // Record start time
                 val startTime = System.currentTimeMillis()
@@ -164,74 +165,60 @@ class ChatViewModel(
                     systemPrompt = "You are a helpful coding assistant integrated into AndroidIDE."
                 }
 
-                // Build conversation history for context (excluding loading message)
-                val history = _messages.value
-                    .filter { it.id != userChatMessage.id && it.id != loadingMessage.id }
-                    .filter { it.status == MessageStatus.SENT || it.status == MessageStatus.COMPLETED }
-                    .map { msg ->
-                        LlmInferenceService.ChatMessage(
-                            if (msg.sender == Sender.USER) LlmInferenceService.ChatMessage.Role.USER
-                            else LlmInferenceService.ChatMessage.Role.ASSISTANT,
-                            msg.text
-                        )
+                // Accumulated response text
+                val responseBuilder = StringBuilder()
+
+                // Use streaming API with callback
+                llmService.generateStreaming(userMessage, config, object : LlmInferenceService.StreamCallback {
+                    override fun onToken(token: String) {
+                        viewModelScope.launch(Dispatchers.Main) {
+                            // Accumulate token
+                            responseBuilder.append(token)
+
+                            // Update the message with new text using map() to trigger DiffUtil
+                            _messages.value = _messages.value.map { msg ->
+                                if (msg.id == agentMessageId) {
+                                    msg.copy(text = responseBuilder.toString())
+                                } else {
+                                    msg
+                                }
+                            }
+                        }
                     }
 
-                // Generate response with conversation history
-                val future = if (history.isEmpty()) {
-                    llmService.generateCompletion(userMessage, config)
-                } else {
-                    llmService.generateWithHistory(history, userMessage, config)
-                }
+                    override fun onComplete(response: LlmInferenceService.LlmResponse) {
+                        viewModelScope.launch(Dispatchers.Main) {
+                            val durationMs = System.currentTimeMillis() - startTime
 
-                // Wait for the response
-                future.whenComplete { response, throwable ->
-                    viewModelScope.launch(Dispatchers.Main) {
-                        // Calculate duration
-                        val durationMs = System.currentTimeMillis() - startTime
-
-                        // Remove loading message
-                        _messages.value = _messages.value.filter { it.id != loadingMessage.id }
-
-                        if (throwable != null) {
-                            _agentState.value = AgentState.Error("Error: ${throwable.message}")
-                            // Add error message
-                            val errorMessage = ChatMessage(
-                                id = UUID.randomUUID().toString(),
-                                text = "Error: ${throwable.message}",
-                                sender = Sender.SYSTEM,
-                                status = MessageStatus.ERROR,
-                                durationMs = durationMs
-                            )
-                            _messages.value = _messages.value + errorMessage
-                        } else if (response != null) {
-                            if (response.success && response.text != null) {
-                                // Add agent response
-                                val agentChatMessage = ChatMessage(
-                                    id = UUID.randomUUID().toString(),
-                                    text = response.text,
-                                    sender = Sender.AGENT,
-                                    status = MessageStatus.COMPLETED,
-                                    durationMs = durationMs
-                                )
-                                _messages.value = _messages.value + agentChatMessage
-                                _agentState.value = AgentState.Idle
-                            } else {
-                                val errorMsg = response.error ?: "Failed to generate response"
-                                _agentState.value = AgentState.Error(errorMsg)
-                                val errorMessage = ChatMessage(
-                                    id = UUID.randomUUID().toString(),
-                                    text = errorMsg,
-                                    sender = Sender.SYSTEM,
-                                    status = MessageStatus.ERROR,
-                                    durationMs = durationMs
-                                )
-                                _messages.value = _messages.value + errorMessage
+                            // Mark message as completed with final text
+                            _messages.value = _messages.value.map { msg ->
+                                if (msg.id == agentMessageId) {
+                                    msg.copy(
+                                        text = responseBuilder.toString(),
+                                        status = MessageStatus.COMPLETED,
+                                        durationMs = durationMs
+                                    )
+                                } else {
+                                    msg
+                                }
                             }
-                        } else {
-                            _agentState.value = AgentState.Error("No response received")
+
+                            _agentState.value = AgentState.Idle
+                        }
+                    }
+
+                    override fun onError(error: String) {
+                        viewModelScope.launch(Dispatchers.Main) {
+                            val durationMs = System.currentTimeMillis() - startTime
+
+                            // Remove the agent message
+                            _messages.value = _messages.value.filter { it.id != agentMessageId }
+
+                            // Add error message
+                            _agentState.value = AgentState.Error(error)
                             val errorMessage = ChatMessage(
                                 id = UUID.randomUUID().toString(),
-                                text = "No response received",
+                                text = error,
                                 sender = Sender.SYSTEM,
                                 status = MessageStatus.ERROR,
                                 durationMs = durationMs
@@ -239,7 +226,8 @@ class ChatViewModel(
                             _messages.value = _messages.value + errorMessage
                         }
                     }
-                }
+                })
+
             } catch (e: Exception) {
                 _agentState.value = AgentState.Error("Error: ${e.message}")
                 val errorMessage = ChatMessage(

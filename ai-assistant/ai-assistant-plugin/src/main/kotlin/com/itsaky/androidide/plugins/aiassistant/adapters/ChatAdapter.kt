@@ -98,6 +98,41 @@ class ChatAdapter(
         }
     }
 
+    override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int, payloads: MutableList<Any>) {
+        if (payloads.isEmpty()) {
+            // No payload, do full bind
+            onBindViewHolder(holder, position)
+        } else {
+            // Handle payload update
+            val payload = payloads[0]
+            if (payload is TextUpdatePayload && holder is DefaultMessageViewHolder) {
+                // Only update the text content and status, don't rebind everything
+                when (payload.status) {
+                    MessageStatus.LOADING -> {
+                        holder.loadingIndicator.visibility = View.VISIBLE
+                        holder.messageContent.visibility = View.GONE
+                    }
+                    MessageStatus.SENT, MessageStatus.COMPLETED -> {
+                        holder.loadingIndicator.visibility = View.GONE
+                        holder.messageContent.visibility = View.VISIBLE
+                        markwon.setMarkdown(holder.messageContent, payload.text)
+                    }
+                    MessageStatus.ERROR -> {
+                        holder.loadingIndicator.visibility = View.GONE
+                        holder.messageContent.visibility = View.VISIBLE
+                        holder.messageContent.text = payload.text
+                    }
+                }
+            } else if (payload is TextUpdatePayload && holder is SystemMessageViewHolder) {
+                markwon.setMarkdown(holder.messageContent, payload.text)
+                updateSystemMessageExpansion(holder, getItem(position))
+            } else {
+                // Unknown payload, do full bind
+                onBindViewHolder(holder, position)
+            }
+        }
+    }
+
     private fun bindDefaultMessage(holder: DefaultMessageViewHolder, message: ChatMessage) {
         holder.messageSender.text = message.sender.name.lowercase(Locale.getDefault())
             .replaceFirstChar { it.titlecase(Locale.getDefault()) }
@@ -268,5 +303,17 @@ class ChatAdapter(
         override fun areContentsTheSame(oldItem: ChatMessage, newItem: ChatMessage): Boolean {
             return oldItem == newItem
         }
+
+        override fun getChangePayload(oldItem: ChatMessage, newItem: ChatMessage): Any? {
+            // If only the text or status changed, return a payload to avoid full rebind
+            if (oldItem.id == newItem.id &&
+                (oldItem.text != newItem.text || oldItem.status != newItem.status)) {
+                return TextUpdatePayload(newItem.text, newItem.status)
+            }
+            return null
+        }
     }
+
+    // Payload for partial updates
+    data class TextUpdatePayload(val text: String, val status: MessageStatus)
 }
