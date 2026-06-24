@@ -13,6 +13,13 @@ object AndroidConstants {
     const val DEFAULT_TEXT_SIZE = "16sp"
 }
 
+object AndroidIdLabels {
+    const val CHECKBOX_GROUP = "cb_group"
+    const val RADIO_BUTTON = "radio_button"
+    const val RADIO_GROUP = "radio_group"
+    const val RADIO_BUTTON_GROUP = "rb_group"
+}
+
 object AndroidWidgetTags {
     const val LINEAR_LAYOUT = "LinearLayout"
     const val RADIO_GROUP = "RadioGroup"
