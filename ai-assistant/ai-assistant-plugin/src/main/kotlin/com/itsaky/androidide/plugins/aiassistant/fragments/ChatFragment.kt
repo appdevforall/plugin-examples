@@ -55,6 +55,9 @@ class ChatFragment : Fragment() {
     private lateinit var chipGroup: ChipGroup
     private lateinit var addContextButton: ImageButton
     private val contextFiles = mutableListOf<File>()
+    private lateinit var scrollToBottomButton: Button
+    private var isUserScrolledUp = false
+    private var isStreamingActive = false
 
 
     override fun onCreateView(
@@ -198,6 +201,15 @@ class ChatFragment : Fragment() {
 
         mainContainer.addView(contextContainer)
 
+        // Messages container with RecyclerView and scroll button
+        val messagesContainer = FrameLayout(requireContext()).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                0,
+                1f
+            )
+        }
+
         // Messages RecyclerView
         // Use plugin context for adapter to ensure proper resource inflation
         val pluginContext = getPluginContext()?.androidContext ?: requireContext()
@@ -205,17 +217,46 @@ class ChatFragment : Fragment() {
             onMessageAction(action, message)
         }
         messagesRecyclerView = RecyclerView(requireContext()).apply {
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                0,
-                1f
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
             )
             layoutManager = LinearLayoutManager(requireContext()).apply {
                 stackFromEnd = true
             }
             adapter = chatAdapter
+            clipToPadding = false
+            clipChildren = false
+
+            // Add scroll listener to detect manual scrolling
+            addOnScrollListener(object : RecyclerView.OnScrollListener() {
+                override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+                    super.onScrolled(recyclerView, dx, dy)
+                    updateScrollState()
+                }
+            })
         }
-        mainContainer.addView(messagesRecyclerView)
+        messagesContainer.addView(messagesRecyclerView)
+
+        // Scroll to bottom button (initially hidden)
+        scrollToBottomButton = Button(requireContext()).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                gravity = Gravity.BOTTOM or Gravity.END
+                setMargins(0, 0, 16, 16)
+            }
+            text = "↓"
+            textSize = 20f
+            visibility = View.GONE
+            setOnClickListener {
+                scrollToBottom(smooth = true)
+            }
+        }
+        messagesContainer.addView(scrollToBottomButton)
+
+        mainContainer.addView(messagesContainer)
 
         // Input container
         val inputContainer = LinearLayout(requireContext()).apply {
@@ -257,8 +298,10 @@ class ChatFragment : Fragment() {
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.messages.collect { messages ->
                 chatAdapter.submitList(messages)
-                if (messages.isNotEmpty()) {
-                    messagesRecyclerView.scrollToPosition(messages.size - 1)
+
+                // Smart auto-scroll: only scroll if user hasn't manually scrolled up
+                if (messages.isNotEmpty() && !isUserScrolledUp) {
+                    scrollToBottom(smooth = false)
                 }
             }
         }
@@ -266,6 +309,14 @@ class ChatFragment : Fragment() {
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.agentState.collect { state ->
                 updateStatusUI(state)
+
+                // Track streaming state
+                isStreamingActive = state is AgentState.Processing
+                if (isStreamingActive) {
+                    // Reset scroll state when streaming starts
+                    isUserScrolledUp = false
+                    scrollToBottomButton.visibility = View.GONE
+                }
             }
         }
 
@@ -433,6 +484,63 @@ class ChatFragment : Fragment() {
         settingsFragment.show(parentFragmentManager, "ai_settings")
     }
 
+    /**
+     * Check if RecyclerView is at the bottom.
+     * Returns true if within 100px of the bottom.
+     */
+    private fun isAtBottom(): Boolean {
+        val layoutManager = messagesRecyclerView.layoutManager as? LinearLayoutManager ?: return true
+        val lastVisiblePosition = layoutManager.findLastVisibleItemPosition()
+        val lastItemPosition = chatAdapter.itemCount - 1
+
+        // If last item is visible or close to visible, consider at bottom
+        if (lastVisiblePosition >= lastItemPosition - 1) {
+            // Also check if last item is fully visible
+            val lastView = layoutManager.findViewByPosition(lastItemPosition)
+            if (lastView != null) {
+                val bottom = lastView.bottom
+                val recyclerBottom = messagesRecyclerView.height - messagesRecyclerView.paddingBottom
+                return bottom <= recyclerBottom + 100 // 100px threshold
+            }
+            return true
+        }
+        return false
+    }
+
+    /**
+     * Update scroll state and show/hide scroll button.
+     */
+    private fun updateScrollState() {
+        val atBottom = isAtBottom()
+
+        // Only mark as scrolled up if streaming is active
+        if (isStreamingActive) {
+            isUserScrolledUp = !atBottom
+
+            // Show/hide scroll button
+            if (isUserScrolledUp) {
+                scrollToBottomButton.visibility = View.VISIBLE
+            } else {
+                scrollToBottomButton.visibility = View.GONE
+            }
+        }
+    }
+
+    /**
+     * Scroll to bottom of messages.
+     */
+    private fun scrollToBottom(smooth: Boolean) {
+        val position = chatAdapter.itemCount - 1
+        if (position >= 0) {
+            if (smooth) {
+                messagesRecyclerView.smoothScrollToPosition(position)
+            } else {
+                messagesRecyclerView.scrollToPosition(position)
+            }
+            isUserScrolledUp = false
+            scrollToBottomButton.visibility = View.GONE
+        }
+    }
 
     override fun onDestroyView() {
         super.onDestroyView()

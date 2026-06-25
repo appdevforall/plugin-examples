@@ -1,8 +1,10 @@
 package com.itsaky.androidide.plugins.aicore
 
 import com.google.genai.Client
+import com.google.genai.ResponseStream
 import com.google.genai.types.Content
 import com.google.genai.types.GenerateContentConfig
+import com.google.genai.types.GenerateContentResponse
 import com.google.genai.types.Part
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.services.LlmInferenceService.*
@@ -24,7 +26,20 @@ class GeminiBackend(private val context: PluginContext) : LlmBackend {
     @Volatile
     private var currentJob: Job? = null
 
-    private val modelName = "gemini-2.0-flash-exp"
+    /**
+     * Get the model name from preferences, or use default.
+     * Default to gemini-1.5-flash for compatibility, fallback to gemini-2.5-flash.
+     */
+    private fun getModelName(): String {
+        val prefs = try {
+            val aiAssistantContext = SharedServices.get(PluginContext::class.java)
+            aiAssistantContext?.getPluginSharedPreferences("AgentSettings")
+        } catch (e: Exception) {
+            context.logger.error("GeminiBackend: Error getting preferences", e)
+            null
+        }
+        return prefs?.getString("gemini_model", "gemini-1.5-flash") ?: "gemini-1.5-flash"
+    }
 
     override fun getId(): String = "gemini"
 
@@ -58,6 +73,7 @@ class GeminiBackend(private val context: PluginContext) : LlmBackend {
                     return@launch
                 }
 
+                val startTime = System.currentTimeMillis()
                 context.logger.info("GeminiBackend: Generating response for prompt (${prompt.length} chars)")
 
                 // Create history with user message
@@ -70,39 +86,34 @@ class GeminiBackend(private val context: PluginContext) : LlmBackend {
 
                 // Generate content
                 val generateConfig = GenerateContentConfig.builder()
-                    .temperature(config.temperature.toDouble())
+                    .temperature(config.temperature)
                     .maxOutputTokens(config.maxTokens)
                     .build()
 
-                val response = client.models.generateContent(modelName, history, generateConfig)
+                val response = client.models.generateContent(getModelName(), history, generateConfig)
 
-                // Extract text from response
-                val candidates = response.candidates().getOrNull()
-                if (candidates.isNullOrEmpty()) {
+                // Extract text from response (handle Java Optional)
+                val candidates = response.candidates().orElse(emptyList())
+                if (candidates.isEmpty()) {
                     future.complete(LlmResponse.failure("No response from Gemini API"))
                     return@launch
                 }
 
-                val content = candidates[0].content().getOrNull()
-                val parts = content?.parts()?.getOrNull()
-                val text = parts?.firstOrNull()?.text()?.getOrNull()
+                val content = candidates[0].content().orElse(null)
+                val parts = content?.parts()?.orElse(emptyList())
+                val text = parts?.firstOrNull()?.text()?.orElse(null)
 
                 if (text.isNullOrBlank()) {
                     future.complete(LlmResponse.failure("Empty response from Gemini API"))
                 } else {
-                    context.logger.info("GeminiBackend: Generated ${text.length} chars")
-                    future.complete(LlmResponse.success(text))
+                    val tokenCount = text.split("\\s+".toRegex()).size  // Approximate token count
+                    context.logger.info("GeminiBackend: Generated ${text.length} chars, ~$tokenCount tokens")
+                    future.complete(LlmResponse.success(text, tokenCount, startTime))
                 }
 
             } catch (e: Exception) {
                 context.logger.error("GeminiBackend: Error generating response", e)
-                val errorMsg = when {
-                    e.message?.contains("API key") == true ->
-                        "Invalid API key. Please check your Gemini API key in settings."
-                    e.message?.contains("quota") == true || e.message?.contains("limit") == true ->
-                        "API quota exceeded. Please check your Gemini API usage."
-                    else -> "Gemini API error: ${e.message}"
-                }
+                val errorMsg = formatErrorMessage(e)
                 future.complete(LlmResponse.failure(errorMsg))
             }
         }
@@ -123,6 +134,7 @@ class GeminiBackend(private val context: PluginContext) : LlmBackend {
                     return@launch
                 }
 
+                val startTime = System.currentTimeMillis()
                 context.logger.info("GeminiBackend: Streaming response for prompt (${prompt.length} chars)")
 
                 // Create history with user message
@@ -133,56 +145,185 @@ class GeminiBackend(private val context: PluginContext) : LlmBackend {
                         .build()
                 )
 
-                // Generate streaming content
+                // Generate content
                 val generateConfig = GenerateContentConfig.builder()
-                    .temperature(config.temperature.toDouble())
+                    .temperature(config.temperature)
                     .maxOutputTokens(config.maxTokens)
                     .build()
 
-                val responseFlow = client.models.generateContentStream(modelName, history, generateConfig)
+                // Use true streaming API
+                val responseStream: ResponseStream<GenerateContentResponse> =
+                    client.models.generateContentStream(getModelName(), history, generateConfig)
+
                 val fullText = StringBuilder()
+                var chunkCount = 0
 
-                responseFlow.collect { chunk ->
-                    val candidates = chunk.candidates().getOrNull()
-                    if (!candidates.isNullOrEmpty()) {
-                        val content = candidates[0].content().getOrNull()
-                        val parts = content?.parts()?.getOrNull()
-                        val text = parts?.firstOrNull()?.text()?.getOrNull()
+                try {
+                    // Iterate through stream chunks as they arrive
+                    for (response in responseStream) {
+                        val chunk = response.text()
+                        if (chunk != null && chunk.isNotEmpty()) {
+                            chunkCount++
+                            fullText.append(chunk)
+                            context.logger.debug("GeminiBackend: Stream chunk #$chunkCount: ${chunk.length} chars")
 
-                        if (!text.isNullOrBlank()) {
-                            fullText.append(text)
-                            callback.onToken(text)
+                            // Send each chunk to UI immediately
+                            callback.onToken(chunk)
                         }
                     }
-                }
 
-                context.logger.info("GeminiBackend: Streamed ${fullText.length} chars total")
-                callback.onComplete(LlmResponse.success(fullText.toString()))
+                    val finalText = fullText.toString()
+                    if (finalText.isBlank()) {
+                        callback.onError("Empty response from Gemini API")
+                    } else {
+                        val tokenCount = finalText.split("\\s+".toRegex()).size
+                        context.logger.info("GeminiBackend: Streamed ${finalText.length} chars in $chunkCount chunks, ~$tokenCount tokens")
+                        callback.onComplete(LlmResponse.success(finalText, tokenCount, startTime))
+                    }
+                } finally {
+                    responseStream.close()
+                }
 
             } catch (e: Exception) {
                 context.logger.error("GeminiBackend: Error in streaming", e)
-                val errorMsg = when {
-                    e.message?.contains("API key") == true ->
-                        "Invalid API key. Please check your Gemini API key in settings."
-                    e.message?.contains("quota") == true || e.message?.contains("limit") == true ->
-                        "API quota exceeded. Please check your Gemini API usage."
-                    else -> "Gemini API error: ${e.message}"
-                }
-                callback.onError(errorMsg)
+                callback.onError(formatErrorMessage(e))
             }
         }
     }
 
-    override fun cancelGeneration() {
-        currentJob?.cancel()
-        currentJob = null
-        context.logger.info("GeminiBackend: Generation cancelled")
+    override fun generateWithHistory(
+        history: List<ChatMessage>,
+        prompt: String,
+        config: LlmConfig
+    ): CompletableFuture<LlmResponse> {
+        context.logger.info("GeminiBackend.generateWithHistory() called with ${history.size} messages")
+
+        val future = CompletableFuture<LlmResponse>()
+
+        currentJob = scope.launch {
+            try {
+                val client = createClient()
+                if (client == null) {
+                    future.complete(LlmResponse.failure("Gemini API key not configured"))
+                    return@launch
+                }
+
+                val startTime = System.currentTimeMillis()
+
+                // Convert chat history to Gemini format
+                val geminiHistory = mutableListOf<Content>()
+
+                // Add system message if provided
+                if (config.systemPrompt != null) {
+                    geminiHistory.add(
+                        Content.builder()
+                            .parts(listOf(Part.builder().text(config.systemPrompt).build()))
+                            .role("user")
+                            .build()
+                    )
+                    geminiHistory.add(
+                        Content.builder()
+                            .parts(listOf(Part.builder().text("Understood.").build()))
+                            .role("model")
+                            .build()
+                    )
+                }
+
+                // Add chat history
+                for (msg in history) {
+                    val role = when (msg.role) {
+                        ChatMessage.Role.USER -> "user"
+                        ChatMessage.Role.ASSISTANT -> "model"
+                        ChatMessage.Role.SYSTEM -> "user"  // System messages go as user
+                    }
+                    geminiHistory.add(
+                        Content.builder()
+                            .parts(listOf(Part.builder().text(msg.content).build()))
+                            .role(role)
+                            .build()
+                    )
+                }
+
+                // Add current prompt
+                geminiHistory.add(
+                    Content.builder()
+                        .parts(listOf(Part.builder().text(prompt).build()))
+                        .role("user")
+                        .build()
+                )
+
+                // Generate content
+                val generateConfig = GenerateContentConfig.builder()
+                    .temperature(config.temperature)
+                    .maxOutputTokens(config.maxTokens)
+                    .build()
+
+                val response = client.models.generateContent(getModelName(), geminiHistory, generateConfig)
+
+                // Extract text from response
+                val candidates = response.candidates().orElse(emptyList())
+                if (candidates.isEmpty()) {
+                    future.complete(LlmResponse.failure("No response from Gemini API"))
+                    return@launch
+                }
+
+                val content = candidates[0].content().orElse(null)
+                val parts = content?.parts()?.orElse(emptyList())
+                val text = parts?.firstOrNull()?.text()?.orElse(null)
+
+                if (text.isNullOrBlank()) {
+                    future.complete(LlmResponse.failure("Empty response from Gemini API"))
+                } else {
+                    val tokenCount = text.split("\\s+".toRegex()).size
+                    context.logger.info("GeminiBackend: Generated ${text.length} chars with history, ~$tokenCount tokens")
+                    future.complete(LlmResponse.success(text, tokenCount, startTime))
+                }
+
+            } catch (e: Exception) {
+                context.logger.error("GeminiBackend: Error generating with history", e)
+                future.complete(LlmResponse.failure(formatErrorMessage(e)))
+            }
+        }
+
+        return future
     }
 
-    override fun getEmbeddings(text: String): CompletableFuture<FloatArray> {
-        // Gemini embeddings not implemented yet
-        val future = CompletableFuture<FloatArray>()
-        future.completeExceptionally(UnsupportedOperationException("Embeddings not supported by Gemini backend"))
+    /**
+     * List available Gemini models.
+     * Returns a CompletableFuture with list of model names.
+     *
+     * Note: The Gemini Java SDK 1.16.0 doesn't have a direct list models API,
+     * so we return a curated list of commonly available models.
+     */
+    fun listModels(): CompletableFuture<List<String>> {
+        val future = CompletableFuture<List<String>>()
+
+        scope.launch {
+            try {
+                context.logger.info("GeminiBackend: Returning available models list")
+
+                // Return list of known Gemini models
+                // gemini-1.5-* may be deprecated, but included for fallback
+                future.complete(listOf(
+                    "gemini-1.5-flash",
+                    "gemini-1.5-pro",
+                    "gemini-2.5-flash",
+                    "gemini-2.5-flash-lite",
+                    "gemini-2.5-pro",
+                    "gemini-3-flash",
+                    "gemini-3.5-flash"
+                ))
+            } catch (e: Exception) {
+                context.logger.error("GeminiBackend: Error in listModels", e)
+                // Return minimal fallback list on error
+                future.complete(listOf(
+                    "gemini-1.5-flash",
+                    "gemini-2.5-flash",
+                    "gemini-3.5-flash"
+                ))
+            }
+        }
+
         return future
     }
 
@@ -221,4 +362,22 @@ class GeminiBackend(private val context: PluginContext) : LlmBackend {
         val systemPrompt = config.systemPrompt ?: "You are a helpful coding assistant."
         return """$systemPrompt
 
-User: $userPrompt
+User: $userPrompt"""
+    }
+
+    /**
+     * Format error message with user-friendly descriptions.
+     */
+    private fun formatErrorMessage(e: Exception): String {
+        return when {
+            e.message?.contains("API key", ignoreCase = true) == true ->
+                "Invalid API key. Please check your Gemini API key in settings."
+            e.message?.contains("quota", ignoreCase = true) == true ||
+            e.message?.contains("limit", ignoreCase = true) == true ->
+                "API quota exceeded. Please check your Gemini API usage."
+            e.message?.contains("network", ignoreCase = true) == true ->
+                "Network error. Please check your internet connection."
+            else -> "Gemini API error: ${e.message}"
+        }
+    }
+}

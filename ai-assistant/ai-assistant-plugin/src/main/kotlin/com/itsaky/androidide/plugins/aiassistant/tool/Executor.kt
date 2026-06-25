@@ -36,10 +36,6 @@ class Executor(
                 "search_project" -> listOf("query")
                 "create_file" -> listOf("file_path", "content")
                 "update_file" -> listOf("file_path", "content")
-                "add_dependency" -> listOf("dependency_string")
-                "add_string_resource" -> listOf("name", "value")
-                "run_app" -> emptyList() // No required args
-                "get_build_output" -> emptyList() // No required args
                 else -> emptyList()
             }
         }

@@ -185,24 +185,68 @@ interface IdeBuildService {
      * @return true if a build is running, false otherwise
      */
     fun isBuildInProgress(): Boolean
-    
+
     /**
      * Checks if the Gradle tooling server is started and ready.
      * @return true if the tooling server is available, false otherwise
      */
     fun isToolingServerStarted(): Boolean
-    
+
     /**
      * Registers a callback to be notified when build status changes.
      * @param callback The callback to register
      */
     fun addBuildStatusListener(callback: BuildStatusListener)
-    
+
     /**
      * Unregisters a build status callback.
      * @param callback The callback to unregister
      */
     fun removeBuildStatusListener(callback: BuildStatusListener)
+
+    /**
+     * Builds and launches the app on the connected device.
+     * This is an async operation that returns a callback with the result.
+     * @param callback Callback to receive the build and launch result
+     */
+    fun runApp(callback: BuildAndLaunchCallback)
+
+    /**
+     * Triggers a Gradle sync operation.
+     * This is an async operation that returns via callback.
+     * @param callback Callback to receive the sync result
+     */
+    fun triggerGradleSync(callback: GradleSyncCallback)
+
+    /**
+     * Gets the latest build output logs.
+     * @return Build output log content, or null if no build output is available
+     */
+    fun getBuildOutput(): String?
+}
+
+/**
+ * Callback interface for build and launch operations.
+ */
+interface BuildAndLaunchCallback {
+    /**
+     * Called when the build and launch operation completes.
+     * @param success true if build and launch succeeded
+     * @param message Descriptive message about the result
+     */
+    fun onComplete(success: Boolean, message: String)
+}
+
+/**
+ * Callback interface for Gradle sync operations.
+ */
+interface GradleSyncCallback {
+    /**
+     * Called when the Gradle sync operation completes.
+     * @param success true if sync succeeded
+     * @param output Build output logs from the sync
+     */
+    fun onComplete(success: Boolean, output: String)
 }
 
 /**
@@ -306,4 +350,33 @@ interface BuildStatusListener {
      * @param error The error message, or null if cancelled
      */
     fun onBuildFailed(error: String?)
+}
+
+/**
+ * Service interface for manipulating project structure, dependencies, and resources.
+ * Requires FILESYSTEM_WRITE permission.
+ */
+interface IdeProjectManipulationService {
+    /**
+     * Adds a dependency to a Gradle build file.
+     * @param dependencyString The full dependency line (e.g., "implementation(\"io.coil-kt:coil:2.6.0\")")
+     * @param buildFilePath Relative path to the build file (e.g., "app/build.gradle.kts")
+     * @return true if the dependency was added successfully
+     */
+    fun addDependency(dependencyString: String, buildFilePath: String): Boolean
+
+    /**
+     * Adds a string resource to the strings.xml file.
+     * @param name The resource name (e.g., "welcome_message")
+     * @param value The string content
+     * @return true if the resource was added successfully
+     */
+    fun addStringResource(name: String, value: String): Boolean
+
+    /**
+     * Deletes a file from the project.
+     * @param path Relative path from project root
+     * @return true if the file was deleted successfully
+     */
+    fun deleteFile(path: String): Boolean
 }

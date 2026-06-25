@@ -252,6 +252,9 @@ class AiSettingsFragment : DialogFragment() {
         val clearButton = view.findViewById<Button>(R.id.btn_clear_api_key)
         val statusTextView = view.findViewById<TextView>(R.id.gemini_api_key_status_text)
 
+        // Create model selection container
+        val modelContainer = createModelSelectionUi(view)
+
         fun updateUiState(isEditing: Boolean) {
             if (isEditing) {
                 statusTextView.visibility = View.GONE
@@ -311,6 +314,122 @@ class AiSettingsFragment : DialogFragment() {
             Toast.makeText(requireContext(), "API Key cleared", Toast.LENGTH_SHORT).show()
             updateUiState(isEditing = true)
             apiKeyInput.setText("")
+        }
+
+        // Setup model selection
+        setupGeminiModelSelection(modelContainer)
+    }
+
+    private fun createModelSelectionUi(parent: View): LinearLayout {
+        val context = requireContext()
+        val container = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, 32, 0, 0)
+        }
+
+        // Add title
+        val titleText = TextView(context).apply {
+            text = "Gemini Model"
+            textSize = 16f
+            setPadding(0, 0, 0, 16)
+        }
+        container.addView(titleText)
+
+        // Add current model display
+        val currentModelText = TextView(context).apply {
+            id = View.generateViewId()
+            text = "Current: ${viewModel.getGeminiModel()}"
+            setPadding(0, 0, 0, 8)
+        }
+        container.addView(currentModelText)
+
+        // Add model spinner
+        val modelSpinner = Spinner(context).apply {
+            id = View.generateViewId()
+        }
+        container.addView(modelSpinner)
+
+        // Add refresh button
+        val refreshButton = Button(context).apply {
+            id = View.generateViewId()
+            text = "Refresh Models"
+        }
+        container.addView(refreshButton)
+
+        // Find the parent container and add this
+        if (parent is ViewGroup) {
+            parent.addView(container)
+        }
+
+        // Tag the views for later reference
+        container.tag = "model_container"
+        currentModelText.tag = "current_model_text"
+        modelSpinner.tag = "model_spinner"
+        refreshButton.tag = "refresh_button"
+
+        return container
+    }
+
+    private fun setupGeminiModelSelection(container: View) {
+        val currentModelText = container.findViewWithTag<TextView>("current_model_text")
+        val modelSpinner = container.findViewWithTag<Spinner>("model_spinner")
+        val refreshButton = container.findViewWithTag<Button>("refresh_button")
+
+        if (modelSpinner == null || refreshButton == null) return
+
+        // Setup spinner
+        fun updateModelSpinner(models: List<String>) {
+            val adapter = ArrayAdapter(
+                requireContext(),
+                android.R.layout.simple_spinner_item,
+                models
+            )
+            adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+            modelSpinner.adapter = adapter
+
+            // Set current selection
+            val currentModel = viewModel.getGeminiModel()
+            val currentIndex = models.indexOf(currentModel)
+            if (currentIndex >= 0) {
+                modelSpinner.setSelection(currentIndex)
+            }
+        }
+
+        // Observe models
+        viewModel.geminiModels.observe(viewLifecycleOwner) { models ->
+            if (models.isNotEmpty()) {
+                updateModelSpinner(models)
+            }
+        }
+
+        // Observe loading state
+        viewModel.geminiModelsLoading.observe(viewLifecycleOwner) { isLoading ->
+            refreshButton.isEnabled = !isLoading
+            refreshButton.text = if (isLoading) "Loading..." else "Refresh Models"
+        }
+
+        // Handle model selection
+        modelSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                val selectedModel = parent?.getItemAtPosition(position) as? String
+                if (selectedModel != null && selectedModel != viewModel.getGeminiModel()) {
+                    viewModel.saveGeminiModel(selectedModel)
+                    currentModelText?.text = "Current: $selectedModel"
+                    Toast.makeText(requireContext(), "Model changed to $selectedModel", Toast.LENGTH_SHORT).show()
+                }
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
+
+        // Handle refresh button
+        refreshButton.setOnClickListener {
+            viewModel.fetchGeminiModels()
+        }
+
+        // Initial fetch
+        if (viewModel.geminiModels.value.isNullOrEmpty()) {
+            viewModel.fetchGeminiModels()
         }
     }
 }

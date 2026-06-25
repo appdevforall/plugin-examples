@@ -144,6 +144,100 @@ class AiSettingsViewModel(
         }
     }
 
+    fun saveGeminiModel(model: String) {
+        getPluginPrefs()?.edit()?.apply {
+            putString("gemini_model", model)
+            apply()
+        }
+    }
+
+    fun getGeminiModel(): String {
+        return getPluginPrefs()?.getString("gemini_model", "gemini-1.5-flash") ?: "gemini-1.5-flash"
+    }
+
+    private val _geminiModels = MutableLiveData<List<String>>(emptyList())
+    val geminiModels: LiveData<List<String>> get() = _geminiModels
+
+    private val _geminiModelsLoading = MutableLiveData<Boolean>(false)
+    val geminiModelsLoading: LiveData<Boolean> get() = _geminiModelsLoading
+
+    fun fetchGeminiModels() {
+        viewModelScope.launch(Dispatchers.IO) {
+            _geminiModelsLoading.postValue(true)
+
+            try {
+                // Get the LlmInferenceService from SharedServices
+                val llmService = SharedServices.get(LlmInferenceService::class.java)
+                if (llmService == null) {
+                    android.util.Log.e("AiSettingsViewModel", "LlmInferenceService not available")
+                    _geminiModels.postValue(listOf(
+                        "gemini-1.5-flash",
+                        "gemini-1.5-pro",
+                        "gemini-2.5-flash",
+                        "gemini-2.5-pro",
+                        "gemini-3-flash",
+                        "gemini-3.5-flash"
+                    ))
+                    _geminiModelsLoading.postValue(false)
+                    return@launch
+                }
+
+                // Get the Gemini backend
+                val geminiBackend = llmService.getBackend("gemini")
+                if (geminiBackend == null) {
+                    android.util.Log.e("AiSettingsViewModel", "Gemini backend not available")
+                    _geminiModels.postValue(listOf(
+                        "gemini-1.5-flash",
+                        "gemini-1.5-pro",
+                        "gemini-2.5-flash",
+                        "gemini-2.5-pro",
+                        "gemini-3-flash",
+                        "gemini-3.5-flash"
+                    ))
+                    _geminiModelsLoading.postValue(false)
+                    return@launch
+                }
+
+                // Try to get list models method via reflection
+                // (since GeminiBackend is not in the interface)
+                try {
+                    val listModelsMethod = geminiBackend.javaClass.getMethod("listModels")
+                    val futureResult = listModelsMethod.invoke(geminiBackend)
+
+                    if (futureResult is java.util.concurrent.CompletableFuture<*>) {
+                        @Suppress("UNCHECKED_CAST")
+                        val models = (futureResult as java.util.concurrent.CompletableFuture<List<String>>).get()
+                        android.util.Log.d("AiSettingsViewModel", "Fetched ${models.size} Gemini models")
+                        _geminiModels.postValue(models)
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("AiSettingsViewModel", "Error fetching models", e)
+                    // Fallback to default list
+                    _geminiModels.postValue(listOf(
+                        "gemini-1.5-flash",
+                        "gemini-1.5-pro",
+                        "gemini-2.5-flash",
+                        "gemini-2.5-pro",
+                        "gemini-3-flash",
+                        "gemini-3.5-flash"
+                    ))
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("AiSettingsViewModel", "Error in fetchGeminiModels", e)
+                _geminiModels.postValue(listOf(
+                    "gemini-1.5-flash",
+                    "gemini-1.5-pro",
+                    "gemini-2.5-flash",
+                    "gemini-2.5-pro",
+                    "gemini-3-flash",
+                    "gemini-3.5-flash"
+                ))
+            } finally {
+                _geminiModelsLoading.postValue(false)
+            }
+        }
+    }
+
     /**
      * Load a model from URI.
      * In the plugin context, we just save the path - the actual loading
