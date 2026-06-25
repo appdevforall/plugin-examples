@@ -60,11 +60,12 @@ android {
 dependencies {
     compileOnly(project(":plugin-api"))
 
-    // Use app's androidx libraries to avoid ClassLoader conflicts
-    compileOnly("androidx.appcompat:appcompat:1.6.1")
-    compileOnly("androidx.fragment:fragment-ktx:1.6.2")
-    compileOnly("com.google.android.material:material:1.10.0")
-    compileOnly("androidx.recyclerview:recyclerview:1.3.2")
+    // Use implementation for androidx libraries to make XML resources/attributes available at compile time
+    implementation("androidx.appcompat:appcompat:1.6.1")
+    implementation("androidx.fragment:fragment-ktx:1.6.2")
+    implementation("com.google.android.material:material:1.10.0")
+    implementation("androidx.recyclerview:recyclerview:1.3.2")
+    implementation("androidx.constraintlayout:constraintlayout:2.1.4")
 
     // Markdown rendering - plugin-specific library
     implementation("io.noties.markwon:core:4.6.2")

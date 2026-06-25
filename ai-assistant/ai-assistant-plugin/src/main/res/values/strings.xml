@@ -96,4 +96,13 @@
     <string name="settings_model">Model</string>
     <string name="settings_temperature">Temperature</string>
     <string name="settings_max_tokens">Max Tokens</string>
+
+    <!-- Task 4 - Chat Layout -->
+    <string name="ai_agent">AI Agent</string>
+    <string name="new_chat">New Chat</string>
+    <string name="add_context_file">Add context file</string>
+    <string name="type_a_message_or_prompt">Type a message or prompt…</string>
+    <string name="experimental_ai_use_at_your_own_risk">⚠️ Experimental AI. Use at your own risk.</string>
+    <string name="current_ai_backend">Current AI backend</string>
+    <string name="send">Send</string>
 </resources>
