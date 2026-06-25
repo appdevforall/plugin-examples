@@ -60,7 +60,10 @@ android {
 dependencies {
     compileOnly(project(":plugin-api"))
 
-    // Use implementation for androidx libraries to make XML resources/attributes available at compile time
+    // Use 'implementation' (not 'compileOnly') for androidx libraries.
+    // This is required for XML layouts: AAPT2 needs these dependencies at compile-time to process
+    // resource attributes and resolve xmlns declarations. This is standard across all CoGo plugins
+    // with XML layouts (random-xkcd, sketch-to-ui-plugin, Beepy). See investigation in Task 4.
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("androidx.fragment:fragment-ktx:1.6.2")
     implementation("com.google.android.material:material:1.10.0")
