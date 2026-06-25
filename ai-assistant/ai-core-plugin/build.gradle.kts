@@ -66,6 +66,9 @@ dependencies {
     implementation("org.jetbrains.kotlin:kotlin-stdlib:2.3.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 
+    // Google Generative AI SDK for Gemini API
+    implementation("com.google.genai:google-genai:1.16.0")
+
     testImplementation("junit:junit:4.13.2")
     testImplementation("io.mockk:mockk:1.13.8")
 }

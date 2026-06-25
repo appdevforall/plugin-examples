@@ -227,20 +227,49 @@ class ChatViewModel(
                         val backends = llmService.availableBackends
                         android.util.Log.e("ChatViewModel", "=== BACKENDS LIST === Found ${backends.size} backends")
 
-                        // Find first actually available backend
+                        // Read backend preference from settings
+                        val prefs = getContext()?.getPluginSharedPreferences("AgentSettings")
+                        val preferredBackendName = prefs?.getString("ai_backend_preference", "LOCAL_LLM")
+                        val preferredBackendId = when (preferredBackendName) {
+                            "GEMINI" -> "gemini"
+                            "LOCAL_LLM" -> "local"
+                            else -> "local"
+                        }
+                        android.util.Log.e("ChatViewModel", "=== PREFERENCE === Preferred backend from settings: $preferredBackendName -> $preferredBackendId")
+
+                        // First try to use the preferred backend
                         var foundAvailable = false
-                        for (backend in backends) {
-                            val backendAvailable = backend.isAvailable
-                            android.util.Log.e("ChatViewModel", "=== CHECKING BACKEND === Backend: ${backend.id} - ${backend.name}, isAvailable: $backendAvailable")
+                        val preferredBackend = backends.find { it.id == preferredBackendId }
+                        if (preferredBackend != null) {
+                            val backendAvailable = preferredBackend.isAvailable
+                            android.util.Log.e("ChatViewModel", "=== CHECKING PREFERRED === Backend: ${preferredBackend.id} - ${preferredBackend.name}, isAvailable: $backendAvailable")
                             if (backendAvailable) {
-                                android.util.Log.e("ChatViewModel", "=== BACKEND IS AVAILABLE === Setting backend to: ${backend.id}")
+                                android.util.Log.e("ChatViewModel", "=== USING PREFERRED === Setting backend to: ${preferredBackend.id}")
                                 _isBackendAvailable.value = true
-                                currentBackendId = backend.id
-                                android.util.Log.e("ChatViewModel", "=== SUCCESS === Found available backend: $currentBackendId")
+                                currentBackendId = preferredBackend.id
+                                android.util.Log.e("ChatViewModel", "=== SUCCESS === Using preferred backend: $currentBackendId")
                                 foundAvailable = true
-                                break
                             } else {
-                                android.util.Log.e("ChatViewModel", "=== BACKEND NOT AVAILABLE === Skipping backend: ${backend.id}")
+                                android.util.Log.e("ChatViewModel", "=== PREFERRED NOT AVAILABLE === Backend ${preferredBackend.id} is not available")
+                            }
+                        } else {
+                            android.util.Log.e("ChatViewModel", "=== PREFERRED NOT FOUND === Backend $preferredBackendId not registered")
+                        }
+
+                        // If preferred backend not available, try any available backend as fallback
+                        if (!foundAvailable) {
+                            android.util.Log.e("ChatViewModel", "=== FALLBACK === Trying any available backend")
+                            for (backend in backends) {
+                                val backendAvailable = backend.isAvailable
+                                android.util.Log.e("ChatViewModel", "=== CHECKING FALLBACK === Backend: ${backend.id} - ${backend.name}, isAvailable: $backendAvailable")
+                                if (backendAvailable) {
+                                    android.util.Log.e("ChatViewModel", "=== FALLBACK FOUND === Setting backend to: ${backend.id}")
+                                    _isBackendAvailable.value = true
+                                    currentBackendId = backend.id
+                                    android.util.Log.e("ChatViewModel", "=== SUCCESS === Using fallback backend: $currentBackendId")
+                                    foundAvailable = true
+                                    break
+                                }
                             }
                         }
 
@@ -248,7 +277,7 @@ class ChatViewModel(
                             android.util.Log.e("ChatViewModel", "=== EARLY EXIT === Found available backend, exiting retry loop")
                             return@launch // Success, exit retry loop
                         } else {
-                            android.util.Log.e("ChatViewModel", "=== NO BACKENDS === No available backends found (model not configured)")
+                            android.util.Log.e("ChatViewModel", "=== NO BACKENDS === No available backends found (not configured)")
                         }
                     } catch (e: Exception) {
                         android.util.Log.e("ChatViewModel", "=== EXCEPTION === Error checking backends on attempt ${attempt + 1}: ${e.message}", e)

@@ -14,6 +14,7 @@ class AiCorePlugin : IPlugin {
     private lateinit var context: PluginContext
     private lateinit var llmService: LlmInferenceServiceImpl
     private lateinit var localBackend: LocalLlmBackend
+    private lateinit var geminiBackend: GeminiBackend
 
     companion object {
         const val PLUGIN_ID = "com.itsaky.androidide.plugins.aicore"
@@ -46,6 +47,11 @@ class AiCorePlugin : IPlugin {
             llmService.registerBackend(localBackend)
             context.logger.info("AiCorePlugin: Registered local LLM backend")
 
+            // Create and register Gemini API backend
+            geminiBackend = GeminiBackend(context)
+            llmService.registerBackend(geminiBackend)
+            context.logger.info("AiCorePlugin: Registered Gemini API backend")
+
             return true
         } catch (e: Exception) {
             context.logger.error("AiCorePlugin: Activation failed", e)
@@ -57,10 +63,12 @@ class AiCorePlugin : IPlugin {
         context.logger.info("AiCorePlugin: Deactivating plugin")
 
         try {
-            // Unregister backend
+            // Unregister backends
             if (::llmService.isInitialized) {
                 llmService.unregisterBackend("local")
                 context.logger.info("AiCorePlugin: Unregistered local LLM backend")
+                llmService.unregisterBackend("gemini")
+                context.logger.info("AiCorePlugin: Unregistered Gemini API backend")
             }
 
             // Unregister from SharedServices
