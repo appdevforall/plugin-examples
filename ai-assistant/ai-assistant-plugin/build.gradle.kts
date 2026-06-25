@@ -29,6 +29,10 @@ android {
         }
     }
 
+    buildFeatures {
+        viewBinding = true
+    }
+
     buildTypes {
         release {
             // Disable minification to avoid lambda obfuscation issues with ClassLoader isolation

@@ -1,63 +1,39 @@
 package com.itsaky.androidide.plugins.aiassistant.fragments
 
-import android.app.AlertDialog
-import android.content.Intent
 import android.os.Bundle
-import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.Button
-import android.widget.EditText
-import android.widget.FrameLayout
-import android.widget.ImageButton
-import android.widget.LinearLayout
-import android.widget.PopupMenu
-import android.widget.ProgressBar
-import android.widget.RadioButton
-import android.widget.RadioGroup
-import android.widget.TextView
-import android.widget.Toast
-import android.graphics.Color
-import android.view.ViewGroup.MarginLayoutParams
-import com.google.android.material.chip.Chip
-import com.google.android.material.chip.ChipGroup
-import java.io.File
+import androidx.core.view.isVisible
+import androidx.core.widget.doAfterTextChanged
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.chip.Chip
+import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aiassistant.adapters.ChatAdapter
-import io.noties.markwon.Markwon
+import com.itsaky.androidide.plugins.aiassistant.databinding.FragmentChatBinding
 import com.itsaky.androidide.plugins.aiassistant.models.AgentState
 import com.itsaky.androidide.plugins.aiassistant.viewmodel.ChatViewModel
-import com.itsaky.androidide.plugins.services.LlmInferenceService
-import com.itsaky.androidide.plugins.IPlugin
-import com.itsaky.androidide.plugins.PluginContext
-import com.itsaky.androidide.plugins.aiassistant.tool.ApprovalResult
+import io.noties.markwon.Markwon
 import kotlinx.coroutines.launch
+import java.io.File
 
 /**
  * ChatFragment for Agent chat UI.
  * Provides a full chat interface with LLM integration.
  */
 class ChatFragment : Fragment() {
+    private var _binding: FragmentChatBinding? = null
+    private val binding get() = _binding!!
 
     private lateinit var viewModel: ChatViewModel
-    private lateinit var messagesRecyclerView: RecyclerView
-    private lateinit var inputEditText: EditText
-    private lateinit var sendButton: Button
-    private lateinit var statusTextView: TextView
-    private lateinit var settingsButton: ImageButton
     private lateinit var chatAdapter: ChatAdapter
     private lateinit var markwon: Markwon
-    private lateinit var chipGroup: ChipGroup
-    private lateinit var addContextButton: ImageButton
     private val contextFiles = mutableListOf<File>()
-    private lateinit var scrollToBottomButton: Button
-    private var isUserScrolledUp = false
-    private var isStreamingActive = false
 
 
     override fun onCreateView(
@@ -65,19 +41,25 @@ class ChatFragment : Fragment() {
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        return FrameLayout(requireContext()).apply {
-            layoutParams = FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT
-            )
-        }
+        _binding = FragmentChatBinding.inflate(inflater, container, false)
+        return binding.root
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        viewModel.stopProcessing()
+        _binding = null
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+
         initializeMarkwon()
         initializeViewModel()
-        buildUI()
+        setupRecyclerView()
+        setupInputArea()
+        setupStatusBar()
+        setupBackendIndicator()
         observeViewModel()
     }
 
@@ -106,237 +88,103 @@ class ChatFragment : Fragment() {
         return com.itsaky.androidide.plugins.aiassistant.AiAssistantPlugin.getContext()
     }
 
-    private fun buildUI() {
-        val rootView = view as? ViewGroup ?: return
-
-        val mainContainer = LinearLayout(requireContext()).apply {
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.MATCH_PARENT
-            )
-            orientation = LinearLayout.VERTICAL
-            setPadding(8, 8, 8, 8)
-        }
-
-        // Toolbar with settings button
-        val toolbar = LinearLayout(requireContext()).apply {
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-            orientation = LinearLayout.HORIZONTAL
-            setPadding(8, 8, 8, 8)
-        }
-
-        val toolbarTitle = TextView(requireContext()).apply {
-            layoutParams = LinearLayout.LayoutParams(
-                0,
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                1f
-            )
-            text = "AI Chat"
-            textSize = 18f
-            setPadding(8, 8, 8, 8)
-        }
-        toolbar.addView(toolbarTitle)
-
-        settingsButton = ImageButton(requireContext()).apply {
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-            // Use Android's built-in more_vert icon (3 dots)
-            setImageResource(android.R.drawable.ic_menu_more)
-            setOnClickListener { showSettingsMenu(it) }
-            background = null // Remove default button background
-            setPadding(16, 16, 16, 16)
-        }
-        toolbar.addView(settingsButton)
-
-        mainContainer.addView(toolbar)
-
-        // Status bar (only for errors and backend availability)
-        statusTextView = TextView(requireContext()).apply {
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-            textSize = 14f
-            setPadding(8, 8, 8, 8)
-            visibility = View.GONE
-        }
-        mainContainer.addView(statusTextView)
-
-        // Context chips container
-        val contextContainer = LinearLayout(requireContext()).apply {
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-            orientation = LinearLayout.HORIZONTAL
-            setPadding(8, 0, 8, 0)
-            visibility = View.GONE
-        }
-
-        chipGroup = ChipGroup(requireContext()).apply {
-            layoutParams = LinearLayout.LayoutParams(
-                0,
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                1f
-            )
-        }
-        contextContainer.addView(chipGroup)
-
-        addContextButton = ImageButton(requireContext()).apply {
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-            setImageResource(android.R.drawable.ic_input_add)
-            background = null
-            setPadding(16, 16, 16, 16)
-            setOnClickListener { showFilePicker() }
-        }
-        contextContainer.addView(addContextButton)
-
-        mainContainer.addView(contextContainer)
-
-        // Messages container with RecyclerView and scroll button
-        val messagesContainer = FrameLayout(requireContext()).apply {
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                0,
-                1f
-            )
-        }
-
-        // Messages RecyclerView
+    private fun setupRecyclerView() {
         // Use plugin context for adapter to ensure proper resource inflation
         val pluginContext = getPluginContext()?.androidContext ?: requireContext()
         chatAdapter = ChatAdapter(pluginContext, markwon) { action, message ->
             onMessageAction(action, message)
         }
-        messagesRecyclerView = RecyclerView(requireContext()).apply {
-            layoutParams = FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT
-            )
+        binding.chatRecyclerView.apply {
+            adapter = chatAdapter
             layoutManager = LinearLayoutManager(requireContext()).apply {
                 stackFromEnd = true
             }
-            adapter = chatAdapter
-            clipToPadding = false
-            clipChildren = false
-
-            // Add scroll listener to detect manual scrolling
-            addOnScrollListener(object : RecyclerView.OnScrollListener() {
-                override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
-                    super.onScrolled(recyclerView, dx, dy)
-                    updateScrollState()
-                }
-            })
         }
-        messagesContainer.addView(messagesRecyclerView)
+    }
 
-        // Scroll to bottom button (initially hidden)
-        scrollToBottomButton = Button(requireContext()).apply {
-            layoutParams = FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                gravity = Gravity.BOTTOM or Gravity.END
-                setMargins(0, 0, 16, 16)
-            }
-            text = "↓"
-            textSize = 20f
-            visibility = View.GONE
-            setOnClickListener {
-                scrollToBottom(smooth = true)
+    private fun setupInputArea() {
+        binding.promptInputEdittext.doAfterTextChanged { text ->
+            binding.sendButton.isEnabled = !text.isNullOrBlank()
+        }
+
+        binding.sendButton.setOnClickListener {
+            val message = binding.promptInputEdittext.text?.toString() ?: return@setOnClickListener
+            if (message.isNotBlank()) {
+                viewModel.sendMessage(message)
+                binding.promptInputEdittext.text?.clear()
             }
         }
-        messagesContainer.addView(scrollToBottomButton)
 
-        mainContainer.addView(messagesContainer)
-
-        // Input container
-        val inputContainer = LinearLayout(requireContext()).apply {
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-            orientation = LinearLayout.HORIZONTAL
-            setPadding(8, 8, 8, 8)
+        binding.btnAddContext.setOnClickListener {
+            showFilePicker()
         }
+    }
 
-        inputEditText = EditText(requireContext()).apply {
-            layoutParams = LinearLayout.LayoutParams(
-                0,
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                1f
-            )
-            hint = "Enter your message..."
-            setPadding(8, 8, 8, 8)
-        }
-        inputContainer.addView(inputEditText)
+    private fun setupStatusBar() {
+        binding.agentStatusContainer.isVisible = false
+    }
 
-        sendButton = Button(requireContext()).apply {
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-            text = "Send"
-            isEnabled = false
-            setOnClickListener { onSendClicked() }
-        }
-        inputContainer.addView(sendButton)
-
-        mainContainer.addView(inputContainer)
-        rootView.addView(mainContainer)
+    private fun setupBackendIndicator() {
+        binding.backendStatusText.text = "Gemini"
     }
 
     private fun observeViewModel() {
         viewLifecycleOwner.lifecycleScope.launch {
-            viewModel.messages.collect { messages ->
-                chatAdapter.submitList(messages)
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch { observeMessages() }
+                launch { observeAgentState() }
+                launch { observePendingApprovalRequest() }
+            }
+        }
+    }
 
-                // Smart auto-scroll: only scroll if user hasn't manually scrolled up
-                if (messages.isNotEmpty() && !isUserScrolledUp) {
-                    scrollToBottom(smooth = false)
+    private suspend fun observeMessages() {
+        viewModel.messages.collect { messages ->
+            binding.emptyChatView.isVisible = messages.isEmpty()
+            chatAdapter.submitList(messages) {
+                if (messages.isNotEmpty()) {
+                    binding.chatRecyclerView.scrollToPosition(messages.size - 1)
                 }
             }
         }
+    }
 
-        viewLifecycleOwner.lifecycleScope.launch {
-            viewModel.agentState.collect { state ->
-                updateStatusUI(state)
-
-                // Track streaming state
-                isStreamingActive = state is AgentState.Processing
-                if (isStreamingActive) {
-                    // Reset scroll state when streaming starts
-                    isUserScrolledUp = false
-                    scrollToBottomButton.visibility = View.GONE
+    private suspend fun observeAgentState() {
+        viewModel.agentState.collect { state ->
+            when (state) {
+                is AgentState.Idle -> {
+                    binding.agentStatusContainer.isVisible = false
+                    binding.sendButton.isEnabled = true
+                }
+                is AgentState.Executing -> {
+                    binding.agentStatusContainer.isVisible = true
+                    binding.agentStatusMessage.text = state.formattedProgress
+                    binding.agentStatusTimer.text = state.formattedTiming
+                    binding.sendButton.isEnabled = false
+                    viewModel.startStateTimer(state)
+                }
+                is AgentState.Processing -> {
+                    binding.agentStatusContainer.isVisible = true
+                    binding.agentStatusMessage.text = "Generating response..."
+                    binding.agentStatusTimer.text = ""
+                    binding.sendButton.isEnabled = false
+                }
+                is AgentState.Error -> {
+                    binding.agentStatusContainer.isVisible = false
+                    binding.sendButton.isEnabled = true
+                    viewModel.stopStateTimer()
+                }
+                else -> {
+                    binding.sendButton.isEnabled = false
                 }
             }
         }
+    }
 
-        viewLifecycleOwner.lifecycleScope.launch {
-            viewModel.isBackendAvailable.collect { isAvailable ->
-                sendButton.isEnabled = isAvailable && viewModel.agentState.value is AgentState.Idle
-                if (!isAvailable) {
-                    statusTextView.text = "No LLM backend available. Configure AI Core plugin."
-                    statusTextView.visibility = View.VISIBLE
-                } else {
-                    statusTextView.visibility = View.GONE
-                }
-            }
-        }
-
-        viewLifecycleOwner.lifecycleScope.launch {
-            viewModel.pendingApprovalRequest.collect { request ->
-                if (request != null) {
-                    showApprovalDialog(request)
-                }
+    private suspend fun observePendingApprovalRequest() {
+        viewModel.pendingApprovalRequest.collect { request ->
+            if (request != null) {
+                showApprovalDialog(request)
             }
         }
     }
@@ -365,7 +213,6 @@ class ChatFragment : Fragment() {
                 addChipForFile(file)
             }
         }
-        updateContextVisibility()
         viewModel.setContextFiles(contextFiles)
     }
 
@@ -375,77 +222,19 @@ class ChatFragment : Fragment() {
             isCloseIconVisible = true
             setOnCloseIconClickListener {
                 contextFiles.remove(file)
-                chipGroup.removeView(this)
-                updateContextVisibility()
+                binding.contextChipGroup.removeView(this)
                 viewModel.setContextFiles(contextFiles)
             }
         }
-        chipGroup.addView(chip)
-    }
-
-    private fun updateContextVisibility() {
-        val contextContainer = chipGroup.parent as? LinearLayout
-        contextContainer?.visibility = if (contextFiles.isEmpty()) View.GONE else View.VISIBLE
-    }
-
-    private fun updateStatusUI(state: AgentState) {
-        when (state) {
-            is AgentState.Idle -> {
-                statusTextView.visibility = View.GONE
-                sendButton.isEnabled = viewModel.isBackendAvailable.value
-            }
-            is AgentState.Initializing -> {
-                statusTextView.text = state.message
-                statusTextView.visibility = View.VISIBLE
-                sendButton.isEnabled = false
-            }
-            is AgentState.Thinking -> {
-                statusTextView.text = state.thought
-                statusTextView.visibility = View.VISIBLE
-                sendButton.isEnabled = false
-            }
-            is AgentState.Executing -> {
-                statusTextView.text = "Step ${state.currentStepIndex + 1} of ${state.totalSteps}: ${state.description}"
-                statusTextView.visibility = View.VISIBLE
-                sendButton.isEnabled = false
-            }
-            is AgentState.Processing -> {
-                statusTextView.visibility = View.GONE
-                sendButton.isEnabled = false
-            }
-            is AgentState.Cancelling -> {
-                statusTextView.visibility = View.GONE
-                sendButton.isEnabled = false
-            }
-            is AgentState.Error -> {
-                // Errors are now shown as messages in the list, not in status bar
-                statusTextView.visibility = View.GONE
-                sendButton.isEnabled = viewModel.isBackendAvailable.value
-            }
-        }
-    }
-
-    private fun onSendClicked() {
-        val message = inputEditText.text.toString().trim()
-        if (message.isEmpty()) {
-            Toast.makeText(requireContext(), "Please enter a message", Toast.LENGTH_SHORT).show()
-            return
-        }
-        inputEditText.text.clear()
-        viewModel.sendMessage(message)
-    }
-
-    private fun onClearClicked() {
-        viewModel.clearMessages()
-        Toast.makeText(requireContext(), "Chat cleared", Toast.LENGTH_SHORT).show()
+        binding.contextChipGroup.addView(chip)
     }
 
     private fun onMessageAction(action: String, message: com.itsaky.androidide.plugins.aiassistant.models.ChatMessage) {
         when (action) {
             ChatAdapter.ACTION_EDIT -> {
                 // Show dialog to edit message
-                inputEditText.setText(message.text)
-                inputEditText.requestFocus()
+                binding.promptInputEdittext.setText(message.text)
+                binding.promptInputEdittext.requestFocus()
             }
             ChatAdapter.ACTION_RETRY -> {
                 // Resend the message
@@ -458,94 +247,12 @@ class ChatFragment : Fragment() {
         }
     }
 
-    private fun showSettingsMenu(anchor: View) {
-        val popup = PopupMenu(requireContext(), anchor)
-        popup.menu.add(0, 1, 0, "Clear chat")
-        popup.menu.add(0, 2, 0, "Settings")
-        popup.setOnMenuItemClickListener { item ->
-            when (item.itemId) {
-                1 -> {
-                    onClearClicked()
-                    true
-                }
-                2 -> {
-                    openSettingsFragment()
-                    true
-                }
-                else -> false
-            }
-        }
-        popup.show()
-    }
-
     private fun openSettingsFragment() {
         val settingsFragment = AiSettingsFragment()
         // Show as dialog fragment to avoid overlapping with chat UI
         settingsFragment.show(parentFragmentManager, "ai_settings")
     }
 
-    /**
-     * Check if RecyclerView is at the bottom.
-     * Returns true if within 100px of the bottom.
-     */
-    private fun isAtBottom(): Boolean {
-        val layoutManager = messagesRecyclerView.layoutManager as? LinearLayoutManager ?: return true
-        val lastVisiblePosition = layoutManager.findLastVisibleItemPosition()
-        val lastItemPosition = chatAdapter.itemCount - 1
-
-        // If last item is visible or close to visible, consider at bottom
-        if (lastVisiblePosition >= lastItemPosition - 1) {
-            // Also check if last item is fully visible
-            val lastView = layoutManager.findViewByPosition(lastItemPosition)
-            if (lastView != null) {
-                val bottom = lastView.bottom
-                val recyclerBottom = messagesRecyclerView.height - messagesRecyclerView.paddingBottom
-                return bottom <= recyclerBottom + 100 // 100px threshold
-            }
-            return true
-        }
-        return false
-    }
-
-    /**
-     * Update scroll state and show/hide scroll button.
-     */
-    private fun updateScrollState() {
-        val atBottom = isAtBottom()
-
-        // Only mark as scrolled up if streaming is active
-        if (isStreamingActive) {
-            isUserScrolledUp = !atBottom
-
-            // Show/hide scroll button
-            if (isUserScrolledUp) {
-                scrollToBottomButton.visibility = View.VISIBLE
-            } else {
-                scrollToBottomButton.visibility = View.GONE
-            }
-        }
-    }
-
-    /**
-     * Scroll to bottom of messages.
-     */
-    private fun scrollToBottom(smooth: Boolean) {
-        val position = chatAdapter.itemCount - 1
-        if (position >= 0) {
-            if (smooth) {
-                messagesRecyclerView.smoothScrollToPosition(position)
-            } else {
-                messagesRecyclerView.scrollToPosition(position)
-            }
-            isUserScrolledUp = false
-            scrollToBottomButton.visibility = View.GONE
-        }
-    }
-
-    override fun onDestroyView() {
-        super.onDestroyView()
-        viewModel.stopProcessing()
-    }
 }
 
 /**
