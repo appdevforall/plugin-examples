@@ -56,6 +56,9 @@ class ChatFragment : Fragment() {
 
         initializeMarkwon()
         initializeViewModel()
+        if (!viewModel.isStorageInitialized()) {
+            viewModel.initializeStorage(requireContext())
+        }
         setupRecyclerView()
         setupInputArea()
         setupStatusBar()

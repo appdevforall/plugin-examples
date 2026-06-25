@@ -19,6 +19,7 @@ import com.itsaky.androidide.plugins.aiassistant.tool.handlers.ListFilesHandler
 import com.itsaky.androidide.plugins.aiassistant.tool.handlers.ReadFileHandler
 import com.itsaky.androidide.plugins.aiassistant.tool.handlers.SearchProjectHandler
 import com.itsaky.androidide.plugins.aiassistant.tool.handlers.UpdateFileHandler
+import com.itsaky.androidide.plugins.aiassistant.data.ChatStorageManager
 import com.itsaky.androidide.plugins.aiassistant.utils.ToolExecutionTracker
 import com.itsaky.androidide.plugins.services.LlmInferenceService
 import com.itsaky.androidide.plugins.services.SharedServices
@@ -87,6 +88,10 @@ class ChatViewModel(
 
     private var stateUpdateJob: Job? = null
 
+    private lateinit var storageManager: ChatStorageManager
+
+    fun isStorageInitialized(): Boolean = ::storageManager.isInitialized
+
     init {
         // Initialize tool handlers
         val context = getContext()
@@ -115,6 +120,28 @@ class ChatViewModel(
                 }
             }
         }
+    }
+
+    fun initializeStorage(context: android.content.Context) {
+        storageManager = ChatStorageManager(context)
+        loadSessions()
+    }
+
+    fun loadSessions() {
+        val loaded = storageManager.loadSessions()
+        if (loaded.isEmpty()) {
+            createNewSession()
+        } else {
+            _sessions.value = loaded
+            val currentId = storageManager.loadCurrentSessionId()
+            val session = loaded.firstOrNull { it.id == currentId } ?: loaded.first()
+            switchToSession(session.id)
+        }
+    }
+
+    private fun persistSessions() {
+        storageManager.saveSessions(_sessions.value)
+        storageManager.saveCurrentSessionId(_currentSessionId.value)
     }
 
     /**
@@ -557,6 +584,7 @@ class ChatViewModel(
 
     override fun onCleared() {
         super.onCleared()
+        persistSessions()
         stopProcessing()
         stopStateTimer()
     }

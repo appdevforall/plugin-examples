@@ -77,6 +77,9 @@ dependencies {
     // Markdown rendering - plugin-specific library
     implementation("io.noties.markwon:core:4.6.2")
 
+    // JSON serialization for session persistence
+    implementation("com.google.code.gson:gson:2.10.1")
+
     // Plugin dependencies are loaded at runtime by the plugin manager
     // No explicit compile-time dependency on ai-core-plugin needed
     testImplementation("junit:junit:4.13.2")
