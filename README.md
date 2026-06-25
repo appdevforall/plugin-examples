@@ -18,6 +18,7 @@ See the official [plugin documentation](https://www.appdevforall.org/codeonthego
 | [`icons-repository/`](icons-repository/)           | Browse a bundled Material icon catalog and import any icon as a Vector Drawable into the active project. |
 | [`client-time-tracker/`](client-time-tracker/)                       | Tracks billable coding sessions per project and generates PDF/Excel/CSV invoices. |
 | [`python-tools/`](python-tools/)                   | Adds Python + Flask project templates, with on-device Python install and run/install/test actions. |
+| [`ai-assistant/`](ai-assistant/)                   | AI-powered code assistant with on-device LLM inference using llama.cpp; includes chat UI and GGUF model support. **Note:** Requires [llama.cpp](https://github.com/ggml-org/llama.cpp) cloned as sibling directory. See [ai-assistant/BUILDING.md](ai-assistant/BUILDING.md). |
 
 ## Building a plugin
 

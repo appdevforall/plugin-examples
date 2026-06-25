@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App/Plugin Name -->
+    <string name="app_name">AI Assistant</string>
+
+    <!-- Chat Fragment -->
+    <string name="chat_title">AI Chat</string>
+    <string name="hint_enter_message">Enter your message…</string>
+    <string name="btn_send">Send</string>
+    <string name="btn_stop">Stop</string>
+    <string name="btn_clear_chat">Clear chat</string>
+
+    <!-- Menu Items -->
+    <string name="menu_clear_chat">Clear chat</string>
+    <string name="menu_settings">Settings</string>
+    <string name="menu_new_chat">New chat</string>
+    <string name="menu_chat_history">Chat history</string>
+    <string name="menu_copy_chat">Copy chat</string>
+
+    <!-- Agent States -->
+    <string name="state_ready">Ready</string>
+    <string name="state_initializing">Initializing…</string>
+    <string name="state_thinking">Thinking…</string>
+    <string name="state_processing">Processing…</string>
+    <string name="state_executing">Executing step %1$d of %2$d: %3$s</string>
+    <string name="state_cancelling">Cancelling…</string>
+    <string name="state_error">Error: %s</string>
+
+    <!-- Backend Status -->
+    <string name="backend_not_available">No LLM backend available. Configure AI Core plugin.</string>
+    <string name="backend_local_llm">Local LLM</string>
+    <string name="backend_gemini">Gemini API</string>
+    <string name="backend_model">Model: %s</string>
+
+    <!-- Messages -->
+    <string name="msg_chat_cleared">Chat cleared</string>
+    <string name="msg_enter_message">Please enter a message</string>
+    <string name="msg_copied">Copied</string>
+    <string name="msg_generating">Generating…</string>
+
+    <!-- Message Actions -->
+    <string name="action_copy_text">Copy Text</string>
+    <string name="action_edit_message">Edit Message</string>
+    <string name="action_retry">Retry</string>
+    <string name="action_open_settings">Open AI Settings</string>
+
+    <!-- Tool Execution -->
+    <string name="tool_reading_file">Reading file…</string>
+    <string name="tool_listing_files">Listing files…</string>
+    <string name="tool_searching">Searching…</string>
+    <string name="tool_creating_file">Creating file…</string>
+    <string name="tool_updating_file">Updating file…</string>
+
+    <!-- Errors -->
+    <string name="error_llm_service_not_available">LLM service not available. Install AI Core plugin.</string>
+    <string name="error_no_backend">No LLM backend available. Please configure one in AI Core plugin.</string>
+    <string name="error_generation_failed">Failed to generate response</string>
+    <string name="error_file_read">Error reading file: %s</string>
+    <string name="error_file_write">Error writing file: %s</string>
+
+    <!-- Approval Dialog -->
+    <string name="approval_title">Approve %s?</string>
+    <string name="approval_message">The AI wants to execute:</string>
+    <string name="approval_args">Arguments:</string>
+    <string name="approval_approve_once">Approve Once</string>
+    <string name="approval_approve_session">Approve for Session</string>
+    <string name="approval_deny">Deny</string>
+
+    <!-- Token Usage -->
+    <string name="tokens_used">Tokens: %d%%</string>
+    <string name="tokens_na">Tokens: N/A</string>
+
+    <!-- Time Formatting -->
+    <string name="time_took">took %s</string>
+    <string name="time_format_seconds">%.1fs</string>
+    <string name="time_format_minutes" formatted="false">%dm %.1fs</string>
+
+    <!-- Copy Chat -->
+    <string name="copy_chat_title">Copy Chat</string>
+    <string name="copy_chat_copy">Copy to Clipboard</string>
+    <string name="copy_chat_share">Share as File</string>
+    <string name="copy_chat_empty">No messages to copy</string>
+    <string name="copy_chat_success">Chat copied to clipboard</string>
+    <string name="copy_chat_failed">Failed to copy chat</string>
+    <string name="copy_chat_share_failed">Failed to share chat</string>
+
+    <!-- Sender Labels -->
+    <string name="sender_user">User</string>
+    <string name="sender_agent">Agent</string>
+    <string name="sender_system">System</string>
+    <string name="sender_tool">Tool</string>
+
+    <!-- Settings -->
+    <string name="settings_title">AI Settings</string>
+    <string name="settings_backend">Backend</string>
+    <string name="settings_model">Model</string>
+    <string name="settings_temperature">Temperature</string>
+    <string name="settings_max_tokens">Max Tokens</string>
+</resources>
