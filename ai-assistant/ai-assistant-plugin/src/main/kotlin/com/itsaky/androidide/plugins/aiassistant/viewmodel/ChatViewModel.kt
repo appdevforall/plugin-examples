@@ -19,6 +19,7 @@ import com.itsaky.androidide.plugins.aiassistant.tool.handlers.ListFilesHandler
 import com.itsaky.androidide.plugins.aiassistant.tool.handlers.ReadFileHandler
 import com.itsaky.androidide.plugins.aiassistant.tool.handlers.SearchProjectHandler
 import com.itsaky.androidide.plugins.aiassistant.tool.handlers.UpdateFileHandler
+import com.itsaky.androidide.plugins.aiassistant.utils.ToolExecutionTracker
 import com.itsaky.androidide.plugins.services.LlmInferenceService
 import com.itsaky.androidide.plugins.services.SharedServices
 import kotlinx.coroutines.Dispatchers
@@ -75,6 +76,7 @@ class ChatViewModel(
     private val approvalManager = ToolApprovalManager()
     private val toolRouter: ToolRouter
     private val executor: Executor
+    val toolExecutionTracker = ToolExecutionTracker()
 
     private val _pendingApprovalRequest = MutableStateFlow<ApprovalRequest?>(null)
     val pendingApprovalRequest: StateFlow<ApprovalRequest?> = _pendingApprovalRequest.asStateFlow()
@@ -97,7 +99,7 @@ class ChatViewModel(
         }
 
         toolRouter = ToolRouter(handlers)
-        executor = Executor(toolRouter, approvalManager)
+        executor = Executor(toolRouter, approvalManager, toolExecutionTracker)
 
         // Monitor approval requests
         viewModelScope.launch {

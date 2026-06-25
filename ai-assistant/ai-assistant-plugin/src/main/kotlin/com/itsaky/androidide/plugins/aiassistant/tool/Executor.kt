@@ -2,6 +2,7 @@ package com.itsaky.androidide.plugins.aiassistant.tool
 
 import android.util.Log
 import com.itsaky.androidide.plugins.aiassistant.models.ToolResult
+import com.itsaky.androidide.plugins.aiassistant.utils.ToolExecutionTracker
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -11,7 +12,8 @@ import kotlinx.coroutines.coroutineScope
  */
 class Executor(
     private val toolRouter: ToolRouter,
-    private val approvalManager: ToolApprovalManager
+    private val approvalManager: ToolApprovalManager,
+    private val toolExecutionTracker: ToolExecutionTracker? = null
 ) {
     private val TAG = "Executor"
 
@@ -34,6 +36,10 @@ class Executor(
                 "search_project" -> listOf("query")
                 "create_file" -> listOf("file_path", "content")
                 "update_file" -> listOf("file_path", "content")
+                "add_dependency" -> listOf("dependency_string")
+                "add_string_resource" -> listOf("name", "value")
+                "run_app" -> emptyList() // No required args
+                "get_build_output" -> emptyList() // No required args
                 else -> emptyList()
             }
         }
@@ -104,7 +110,15 @@ class Executor(
         }
 
         Log.d(TAG, "($executionMode): Dispatching '$toolName' with args: $args")
+
+        // Before tool execution
+        val toolStartTime = System.currentTimeMillis()
+
         val result = toolRouter.dispatch(toolName, args)
+
+        // After tool execution
+        val toolDuration = System.currentTimeMillis() - toolStartTime
+        toolExecutionTracker?.logToolCall(toolName, toolDuration)
 
         Log.i(TAG, "($executionMode): Result: ${result.toResultMap()}")
         return result
