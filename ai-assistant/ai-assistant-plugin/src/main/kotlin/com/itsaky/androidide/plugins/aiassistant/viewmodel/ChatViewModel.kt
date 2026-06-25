@@ -23,6 +23,7 @@ import com.itsaky.androidide.plugins.aiassistant.utils.ToolExecutionTracker
 import com.itsaky.androidide.plugins.services.LlmInferenceService
 import com.itsaky.androidide.plugins.services.SharedServices
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -30,6 +31,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.io.File
@@ -82,6 +84,8 @@ class ChatViewModel(
     val pendingApprovalRequest: StateFlow<ApprovalRequest?> = _pendingApprovalRequest.asStateFlow()
 
     private var contextFiles = listOf<File>()
+
+    private var stateUpdateJob: Job? = null
 
     init {
         // Initialize tool handlers
@@ -218,11 +222,13 @@ class ChatViewModel(
     private suspend fun executeToolCalls(toolCalls: List<ToolCall>) {
         if (toolCalls.isEmpty()) return
 
-        _agentState.value = AgentState.Executing(
+        val executingState = AgentState.Executing(
             currentStepIndex = 0,
             totalSteps = toolCalls.size,
             description = toolCalls.first().name
         )
+        _agentState.value = executingState
+        startStateTimer(executingState)
 
         val results = executor.execute(toolCalls)
 
@@ -243,6 +249,7 @@ class ChatViewModel(
             syncMessageToSession(resultMessage)
         }
 
+        stopStateTimer()
         _agentState.value = AgentState.Idle
     }
 
@@ -525,8 +532,32 @@ class ChatViewModel(
         }
     }
 
+    /**
+     * Start a timer that updates the executing state with elapsed time.
+     * Updates every 100ms for smooth progress display.
+     */
+    fun startStateTimer(state: AgentState.Executing) {
+        stateUpdateJob?.cancel()
+        stateUpdateJob = viewModelScope.launch {
+            while (isActive) {
+                delay(100) // Update every 100ms
+                val elapsed = System.currentTimeMillis() - state.startTime
+                _agentState.value = state.copy(elapsedMillis = elapsed)
+            }
+        }
+    }
+
+    /**
+     * Stop the state timer.
+     */
+    fun stopStateTimer() {
+        stateUpdateJob?.cancel()
+        stateUpdateJob = null
+    }
+
     override fun onCleared() {
         super.onCleared()
         stopProcessing()
+        stopStateTimer()
     }
 }
