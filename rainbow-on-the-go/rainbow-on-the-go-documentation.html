@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RainbowOnTheGo Plugin Documentation</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --fg: #1a1a1a;
+    --accent: #7b1fa2;
+    --accent-light: #f4e9f8;
+    --border: #d0d7de;
+    --code-bg: #f4f6f8;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--fg);
+    background: var(--bg);
+    line-height: 1.6;
+    max-width: 52rem;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+  }
+  header { border-bottom: 3px solid var(--accent); padding-bottom: 1.2rem; margin-bottom: 2rem; }
+  header h1 { font-size: 2rem; color: var(--accent); }
+  header p.subtitle { color: #555; margin-top: 0.3rem; }
+  nav { background: var(--accent-light); border: 1px solid var(--border); border-radius: 6px; padding: 1rem 1.5rem; margin-bottom: 2.5rem; }
+  nav h2 { font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); margin-bottom: 0.5rem; }
+  nav ol { padding-left: 1.3rem; }
+  nav a { color: var(--accent); text-decoration: none; }
+  nav a:hover { text-decoration: underline; }
+  section { margin-bottom: 2.5rem; }
+  h2 { font-size: 1.4rem; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; margin-bottom: 1rem; }
+  h3 { font-size: 1.1rem; margin: 1.2rem 0 0.5rem; }
+  p, li { margin-bottom: 0.5rem; }
+  ul, ol { padding-left: 1.4rem; }
+  code {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    background: var(--code-bg);
+    padding: 0.15em 0.35em;
+    border-radius: 3px;
+    font-size: 0.9em;
+  }
+  .swatch { display: inline-block; width: 0.9em; height: 0.9em; border-radius: 2px; vertical-align: middle; margin-right: 0.3em; border: 1px solid rgba(0,0,0,0.15); }
+  table { border-collapse: collapse; width: 100%; margin: 0.8rem 0; }
+  th, td { border: 1px solid var(--border); padding: 0.4rem 0.6rem; text-align: left; font-size: 0.92rem; }
+  th { background: var(--accent-light); }
+</style>
+</head>
+<body>
+<header>
+  <h1>RainbowOnTheGo Plugin</h1>
+  <p class="subtitle">Depth-colored parentheses, brackets, and braces for the Code On The Go editor.</p>
+</header>
+
+<nav>
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#overview">Executive Overview</a></li>
+    <li><a href="#functionality">Core Functionality</a></li>
+    <li><a href="#architecture">Technical Architecture</a></li>
+    <li><a href="#usage">Usage</a></li>
+    <li><a href="#benefits">Key Benefits</a></li>
+  </ol>
+</nav>
+
+<section id="overview">
+  <h2>1. Executive Overview</h2>
+  <p>RainbowOnTheGo makes nested code easier to read by coloring each pair of
+  brackets according to how deeply it is nested. An opening delimiter and its matching
+  closing delimiter share the same color, so you can see at a glance which <code>(</code>
+  pairs with which <code>)</code>, even in deeply nested expressions.</p>
+  <p>The plugin computes the coloring itself and the Code On The Go editor merges it on top of
+  the normal highlighting. It adds no toolbar buttons, requests no permissions, makes no network
+  calls, and reads no files.</p>
+</section>
+
+<section id="functionality">
+  <h2>2. Core Functionality</h2>
+  <p>The plugin colors three delimiter pairs — <code>()</code>, <code>[]</code> and
+  <code>{}</code> — cycling through six colors by nesting depth:</p>
+  <table>
+    <tr><th>Depth</th><th>Day theme</th><th>Night theme</th></tr>
+    <tr><td>0, 6, 12…</td><td><span class="swatch" style="background:#D11C1C"></span>Red</td><td><span class="swatch" style="background:#FF6B6B"></span>Red</td></tr>
+    <tr><td>1, 7, 13…</td><td><span class="swatch" style="background:#D9730D"></span>Orange</td><td><span class="swatch" style="background:#FFA94D"></span>Orange</td></tr>
+    <tr><td>2, 8, 14…</td><td><span class="swatch" style="background:#B8860B"></span>Yellow</td><td><span class="swatch" style="background:#FFE066"></span>Yellow</td></tr>
+    <tr><td>3, 9, 15…</td><td><span class="swatch" style="background:#1B8A2E"></span>Green</td><td><span class="swatch" style="background:#69DB7C"></span>Green</td></tr>
+    <tr><td>4, 10, 16…</td><td><span class="swatch" style="background:#1565C0"></span>Blue</td><td><span class="swatch" style="background:#4DABF7"></span>Blue</td></tr>
+    <tr><td>5, 11, 17…</td><td><span class="swatch" style="background:#7B1FA2"></span>Purple</td><td><span class="swatch" style="background:#DA77F2"></span>Purple</td></tr>
+  </table>
+  <p>Brackets that appear inside string literals and comments are left alone, so a
+  <code>(</code> inside <code>"text (here)"</code> keeps its normal string color.</p>
+</section>
+
+<section id="architecture">
+  <h2>3. Technical Architecture</h2>
+  <p>The plugin implements <code>EditorDecorationProvider</code>, a generic additive extension
+  in the Code On The Go plugin API. Its only method, <code>decorate(text, start, end, isDark)</code>,
+  returns a list of foreground-color spans for a region of editor text; the IDE merges them on top
+  of the existing highlighting. Because the only output is a list of colored ranges, a provider can
+  never replace or suppress the editor's syntax highlighting — and the IDE has no knowledge of
+  brackets, depth, or palettes. All of that lives in the plugin.</p>
+  <p>For each region, <code>decorate</code> scans the text for bracket characters, tracks the
+  running nesting depth (recovered by scanning back from the region start), skips brackets inside
+  strings and comments, and emits a span per bracket colored
+  <code>palette[depth % palette.size]</code>. Detection is text-based, so it works in every
+  language — not only those whose grammar tags brackets — and the same generic decoration hook can
+  power any other plugin (indent guides, marker tinting, …).</p>
+</section>
+
+<section id="usage">
+  <h2>4. Usage</h2>
+  <ol>
+    <li>Install <code>rainbow-on-the-go.cgp</code> from the Code On The Go Plugin Manager.</li>
+    <li>Enable the plugin. Open editors repaint automatically.</li>
+    <li>Open any source file with nested brackets — each nesting level is a different color,
+    and matching delimiters share a color.</li>
+    <li>Switch between light and dark themes; the palette follows the theme.</li>
+    <li>Disable the plugin to return brackets to the editor's normal color.</li>
+  </ol>
+</section>
+
+<section id="benefits">
+  <h2>5. Key Benefits</h2>
+  <ul>
+    <li><strong>Readability:</strong> matching delimiters are instantly identifiable in
+    deeply nested code.</li>
+    <li><strong>Theme-aware:</strong> separate palettes keep colors legible on both light
+    and dark backgrounds.</li>
+    <li><strong>Non-intrusive:</strong> purely additive — it only colors bracket glyphs and
+    leaves all other highlighting untouched.</li>
+    <li><strong>Safe:</strong> no permissions, no network, no file access.</li>
+  </ul>
+</section>
+
+</body>
+</html>

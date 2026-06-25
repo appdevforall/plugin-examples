@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RainbowOnTheGo — How it works</title>
+<link rel="stylesheet" href="css/walkthrough.css">
+</head>
+<body>
+
+<h1>RainbowOnTheGo</h1>
+<p>RainbowOnTheGo colors matching parentheses, brackets, and braces by how deeply they
+nest, so a delimiter and its match share a color. It works in every language and adds color
+only — your normal syntax highlighting is untouched.</p>
+
+<h2>What you'll see</h2>
+<p>Each nesting level gets the next color, cycling through six:</p>
+<ul>
+  <li>Depth 0 — red</li>
+  <li>Depth 1 — orange</li>
+  <li>Depth 2 — yellow</li>
+  <li>Depth 3 — green</li>
+  <li>Depth 4 — blue</li>
+  <li>Depth 5 — purple</li>
+</ul>
+<p>At depth 6 the colors start over at red. A closing bracket always matches the color of
+the opening bracket it pairs with.</p>
+
+<h2>Light and dark themes</h2>
+<p>The plugin ships two palettes. On a light editor theme it uses deeper, saturated colors
+that stay legible on white; on a dark theme it uses brighter, pastel colors. The editor picks
+the palette that matches your current theme and repaints when you switch.</p>
+
+<h2>Strings and comments</h2>
+<p>Brackets inside string literals and comments are skipped, so a parenthesis in
+<code>"hello (world)"</code> or in a <code>// comment (here)</code> keeps its normal color and
+does not affect nesting depth.</p>
+
+<h2>Turning it off</h2>
+<p>Disable RainbowOnTheGo in the Plugin Manager to return all brackets to the editor's normal
+color. The change applies immediately to open editors.</p>
+
+<h2>How it's built</h2>
+<p>RainbowOnTheGo implements <code>EditorDecorationProvider</code>, a generic Code On The Go
+plugin API. Its <code>decorate</code> method scans a region of text for bracket characters,
+tracks the running nesting depth, skips brackets inside strings and comments, and returns a
+foreground-color span per bracket. The editor merges those spans on top of the normal
+highlighting — it never replaces it, and the IDE itself knows nothing about brackets. The same
+generic hook could power other decorations too.</p>
+
+</body>
+</html>
