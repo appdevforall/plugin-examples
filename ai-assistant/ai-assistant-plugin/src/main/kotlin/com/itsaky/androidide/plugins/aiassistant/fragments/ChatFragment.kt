@@ -41,7 +41,13 @@ class ChatFragment : Fragment() {
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        _binding = FragmentChatBinding.inflate(inflater, container, false)
+        // Get plugin context to ensure proper resource inflation
+        val pluginContext = getPluginContext()?.androidContext ?: requireContext()
+
+        // Create inflater with plugin context
+        val pluginInflater = inflater.cloneInContext(pluginContext)
+
+        _binding = FragmentChatBinding.inflate(pluginInflater, container, false)
         return binding.root
     }
 
