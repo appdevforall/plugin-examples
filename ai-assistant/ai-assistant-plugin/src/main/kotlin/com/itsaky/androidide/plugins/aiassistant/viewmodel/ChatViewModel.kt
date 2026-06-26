@@ -210,7 +210,22 @@ class ChatViewModel(
      * Build system prompt with tool descriptions.
      */
     private fun buildSystemPrompt(): String {
-        return "You are a helpful coding assistant integrated into AndroidIDE."
+        val toolDescriptions = toolRouter.getAllHandlers().joinToString("\n") { handler ->
+            "- ${handler.toolName}: ${handler.description}"
+        }
+
+        return """
+        You are a helpful coding assistant integrated into AndroidIDE.
+
+        You have access to the following tools:
+        $toolDescriptions
+
+        To use a tool, include this in your response:
+        <tool_call>{"tool":"tool_name","args":{"param":"value"}}</tool_call>
+
+        You can include explanation text before or after the tool call.
+        Always use tools when the user asks you to perform an action.
+        """.trimIndent()
     }
 
     /**

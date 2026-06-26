@@ -44,4 +44,11 @@ class ToolRouter(
     fun getAvailableTools(): List<String> {
         return handlerMap.keys.toList()
     }
+
+    /**
+     * Get all registered tool handlers.
+     */
+    fun getAllHandlers(): List<ToolHandler> {
+        return handlers
+    }
 }
