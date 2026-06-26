@@ -123,18 +123,22 @@ class ChatViewModel(
     }
 
     fun initializeStorage(context: android.content.Context) {
+        android.util.Log.d("ChatViewModel", "initializeStorage called")
         storageManager = ChatStorageManager(context)
         loadSessions()
     }
 
     fun loadSessions() {
         val loaded = storageManager.loadSessions()
+        android.util.Log.d("ChatViewModel", "loadSessions: loaded ${loaded.size} sessions")
         if (loaded.isEmpty()) {
+            android.util.Log.d("ChatViewModel", "No sessions found, creating new session")
             createNewSession()
         } else {
             _sessions.value = loaded
             val currentId = storageManager.loadCurrentSessionId()
             val session = loaded.firstOrNull { it.id == currentId } ?: loaded.first()
+            android.util.Log.d("ChatViewModel", "Switching to session ${session.id} with ${session.messages.size} messages")
             switchToSession(session.id)
         }
     }
@@ -286,17 +290,22 @@ class ChatViewModel(
      * Retries with delays to handle plugin loading timing.
      */
     fun checkBackendAvailability() {
+        android.util.Log.d("ChatViewModel", "checkBackendAvailability: Starting check")
         viewModelScope.launch(Dispatchers.IO) {
             // Retry up to 5 times with 500ms delays to handle plugin loading order
             repeat(5) { attempt ->
+                android.util.Log.d("ChatViewModel", "checkBackendAvailability: Attempt ${attempt + 1}")
                 val llmService = getLlmService()
+                android.util.Log.d("ChatViewModel", "checkBackendAvailability: llmService = $llmService")
                 if (llmService != null) {
                     try {
                         val backends = llmService.availableBackends
+                        android.util.Log.d("ChatViewModel", "checkBackendAvailability: Found ${backends.size} backends")
 
                         // Read backend preference from settings
                         val prefs = getContext()?.getPluginSharedPreferences("AgentSettings")
                         val preferredBackendName = prefs?.getString("ai_backend_preference", "LOCAL_LLM")
+                        android.util.Log.d("ChatViewModel", "checkBackendAvailability: Preferred backend = $preferredBackendName")
                         val preferredBackendId = when (preferredBackendName) {
                             "GEMINI" -> "gemini"
                             "LOCAL_LLM" -> "local"
@@ -306,18 +315,22 @@ class ChatViewModel(
                         // First try to use the preferred backend
                         var foundAvailable = false
                         val preferredBackend = backends.find { it.id == preferredBackendId }
+                        android.util.Log.d("ChatViewModel", "checkBackendAvailability: Preferred backend (${preferredBackendId}) found=${preferredBackend != null}, available=${preferredBackend?.isAvailable}")
                         if (preferredBackend != null && preferredBackend.isAvailable) {
                             _isBackendAvailable.value = true
                             currentBackendId = preferredBackend.id
+                            android.util.Log.d("ChatViewModel", "checkBackendAvailability: Using preferred backend ${preferredBackend.id}")
                             return@launch // Success, exit retry loop
                         }
 
                         // If preferred backend not available, try any available backend as fallback
                         for (backend in backends) {
+                            android.util.Log.d("ChatViewModel", "checkBackendAvailability: Checking backend ${backend.id}, available=${backend.isAvailable}")
                             if (backend.isAvailable) {
                                 _isBackendAvailable.value = true
                                 currentBackendId = backend.id
                                 foundAvailable = true
+                                android.util.Log.d("ChatViewModel", "checkBackendAvailability: Using fallback backend ${backend.id}")
                                 break
                             }
                         }
@@ -337,6 +350,7 @@ class ChatViewModel(
             }
 
             // All retries failed
+            android.util.Log.d("ChatViewModel", "checkBackendAvailability: All retries failed, no backend available")
             _isBackendAvailable.value = false
         }
     }
@@ -345,21 +359,26 @@ class ChatViewModel(
      * Send a user message and get agent response.
      */
     fun sendMessage(userMessage: String) {
+        android.util.Log.d("ChatViewModel", "sendMessage called with: '$userMessage'")
         val llmService = getLlmService()
         if (llmService == null) {
+            android.util.Log.d("ChatViewModel", "sendMessage: LLM service not available")
             _agentState.value = AgentState.Error("LLM service not available. Install AI Core plugin.")
             return
         }
 
         if (!_isBackendAvailable.value) {
+            android.util.Log.d("ChatViewModel", "sendMessage: Backend not available")
             _agentState.value = AgentState.Error("No LLM backend available. Please configure one in AI Core plugin.")
             return
         }
 
         if (userMessage.isBlank()) {
+            android.util.Log.d("ChatViewModel", "sendMessage: Message is blank")
             return
         }
 
+        android.util.Log.d("ChatViewModel", "sendMessage: Starting message processing")
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 // Add user message
@@ -370,6 +389,7 @@ class ChatViewModel(
                     status = MessageStatus.SENT
                 )
                 _messages.value = _messages.value + userChatMessage
+                android.util.Log.d("ChatViewModel", "sendMessage: Added user message, total messages=${_messages.value.size}")
                 syncMessageToSession(userChatMessage)
 
                 // Add empty agent message that will be updated with streaming tokens
@@ -530,9 +550,11 @@ class ChatViewModel(
      */
     fun switchToSession(sessionId: String) {
         val session = _sessions.value.firstOrNull { it.id == sessionId }
+        android.util.Log.d("ChatViewModel", "switchToSession: sessionId=$sessionId, session found=${session != null}")
         if (session != null) {
             _currentSessionId.value = sessionId
             _messages.value = session.messages
+            android.util.Log.d("ChatViewModel", "switchToSession: set _messages to ${session.messages.size} messages")
         }
     }
 

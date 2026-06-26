@@ -65,6 +65,7 @@ class ChatFragment : Fragment() {
         if (!viewModel.isStorageInitialized()) {
             viewModel.initializeStorage(requireContext())
         }
+        setupToolbar()
         setupRecyclerView()
         setupInputArea()
         setupStatusBar()
@@ -108,6 +109,17 @@ class ChatFragment : Fragment() {
             layoutManager = LinearLayoutManager(requireContext()).apply {
                 stackFromEnd = true
             }
+        }
+    }
+
+    private fun setupToolbar() {
+        binding.btnClearChat.setOnClickListener {
+            // Clear current session and create a new one
+            viewModel.createNewSession()
+        }
+
+        binding.btnSettings.setOnClickListener {
+            openSettingsFragment()
         }
     }
 

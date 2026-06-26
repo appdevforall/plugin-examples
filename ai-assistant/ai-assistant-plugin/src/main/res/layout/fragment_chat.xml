@@ -5,19 +5,44 @@
     android:orientation="vertical"
     android:background="#FFFFFF">
 
-    <!-- Simple toolbar -->
-    <TextView
+    <!-- Toolbar with title and menu buttons -->
+    <LinearLayout
         android:id="@+id/chat_toolbar"
         android:layout_width="match_parent"
         android:layout_height="56dp"
         android:background="#E0E0E0"
         android:gravity="center_vertical"
+        android:orientation="horizontal"
         android:paddingStart="16dp"
-        android:paddingEnd="16dp"
-        android:text="AI Agent"
-        android:textColor="#212121"
-        android:textSize="20sp"
-        android:textStyle="bold" />
+        android:paddingEnd="8dp">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="AI Agent"
+            android:textColor="#212121"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/btn_clear_chat"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Clear"
+            android:textSize="12sp"
+            android:padding="8dp"
+            android:minWidth="0dp" />
+
+        <Button
+            android:id="@+id/btn_settings"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Settings"
+            android:textSize="12sp"
+            android:padding="8dp"
+            android:minWidth="0dp" />
+    </LinearLayout>
 
     <!-- RecyclerView for messages -->
     <androidx.recyclerview.widget.RecyclerView
