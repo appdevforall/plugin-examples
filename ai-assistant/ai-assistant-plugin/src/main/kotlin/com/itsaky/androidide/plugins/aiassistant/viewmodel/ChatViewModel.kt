@@ -218,14 +218,25 @@ class ChatViewModel(
         val prompt = """
         You are a helpful coding assistant integrated into AndroidIDE.
 
-        You have access to the following tools:
+        AVAILABLE TOOLS:
         $toolDescriptions
 
-        To use a tool, include this in your response:
-        <tool_call>{"tool":"tool_name","args":{"param":"value"}}</tool_call>
+        IMPORTANT: When the user asks you to DO something (read, list, search, create, update, run), you MUST use a tool.
 
-        You can include explanation text before or after the tool call.
-        Always use tools when the user asks you to perform an action.
+        Example requests and responses:
+        User: "run the app"
+        Assistant: I'll run the app for you.
+        <tool_call>{"tool":"run_app","args":{}}</tool_call>
+
+        User: "list files in src"
+        Assistant: Let me list the files in the src directory.
+        <tool_call>{"tool":"list_files","args":{"directory":"src"}}</tool_call>
+
+        User: "read MainActivity.kt"
+        Assistant: I'll read that file for you.
+        <tool_call>{"tool":"read_file","args":{"path":"MainActivity.kt"}}</tool_call>
+
+        ALWAYS include the <tool_call> block when the user asks you to perform an action.
         """.trimIndent()
 
         android.util.Log.d("ChatViewModel", "System prompt built with ${toolRouter.getAllHandlers().size} tools:\n$prompt")
