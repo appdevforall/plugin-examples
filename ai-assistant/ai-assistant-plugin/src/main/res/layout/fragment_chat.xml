@@ -112,13 +112,13 @@
                 android:gravity="center_vertical"
                 android:orientation="horizontal">
 
-                <com.google.android.material.button.MaterialButton
+                <Button
                     android:id="@+id/btn_add_context"
-                    style="@style/Widget.Material3.Button.IconButton"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:contentDescription="@string/add_context_file"
-                    android:text="\@" />
+                    android:text="\@"
+                    android:textSize="16sp" />
 
                 <HorizontalScrollView
                     android:layout_width="0dp"
@@ -134,24 +134,21 @@
                 </HorizontalScrollView>
             </LinearLayout>
 
-            <com.google.android.material.textfield.TextInputLayout
-                android:id="@+id/prompt_input_layout"
-                style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+            <EditText
+                android:id="@+id/prompt_input_edittext"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
-                android:hint="@string/type_a_message_or_prompt">
-
-                <com.google.android.material.textfield.TextInputEditText
-                    android:id="@+id/prompt_input_edittext"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:gravity="top"
-                    android:inputType="textMultiLine|textCapSentences"
-                    android:maxLines="8"
-                    android:minHeight="56dp"
-                    android:scrollbars="vertical" />
-            </com.google.android.material.textfield.TextInputLayout>
+                android:hint="@string/type_a_message_or_prompt"
+                android:background="@android:drawable/editbox_background"
+                android:padding="12dp"
+                android:gravity="top"
+                android:inputType="textMultiLine|textCapSentences"
+                android:maxLines="8"
+                android:minHeight="56dp"
+                android:scrollbars="vertical"
+                android:textSize="16sp"
+                android:textColor="#000000" />
 
             <TextView
                 android:layout_width="match_parent"
@@ -200,18 +197,18 @@
                         tools:text="Gemini" />
                 </LinearLayout>
 
-                <com.google.android.material.button.MaterialButton
+                <Button
                     android:id="@+id/send_button"
-                    style="@style/Widget.Material3.Button"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_alignParentEnd="true"
                     android:layout_centerVertical="true"
-                    android:backgroundTint="#212121"
+                    android:background="#212121"
                     android:enabled="false"
                     android:text="@string/send"
                     android:textColor="#FFFFFF"
-                    app:cornerRadius="20dp" />
+                    android:padding="12dp"
+                    android:minWidth="80dp" />
             </RelativeLayout>
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
