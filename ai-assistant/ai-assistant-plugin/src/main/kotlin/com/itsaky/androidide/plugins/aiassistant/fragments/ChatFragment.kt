@@ -109,14 +109,6 @@ class ChatFragment : Fragment() {
                 stackFromEnd = true
             }
         }
-
-        // DEBUG: Add test message to verify RecyclerView works
-        android.util.Log.d("ChatFragment", "RecyclerView setup complete, adding test message")
-        val testMessage = com.itsaky.androidide.plugins.aiassistant.models.ChatMessage(
-            text = "🔧 DEBUG: If you can see this, the RecyclerView is working!",
-            sender = com.itsaky.androidide.plugins.aiassistant.models.Sender.AGENT
-        )
-        chatAdapter.submitList(listOf(testMessage))
     }
 
     private fun setupInputArea() {
@@ -148,8 +140,7 @@ class ChatFragment : Fragment() {
     private fun observeViewModel() {
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                // TEMP: Commented out to test if RecyclerView can display messages
-                // launch { observeMessages() }
+                launch { observeMessages() }
                 launch { observeAgentState() }
                 launch { observePendingApprovalRequest() }
             }
