@@ -109,6 +109,14 @@ class ChatFragment : Fragment() {
                 stackFromEnd = true
             }
         }
+
+        // DEBUG: Add test message to verify RecyclerView works
+        android.util.Log.d("ChatFragment", "RecyclerView setup complete, adding test message")
+        val testMessage = com.itsaky.androidide.plugins.aiassistant.models.ChatMessage(
+            text = "🔧 DEBUG: If you can see this, the RecyclerView is working!",
+            sender = com.itsaky.androidide.plugins.aiassistant.models.Sender.AGENT
+        )
+        chatAdapter.submitList(listOf(testMessage))
     }
 
     private fun setupInputArea() {
