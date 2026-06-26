@@ -101,7 +101,8 @@ class ChatViewModel(
                 ListFilesHandler(context),
                 SearchProjectHandler(context),
                 CreateFileHandler(context),
-                UpdateFileHandler(context)
+                UpdateFileHandler(context),
+                com.itsaky.androidide.plugins.aiassistant.tool.handlers.RunAppHandler(context)
             )
         } else {
             emptyList()
@@ -214,7 +215,7 @@ class ChatViewModel(
             "- ${handler.toolName}: ${handler.description}"
         }
 
-        return """
+        val prompt = """
         You are a helpful coding assistant integrated into AndroidIDE.
 
         You have access to the following tools:
@@ -226,6 +227,9 @@ class ChatViewModel(
         You can include explanation text before or after the tool call.
         Always use tools when the user asks you to perform an action.
         """.trimIndent()
+
+        android.util.Log.d("ChatViewModel", "System prompt built with ${toolRouter.getAllHandlers().size} tools:\n$prompt")
+        return prompt
     }
 
     /**
