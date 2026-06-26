@@ -9,10 +9,13 @@
         android:id="@+id/chat_toolbar"
         android:layout_width="0dp"
         android:layout_height="56dp"
+        android:background="#F5F5F5"
+        android:elevation="4dp"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
-        app:title="@string/ai_agent" />
+        app:title="@string/ai_agent"
+        app:titleTextColor="#212121" />
 
     <TextView
         android:id="@+id/empty_chat_view"

@@ -14,7 +14,8 @@
         android:id="@+id/message_sender"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:textAppearance="?android:attr/textAppearanceSmall"
+        android:textSize="14sp"
+        android:textColor="#212121"
         android:textStyle="bold"
         tools:text="User" />
 
@@ -32,7 +33,8 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
         android:layout_marginEnd="8dp"
-        android:textAppearance="?android:attr/textAppearanceMedium"
+        android:textSize="16sp"
+        android:textColor="#000000"
         android:textIsSelectable="true"
         android:scrollHorizontally="false"
         tools:text="This is a sample message content." />
@@ -48,8 +50,8 @@
             android:id="@+id/message_timestamp"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textAppearance="?android:attr/textAppearanceSmall"
-            android:textColor="?android:attr/textColorSecondary"
+            android:textSize="14sp"
+        android:textColor="#212121"
             tools:text="10:45 AM" />
 
         <TextView
@@ -57,8 +59,8 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
-            android:textAppearance="?android:attr/textAppearanceSmall"
-            android:textColor="?android:attr/textColorSecondary"
+            android:textSize="14sp"
+        android:textColor="#212121"
             android:visibility="gone"
             tools:text="..."
             tools:visibility="visible" />
@@ -68,8 +70,8 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginStart="12dp"
-            android:textAppearance="?android:attr/textAppearanceSmall"
-            android:textColor="?android:attr/textColorSecondary"
+            android:textSize="14sp"
+        android:textColor="#212121"
             android:alpha="0.6"
             tools:text="took 1.2s" />
     </LinearLayout>
