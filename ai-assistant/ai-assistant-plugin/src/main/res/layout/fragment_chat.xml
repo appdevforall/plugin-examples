@@ -8,7 +8,7 @@
     <com.google.android.material.appbar.MaterialToolbar
         android:id="@+id/chat_toolbar"
         android:layout_width="0dp"
-        android:layout_height="?attr/actionBarSize"
+        android:layout_height="56dp"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
@@ -19,8 +19,8 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="@string/new_chat"
-        android:textAppearance="?attr/textAppearanceHeadline5"
-        android:textColor="?attr/colorOnSurfaceVariant"
+        android:textSize="24sp"
+        android:textColor="#757575"
         android:visibility="gone"
         app:layout_constraintBottom_toTopOf="@id/input_bar_card"
         app:layout_constraintEnd_toEndOf="parent"
@@ -62,7 +62,7 @@
             android:ellipsize="end"
             android:fontFamily="monospace"
             android:maxLines="1"
-            android:textAppearance="?attr/textAppearanceCaption"
+            android:textSize="12sp"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toStartOf="@+id/agent_status_timer"
             app:layout_constraintStart_toStartOf="parent"
@@ -76,7 +76,7 @@
             android:fontFamily="monospace"
             android:gravity="end"
             android:minWidth="130dp"
-            android:textAppearance="?attr/textAppearanceCaption"
+            android:textSize="12sp"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintTop_toTopOf="parent"
@@ -156,7 +156,7 @@
                 android:gravity="center_horizontal"
                 android:layout_marginTop="4dp"
                 android:text="@string/experimental_ai_use_at_your_own_risk"
-                android:textAppearance="?attr/textAppearanceCaption" />
+                android:textSize="12sp" />
 
             <RelativeLayout
                 android:layout_width="match_parent"
@@ -182,7 +182,7 @@
                         android:layout_height="18dp"
                         android:contentDescription="@string/current_ai_backend"
                         android:src="@drawable/ic_ai"
-                        app:tint="?attr/colorOnSurfaceVariant" />
+                        app:tint="#757575" />
 
                     <TextView
                         android:id="@+id/backend_status_text"
@@ -192,8 +192,8 @@
                         android:ellipsize="end"
                         android:maxWidth="130dp"
                         android:maxLines="1"
-                        android:textAppearance="?attr/textAppearanceLabelLarge"
-                        android:textColor="?attr/colorOnSurface"
+                        android:textSize="14sp"
+                        android:textColor="#212121"
                         tools:text="Gemini" />
                 </LinearLayout>
 
@@ -204,10 +204,10 @@
                     android:layout_height="wrap_content"
                     android:layout_alignParentEnd="true"
                     android:layout_centerVertical="true"
-                    android:backgroundTint="?attr/colorOnSurface"
+                    android:backgroundTint="#212121"
                     android:enabled="false"
                     android:text="@string/send"
-                    android:textColor="?attr/colorSurface"
+                    android:textColor="#FFFFFF"
                     app:cornerRadius="20dp" />
             </RelativeLayout>
         </LinearLayout>
