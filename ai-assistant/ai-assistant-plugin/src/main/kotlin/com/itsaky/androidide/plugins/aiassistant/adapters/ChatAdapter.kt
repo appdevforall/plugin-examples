@@ -65,6 +65,12 @@ class ChatAdapter(
         val messageContent: TextView = view.findViewById(R.id.message_content)
     }
 
+    override fun getItemCount(): Int {
+        val count = super.getItemCount()
+        android.util.Log.d("ChatAdapter", "getItemCount() = $count")
+        return count
+    }
+
     override fun getItemViewType(position: Int): Int {
         val message = getItem(position)
         return if (message.sender == Sender.SYSTEM && message.status == MessageStatus.ERROR) {
@@ -77,6 +83,7 @@ class ChatAdapter(
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+        android.util.Log.d("ChatAdapter", "onCreateViewHolder called, viewType=$viewType")
         // Use plugin context for inflating layouts to access plugin resources
         val inflater = LayoutInflater.from(pluginContext)
         return when (viewType) {

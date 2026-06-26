@@ -148,7 +148,8 @@ class ChatFragment : Fragment() {
     private fun observeViewModel() {
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                launch { observeMessages() }
+                // TEMP: Commented out to test if RecyclerView can display messages
+                // launch { observeMessages() }
                 launch { observeAgentState() }
                 launch { observePendingApprovalRequest() }
             }
