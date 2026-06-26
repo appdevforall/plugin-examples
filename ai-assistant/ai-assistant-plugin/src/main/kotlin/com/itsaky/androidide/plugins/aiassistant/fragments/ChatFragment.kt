@@ -113,13 +113,26 @@ class ChatFragment : Fragment() {
     }
 
     private fun setupToolbar() {
-        binding.btnClearChat.setOnClickListener {
-            // Clear current session and create a new one
-            viewModel.createNewSession()
-        }
+        binding.btnOverflowMenu.setOnClickListener { view ->
+            // Use plugin context for PopupMenu to access menu resources
+            val pluginContext = getPluginContext()?.androidContext ?: requireContext()
+            val popup = android.widget.PopupMenu(pluginContext, view)
+            popup.menuInflater.inflate(com.itsaky.androidide.plugins.aiassistant.R.menu.chat_overflow_menu, popup.menu)
 
-        binding.btnSettings.setOnClickListener {
-            openSettingsFragment()
+            popup.setOnMenuItemClickListener { menuItem ->
+                when (menuItem.itemId) {
+                    com.itsaky.androidide.plugins.aiassistant.R.id.menu_settings -> {
+                        openSettingsFragment()
+                        true
+                    }
+                    com.itsaky.androidide.plugins.aiassistant.R.id.menu_clear_chat -> {
+                        viewModel.createNewSession()
+                        true
+                    }
+                    else -> false
+                }
+            }
+            popup.show()
         }
     }
 
