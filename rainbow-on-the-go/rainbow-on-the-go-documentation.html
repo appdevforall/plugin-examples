@@ -105,9 +105,11 @@
   <p>For each region, <code>decorate</code> scans the text for bracket characters, tracks the
   running nesting depth (recovered by scanning back from the region start), skips brackets inside
   strings and comments, and emits a span per bracket colored
-  <code>palette[depth % palette.size]</code>. Detection is text-based, so it works in every
-  language — not only those whose grammar tags brackets — and the same generic decoration hook can
-  power any other plugin (indent guides, marker tinting, …).</p>
+  <code>palette[depth % palette.size]</code>. Detection is text-based and tuned for Java/Kotlin
+  token rules. Because <code>decorate</code> is given no language, the plugin also implements
+  <code>FileOpenExtension</code> to observe which file is open and colors only when that file is
+  Java or Kotlin — other languages are left untouched. The same generic decoration hook can power
+  any other plugin (indent guides, marker tinting, …).</p>
 </section>
 
 <section id="usage">
@@ -115,8 +117,8 @@
   <ol>
     <li>Install <code>rainbow-on-the-go.cgp</code> from the Code On The Go Plugin Manager.</li>
     <li>Enable the plugin. Open editors repaint automatically.</li>
-    <li>Open any source file with nested brackets — each nesting level is a different color,
-    and matching delimiters share a color.</li>
+    <li>Open a Java or Kotlin file with nested brackets — each nesting level is a different color,
+    and matching delimiters share a color. Other languages are left untouched.</li>
     <li>Switch between light and dark themes; the palette follows the theme.</li>
     <li>Disable the plugin to return brackets to the editor's normal color.</li>
   </ol>
@@ -131,7 +133,8 @@
     and dark backgrounds.</li>
     <li><strong>Non-intrusive:</strong> purely additive — it only colors bracket glyphs and
     leaves all other highlighting untouched.</li>
-    <li><strong>Safe:</strong> no permissions, no network, no file access.</li>
+    <li><strong>Safe:</strong> no permissions, no network, and it reads no file contents — it only
+    notes which file is open (its name) to limit coloring to Java and Kotlin.</li>
   </ul>
 </section>
 

@@ -19,7 +19,7 @@
 
         <meta-data
             android:name="plugin.description"
-            android:value="Colors matching parentheses, brackets, and braces by nesting depth so you can see which delimiter pairs with which. Cycles through six colors (red, orange, yellow, green, blue, purple) with separate palettes tuned for the Code On The Go editor's light and dark themes." />
+            android:value="Colors matching parentheses, brackets, and braces by nesting depth in Java and Kotlin files so you can see which delimiter pairs with which. Cycles through six colors (red, orange, yellow, green, blue, purple) with separate palettes tuned for the Code On The Go editor's light and dark themes. Other languages are left untouched." />
 
         <meta-data
             android:name="plugin.author"
