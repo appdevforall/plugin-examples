@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Literacy Course — Plugin Documentation</title>
+<style>
+  /* Fixed light theme: white background, black body text (no dark-mode switch). */
+  html, body { background: #ffffff; color: #000000; }
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    line-height: 1.6; max-width: 820px; margin: 0 auto; padding: 32px 20px 64px;
+  }
+  h1 { font-size: 1.9rem; margin: 0 0 4px; }
+  h2 { font-size: 1.3rem; margin: 32px 0 8px; border-bottom: 2px solid #d9d9d9; padding-bottom: 6px; }
+  h3 { font-size: 1.05rem; margin: 20px 0 4px; }
+  p, li { color: #000000; }
+  code { background: #f0f0f3; padding: 1px 5px; border-radius: 4px; font-size: .92em; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; }
+  th, td { border: 1px solid #cccccc; padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: #f4f4f7; }
+  .sub { color: #333333; margin-top: 0; }
+  footer { margin-top: 40px; color: #444444; font-size: .85rem; }
+</style>
+</head>
+<body>
+
+<h1>AI Literacy Course</h1>
+<p class="sub">An offline "Introduction to AI" course from Learn AI Anywhere, packaged for Code On The Go.</p>
+
+<h2>Executive overview</h2>
+<p>The AI Literacy Course plugin brings Learn AI Anywhere's complete
+<strong>Introduction to Artificial Intelligence</strong> course into Code On The Go,
+playable entirely offline. It bundles twenty-six short lesson videos, interactive
+HTML activities, the NeuroPocket machine-learning app, and teacher resources into a
+single full-screen experience. Once installed, it needs no internet connection — making
+it suitable for classrooms and communities with limited or no connectivity. It is aimed
+at learners and educators who want a structured, self-contained AI literacy curriculum
+on a device they already use for coding.</p>
+
+<h2>Core functionality</h2>
+<ul>
+  <li><strong>Offline video course</strong> — an introduction plus four lessons (26 videos
+      total), presented in playback order and played inline with fullscreen support.</li>
+  <li><strong>Interactive activities</strong> — self-check quizzes and worksheets (HTML), plus
+      the <strong>NeuroPocket</strong> app, which runs an image classifier in the browser.</li>
+  <li><strong>Teacher resources</strong> — a teacher guide, slide deck, and printable
+      worksheets rendered as PDF.</li>
+  <li><strong>Generated navigation</strong> — a lesson list is built automatically from the
+      bundled content, so videos are reachable in a couple of taps.</li>
+  <li><strong>Fully offline</strong> — the entire course ships inside the plugin and is served
+      locally; nothing is uploaded and no learner data leaves the device.</li>
+</ul>
+
+<h2>Technical architecture</h2>
+<p>The plugin implements <code>IPlugin</code>, <code>UIExtension</code>, and
+<code>DocumentationExtension</code>. Its pieces:</p>
+<table>
+  <tr><th>Component</th><th>Responsibility</th></tr>
+  <tr><td><code>AiLiteracyCoursePlugin</code></td><td>Lifecycle, an editor-sidebar launcher
+      (<code>getSideMenuItems</code>) that opens the course via
+      <code>IdeUIService.openPluginScreen</code>, and tooltip/Tier-3 help.</td></tr>
+  <tr><td><code>CourseInstaller</code></td><td>One-time extraction of the bundled ZIP into
+      <code>IdeEnvironmentService.getPluginDataDirectory()</code> using
+      <code>IdeArchiveService</code>, including the nested activity zips.</td></tr>
+  <tr><td><code>CourseShell</code></td><td>Generates the navigation <code>index.html</code> over
+      the extracted tree (the bundle ships no web shell of its own).</td></tr>
+  <tr><td><code>CourseFragment</code></td><td>Full-screen <code>WebView</code> host. Serves the
+      extracted files through a <code>WebViewAssetLoader</code> custom <code>PathHandler</code>
+      over a virtual <code>https</code> origin (required for video and the NeuroPocket service
+      worker). Handles Back, rotation, and fullscreen video.</td></tr>
+</table>
+<p>The ~110&nbsp;MB course ZIP is not committed to source control; a Gradle
+<code>downloadAssets</code> task fetches it at build time (verifying a pinned MD5) and packs
+it into the <code>.cgp</code>. The only declared permission is
+<code>ide.environment.write</code>, needed for the one-time extraction into the plugin's data
+directory.</p>
+
+<h2>Usage</h2>
+<ol>
+  <li>Install the plugin: <strong>Preferences → Plugin Manager → +</strong>, then select
+      <code>ai-literacy-course.cgp</code> and enable it.</li>
+  <li>Open a project so the editor (and its sidebar) is visible.</li>
+  <li>Tap the <strong>AI Literacy Course</strong> icon (graduation cap) in the editor sidebar.</li>
+  <li>On first launch the course unpacks once (a brief progress screen); after that it opens
+      instantly.</li>
+  <li>Browse lessons, tap a video to play it (and the fullscreen control to enlarge), or open an
+      activity or PDF. Use the device <strong>Back</strong> gesture to step back through the
+      course and exit.</li>
+</ol>
+
+<h2>Key benefits</h2>
+<ul>
+  <li><strong>Works with no internet</strong> — ideal for offline-first classrooms and
+      low-connectivity environments.</li>
+  <li><strong>Self-contained</strong> — videos, activities, and resources travel inside the
+      single plugin file.</li>
+  <li><strong>Privacy-preserving</strong> — self-check activity scores stay on-device; nothing is
+      transmitted.</li>
+  <li><strong>Low friction</strong> — a generated lesson index puts the course content a couple of
+      taps away, inside the IDE students already use.</li>
+</ul>
+
+<footer>
+  Course content © Learn AI Anywhere (learnaianywhere.org), redistributed offline with the
+  project's encouragement. Plugin by App Dev For All.
+</footer>
+
+</body>
+</html>
