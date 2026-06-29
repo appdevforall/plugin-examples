@@ -72,13 +72,23 @@ class ComposePreviewPlugin : IPlugin, UIExtension, DocumentationExtension {
             detail = "See how your Compose UI looks while you build it, without running the app on a device or emulator.",
             buttons = listOf(
                 PluginTooltipButton(
+                    description = "How it works",
+                    uri = "index.html",
+                    order = 0,
+                ),
+                PluginTooltipButton(
                     description = "Learn More",
                     uri = "i/plugins-adfa.html",
+                    order = 1,
                     directPath = true,
                 )
             )
         )
     )
+
+    // Tier 3 documentation bundle: files under assets/docs/ are indexed at install time and served
+    // from http://localhost:6174/plugin/<pluginId>/<file>. The "How it works" button links index.html.
+    override fun getTier3DocsAssetPath(): String = "docs"
 
     private fun openPreviewIfValid() {
         val editor = context.services.get(IdeEditorService::class.java)
