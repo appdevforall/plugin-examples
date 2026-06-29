@@ -167,7 +167,7 @@ class ComposePreviewFragment : Fragment() {
         val params = binding.singlePreviewView.layoutParams
         container.removeView(binding.singlePreviewView)
         container.addView(activityView, index, params)
-        activityView.isVisible = false
+        activityView.isVisible = true
         activityView.setViewCompositionStrategy(
             ViewCompositionStrategy.DisposeOnDetachedFromWindowOrReleasedFromPool
         )
@@ -245,7 +245,7 @@ class ComposePreviewFragment : Fragment() {
         val isReady = state is PreviewState.Ready
         val isAllMode = viewModel.displayMode.value == DisplayMode.ALL
         binding.previewScrollView.isVisible = isReady && isAllMode
-        singlePreviewView?.isVisible = isReady && !isAllMode
+        binding.singlePreviewWrapper.isVisible = isReady && !isAllMode
 
         when (state) {
             is PreviewState.Idle -> setStatus("Rendering…")
@@ -318,7 +318,7 @@ class ComposePreviewFragment : Fragment() {
 
         if (viewModel.previewState.value is PreviewState.Ready) {
             binding.previewScrollView.isVisible = isAllMode
-            singlePreviewView?.isVisible = !isAllMode
+            binding.singlePreviewWrapper.isVisible = !isAllMode
             if (isAllMode) renderAllPreviews() else renderSinglePreview()
         }
     }
@@ -455,6 +455,10 @@ class ComposePreviewFragment : Fragment() {
             ?: previewInstances.firstOrNull()
             ?: return
         selectedSingleKey = instance.cardKey
+        binding.singlePreviewLabel.text = buildString {
+            append(instance.label)
+            instance.config.group?.let { append("  ·  ").append(it) }
+        }
         singlePreviewView?.let { applyBackground(it, instance.config) }
         singleRenderer?.render(
             clazz, instance.config.functionName, instance.context,

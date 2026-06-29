@@ -32,11 +32,34 @@
         android:layout_height="0dp"
         android:layout_weight="1">
 
-        <androidx.compose.ui.platform.ComposeView
-            android:id="@+id/singlePreviewView"
+        <LinearLayout
+            android:id="@+id/singlePreviewWrapper"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:visibility="gone" />
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/singlePreviewLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="16dp"
+                android:layout_marginTop="12dp"
+                android:fontFamily="monospace"
+                android:letterSpacing="0.02"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                android:textSize="11sp"
+                android:alpha="0.6" />
+
+            <androidx.compose.ui.platform.ComposeView
+                android:id="@+id/singlePreviewView"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:layout_marginHorizontal="16dp"
+                android:layout_marginTop="8dp" />
+
+        </LinearLayout>
 
         <androidx.core.widget.NestedScrollView
             android:id="@+id/previewScrollView"
@@ -101,7 +124,7 @@
                 android:layout_width="48dp"
                 android:layout_height="48dp"
                 android:src="@drawable/ic_error"
-                app:tint="?attr/colorError"
+                android:tint="?attr/colorError"
                 android:importantForAccessibility="no" />
 
             <TextView
@@ -140,7 +163,6 @@
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/copyErrorButton"
-                    style="@style/Widget.Material3.Button.TonalButton"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="8dp"
@@ -183,7 +205,7 @@
                 android:layout_width="64dp"
                 android:layout_height="64dp"
                 android:src="@drawable/ic_preview_layout"
-                app:tint="?attr/colorOutline"
+                android:tint="?attr/colorOutline"
                 android:alpha="0.6"
                 android:importantForAccessibility="no" />
 
@@ -219,7 +241,7 @@
                 android:layout_width="64dp"
                 android:layout_height="64dp"
                 android:src="@drawable/ic_gradle"
-                app:tint="?attr/colorPrimary"
+                android:tint="?attr/colorPrimary"
                 android:importantForAccessibility="no" />
 
             <TextView
