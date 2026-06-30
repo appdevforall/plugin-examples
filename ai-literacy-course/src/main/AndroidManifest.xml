@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application
+        android:label="@string/app_name"
+        android:theme="@style/PluginTheme">
+
+        <!-- Plugin metadata -->
+        <meta-data
+            android:name="plugin.id"
+            android:value="org.appdevforall.ailiteracycourse" />
+
+        <meta-data
+            android:name="plugin.name"
+            android:value="AI Literacy Course" />
+
+        <meta-data
+            android:name="plugin.version"
+            android:value="${pluginVersion}" />
+
+        <meta-data
+            android:name="plugin.description"
+            android:value="An offline &quot;Introduction to AI&quot; course from Learn AI Anywhere: 26 lesson videos plus interactive activities, the NeuroPocket app, and teacher resources. Everything runs fully offline inside Code On The Go — no internet required." />
+
+        <meta-data
+            android:name="plugin.author"
+            android:value="App Dev For All" />
+
+        <meta-data
+            android:name="plugin.min_ide_version"
+            android:value="1.0.0" />
+
+        <meta-data
+            android:name="plugin.max_ide_version"
+            android:value="26.99" />
+
+        <!-- ide.environment.write: required by IdeArchiveService to extract the
+             bundled course ZIP into the plugin's data directory
+             (IdeEnvironmentService.getPluginDataDirectory). No network and no
+             host project access — the course renders offline from a virtual
+             https origin. -->
+        <meta-data
+            android:name="plugin.permissions"
+            android:value="ide.environment.write" />
+
+        <meta-data
+            android:name="plugin.main_class"
+            android:value="org.appdevforall.ailiteracycourse.AiLiteracyCoursePlugin" />
+
+        <!-- One editor-sidebar slot for the course launcher. The host skips a
+             plugin's sidebar items entirely if it declares fewer slots than it
+             returns from getSideMenuItems(). -->
+        <meta-data
+            android:name="plugin.sidebar_items"
+            android:value="1" />
+
+        <!-- Plugin Manager icons (inside the .cgp at exactly these asset paths). -->
+        <meta-data
+            android:name="plugin.icon_day"
+            android:value="assets/icon_day.png" />
+        <meta-data
+            android:name="plugin.icon_night"
+            android:value="assets/icon_night.png" />
+
+    </application>
+
+</manifest>

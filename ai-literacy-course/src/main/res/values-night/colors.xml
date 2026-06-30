@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- WebView backdrop while the course shell loads (dark) — avoids a white
+         flash before the dark-aware shell paints. -->
+    <color name="course_background">#0C1018</color>
+</resources>

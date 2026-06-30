@@ -73,6 +73,7 @@ jobs:
             ["snippets"]="snippets.cgp"
             ["icons-repository"]="icons-repository.cgp"
             ["rainbow-on-the-go"]="rainbow-on-the-go.cgp"
+            ["ai-literacy-course"]="ai-literacy-course.cgp"
           )
           for module in "${!MAP[@]}"; do
             src=$(ls "${module}/build/plugin/"*.cgp 2>/dev/null | head -n1)

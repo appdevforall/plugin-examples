@@ -20,6 +20,7 @@ See the official [plugin documentation](https://www.appdevforall.org/codeonthego
 | [`python-tools/`](python-tools/)                   | Adds Python + Flask project templates, with on-device Python install and run/install/test actions. |
 | [`rainbow-on-the-go/`](rainbow-on-the-go/)         | Colors matching parentheses, brackets, and braces by nesting depth, with light/dark palettes. |
 | [`compose-preview/`](compose-preview/)             | Renders Jetpack Compose `@Preview` functions on-device — no full app build or run. |
+| [`ai-literacy-course/`](ai-literacy-course/)       | Bundles Learn AI Anywhere's offline "Introduction to AI" course (26 videos + interactive activities) and plays it full-screen, fully offline. |
 
 ## Building a plugin
 

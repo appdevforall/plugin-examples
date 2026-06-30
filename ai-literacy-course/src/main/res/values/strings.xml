@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">AI Literacy Course</string>
+
+    <!-- Side-menu launcher -->
+    <string name="menu_open_course">AI Literacy Course</string>
+    <string name="screen_title">AI Literacy Course</string>
+
+    <!-- First-run extraction -->
+    <string name="preparing_course">Preparing the course…</string>
+    <string name="preparing_detail">Unpacking videos and activities. This happens once.</string>
+    <string name="prepare_failed">Could not prepare the course. Please reinstall the plugin.</string>
+
+    <!-- Course pack is from Learn AI Anywhere (learnaianywhere.org). -->
+    <string name="credit">Course © Learn AI Anywhere · learnaianywhere.org</string>
+</resources>
