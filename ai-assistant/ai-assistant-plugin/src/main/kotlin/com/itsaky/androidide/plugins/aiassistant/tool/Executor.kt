@@ -32,7 +32,7 @@ class Executor(
         fun requiredArgsForTool(toolName: String): List<String> {
             return when (toolName) {
                 "read_file" -> listOf("file_path")
-                "list_files" -> listOf("directory")
+                "list_files" -> emptyList()  // directory is optional, defaults to "."
                 "search_project" -> listOf("query")
                 "create_file" -> listOf("file_path", "content")
                 "update_file" -> listOf("file_path", "content")

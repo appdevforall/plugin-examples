@@ -167,26 +167,55 @@ class ToolCallExtractor {
 
         /**
          * Extract directory path from natural language.
+         * Looks for explicit paths or common directory names.
          */
         private fun extractDirectory(text: String): String? {
-            // Look for patterns like "in src", "in ./src", "in root", etc.
+            val lowerText = text.lowercase()
+
+            // Check for common project directories
+            val commonDirs = mapOf(
+                "src" to "src",
+                "source" to "src",
+                "source code" to "src",
+                "main" to "src/main",
+                "java" to "src/main/java",
+                "kotlin" to "src/main/kotlin",
+                "resources" to "src/main/resources",
+                "test" to "src/test",
+                "root" to ".",
+                "project" to ".",
+                "current" to "."
+            )
+
+            for ((keyword, dir) in commonDirs) {
+                if (lowerText.contains(keyword)) {
+                    Log.d(TAG, "Detected directory from keyword '$keyword': $dir")
+                    return dir
+                }
+            }
+
+            // Look for patterns like "in src", "in ./src", "in /path/to/dir", etc.
             val patterns = listOf(
-                Regex("""(?:in|from)\s+["`']?([^"`'\s]+)["`']?"""),
-                Regex("""directory\s+["`']?([^"`'\s]+)["`']?"""),
-                Regex("""folder\s+["`']?([^"`'\s]+)["`']?""")
+                Regex("""(?:in|from)\s+(?:the\s+)?["`']?([/.\-\w]+)["`']?"""),
+                Regex("""directory\s+(?:of\s+)?["`']?([/.\-\w]+)["`']?"""),
+                Regex("""folder\s+["`']?([/.\-\w]+)["`']?"""),
+                Regex("""path\s+["`']?([/.\-\w]+)["`']?""")
             )
 
             for (pattern in patterns) {
                 val match = pattern.find(text)
                 if (match != null) {
                     val dir = match.groupValues[1]
-                    if (dir.isNotEmpty() && !dir.contains("the")) {
+                    if (dir.isNotEmpty() && dir.length > 1 && !dir.contains("the")) {
+                        Log.d(TAG, "Extracted directory from pattern: $dir")
                         return dir
                     }
                 }
             }
 
-            return null
+            // Default to current directory if no specific directory mentioned
+            Log.d(TAG, "No specific directory found, defaulting to current directory (.)")
+            return null  // Will default to "." in ListFilesHandler
         }
 
         /**
