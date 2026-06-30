@@ -17,9 +17,10 @@ class ReadFileHandler(
     override val requiresApproval = false
 
     override suspend fun execute(args: Map<String, Any?>): ToolResult {
-        val filePath = args["file_path"]?.toString()?.trim()
+        // Accept both "file_path" (standardized) and "path" (legacy LLM responses)
+        val filePath = (args["file_path"] ?: args["path"])?.toString()?.trim()
         if (filePath.isNullOrBlank()) {
-            return ToolResult.failure("file_path is required")
+            return ToolResult.failure("file_path argument is required (or 'path' as fallback)")
         }
 
         return try {

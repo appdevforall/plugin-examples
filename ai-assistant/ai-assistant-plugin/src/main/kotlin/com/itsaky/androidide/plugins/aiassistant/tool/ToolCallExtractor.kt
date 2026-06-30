@@ -72,22 +72,53 @@ class ToolCallExtractor {
         /**
          * Strategy 2: Extract tool calls from bare JSON objects.
          * Format: {"tool":"name","args":{...}}
+         * Uses brace-balanced extraction to handle nested args objects.
          */
         private fun extractFromJsonObjects(text: String): List<ToolCall> {
             val toolCalls = mutableListOf<ToolCall>()
+            var found = 0
 
-            // Find JSON objects that contain "tool" field
-            val regex = Regex("""\{[^{}]*"tool"[^{}]*\}""")
-            val matches = regex.findAll(text)
+            // Find JSON objects with balanced braces containing "tool" field
+            var i = 0
+            while (i < text.length) {
+                if (text[i] == '{') {
+                    // Try to extract a balanced JSON object
+                    var braceCount = 0
+                    var j = i
+                    var hasToolField = false
 
-            Log.d(TAG, "Strategy 2 (JSON objects): Found ${matches.count()} matches")
+                    while (j < text.length) {
+                        if (text[j] == '{') braceCount++
+                        else if (text[j] == '}') braceCount--
 
-            for (match in matches) {
-                val parsed = parseToolJson(match.value)
-                if (parsed != null) {
-                    toolCalls.add(parsed)
+                        // Check if this substring contains "tool"
+                        if (!hasToolField && text.substring(i, minOf(j + 1, text.length)).contains("\"tool\"")) {
+                            hasToolField = true
+                        }
+
+                        j++
+
+                        if (braceCount == 0) {
+                            // Found complete object
+                            if (hasToolField) {
+                                val jsonStr = text.substring(i, j)
+                                val parsed = parseToolJson(jsonStr)
+                                if (parsed != null) {
+                                    toolCalls.add(parsed)
+                                    found++
+                                }
+                            }
+                            break
+                        }
+                    }
+
+                    i = j
+                } else {
+                    i++
                 }
             }
+
+            Log.d(TAG, "Strategy 2 (JSON objects): Found $found matches")
 
             return toolCalls
         }

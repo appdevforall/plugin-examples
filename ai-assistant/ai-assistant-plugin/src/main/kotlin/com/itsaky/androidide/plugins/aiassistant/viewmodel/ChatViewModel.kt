@@ -70,6 +70,10 @@ class ChatViewModel(
     private val _currentSessionId = MutableStateFlow<String?>(null)
     val currentSessionId: StateFlow<String?> = _currentSessionId.asStateFlow()
 
+    // Conversation history for LLM context (separate from UI messages)
+    private val _history = MutableStateFlow<List<LlmInferenceService.ChatMessage>>(emptyList())
+    val history: StateFlow<List<LlmInferenceService.ChatMessage>> = _history.asStateFlow()
+
     val currentSession: StateFlow<ChatSession?> = combine(_sessions, _currentSessionId) { sessions, id ->
         sessions.firstOrNull { it.id == id }
     }.stateIn(viewModelScope, SharingStarted.Lazily, null)
@@ -237,7 +241,7 @@ class ChatViewModel(
         <tool_call>{"tool":"list_files","args":{"directory":"src"}}</tool_call>
 
         User: "read MainActivity.kt"
-        <tool_call>{"tool":"read_file","args":{"path":"MainActivity.kt"}}</tool_call>
+        <tool_call>{"tool":"read_file","args":{"file_path":"MainActivity.kt"}}</tool_call>
 
         User: "search for onCreate"
         <tool_call>{"tool":"search_project","args":{"query":"onCreate"}}</tool_call>
@@ -451,6 +455,14 @@ class ChatViewModel(
                     }
                 }
 
+                // Add user message to conversation history for LLM context
+                val userHistoryMessage = LlmInferenceService.ChatMessage(
+                    LlmInferenceService.ChatMessage.Role.USER,
+                    messageWithContext
+                )
+                _history.value = _history.value + userHistoryMessage
+                android.util.Log.d("ChatViewModel", "Added user to history. Total history length: ${_history.value.size}")
+
                 // Accumulated response text
                 val responseBuilder = StringBuilder()
 
@@ -505,6 +517,14 @@ class ChatViewModel(
 
                                 syncMessageToSession(updatedMessage)
                             }
+
+                            // Add assistant response to conversation history for LLM context
+                            val assistantHistoryMessage = LlmInferenceService.ChatMessage(
+                                LlmInferenceService.ChatMessage.Role.ASSISTANT,
+                                finalText
+                            )
+                            _history.value = _history.value + assistantHistoryMessage
+                            android.util.Log.d("ChatViewModel", "Added assistant to history. Total history length: ${_history.value.size}")
 
                             // Parse and execute tool calls if any
                             val toolCalls = parseToolCalls(finalText)

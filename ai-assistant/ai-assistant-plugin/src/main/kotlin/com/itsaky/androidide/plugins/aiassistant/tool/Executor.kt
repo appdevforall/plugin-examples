@@ -86,9 +86,16 @@ class Executor(
             return ToolResult.failure("Unknown function '$toolName'")
         }
 
+        // Normalize arg keys for read_file: if "path" is present but "file_path" is missing, remap
+        val normalizedArgs = args.toMutableMap()
+        if (toolName == "read_file" && normalizedArgs.containsKey("path") && !normalizedArgs.containsKey("file_path")) {
+            normalizedArgs["file_path"] = normalizedArgs["path"]!!
+            Log.d(TAG, "($executionMode): Remapped 'path' → 'file_path' for read_file tool")
+        }
+
         // Check required arguments
         val missingArgs = requiredArgsForTool(toolName).filter { key ->
-            val value = args[key]?.toString()?.trim().orEmpty()
+            val value = normalizedArgs[key]?.toString()?.trim().orEmpty()
             value.isBlank()
         }
         if (missingArgs.isNotEmpty()) {
@@ -98,19 +105,19 @@ class Executor(
         }
 
         // Check approval
-        val approvalResponse = approvalManager.ensureApproved(toolName, handler, args)
+        val approvalResponse = approvalManager.ensureApproved(toolName, handler, normalizedArgs)
         if (!approvalResponse.approved) {
             val message = approvalResponse.denialMessage ?: "Action denied by user."
             Log.i(TAG, "($executionMode): Tool '$toolName' denied. $message")
             return ToolResult.failure(message)
         }
 
-        Log.d(TAG, "($executionMode): Dispatching '$toolName' with args: $args")
+        Log.d(TAG, "($executionMode): Dispatching '$toolName' with args: $normalizedArgs")
 
         // Before tool execution
         val toolStartTime = System.currentTimeMillis()
 
-        val result = toolRouter.dispatch(toolName, args)
+        val result = toolRouter.dispatch(toolName, normalizedArgs)
 
         // After tool execution
         val toolDuration = System.currentTimeMillis() - toolStartTime
