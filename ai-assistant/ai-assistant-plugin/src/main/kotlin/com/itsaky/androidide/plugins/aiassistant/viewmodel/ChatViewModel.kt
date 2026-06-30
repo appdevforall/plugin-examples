@@ -227,15 +227,63 @@ class ChatViewModel(
     }
 
     /**
-     * Build system prompt with tool descriptions.
+     * Build appropriate system prompt based on LLM backend.
      */
     private fun buildSystemPrompt(): String {
+        return if (currentBackendId == "gemini") {
+            buildSystemPromptGemini()
+        } else {
+            buildSystemPromptLocal()
+        }
+    }
+
+    /**
+     * System prompt for Gemini (high autonomy, structured tool calling via native functions).
+     */
+    private fun buildSystemPromptGemini(): String {
         val toolDescriptions = toolRouter.getAllHandlers().joinToString("\n") { handler ->
             "- ${handler.toolName}: ${handler.description}"
         }
 
         val prompt = """
-        You are a helpful coding assistant integrated into AndroidIDE.
+        You are a senior Android developer integrated into AndroidIDE. Your goal is to build complete, working Android apps from user descriptions.
+
+        AVAILABLE TOOLS:
+        $toolDescriptions
+
+        BEHAVIOR:
+        - Create complete, production-ready code
+        - Call tools proactively to build, test, and verify your work
+        - Read files to understand project structure before making changes
+        - After each file modification, verify the build compiles
+        - Generate apps that actually run and work as described
+
+        WORKFLOW:
+        1. Understand the user's request
+        2. List files to understand the project structure
+        3. Create/modify files with complete implementations
+        4. Add dependencies if needed
+        5. Sync gradle and verify compilation
+        6. Run the app to confirm it works
+        7. Report success and what was built
+
+        You have full access to tools - use them continuously throughout the workflow.
+        """.trimIndent()
+
+        android.util.Log.d("ChatViewModel", "Using Gemini system prompt (high autonomy mode) with ${toolRouter.getAllHandlers().size} tools")
+        return prompt
+    }
+
+    /**
+     * System prompt for local LLMs (guided step-by-step with text-based tool calling).
+     */
+    private fun buildSystemPromptLocal(): String {
+        val toolDescriptions = toolRouter.getAllHandlers().joinToString("\n") { handler ->
+            "- ${handler.toolName}: ${handler.description}"
+        }
+
+        val prompt = """
+        You are a helpful coding assistant integrated into AndroidIDE. Help the user build Android apps step-by-step.
 
         CRITICAL: You MUST use tools for ANY action-related request. Do NOT just describe what you would do.
 
@@ -249,34 +297,27 @@ class ChatViewModel(
            <tool_call>{"tool":"TOOL_NAME","args":{"param1":"value1"}}</tool_call>
         4. Execute tools BEFORE saying anything else
 
-        EXAMPLES (you MUST follow this exact pattern):
+        STEP-BY-STEP WORKFLOW:
+        1. List files to understand the project
+        2. Read existing files to know what to change
+        3. Create or update one file at a time
+        4. After each file, ask the user what to do next
+        5. Add dependencies when needed
+        6. Sync gradle to check for errors
+        7. Run the app to test it
+        8. Ask for feedback and iterate
 
+        EXAMPLES:
         User: "list files in src"
         <tool_call>{"tool":"list_files","args":{"directory":"src"}}</tool_call>
 
         User: "read MainActivity.kt"
         <tool_call>{"tool":"read_file","args":{"file_path":"MainActivity.kt"}}</tool_call>
 
-        User: "search for onCreate"
-        <tool_call>{"tool":"search_project","args":{"query":"onCreate"}}</tool_call>
-
-        User: "run the app"
-        <tool_call>{"tool":"run_app","args":{}}</tool_call>
-
-        MULTI-TOOL EXAMPLE:
-        User: "list files and search for test"
-        <tool_call>{"tool":"list_files","args":{"directory":"."}}</tool_call>
-        <tool_call>{"tool":"search_project","args":{"query":"test"}}</tool_call>
-
-        INSTRUCTIONS:
-        - ALWAYS output tool calls FIRST, before any explanatory text
-        - Use exact tool names from the list above
-        - Include all required parameters
-        - If user wants multiple actions, call multiple tools
-        - Do NOT skip or delay tool calls
+        After each tool call, analyze the result and ask: "What would you like to do next?"
         """.trimIndent()
 
-        android.util.Log.d("ChatViewModel", "System prompt built with ${toolRouter.getAllHandlers().size} tools")
+        android.util.Log.d("ChatViewModel", "Using Local LLM system prompt (guided mode) with ${toolRouter.getAllHandlers().size} tools")
         return prompt
     }
 
