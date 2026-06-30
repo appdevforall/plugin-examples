@@ -288,6 +288,7 @@ class CourseFragment : Fragment() {
             "woff2" -> "font/woff2"
             "ttf" -> "font/ttf"
             "txt", "md" -> "text/plain"
+            "ftl" -> "text/plain"          // PDF.js viewer locale (Fluent) files
             else -> "application/octet-stream"
         }
     }

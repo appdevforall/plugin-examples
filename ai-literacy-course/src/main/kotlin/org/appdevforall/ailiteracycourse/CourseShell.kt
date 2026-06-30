@@ -8,7 +8,8 @@ import java.io.File
  * The bundle ships no web shell of its own — just numbered folders of `.mp4`
  * videos, `.pdf` resources, and HTML activities. This walks that regular
  * structure and emits a single video-forward page: lessons in playback order,
- * each video inline, activities and PDFs as links the WebView opens in place.
+ * each video inline, activities as links the WebView opens in place, and PDFs
+ * opened through the bundled PDF.js viewer (a bare WebView can't render PDFs).
  *
  * All links are relative to the page (served at `…/course/index.html`), so they
  * resolve under the same virtual https origin.
@@ -75,8 +76,19 @@ object CourseShell {
         """.trimIndent() + "\n"
 
         Kind.ACTIVITY -> link(item, "Activity")
-        Kind.PDF -> link(item, "PDF")
+        Kind.PDF -> link(item.copy(href = pdfViewerHref(item.href)), "PDF")
     }
+
+    /**
+     * Wrap a PDF's page-relative URL in the bundled PDF.js viewer. The viewer
+     * lives at `pdfjs/web/viewer.html`, two levels below the page root, so the
+     * PDF is reached back up via `../../`. Resolved against the viewer's URL,
+     * this stays on the same origin — which PDF.js requires for `?file=`.
+     * Course resource names are URL-safe kebab-case, so [rel] needs no further
+     * encoding as a query value.
+     */
+    private fun pdfViewerHref(rel: String): String =
+        "pdfjs/web/viewer.html?file=../../$rel"
 
     private fun link(item: Item, badge: String): String = """
         <a class="item link" href="${attr(item.href)}">
