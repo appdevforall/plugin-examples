@@ -35,6 +35,20 @@ class ChatFragment : Fragment() {
     private lateinit var markwon: Markwon
     private val contextFiles = mutableListOf<File>()
 
+    companion object {
+        // Test prompt injection (for E2E testing via broadcast receiver)
+        @Volatile
+        private var pendingTestPrompt: String? = null
+
+        fun injectTestPrompt(prompt: String) {
+            pendingTestPrompt = prompt
+        }
+
+        fun getPendingTestPrompt(): String? {
+            return pendingTestPrompt?.also { pendingTestPrompt = null }
+        }
+    }
+
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -71,6 +85,23 @@ class ChatFragment : Fragment() {
         setupStatusBar()
         setupBackendIndicator()
         observeViewModel()
+
+        // Check for test prompt from broadcast receiver (E2E testing)
+        injectPendingTestPrompt()
+    }
+
+    /**
+     * Check for test prompt injected via broadcast receiver and auto-send if present.
+     */
+    private fun injectPendingTestPrompt() {
+        val testPrompt = getPendingTestPrompt()
+        if (!testPrompt.isNullOrBlank()) {
+            // Inject into input field and auto-send after a short delay
+            binding.promptInputEdittext.setText(testPrompt)
+            binding.promptInputEdittext.post {
+                binding.sendButton.performClick()
+            }
+        }
     }
 
     private fun initializeMarkwon() {
