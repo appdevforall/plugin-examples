@@ -14,11 +14,15 @@ class ToolApprovalManager {
     // Approval request timeout: 5 minutes
     private val APPROVAL_TIMEOUT_MS = 5 * 60 * 1000L
 
-    // Tools that don't require approval (read-only)
+    // Tools that don't require approval (read-only and safe)
     private val autoApprovedTools = setOf(
         "read_file",
         "list_files",
         "search_project",
+        "open_file",
+        "read_build_output",
+        "gradle_sync",
+        "generate_from_template",
         "get_current_datetime"
     )
 

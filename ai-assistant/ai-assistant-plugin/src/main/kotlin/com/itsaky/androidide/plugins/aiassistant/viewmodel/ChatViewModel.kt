@@ -15,8 +15,13 @@ import com.itsaky.androidide.plugins.aiassistant.tool.ToolCallExtractor
 import com.itsaky.androidide.plugins.aiassistant.tool.ToolRouter
 import com.itsaky.androidide.plugins.aiassistant.tool.ApprovalRequest
 import com.itsaky.androidide.plugins.aiassistant.tool.ApprovalResult
+import com.itsaky.androidide.plugins.aiassistant.tool.handlers.AddDependencyHandler
 import com.itsaky.androidide.plugins.aiassistant.tool.handlers.CreateFileHandler
+import com.itsaky.androidide.plugins.aiassistant.tool.handlers.GenerateFromTemplateHandler
+import com.itsaky.androidide.plugins.aiassistant.tool.handlers.GradleSyncHandler
 import com.itsaky.androidide.plugins.aiassistant.tool.handlers.ListFilesHandler
+import com.itsaky.androidide.plugins.aiassistant.tool.handlers.OpenFileHandler
+import com.itsaky.androidide.plugins.aiassistant.tool.handlers.ReadBuildOutputHandler
 import com.itsaky.androidide.plugins.aiassistant.tool.handlers.ReadFileHandler
 import com.itsaky.androidide.plugins.aiassistant.tool.handlers.SearchProjectHandler
 import com.itsaky.androidide.plugins.aiassistant.tool.handlers.UpdateFileHandler
@@ -102,12 +107,21 @@ class ChatViewModel(
         val context = getContext()
         val handlers = if (context != null) {
             listOf(
+                // Read-only tools
                 ReadFileHandler(context),
                 ListFilesHandler(context),
                 SearchProjectHandler(context),
+                OpenFileHandler(context),
+                ReadBuildOutputHandler(context),
+                // Write tools
                 CreateFileHandler(context),
                 UpdateFileHandler(context),
-                com.itsaky.androidide.plugins.aiassistant.tool.handlers.RunAppHandler(context)
+                AddDependencyHandler(context),
+                // Build tools
+                com.itsaky.androidide.plugins.aiassistant.tool.handlers.RunAppHandler(context),
+                GradleSyncHandler(context),
+                // Template tool
+                GenerateFromTemplateHandler(context)
             )
         } else {
             emptyList()
