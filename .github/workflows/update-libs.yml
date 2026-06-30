@@ -16,6 +16,11 @@ jobs:
     steps:
       - name: Checkout plugin-examples
         uses: actions/checkout@v4
+        with:
+          # PAT from a repo admin so the libs/ push bypasses the main ruleset.
+          # Falls back to GITHUB_TOKEN if the secret is unset (push will then
+          # be blocked by the ruleset, which is the safe default).
+          token: ${{ secrets.ADMIN_PERSONAL_ACCESS_TOKEN || github.token }}
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -67,6 +72,8 @@ jobs:
             ["random-xkcd"]="random-xkcd.cgp"
             ["snippets"]="snippets.cgp"
             ["icons-repository"]="icons-repository.cgp"
+            ["rainbow-on-the-go"]="rainbow-on-the-go.cgp"
+            ["ai-literacy-course"]="ai-literacy-course.cgp"
           )
           for module in "${!MAP[@]}"; do
             src=$(ls "${module}/build/plugin/"*.cgp 2>/dev/null | head -n1)

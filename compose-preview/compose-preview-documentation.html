@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Compose Preview Plugin Documentation</title>
+<style>
+  :root {
+    --bg: #fdfdfd;
+    --fg: #1a1a1a;
+    --accent: #0f766e;
+    --accent-light: #e6f5f3;
+    --border: #d0d7de;
+    --code-bg: #f4f6f8;
+    --table-stripe: #f8fafb;
+    --shadow: rgba(0,0,0,0.06);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--fg);
+    background: var(--bg);
+    line-height: 1.6;
+    max-width: 52rem;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+  }
+  header { border-bottom: 3px solid var(--accent); padding-bottom: 1.2rem; margin-bottom: 2rem; }
+  header h1 { font-size: 2rem; color: var(--accent); }
+  header p.subtitle { color: #555; margin-top: 0.3rem; }
+  header .meta { font-size: 0.85rem; color: #777; margin-top: 0.5rem; }
+  nav { background: var(--accent-light); border: 1px solid var(--border); border-radius: 6px; padding: 1rem 1.5rem; margin-bottom: 2.5rem; }
+  nav h2 { font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); margin-bottom: 0.5rem; }
+  nav ol { padding-left: 1.3rem; }
+  nav li { margin: 0.25rem 0; }
+  nav a { color: var(--accent); text-decoration: none; }
+  nav a:hover { text-decoration: underline; }
+  section { margin-bottom: 2.5rem; }
+  h2 { font-size: 1.4rem; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; margin-bottom: 1rem; }
+  h3 { font-size: 1.1rem; margin: 1.2rem 0 0.5rem; }
+  p, li { margin-bottom: 0.5rem; }
+  ul, ol { padding-left: 1.4rem; }
+  code {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    background: var(--code-bg);
+    padding: 0.15em 0.35em;
+    border-radius: 3px;
+    font-size: 0.9em;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1rem 1.2rem;
+    overflow-x: auto;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    margin: 0.8rem 0 1rem;
+  }
+  pre code { background: none; padding: 0; }
+  table { width: 100%; border-collapse: collapse; margin: 0.8rem 0 1rem; font-size: 0.95rem; }
+  th, td { text-align: left; padding: 0.55rem 0.8rem; border: 1px solid var(--border); }
+  th { background: var(--accent-light); font-weight: 600; }
+  tr:nth-child(even) td { background: var(--table-stripe); }
+  .diagram {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1.2rem;
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 0.85rem;
+    line-height: 1.55;
+    overflow-x: auto;
+    white-space: pre;
+    margin: 0.8rem 0 1rem;
+  }
+  .callout {
+    background: var(--accent-light);
+    border-left: 4px solid var(--accent);
+    padding: 0.8rem 1rem;
+    border-radius: 0 6px 6px 0;
+    margin: 1rem 0;
+  }
+  .file-tree { list-style: none; padding-left: 0; font-family: monospace; font-size: 0.9rem; }
+  .file-tree ul { list-style: none; padding-left: 1.5rem; }
+  footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: 0.85rem; color: #777; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Compose Preview Plugin</h1>
+  <p class="subtitle">Render Jetpack Compose <code>@Preview</code> functions on-device, without building and running the whole app</p>
+  <div class="meta">Version 1.0.0 &middot; Author: App Dev For All &middot; Package: <code>org.appdevforall.composepreview</code></div>
+</header>
+
+<nav>
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#overview">Executive Overview</a></li>
+    <li><a href="#functionality">Core Functionality</a></li>
+    <li><a href="#architecture">Technical Architecture</a></li>
+    <li><a href="#integration">Integration Points</a></li>
+    <li><a href="#deployment">Deployment &amp; Usage</a></li>
+    <li><a href="#benefits">Key Benefits</a></li>
+    <li><a href="#license">Attribution &amp; License</a></li>
+  </ol>
+</nav>
+
+<!-- ================================================================ -->
+<section id="overview">
+  <h2>1. Executive Overview</h2>
+  <p>
+    Compose Preview is a Code on the Go plugin that renders Jetpack Compose
+    <code>@Preview</code> functions directly on the device. Open a Kotlin file
+    that contains previews, tap the <strong>Compose preview</strong> action in the
+    editor toolbar, and the plugin draws your composables on a screen-sized
+    surface &mdash; no emulator and no full app launch.
+  </p>
+  <p>
+    It is a real, on-device compile-and-render, not a mock. The plugin compiles
+    the open file with the Kotlin and Compose compilers, converts the output to
+    DEX, loads it through a child class loader, and invokes the composable into a
+    live <code>ComposeView</code>. The Compose toolchain it needs is bundled with
+    the plugin, so the host IDE does not ship it.
+  </p>
+  <p>
+    The plugin implements three extension interfaces (<code>IPlugin</code>,
+    <code>UIExtension</code>, <code>DocumentationExtension</code>) and consumes
+    host services for the editor, project model, build system, UI, and
+    environment. It links only against the stable <code>plugin-api</code>
+    contract &mdash; never host-internal modules.
+  </p>
+</section>
+
+<!-- ================================================================ -->
+<section id="functionality">
+  <h2>2. Core Functionality</h2>
+
+  <h3>The Compose preview action</h3>
+  <p>
+    The plugin contributes one editor-toolbar action via
+    <code>UIExtension.getToolbarActions()</code>. It is content-aware: it appears
+    only for a <code>.kt</code> file that contains <code>@Preview</code>, and it
+    sits in the preview slot. While such a file is open, the plugin also hides the
+    built-in XML layout preview action (<code>getHiddenToolbarActionIds()</code>)
+    so there is a single, unambiguous preview entry point.
+  </p>
+
+  <h3>Preview modes</h3>
+  <table>
+    <thead>
+      <tr><th>Mode</th><th>What it shows</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><strong>All previews</strong></td><td>Every <code>@Preview</code> in the file, each rendered as a labelled card in a scrolling list.</td></tr>
+      <tr><td><strong>Single preview</strong></td><td>One <code>@Preview</code> chosen from a selector, rendered on its own.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Per-preview options honoured</h3>
+  <p>
+    Each preview's annotation parameters are applied when it renders:
+  </p>
+  <table>
+    <thead>
+      <tr><th>Parameter</th><th>Effect</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>showBackground</code></td><td>Draws the default surface behind the composable.</td></tr>
+      <tr><td><code>uiMode</code></td><td>Light or dark configuration (see below).</td></tr>
+      <tr><td><code>fontScale</code></td><td>Scales text to preview accessibility sizes.</td></tr>
+      <tr><td><code>widthDp</code> / <code>heightDp</code></td><td>Constrains the render surface.</td></tr>
+      <tr><td><code>@PreviewParameter</code></td><td>Each value the provider supplies renders as its own card.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Light and dark</h3>
+  <p>
+    A preview renders <strong>light by default</strong> and switches to dark only
+    when its annotation requests it &mdash; independent of the IDE's own theme, the
+    way Android Studio renders previews. The plugin seeds each render's
+    <code>Configuration</code> with <code>UI_MODE_NIGHT_NO</code> and overrides the
+    night bits only when <code>uiMode</code> asks for them.
+  </p>
+  <pre><code>@Preview(showBackground = true, name = "Greeting")
+@Composable
+fun GreetingPreview() {
+    MyTheme { Greeting("Android") }
+}
+
+@Preview(name = "Dark", uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+fun GreetingDarkPreview() {
+    MyTheme(darkTheme = true) { Greeting("Android") }
+}</code></pre>
+
+  <h3>When a build is needed</h3>
+  <p>
+    Previews resolve their symbols against the module's compiled output. When that
+    output is missing, the panel shows a <strong>Build Required</strong> screen with
+    a <strong>Build Project</strong> button; tapping it runs the module's assemble
+    task through the host build service, after which the preview becomes available.
+    Edits to the file being previewed are recompiled on the fly &mdash; no full
+    rebuild for in-file changes.
+  </p>
+</section>
+
+<!-- ================================================================ -->
+<section id="architecture">
+  <h2>3. Technical Architecture</h2>
+
+  <h3>File layout</h3>
+  <ul class="file-tree">
+    <li>compose-preview/
+      <ul>
+        <li>build.gradle.kts, settings.gradle.kts, proguard-rules.pro</li>
+        <li>src/main/
+          <ul>
+            <li>AndroidManifest.xml (plugin id, main class, icons, permissions)</li>
+            <li>assets/ (<code>icon_day.png</code>, <code>icon_night.png</code>; <code>compose/compose-jars.zip</code> toolchain; <code>docs/</code>)</li>
+            <li>kotlin/org/appdevforall/composepreview/
+              <ul>
+                <li><strong>ComposePreviewPlugin.kt</strong>: entry point; toolbar action, hide rule, tooltip + docs</li>
+                <li><strong>ComposePreviewFragment.kt</strong>: the preview screen (all / single modes, selector, configuration)</li>
+                <li>domain/<strong>PreviewSourceParser.kt</strong>: finds <code>@Preview</code> functions and their parameters</li>
+                <li>compiler/: <code>ComposeCompiler</code>, <code>CompilerDaemon</code> (Kotlin compile + D8 dex)</li>
+                <li>runtime/: <code>ComposableRenderer</code>, <code>ComposableInvoker</code>, resource-context factory</li>
+                <li>data/: project-context source, repository, <code>ComposePreviewViewModel</code> (state machine)</li>
+              </ul>
+            </li>
+            <li>res/layout/, res/drawable/, res/values/</li>
+          </ul>
+        </li>
+      </ul>
+    </li>
+  </ul>
+
+  <h3>Class overview</h3>
+  <table>
+    <thead>
+      <tr><th>Class</th><th>Role</th><th>Key interfaces</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>ComposePreviewPlugin</code></td><td>Entry point. Contributes the toolbar action, the XML-preview hide rule, the long-press tooltip, and the Tier&nbsp;3 docs.</td><td><code>IPlugin</code>, <code>UIExtension</code>, <code>DocumentationExtension</code></td></tr>
+      <tr><td><code>PreviewSourceParser</code></td><td>Parses the source for <code>@Preview</code> functions, their parameters, and <code>@PreviewParameter</code> providers.</td><td>None</td></tr>
+      <tr><td><code>ComposeCompiler</code> / <code>CompilerDaemon</code></td><td>Runs the Kotlin + Compose compiler on-device, then D8 to DEX.</td><td>None</td></tr>
+      <tr><td><code>ComposableRenderer</code> / <code>ComposableInvoker</code></td><td>Loads the compiled preview and invokes the composable into a <code>ComposeView</code> under a controlled, always-resumed lifecycle.</td><td>None</td></tr>
+      <tr><td><code>ComposePreviewViewModel</code></td><td>Drives the preview state machine (Initializing &middot; Compiling &middot; Building &middot; NeedsBuild &middot; Ready &middot; Error).</td><td>extends <code>ViewModel</code></td></tr>
+    </tbody>
+  </table>
+
+  <h3>Render pipeline</h3>
+  <div class="diagram">
+  open .kt with @Preview  +  tap the Compose preview action
+        |
+        v
+  PreviewSourceParser   ── find @Preview fns, params, @PreviewParameter
+        |
+        v
+  ComposeCompiler (Kotlin + Compose plugin)  ──&gt;  D8  ──&gt;  DEX
+        |   classpath from IdeProjectService.getModuleContext
+        |   + bundled assets/compose/compose-jars.zip
+        v
+  child DexClassLoader (parented to the plugin loader)
+        |
+        v
+  ComposableInvoker  ──&gt;  invoke @Preview into a live ComposeView
+        |
+        v
+  rendered preview card(s)   (all-mode list  /  single-mode view)</div>
+  <div class="callout">
+    <strong>Why a bundled toolchain.</strong> The on-device Kotlin/Compose
+    compiler and the Compose runtime jars ship inside the plugin's
+    <code>assets/compose/compose-jars.zip</code>. Keeping them in the plugin means
+    the host IDE no longer carries Compose just for previews.
+  </div>
+
+  <h3>Build configuration</h3>
+  <table>
+    <tr><th>Setting</th><th>Value</th></tr>
+    <tr><td>Gradle plugin</td><td><code>com.itsaky.androidide.plugins.build</code></td></tr>
+    <tr><td>Compile / Target SDK</td><td>34</td></tr>
+    <tr><td>Min SDK</td><td>26</td></tr>
+    <tr><td>Java / Kotlin target</td><td>17</td></tr>
+    <tr><td>Compose</td><td>Enabled; bundled (compose-bom) so the host need not ship it</td></tr>
+    <tr><td>Plugin API</td><td><code>compileOnly</code> via <code>../libs/plugin-api.jar</code></td></tr>
+    <tr><td>Output format</td><td><code>.cgp</code> package</td></tr>
+  </table>
+</section>
+
+<!-- ================================================================ -->
+<section id="integration">
+  <h2>4. Integration Points</h2>
+  <p>
+    Compose Preview implements three extension interfaces and consumes five host
+    services, all through <code>plugin-api</code>.
+  </p>
+
+  <h3>4.1 Plugin lifecycle (<code>IPlugin</code>)</h3>
+  <p>
+    <code>initialize()</code> stores the <code>PluginContext</code> and sets up the
+    environment; <code>activate()</code> / <code>deactivate()</code> /
+    <code>dispose()</code> round out the lifecycle. The preview screen is opened
+    full-screen through <code>IdeUIService.openPluginScreen()</code>.
+  </p>
+
+  <h3>4.2 Toolbar action and visibility (<code>UIExtension</code>)</h3>
+  <p>
+    <code>getToolbarActions()</code> contributes the Compose preview action with an
+    <code>isVisibleProvider</code> that shows it only for Compose files.
+    <code>getHiddenToolbarActionIds()</code> returns the built-in XML preview
+    action's id while a Compose file is open, so only one preview action shows.
+  </p>
+
+  <h3>4.3 Host services consumed</h3>
+  <table>
+    <thead>
+      <tr><th>Service</th><th>Used for</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>IdeEditorService</code></td><td>Read the current file and its contents to detect <code>@Preview</code>.</td></tr>
+      <tr><td><code>IdeProjectService</code></td><td><code>getModuleContext()</code>: module classpath, variant, and build-output locations for compilation.</td></tr>
+      <tr><td><code>IdeBuildService</code></td><td><code>executeTasks()</code>: run the module's assemble task for the Build Required flow.</td></tr>
+      <tr><td><code>IdeUIService</code></td><td><code>openPluginScreen()</code>: present the preview full-screen.</td></tr>
+      <tr><td><code>IdeEnvironmentService</code></td><td>Android SDK location and the plugin's private data directory.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>4.4 Documentation (<code>DocumentationExtension</code>)</h3>
+  <p>
+    The long-press tooltip on the toolbar action comes from
+    <code>getTooltipEntries()</code> (summary + detail), and this page is the
+    Tier&nbsp;3 bundle declared by <code>getTier3DocsAssetPath() = "docs"</code>.
+    Files under <code>assets/docs/</code> are indexed at install time and served
+    from <code>http://localhost:6174/plugin/&lt;pluginId&gt;/&lt;file&gt;</code>.
+  </p>
+
+  <h3>4.5 Class loading and theme recreation</h3>
+  <p>
+    Previews compile to a child <code>DexClassLoader</code> parented to the
+    plugin's own loader, so the single bundled Compose runtime stays
+    classloader-consistent across the nested load. Render surfaces are created with
+    the host activity context (not the plugin context) so composables that touch
+    the window or theme behave, and the preview survives a uiMode (theme) change.
+  </p>
+
+  <h3>4.6 Permissions</h3>
+  <pre><code>&lt;meta-data android:name="plugin.permissions"
+           android:value="filesystem.read,project.structure,native.code" /&gt;</code></pre>
+  <p>
+    Filesystem and project-structure access back source reading and module
+    resolution; <code>native.code</code> covers the bundled on-device toolchain.
+  </p>
+</section>
+
+<!-- ================================================================ -->
+<section id="deployment">
+  <h2>5. Deployment &amp; Usage</h2>
+
+  <h3>Building</h3>
+  <pre><code>cd compose-preview
+./gradlew clean assemblePluginDebug   # or assemblePlugin for release</code></pre>
+  <p>
+    Produces <code>compose-preview/build/plugin/compose-preview-debug.cgp</code>,
+    the bundle you sideload into Code on the Go.
+  </p>
+  <div class="callout">
+    <strong>Always <code>clean</code> first.</strong> The plugin builder copies the
+    built APK to the <code>.cgp</code> and then deletes the source APK, so an
+    incremental build can pick up an empty artifact. A correct build is tens of MB
+    (it carries the bundled Compose toolchain).
+  </div>
+
+  <h3>Installation</h3>
+  <ol>
+    <li>Open <em>Preferences &rarr; Plugin Manager &rarr; +</em>.</li>
+    <li>Select the <code>compose-preview-debug.cgp</code> file.</li>
+    <li>The IDE discovers <code>ComposePreviewPlugin</code> via manifest metadata and activates it.</li>
+  </ol>
+
+  <h3>Using the plugin</h3>
+  <ol>
+    <li>Open a <code>.kt</code> file with at least one <code>@Preview</code> in a Compose module.</li>
+    <li>Tap the <strong>Compose preview</strong> action in the editor toolbar.</li>
+    <li>If prompted with <strong>Build Required</strong>, tap <strong>Build Project</strong> once; then the preview renders.</li>
+    <li>Switch between <strong>all previews</strong> and a <strong>single preview</strong> from the toolbar / selector.</li>
+    <li>Long-press the action for a quick tooltip; this page is the full reference.</li>
+  </ol>
+
+  <h3>Runtime requirements</h3>
+  <table>
+    <tr><th>Requirement</th><th>Value</th></tr>
+    <tr><td>Min Android version</td><td>API 26 (Android 8)</td></tr>
+    <tr><td>Min IDE version</td><td>1.0.0</td></tr>
+    <tr><td>Permissions</td><td><code>filesystem.read</code>, <code>project.structure</code>, <code>native.code</code></td></tr>
+    <tr><td>Network access</td><td>None</td></tr>
+  </table>
+</section>
+
+<!-- ================================================================ -->
+<section id="benefits">
+  <h2>6. Key Benefits</h2>
+  <ul>
+    <li><strong>Real previews, on device.</strong> Composables are compiled and run, not approximated, so what you see is what the framework draws.</li>
+    <li><strong>No full app run.</strong> Iterate on UI without launching the app on a device or emulator.</li>
+    <li><strong>One clear preview entry point.</strong> The action shows only for Compose files and hides the XML preview while active.</li>
+    <li><strong>Faithful light / dark.</strong> Previews default to light and honour <code>uiMode</code> per annotation, independent of the IDE theme.</li>
+    <li><strong>Self-contained toolchain.</strong> The Compose compiler and runtime ship in the plugin, keeping them out of the host IDE.</li>
+    <li><strong>Plugin-API only.</strong> A reference for a compiler/render plugin built entirely on the stable <code>plugin-api</code> contract.</li>
+  </ul>
+</section>
+
+<!-- ================================================================ -->
+<section id="license">
+  <h2>7. Attribution &amp; License</h2>
+  <p>
+    Compose Preview is an open-source example plugin for Code on the Go. Its source
+    is licensed per the surrounding <code>plugin-examples</code> repository (see
+    <code>LICENSE</code> at the repo root).
+  </p>
+  <ul>
+    <li>Jetpack Compose and the Kotlin compiler are used under their respective
+        Apache License 2.0 terms; their trademarks and logos are not used.</li>
+    <li>The plugin makes no network calls and transmits no data; compilation and
+        rendering happen entirely on-device.</li>
+  </ul>
+</section>
+
+<footer>
+  Compose Preview Plugin Documentation &middot; Version 1.0.0 &middot; org.appdevforall.composepreview
+</footer>
+
+</body>
+</html>

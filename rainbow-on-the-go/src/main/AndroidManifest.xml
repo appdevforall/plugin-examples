@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application
+        android:label="@string/app_name">
+
+        <!-- Plugin metadata -->
+        <meta-data
+            android:name="plugin.id"
+            android:value="org.appdevforall.rainbowonthego" />
+
+        <meta-data
+            android:name="plugin.name"
+            android:value="RainbowOnTheGo" />
+
+        <meta-data
+            android:name="plugin.version"
+            android:value="${pluginVersion}" />
+
+        <meta-data
+            android:name="plugin.description"
+            android:value="Colors matching parentheses, brackets, and braces by nesting depth in Java and Kotlin files so you can see which delimiter pairs with which. Cycles through six colors (red, orange, yellow, green, blue, purple) with separate palettes tuned for the Code On The Go editor's light and dark themes. Other languages are left untouched." />
+
+        <meta-data
+            android:name="plugin.author"
+            android:value="App Dev For All" />
+
+        <!-- Supported Code On The Go IDE version range. -->
+        <meta-data
+            android:name="plugin.min_ide_version"
+            android:value="26.27" />
+        <meta-data
+            android:name="plugin.max_ide_version"
+            android:value="99.0.0" />
+
+        <!-- No permissions: this plugin only contributes a color palette. It
+             reads no files, makes no network calls, and changes no IDE settings. -->
+
+        <meta-data
+            android:name="plugin.main_class"
+            android:value="org.appdevforall.rainbowonthego.RainbowOnTheGoPlugin" />
+
+        <!-- Plugin Manager icons. Required for debug builds; release builds
+             skip this check. Paths are inside the .cgp (APK) zip — assets/
+             entries land at exactly this path because the Android build
+             system bundles assets verbatim. -->
+        <meta-data
+            android:name="plugin.icon_day"
+            android:value="assets/icon_day.png" />
+        <meta-data
+            android:name="plugin.icon_night"
+            android:value="assets/icon_night.png" />
+
+    </application>
+
+</manifest>

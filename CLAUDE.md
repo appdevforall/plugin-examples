@@ -78,7 +78,7 @@ If device verification isn't possible in-session, say so explicitly rather than 
 1. Copy `random-xkcd/` — it's the canonical starting template (small but complete, includes the in-IDE help HTML pattern that submissions are expected to follow).
 2. Update `settings.gradle.kts` `rootProject.name`, `build.gradle.kts` `pluginBuilder { pluginName }` + `android { namespace, applicationId }`, and `src/main/AndroidManifest.xml` (`plugin.id`, `plugin.name`, `plugin.main_class`).
 3. Add a row to the README's Examples table.
-4. If your plugin should ship via the website, add it to the `MAP` array in `.github/workflows/build-plugins.yml` and `.github/workflows/update-libs.yml` so the filename mapping picks it up.
+4. If your plugin should ship via the website, add it to the `MAP` array in `.github/workflows/update-libs.yml` so the filename mapping picks it up. (`.github/workflows/build-plugins.yml` needs no change — it auto-discovers plugins by scanning `*/build.gradle.kts` for the plugin-builder Gradle plugin.)
 
 ## Plugin review skill
 
