@@ -88,6 +88,40 @@ class LlmInferenceServiceImpl : LlmInferenceService {
         return future
     }
 
+    override fun generateStreamingWithTools(
+        prompt: String,
+        history: List<ChatMessage>,
+        config: LlmConfig,
+        tools: List<ToolDefinition>,
+        callback: ToolStreamCallback
+    ) {
+        val backend = backends[config.backendId]
+        if (backend == null) {
+            callback.onError("Backend '${config.backendId}' not found")
+            return
+        }
+
+        if (!backend.isAvailable()) {
+            callback.onError("Backend '${config.backendId}' is not available")
+            return
+        }
+
+        // Check if backend supports tool calling (only Gemini for now)
+        if (backend !is GeminiBackend) {
+            // Fallback to streaming without tools for non-Gemini backends
+            val streamCallback = object : StreamCallback {
+                override fun onToken(token: String) = callback.onToken(token)
+                override fun onComplete(response: LlmResponse) = callback.onComplete(response)
+                override fun onError(error: String) = callback.onError(error)
+            }
+            backend.generateStreaming(prompt, config, streamCallback)
+            return
+        }
+
+        // Delegate to Gemini backend with tool support
+        (backend as GeminiBackend).generateStreamingWithTools(prompt, history, config, tools, callback)
+    }
+
     override fun getEmbeddings(text: String, backendId: String): CompletableFuture<FloatArray> {
         // Stub implementation - embeddings not needed for Phase 3
         return CompletableFuture.completedFuture(FloatArray(0))
