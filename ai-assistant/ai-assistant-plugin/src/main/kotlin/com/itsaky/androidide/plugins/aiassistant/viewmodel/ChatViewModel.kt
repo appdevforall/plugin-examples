@@ -11,6 +11,7 @@ import com.itsaky.androidide.plugins.aiassistant.models.Sender
 import com.itsaky.androidide.plugins.aiassistant.tool.Executor
 import com.itsaky.androidide.plugins.aiassistant.tool.ToolApprovalManager
 import com.itsaky.androidide.plugins.aiassistant.tool.ToolCall
+import com.itsaky.androidide.plugins.aiassistant.tool.ToolCallExtractor
 import com.itsaky.androidide.plugins.aiassistant.tool.ToolRouter
 import com.itsaky.androidide.plugins.aiassistant.tool.ApprovalRequest
 import com.itsaky.androidide.plugins.aiassistant.tool.ApprovalResult
@@ -218,63 +219,55 @@ class ChatViewModel(
         val prompt = """
         You are a helpful coding assistant integrated into AndroidIDE.
 
+        CRITICAL: You MUST use tools for ANY action-related request. Do NOT just describe what you would do.
+
         AVAILABLE TOOLS:
         $toolDescriptions
 
-        IMPORTANT: When the user asks you to DO something (read, list, search, create, update, run), you MUST use a tool.
+        TOOL CALLING RULES:
+        1. When user asks to perform an action (list, read, search, create, update, run), IMMEDIATELY call the tool
+        2. Do NOT explain or apologize - just execute the tool call
+        3. Always provide the tool call in this EXACT format:
+           <tool_call>{"tool":"TOOL_NAME","args":{"param1":"value1"}}</tool_call>
+        4. Execute tools BEFORE saying anything else
 
-        Example requests and responses:
-        User: "run the app"
-        Assistant: I'll run the app for you.
-        <tool_call>{"tool":"run_app","args":{}}</tool_call>
+        EXAMPLES (you MUST follow this exact pattern):
 
         User: "list files in src"
-        Assistant: Let me list the files in the src directory.
         <tool_call>{"tool":"list_files","args":{"directory":"src"}}</tool_call>
 
         User: "read MainActivity.kt"
-        Assistant: I'll read that file for you.
         <tool_call>{"tool":"read_file","args":{"path":"MainActivity.kt"}}</tool_call>
 
-        ALWAYS include the <tool_call> block when the user asks you to perform an action.
+        User: "search for onCreate"
+        <tool_call>{"tool":"search_project","args":{"query":"onCreate"}}</tool_call>
+
+        User: "run the app"
+        <tool_call>{"tool":"run_app","args":{}}</tool_call>
+
+        MULTI-TOOL EXAMPLE:
+        User: "list files and search for test"
+        <tool_call>{"tool":"list_files","args":{"directory":"."}}</tool_call>
+        <tool_call>{"tool":"search_project","args":{"query":"test"}}</tool_call>
+
+        INSTRUCTIONS:
+        - ALWAYS output tool calls FIRST, before any explanatory text
+        - Use exact tool names from the list above
+        - Include all required parameters
+        - If user wants multiple actions, call multiple tools
+        - Do NOT skip or delay tool calls
         """.trimIndent()
 
-        android.util.Log.d("ChatViewModel", "System prompt built with ${toolRouter.getAllHandlers().size} tools:\n$prompt")
+        android.util.Log.d("ChatViewModel", "System prompt built with ${toolRouter.getAllHandlers().size} tools")
         return prompt
     }
 
     /**
-     * Parse tool calls from text.
-     * Looks for JSON objects with tool call structure.
+     * Parse tool calls from text using multi-strategy extraction.
+     * Tries: XML tags → JSON objects → Implicit actions
      */
     private fun parseToolCalls(text: String): List<ToolCall> {
-        val toolCalls = mutableListOf<ToolCall>()
-
-        // Look for tool call patterns: <tool_call>{"tool":"name","args":{...}}</tool_call>
-        val toolCallRegex = Regex("""<tool_call>\s*(.+?)\s*</tool_call>""", RegexOption.DOT_MATCHES_ALL)
-        val matches = toolCallRegex.findAll(text)
-
-        for (match in matches) {
-            try {
-                val jsonStr = match.groupValues[1].trim()
-                val json = JSONObject(jsonStr)
-                val toolName = json.optString("tool") ?: json.optString("name") ?: continue
-                val argsJson = json.optJSONObject("args") ?: json.optJSONObject("arguments") ?: JSONObject()
-
-                val args = mutableMapOf<String, Any?>()
-                val keys = argsJson.keys()
-                while (keys.hasNext()) {
-                    val key = keys.next()
-                    args[key] = argsJson.get(key)
-                }
-
-                toolCalls.add(ToolCall(toolName, args))
-            } catch (e: Exception) {
-                android.util.Log.e("ChatViewModel", "Error parsing tool call: ${e.message}", e)
-            }
-        }
-
-        return toolCalls
+        return ToolCallExtractor.extractToolCalls(text)
     }
 
     /**
@@ -296,17 +289,20 @@ class ChatViewModel(
         // Add tool results as messages
         results.forEachIndexed { index, result ->
             val toolCall = toolCalls[index]
+            val resultText = if (result.success) {
+                "${toolCall.name}: ${result.message}\n${result.data ?: ""}"
+            } else {
+                "${toolCall.name} failed: ${result.message}\n${result.error_details ?: ""}"
+            }
             val resultMessage = ChatMessage(
                 id = UUID.randomUUID().toString(),
-                text = if (result.success) {
-                    "${toolCall.name}: ${result.message}\n${result.data ?: ""}"
-                } else {
-                    "${toolCall.name} failed: ${result.message}\n${result.error_details ?: ""}"
-                },
+                text = resultText,
                 sender = Sender.TOOL,
                 status = if (result.success) MessageStatus.SENT else MessageStatus.ERROR
             )
+            android.util.Log.d("ChatViewModel", "Adding tool result message: $resultText")
             _messages.value = _messages.value + resultMessage
+            android.util.Log.d("ChatViewModel", "Total messages after tool result: ${_messages.value.size}")
             syncMessageToSession(resultMessage)
         }
 

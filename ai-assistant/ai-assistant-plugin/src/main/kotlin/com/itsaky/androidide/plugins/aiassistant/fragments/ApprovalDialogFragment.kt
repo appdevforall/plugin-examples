@@ -55,25 +55,28 @@ class ApprovalDialogFragment : DialogFragment() {
         val argsText = arguments?.getString(ARG_ARGS) ?: "{}"
 
         val message = buildString {
+            append("🔒 Tool Approval Required\n\n")
             append(description)
             append("\n\n")
             append(getString(R.string.approval_args))
             append("\n")
             append(argsText)
+            append("\n\n")
+            append("Please choose an option below:")
         }
 
-        return MaterialAlertDialogBuilder(requireContext())
-            .setTitle(getString(R.string.approval_title, toolName))
+        val dialog = MaterialAlertDialogBuilder(requireContext())
+            .setTitle("⚠️ Confirm: $toolName")
             .setMessage(message)
-            .setPositiveButton(R.string.approval_approve_once) { _, _ ->
+            .setPositiveButton("✓ Run Now") { _, _ ->
                 onApprovalDecision?.invoke(ApprovalResult.APPROVED_ONCE)
                 dismiss()
             }
-            .setNeutralButton(R.string.approval_approve_session) { _, _ ->
+            .setNeutralButton("✓ Always Allow") { _, _ ->
                 onApprovalDecision?.invoke(ApprovalResult.APPROVED_FOR_SESSION)
                 dismiss()
             }
-            .setNegativeButton(R.string.approval_deny) { _, _ ->
+            .setNegativeButton("✗ Deny") { _, _ ->
                 onApprovalDecision?.invoke(ApprovalResult.DENIED)
                 dismiss()
             }
@@ -81,6 +84,12 @@ class ApprovalDialogFragment : DialogFragment() {
                 onApprovalDecision?.invoke(ApprovalResult.DENIED)
             }
             .create()
+
+        // Prevent accidental dismissal
+        dialog.setCancelable(false)
+        dialog.setCanceledOnTouchOutside(false)
+
+        return dialog
     }
 
     override fun onDestroyView() {

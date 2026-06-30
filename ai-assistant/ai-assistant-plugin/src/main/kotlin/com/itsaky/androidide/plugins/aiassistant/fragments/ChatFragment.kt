@@ -142,10 +142,19 @@ class ChatFragment : Fragment() {
         }
 
         binding.sendButton.setOnClickListener {
-            val message = binding.promptInputEdittext.text?.toString() ?: return@setOnClickListener
-            if (message.isNotBlank()) {
-                viewModel.sendMessage(message)
-                binding.promptInputEdittext.text?.clear()
+            val currentAgentState = viewModel.agentState.value
+            when (currentAgentState) {
+                is AgentState.Executing, is AgentState.Processing -> {
+                    viewModel.stopProcessing()
+                }
+                else -> {
+                    val message = binding.promptInputEdittext.text?.toString() ?: return@setOnClickListener
+                    if (message.isNotBlank()) {
+                        hideKeyboard()
+                        viewModel.sendMessage(message)
+                        binding.promptInputEdittext.text?.clear()
+                    }
+                }
             }
         }
 
@@ -173,9 +182,16 @@ class ChatFragment : Fragment() {
     }
 
     private suspend fun observeMessages() {
+        android.util.Log.d("ChatFragment", "observeMessages: Starting to collect messages")
         viewModel.messages.collect { messages ->
+            android.util.Log.d("ChatFragment", "observeMessages: Received ${messages.size} messages")
+            messages.forEachIndexed { index, msg ->
+                android.util.Log.d("ChatFragment", "  Message $index: sender=${msg.sender}, text=${msg.text.take(50)}")
+            }
             binding.emptyChatView.isVisible = messages.isEmpty()
+            android.util.Log.d("ChatFragment", "observeMessages: Calling submitList with ${messages.size} messages")
             chatAdapter.submitList(messages) {
+                android.util.Log.d("ChatFragment", "observeMessages: submitList callback - scrolling to ${messages.size - 1}")
                 if (messages.isNotEmpty()) {
                     binding.chatRecyclerView.scrollToPosition(messages.size - 1)
                 }
@@ -189,27 +205,32 @@ class ChatFragment : Fragment() {
                 is AgentState.Idle -> {
                     binding.agentStatusContainer.isVisible = false
                     binding.sendButton.isEnabled = true
+                    binding.sendButton.text = "Send"
                 }
                 is AgentState.Executing -> {
                     binding.agentStatusContainer.isVisible = true
                     binding.agentStatusMessage.text = state.formattedProgress
                     binding.agentStatusTimer.text = state.formattedTiming
-                    binding.sendButton.isEnabled = false
+                    binding.sendButton.isEnabled = true
+                    binding.sendButton.text = "Stop"
                     viewModel.startStateTimer(state)
                 }
                 is AgentState.Processing -> {
                     binding.agentStatusContainer.isVisible = true
                     binding.agentStatusMessage.text = "Generating response..."
                     binding.agentStatusTimer.text = ""
-                    binding.sendButton.isEnabled = false
+                    binding.sendButton.isEnabled = true
+                    binding.sendButton.text = "Stop"
                 }
                 is AgentState.Error -> {
                     binding.agentStatusContainer.isVisible = false
                     binding.sendButton.isEnabled = true
+                    binding.sendButton.text = "Send"
                     viewModel.stopStateTimer()
                 }
                 else -> {
                     binding.sendButton.isEnabled = false
+                    binding.sendButton.text = "Send"
                 }
             }
         }
@@ -279,6 +300,11 @@ class ChatFragment : Fragment() {
                 openSettingsFragment()
             }
         }
+    }
+
+    private fun hideKeyboard() {
+        val imm = requireContext().getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+        imm.hideSoftInputFromWindow(binding.promptInputEdittext.windowToken, 0)
     }
 
     private fun openSettingsFragment() {
