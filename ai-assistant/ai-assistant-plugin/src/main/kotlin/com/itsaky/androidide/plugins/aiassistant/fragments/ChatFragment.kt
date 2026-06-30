@@ -91,16 +91,42 @@ class ChatFragment : Fragment() {
     }
 
     /**
-     * Check for test prompt injected via broadcast receiver and auto-send if present.
+     * Check for test prompt from broadcast receiver and auto-send if present.
+     * Uses SharedPreferences set by TestBroadcastReceiver for reliable communication.
      */
     private fun injectPendingTestPrompt() {
-        val testPrompt = getPendingTestPrompt()
-        if (!testPrompt.isNullOrBlank()) {
-            // Inject into input field and auto-send after a short delay
-            binding.promptInputEdittext.setText(testPrompt)
-            binding.promptInputEdittext.post {
-                binding.sendButton.performClick()
+        try {
+            // Check SharedPreferences for pending test prompt (set by TestBroadcastReceiver)
+            val context = requireContext()
+            val prefs = context.getSharedPreferences("test_ai_prefs", android.content.Context.MODE_PRIVATE)
+            val pendingPrompt = prefs.getString("pending_prompt", null)
+            val shouldAutoSend = prefs.getBoolean("auto_send", false)
+
+            if (!pendingPrompt.isNullOrBlank() && shouldAutoSend) {
+                android.util.Log.d("ChatFragment", "📝 Found pending test prompt: '$pendingPrompt'")
+
+                // Inject into input field
+                binding.promptInputEdittext.setText(pendingPrompt)
+                android.util.Log.d("ChatFragment", "✅ Prompt injected into input field")
+
+                // Auto-send after a short delay to ensure UI is ready
+                binding.promptInputEdittext.post {
+                    android.util.Log.d("ChatFragment", "🚀 Sending prompt automatically...")
+                    binding.sendButton.performClick()
+
+                    // Clear the SharedPreferences after sending
+                    prefs.edit().apply {
+                        remove("pending_prompt")
+                        remove("auto_send")
+                        remove("auto_approve")
+                        remove("timestamp")
+                        apply()
+                    }
+                    android.util.Log.d("ChatFragment", "🧹 Cleared pending prompt from preferences")
+                }
             }
+        } catch (e: Exception) {
+            android.util.Log.e("ChatFragment", "Error checking for pending test prompt: ${e.message}")
         }
     }
 
