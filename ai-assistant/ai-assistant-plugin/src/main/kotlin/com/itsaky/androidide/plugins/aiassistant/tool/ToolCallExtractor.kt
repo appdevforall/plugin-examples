@@ -21,6 +21,9 @@ class ToolCallExtractor {
         fun extractToolCalls(text: String): List<ToolCall> {
             val toolCalls = mutableListOf<ToolCall>()
 
+            Log.d(TAG, "Extracting tool calls from response (${text.length} chars)")
+            Log.d(TAG, "Response preview: ${text.take(300)}")
+
             // Strategy 1: Explicit XML tags
             toolCalls.addAll(extractFromXmlTags(text))
 
@@ -35,6 +38,13 @@ class ToolCallExtractor {
             }
 
             Log.d(TAG, "Extracted ${toolCalls.size} tool calls from response (${text.length} chars)")
+
+            // Warn if we found incomplete tool calls
+            if (text.contains("<tool_call>") && text.count { it == '<' } > text.count { it == '>' }) {
+                Log.w(TAG, "WARNING: Found incomplete tool call tags in response. Response may have been truncated.")
+                Log.w(TAG, "Full response: $text")
+            }
+
             return toolCalls
         }
 

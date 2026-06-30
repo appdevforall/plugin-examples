@@ -438,7 +438,7 @@ class ChatViewModel(
                 // Create LLM config
                 val config = LlmInferenceService.LlmConfig(currentBackendId).apply {
                     temperature = 0.7f
-                    maxTokens = 2048
+                    maxTokens = 4096  // Increased from 2048 to ensure complete tool calls are generated
                     systemPrompt = buildSystemPrompt()
                 }
 
