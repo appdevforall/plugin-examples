@@ -41,25 +41,43 @@ class ListFilesHandler(
                 return ToolResult.failure("Path is not a directory: ${dir.absolutePath}")
             }
 
-            val files = dir.listFiles()?.map { file ->
-                val prefix = if (file.isDirectory) "[DIR] " else "[FILE] "
-                val size = if (file.isFile) " (${formatSize(file.length())})" else ""
-                prefix + file.name + size
-            }?.sorted() ?: emptyList()
+            val fileList = dir.listFiles()?.sortedBy { it.name } ?: emptyList()
 
-            Log.d("ListFilesHandler", "Found ${files.size} items")
+            Log.d("ListFilesHandler", "Found ${fileList.size} items")
 
-            if (files.isEmpty()) {
+            if (fileList.isEmpty()) {
                 Log.w("ListFilesHandler", "Directory is empty: ${dir.absolutePath}")
                 return ToolResult.success(
                     message = "Directory is empty: ${dir.absolutePath}",
-                    data = "(no files)"
+                    data = "(no files or directories)"
                 )
             }
 
+            // Format files and directories separately for better organization
+            val directories = fileList.filter { it.isDirectory }
+            val regularFiles = fileList.filter { it.isFile }
+
+            val formatted = buildString {
+                appendLine("📁 DIRECTORIES (${directories.size}):")
+                directories.forEach { dir ->
+                    appendLine("  ├── ${dir.name}/")
+                }
+
+                if (directories.isNotEmpty() && regularFiles.isNotEmpty()) {
+                    appendLine()
+                }
+
+                appendLine("📄 FILES (${regularFiles.size}):")
+                regularFiles.forEach { file ->
+                    val size = formatSize(file.length())
+                    val sizeStr = String.format("%-8s", size)  // Right-pad for alignment
+                    appendLine("  ├── ${file.name} ($sizeStr)")
+                }
+            }
+
             ToolResult.success(
-                message = "Found ${files.size} items in ${dir.absolutePath}",
-                data = files.joinToString("\n")
+                message = "Found ${fileList.size} items in ${dir.absolutePath}",
+                data = formatted
             )
         } catch (e: Exception) {
             Log.e("ListFilesHandler", "Error listing files in $directory", e)
