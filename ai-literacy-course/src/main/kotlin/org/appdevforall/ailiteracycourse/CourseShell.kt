@@ -36,25 +36,25 @@ object CourseShell {
 
     private enum class Kind { VIDEO, ACTIVITY, PDF }
 
-    private data class Item(val title: String, val href: String, val kind: Kind)
+    private data class Item(val order: Int, val title: String, val href: String, val kind: Kind)
 
     private fun itemsOf(root: File, section: File): List<Item> {
         val entries = section.listFiles() ?: return emptyList()
         return entries.mapNotNull { entry ->
             when {
                 entry.isFile && entry.extension.equals("mp4", true) ->
-                    Item(itemTitle(entry.nameWithoutExtension), rel(root, entry), Kind.VIDEO)
+                    Item(leadingNumber(entry.nameWithoutExtension), itemTitle(entry.nameWithoutExtension), rel(root, entry), Kind.VIDEO)
 
                 entry.isFile && entry.extension.equals("pdf", true) ->
-                    Item(itemTitle(entry.nameWithoutExtension), rel(root, entry), Kind.PDF)
+                    Item(leadingNumber(entry.nameWithoutExtension), itemTitle(entry.nameWithoutExtension), rel(root, entry), Kind.PDF)
 
                 entry.isDirectory -> findIndexHtml(entry)?.let { index ->
-                    Item(itemTitle(entry.name), rel(root, index), Kind.ACTIVITY)
+                    Item(leadingNumber(entry.name), itemTitle(entry.name), rel(root, index), Kind.ACTIVITY)
                 }
 
                 else -> null
             }
-        }.sortedWith(compareBy({ leadingNumber(it.title) }, { it.title }))
+        }.sortedWith(compareBy({ it.order }, { it.title }))
     }
 
     /** Shallowest index.html under [dir] (activities nest theirs differently). */
@@ -124,8 +124,14 @@ object CourseShell {
     private fun itemTitle(raw: String): String =
         titleCase(raw.replace(Regex("^\\d+-"), ""))
 
-    private fun leadingNumber(title: String): Int =
-        Regex("(\\d+)").find(title)?.groupValues?.get(1)?.toIntOrNull() ?: Int.MAX_VALUE
+    /**
+     * The leading "12-" ordering prefix of a raw file/dir name, as an int.
+     * Anchored to the start so a number later in the name (e.g. the "1" in
+     * "5-lesson-1-recap-quiz") can't be mistaken for the ordering key.
+     * Unnumbered entries sort last.
+     */
+    private fun leadingNumber(rawName: String): Int =
+        Regex("^(\\d+)").find(rawName)?.groupValues?.get(1)?.toIntOrNull() ?: Int.MAX_VALUE
 
     private fun titleCase(raw: String): String =
         raw.split('-', ' ', '_').filter { it.isNotBlank() }.joinToString(" ") { w ->
