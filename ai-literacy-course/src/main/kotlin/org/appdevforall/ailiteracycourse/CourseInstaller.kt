@@ -29,8 +29,9 @@ object CourseInstaller {
     // through this viewer (served same-origin from <root>/pdfjs/web/viewer.html).
     private const val PDFJS_ASSET = "pdfjs.zip"
 
-    // Bumped to 2 to force existing installs to re-extract with the PDF viewer.
-    private const val INSTALL_VERSION = 2
+    // Bumped to 3 to force existing installs to re-extract and regenerate the
+    // navigation shell with the corrected lesson-item ordering.
+    private const val INSTALL_VERSION = 3
     private const val MARKER = ".installed-v$INSTALL_VERSION"
 
     private val installLock = Any()
