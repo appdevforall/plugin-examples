@@ -197,6 +197,8 @@ class ChatViewModel(
                 } else {
                     session.messages.add(message)
                 }
+                // Emit immutable snapshot to trigger StateFlow update
+                _messages.value = session.messages.toList()
             }
         }
     }
@@ -654,7 +656,8 @@ class ChatViewModel(
         android.util.Log.d("ChatViewModel", "switchToSession: sessionId=$sessionId, session found=${session != null}")
         if (session != null) {
             _currentSessionId.value = sessionId
-            _messages.value = session.messages
+            // Use immutable snapshot to ensure StateFlow emits on mutations
+            _messages.value = session.messages.toList()
             android.util.Log.d("ChatViewModel", "switchToSession: set _messages to ${session.messages.size} messages")
         }
     }

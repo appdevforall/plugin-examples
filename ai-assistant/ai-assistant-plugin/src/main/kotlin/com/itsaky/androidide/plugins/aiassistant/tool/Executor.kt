@@ -89,8 +89,10 @@ class Executor(
         // Normalize arg keys for read_file: if "path" is present but "file_path" is missing, remap
         val normalizedArgs = args.toMutableMap()
         if (toolName == "read_file" && normalizedArgs.containsKey("path") && !normalizedArgs.containsKey("file_path")) {
-            normalizedArgs["file_path"] = normalizedArgs["path"]!!
-            Log.d(TAG, "($executionMode): Remapped 'path' → 'file_path' for read_file tool")
+            normalizedArgs["path"]?.let { normalizedArgs["file_path"] = it }
+            if (normalizedArgs.containsKey("file_path")) {
+                Log.d(TAG, "($executionMode): Remapped 'path' → 'file_path' for read_file tool")
+            }
         }
 
         // Check required arguments

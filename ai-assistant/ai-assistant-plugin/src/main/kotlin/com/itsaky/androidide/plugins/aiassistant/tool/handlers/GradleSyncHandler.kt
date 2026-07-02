@@ -32,33 +32,39 @@ class GradleSyncHandler(
                 )
             }
 
-            // Use CompletableFuture to wait for sync to complete
-            val syncComplete = CompletableFuture<String>()
+            // Track both success flag and output message
+            val syncComplete = CompletableFuture<Pair<Boolean, String>>()
 
             Log.d("GradleSyncHandler", "Triggering gradle sync...")
             buildService.triggerGradleSync(object : GradleSyncCallback {
                 override fun onComplete(success: Boolean, output: String) {
                     Log.d("GradleSyncHandler", "Sync completed: success=$success, output length=${output.length}")
-                    if (success) {
-                        syncComplete.complete(output.ifEmpty { "Gradle sync completed successfully" })
+                    val message = if (success) {
+                        output.ifEmpty { "Gradle sync completed successfully" }
                     } else {
-                        syncComplete.complete("Gradle sync failed:\n$output")
+                        "Gradle sync failed:\n$output"
                     }
+                    syncComplete.complete(Pair(success, message))
                 }
             })
 
             // Wait for sync to complete (with timeout of 2 minutes)
-            val result: String = try {
+            val (syncSuccess, result): Pair<Boolean, String> = try {
                 syncComplete.get(120_000, java.util.concurrent.TimeUnit.MILLISECONDS)
             } catch (e: Exception) {
                 Log.w("GradleSyncHandler", "Gradle sync timed out or failed: ${e.message}")
-                "Gradle sync in progress (may take 1-2 minutes)"
+                Pair(false, "Gradle sync in progress or timed out (may take 1-2 minutes)")
             }
 
-            ToolResult.success(
-                message = "Gradle sync triggered",
-                data = result
-            )
+            // Return success or failure based on actual sync result
+            if (syncSuccess) {
+                ToolResult.success(
+                    message = "Gradle sync completed",
+                    data = result
+                )
+            } else {
+                ToolResult.failure(result)
+            }
         } catch (e: Exception) {
             Log.e("GradleSyncHandler", "Error triggering gradle sync", e)
             ToolResult.failure(
