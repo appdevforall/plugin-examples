@@ -1,5 +1,44 @@
 # Retrospectives
 
+## 2026-07-01 — Code review (PR #31) + AI Literacy Course ordering fix (PR #36)
+
+### Time Breakdown
+| Started (UTC) | Phase | 👤 Hands-On | 🤖 Agent | Problems |
+|---|---|---|---|---|
+| 00:07 | Code review (8-angle fan-out, verify, ≤10 findings) | █ 7m | █████ 47m | ⚠ scope > PR (stale local `main`) |
+| 00:54 | Post findings 1–10 as PR comments | ▌ 3m | ▌ 5m | ⚠ 3 findings outside PR diff → top-level fallback |
+| 00:59 | Housekeeping (main, pull, ls) | ▌ 1m | ▌ 1m | |
+| 01:00 | Ordering fix — plan mode + implement | █ 6m | ██ 20m | ⚠ plan rejected → "just branch & do it" |
+| 01:20 | Device-test loop (build → fix → rebuild) | ██ 15m | ███ 28m | ⚠ 2 rework cycles: install-marker gate, missing `pdfjs.zip` |
+| 01:48 | Commit / push / PR + away | ▌ 1m | ▌ 3m | idle ~38m before retro |
+
+### Metrics
+| Metric | Duration |
+|---|---|
+| Total wall-clock | ~2h 19m |
+| Hands-on (script) | 48m (35%) — inflated by `/code-review` + `/retro` command expansions counted as typing; real ≈ 25–30m |
+| Automated agent time | ~51m (37%) |
+| Idle / device-testing / away | ~40m (29%) |
+| Retro analysis time | ~2 min |
+
+### Key Observations
+- **Code review ran against a stale local `main`** (150 files vs PR #31's 100); 3 compose-preview findings fell outside the PR diff and needed a fallback top-level comment. No `git fetch` happened first.
+- **Two avoidable device round-trips** on the ordering fix: (1) the `.installed-vN` marker gate meant the fix had no effect until `INSTALL_VERSION` was bumped — I warned about it but didn't preempt it; (2) `pdfjs.zip` was never downloaded on this machine and `assemblePlugin` silently shipped a viewer-less `.cgp`.
+- **Plan mode was overhead** for a ~15-line fix; user rejected the plan with "make a branch; do the work there."
+- **Worked well:** the review fan-out (6 parallel finder agents, self-verified) ran with near-zero interaction; the ordering bug was root-caused on the first try and validated via a Python port of the sort (no `kotlinc` locally).
+
+### Feedback
+**What worked:** (not separately volunteered — core review + fix landed cleanly).
+**What didn't:** Always work on a branch — working on `main` is rarely right. When diffing against `main`, suggest fetching recent changes to avoid stale situations. The `INSTALL_VERSION` miss was sloppy and wasted a cycle.
+
+### Actions Taken
+| Issue | Action Type | Change |
+|---|---|---|
+| Worked on `main`; stale-`main` diff produced phantom findings | CLAUDE.md | Added "Git workflow" section: always branch; `git fetch` + compare `origin/main` before any diff-against-main |
+| `INSTALL_VERSION` not bumped with generation-logic change → dead fix on device | CLAUDE.md | Added "One-time on-device install markers" subsection: bump `INSTALL_VERSION` on any extraction/generation change |
+| `assemblePlugin` silently shipped a `.cgp` missing `pdfjs.zip` | CLAUDE.md | Expanded "Asset downloads": warn assemblePlugin skips `downloadAssets` and ships broken `.cgp`; verify assets first |
+| Same two build traps, cross-session | Learnings | Added "Plugin build & install gotchas" section to `docs/process/learnings.md` |
+
 ## 2026-06-08 — Importing the bookshelf plugin from contrib
 
 ### Time Breakdown

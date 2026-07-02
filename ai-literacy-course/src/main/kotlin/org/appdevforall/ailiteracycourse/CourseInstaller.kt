@@ -23,7 +23,15 @@ import java.io.File
 object CourseInstaller {
 
     private const val BUNDLE_ASSET = "ai-literacy-course.zip"
-    private const val INSTALL_VERSION = 1
+
+    // Mozilla PDF.js (Apache-2.0), bundled so PDF resources render offline. A
+    // bare WebView can't display application/pdf, so the shell links each PDF
+    // through this viewer (served same-origin from <root>/pdfjs/web/viewer.html).
+    private const val PDFJS_ASSET = "pdfjs.zip"
+
+    // Bumped to 3 to force existing installs to re-extract and regenerate the
+    // navigation shell with the corrected lesson-item ordering.
+    private const val INSTALL_VERSION = 3
     private const val MARKER = ".installed-v$INSTALL_VERSION"
 
     private val installLock = Any()
@@ -66,12 +74,32 @@ object CourseInstaller {
             onStatus("Unpacking activities…")
             extractNestedZips(archive, root)
 
+            onStatus("Preparing PDF viewer…")
+            installPdfViewer(context, archive, root)
+
             onStatus("Building course…")
             CourseShell.generate(root)
 
             marker.writeText("ok")
             root
         }
+
+    /**
+     * Unpack the bundled PDF.js viewer into `<root>/pdfjs/` so it is served from
+     * the same virtual https origin as the course PDFs. Same-origin is required:
+     * PDF.js's viewer rejects a `?file=` URL from a different origin, and the
+     * worker/asset fetches must resolve under the same host.
+     */
+    private fun installPdfViewer(context: PluginContext, archive: IdeArchiveService, root: File) {
+        val dest = File(root, "pdfjs")
+        dest.mkdirs()
+        val source = context.resources.openPluginAsset(PDFJS_ASSET)
+            ?: error("Bundled asset not found: $PDFJS_ASSET")
+        val result = source.use {
+            archive.extract(it, ArchiveFormat.ZIP, dest, null)
+        }
+        if (result is ExtractResult.Failure) throw result.error
+    }
 
     /**
      * The bundle wraps everything in a single top folder; descend into it so

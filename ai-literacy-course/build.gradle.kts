@@ -3,6 +3,9 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import java.net.URL
 import java.net.HttpURLConnection
 import java.security.MessageDigest
+import java.util.zip.ZipEntry
+import java.util.zip.ZipInputStream
+import java.util.zip.ZipOutputStream
 
 plugins {
     id("com.android.application")
@@ -82,10 +85,10 @@ tasks.matching {
     enabled = false
 }
 
-// --- Build-time course download (mirrors ndk-installer-plugin) ---------------
+// --- Build-time asset downloads (mirrors ndk-installer-plugin) ---------------
 //
-// The 110 MB course ZIP is NOT committed to git. This task pulls it from LAIA's
-// Google Drive and verifies a self-computed MD5 we pin below. scripts/update-libs.sh
+// Neither the 110 MB course ZIP nor the PDF.js viewer is committed to git. This
+// task pulls each from its source and verifies a pinned MD5. scripts/update-libs.sh
 // runs `downloadAssets` automatically before assemblePlugin for any plugin that
 // declares it.
 
@@ -130,6 +133,27 @@ fun httpDownloadToFile(url: String, target: File): Long {
     return receivedLength
 }
 
+/**
+ * Copy [src] zip to [dest], dropping `*.map` source-map entries. The official
+ * PDF.js dist ships ~9 MB of source maps that point at TypeScript we don't bundle
+ * — dead weight inside the .cgp and on-device. Everything else is passed through
+ * verbatim, so [dest] keeps the dist's `build/` + `web/` root layout that
+ * CourseInstaller extracts.
+ */
+fun repackWithoutMaps(src: File, dest: File) {
+    ZipInputStream(src.inputStream().buffered()).use { zin ->
+        ZipOutputStream(dest.outputStream().buffered()).use { zout ->
+            while (true) {
+                val entry = zin.nextEntry ?: break
+                if (entry.isDirectory || entry.name.endsWith(".map")) continue
+                zout.putNextEntry(ZipEntry(entry.name))
+                zin.copyTo(zout)
+                zout.closeEntry()
+            }
+        }
+    }
+}
+
 fun md5Of(file: File): String {
     val md = MessageDigest.getInstance("MD5")
     file.inputStream().use { input ->
@@ -143,58 +167,90 @@ fun md5Of(file: File): String {
     return md.digest().joinToString("") { "%02x".format(it) }
 }
 
-val downloadAssets by tasks.registering {
-    val assetsDir = project.file("src/main/assets")
-    val archiveFile = assetsDir.resolve("ai-literacy-course.zip")
+/**
+ * Download [url] to [target], retrying with backoff, and fail the build unless
+ * the bytes hash to [expectedMd5]. The MD5 gate is the real integrity check:
+ * it also catches a host serving an HTML interstitial/quota page instead of the
+ * file (Google Drive does this), since that won't match the pinned hash.
+ */
+fun org.gradle.api.Task.downloadVerified(
+    url: String,
+    target: File,
+    expectedMd5: String,
+    label: String,
+    maxAttempts: Int = 3,
+) {
+    var lastError: String? = null
+    for (attempt in 1..maxAttempts) {
+        logger.lifecycle("Downloading $label (attempt $attempt/$maxAttempts)...")
+        try {
+            val bytes = httpDownloadToFile(url, target)
+            val actualMd5 = md5Of(target).lowercase()
+            logger.info("Downloaded $bytes bytes; expected MD5=$expectedMd5 actual=$actualMd5")
+            if (expectedMd5 == actualMd5) return
+            lastError = "MD5 mismatch (expected=$expectedMd5, actual=$actualMd5)."
+        } catch (e: Exception) {
+            lastError = e.message ?: e.javaClass.simpleName
+        }
+        logger.warn("Attempt $attempt failed: $lastError")
+        target.delete()
+        if (attempt < maxAttempts) {
+            val backoffMs = 2_000L * attempt
+            logger.lifecycle("Retrying in ${backoffMs}ms...")
+            Thread.sleep(backoffMs)
+        }
+    }
+    throw GradleException("Failed to download $label after $maxAttempts attempts: $lastError")
+}
 
-    outputs.files(archiveFile)
+val downloadCourse by tasks.registering {
+    val courseArchive = project.file("src/main/assets/ai-literacy-course.zip")
+    outputs.files(courseArchive)
 
     doLast {
-        assetsDir.mkdirs()
-
-        // Google Drive large-file (>100 MB) endpoint. A plain share/uc URL would
-        // return an HTML "can't scan for viruses" interstitial instead of bytes;
-        // this endpoint + confirm=t serves the file directly.
+        courseArchive.parentFile.mkdirs()
+        // Google Drive large-file (>100 MB) endpoint. A plain share/uc URL returns
+        // an HTML "can't scan for viruses" interstitial instead of bytes; this
+        // endpoint + confirm=t serves the file directly. MD5 from the LAIA-provided
+        // zip (110 MB -> 119 MB extracted).
         val fileId = "1zRTVzgzZwVCtij55JnFTLtPFwsSlZo-t"
-        val archiveUrl =
-            "https://drive.usercontent.google.com/download?id=$fileId&export=download&confirm=t"
-
-        // MD5 computed from the LAIA-provided zip (110 MB -> 119 MB extracted).
-        // A mismatch (including Drive returning an HTML/quota page) fails the build.
-        val expectedMd5 = "c2785f29c12056bd54b8cc885355ecc9"
-        val maxAttempts = 3
-
-        var lastError: String? = null
-        for (attempt in 1..maxAttempts) {
-            logger.lifecycle("Downloading AI Literacy course bundle (attempt $attempt/$maxAttempts)...")
-            try {
-                val bytes = httpDownloadToFile(archiveUrl, archiveFile)
-                val actualMd5 = md5Of(archiveFile).lowercase()
-
-                logger.info("Downloaded $bytes bytes")
-                logger.info("Expected MD5: $expectedMd5")
-                logger.info("Actual MD5:   $actualMd5")
-
-                if (expectedMd5 == actualMd5) {
-                    return@doLast
-                }
-                lastError = "MD5 mismatch (expected=$expectedMd5, actual=$actualMd5). " +
-                    "Drive may have served an HTML interstitial/quota page, or the bundle changed."
-            } catch (e: Exception) {
-                lastError = e.message ?: e.javaClass.simpleName
-            }
-
-            logger.warn("Attempt $attempt failed: $lastError")
-            archiveFile.delete()
-            if (attempt < maxAttempts) {
-                val backoffMs = 2_000L * attempt
-                logger.lifecycle("Retrying in ${backoffMs}ms...")
-                Thread.sleep(backoffMs)
-            }
-        }
-
-        throw GradleException(
-            "Failed to download ai-literacy-course.zip after $maxAttempts attempts: $lastError"
+        val url = "https://drive.usercontent.google.com/download?id=$fileId&export=download&confirm=t"
+        downloadVerified(
+            url, courseArchive,
+            expectedMd5 = "c2785f29c12056bd54b8cc885355ecc9",
+            label = "AI Literacy course bundle",
         )
     }
+}
+
+val downloadPdfjs by tasks.registering {
+    val pdfjsArchive = project.file("src/main/assets/pdfjs.zip")
+    outputs.files(pdfjsArchive)
+
+    doLast {
+        pdfjsArchive.parentFile.mkdirs()
+        // A bare WebView can't render application/pdf, so the course shell links
+        // each PDF through this bundled viewer. Pin the modern (.mjs) dist, verify
+        // its MD5, then strip ~9 MB of source maps into pdfjs.zip. The dist's
+        // build/ + web/ root layout is what CourseInstaller extracts.
+        val version = "4.8.69"
+        val url =
+            "https://github.com/mozilla/pdf.js/releases/download/v$version/pdfjs-$version-dist.zip"
+        val download = File.createTempFile("pdfjs-dist", ".zip")
+        try {
+            downloadVerified(
+                url, download,
+                expectedMd5 = "772b68fe1f36e3df7c0827bb4f3e1cec",
+                label = "PDF.js $version dist",
+            )
+            repackWithoutMaps(download, pdfjsArchive)
+        } finally {
+            download.delete()
+        }
+    }
+}
+
+// Aggregator: scripts/update-libs.sh runs `downloadAssets` before assemblePlugin.
+val downloadAssets by tasks.registering {
+    dependsOn(downloadCourse, downloadPdfjs)
 }

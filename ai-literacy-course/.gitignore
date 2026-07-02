@@ -30,3 +30,6 @@ test-results/
 
 # Course bundle is fetched at build time by the downloadAssets task — never commit it.
 src/main/assets/ai-literacy-course.zip
+
+# PDF.js viewer is fetched at build time by the downloadAssets task — never commit it.
+src/main/assets/pdfjs.zip

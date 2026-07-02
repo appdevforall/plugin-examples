@@ -8,7 +8,8 @@ import java.io.File
  * The bundle ships no web shell of its own — just numbered folders of `.mp4`
  * videos, `.pdf` resources, and HTML activities. This walks that regular
  * structure and emits a single video-forward page: lessons in playback order,
- * each video inline, activities and PDFs as links the WebView opens in place.
+ * each video inline, activities as links the WebView opens in place, and PDFs
+ * opened through the bundled PDF.js viewer (a bare WebView can't render PDFs).
  *
  * All links are relative to the page (served at `…/course/index.html`), so they
  * resolve under the same virtual https origin.
@@ -35,25 +36,25 @@ object CourseShell {
 
     private enum class Kind { VIDEO, ACTIVITY, PDF }
 
-    private data class Item(val title: String, val href: String, val kind: Kind)
+    private data class Item(val order: Int, val title: String, val href: String, val kind: Kind)
 
     private fun itemsOf(root: File, section: File): List<Item> {
         val entries = section.listFiles() ?: return emptyList()
         return entries.mapNotNull { entry ->
             when {
                 entry.isFile && entry.extension.equals("mp4", true) ->
-                    Item(itemTitle(entry.nameWithoutExtension), rel(root, entry), Kind.VIDEO)
+                    Item(leadingNumber(entry.nameWithoutExtension), itemTitle(entry.nameWithoutExtension), rel(root, entry), Kind.VIDEO)
 
                 entry.isFile && entry.extension.equals("pdf", true) ->
-                    Item(itemTitle(entry.nameWithoutExtension), rel(root, entry), Kind.PDF)
+                    Item(leadingNumber(entry.nameWithoutExtension), itemTitle(entry.nameWithoutExtension), rel(root, entry), Kind.PDF)
 
                 entry.isDirectory -> findIndexHtml(entry)?.let { index ->
-                    Item(itemTitle(entry.name), rel(root, index), Kind.ACTIVITY)
+                    Item(leadingNumber(entry.name), itemTitle(entry.name), rel(root, index), Kind.ACTIVITY)
                 }
 
                 else -> null
             }
-        }.sortedWith(compareBy({ leadingNumber(it.title) }, { it.title }))
+        }.sortedWith(compareBy({ it.order }, { it.title }))
     }
 
     /** Shallowest index.html under [dir] (activities nest theirs differently). */
@@ -75,8 +76,19 @@ object CourseShell {
         """.trimIndent() + "\n"
 
         Kind.ACTIVITY -> link(item, "Activity")
-        Kind.PDF -> link(item, "PDF")
+        Kind.PDF -> link(item.copy(href = pdfViewerHref(item.href)), "PDF")
     }
+
+    /**
+     * Wrap a PDF's page-relative URL in the bundled PDF.js viewer. The viewer
+     * lives at `pdfjs/web/viewer.html`, two levels below the page root, so the
+     * PDF is reached back up via `../../`. Resolved against the viewer's URL,
+     * this stays on the same origin — which PDF.js requires for `?file=`.
+     * Course resource names are URL-safe kebab-case, so [rel] needs no further
+     * encoding as a query value.
+     */
+    private fun pdfViewerHref(rel: String): String =
+        "pdfjs/web/viewer.html?file=../../$rel"
 
     private fun link(item: Item, badge: String): String = """
         <a class="item link" href="${attr(item.href)}">
@@ -112,8 +124,14 @@ object CourseShell {
     private fun itemTitle(raw: String): String =
         titleCase(raw.replace(Regex("^\\d+-"), ""))
 
-    private fun leadingNumber(title: String): Int =
-        Regex("(\\d+)").find(title)?.groupValues?.get(1)?.toIntOrNull() ?: Int.MAX_VALUE
+    /**
+     * The leading "12-" ordering prefix of a raw file/dir name, as an int.
+     * Anchored to the start so a number later in the name (e.g. the "1" in
+     * "5-lesson-1-recap-quiz") can't be mistaken for the ordering key.
+     * Unnumbered entries sort last.
+     */
+    private fun leadingNumber(rawName: String): Int =
+        Regex("^(\\d+)").find(rawName)?.groupValues?.get(1)?.toIntOrNull() ?: Int.MAX_VALUE
 
     private fun titleCase(raw: String): String =
         raw.split('-', ' ', '_').filter { it.isNotBlank() }.joinToString(" ") { w ->
