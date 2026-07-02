@@ -35,7 +35,7 @@
 
         <meta-data
             android:name="plugin.permissions"
-            android:value="network.access" />
+            android:value="filesystem.read,filesystem.write,network.access,system.commands,project.structure" />
 
         <meta-data
             android:name="plugin.main_class"

@@ -19,17 +19,35 @@ class ListFilesHandler(
     override suspend fun execute(args: Map<String, Any?>): ToolResult {
         var directory = args["directory"]?.toString()?.trim()?.takeIf { it.isNotBlank() }
 
-        // If no directory specified, try to find a sensible default
+        // Get project root for containment check
+        val projectRoot = System.getProperty("project.dir")
+            ?: System.getProperty("user.dir")
+            ?: "/storage/emulated/0/AndroidIDEProjects"
+        val projectRootCanonical = File(projectRoot).canonicalPath
+
+        // If no directory specified, use project root
         if (directory.isNullOrBlank()) {
-            directory = findDefaultDirectory()
-            Log.d("ListFilesHandler", "No directory specified, using default: $directory")
+            directory = projectRoot
+            Log.d("ListFilesHandler", "No directory specified, using project root: $directory")
         }
 
         Log.d("ListFilesHandler", "Listing files in directory: $directory")
 
         return try {
-            val dir = File(directory).absoluteFile
+            // Resolve path against project root if relative
+            val dir = if (directory.startsWith("/")) {
+                File(directory).absoluteFile
+            } else {
+                File(projectRoot, directory).absoluteFile
+            }
             Log.d("ListFilesHandler", "Absolute path: ${dir.absolutePath}")
+
+            // Security: Verify directory is within project root
+            val dirCanonical = dir.canonicalPath
+            if (!dirCanonical.startsWith(projectRootCanonical + File.separator) && dirCanonical != projectRootCanonical) {
+                Log.e("ListFilesHandler", "Path escape attempt: $dirCanonical is outside project root $projectRootCanonical")
+                return ToolResult.failure("Directory path must be within project directory")
+            }
 
             if (!dir.exists()) {
                 Log.w("ListFilesHandler", "Directory does not exist: ${dir.absolutePath}")
@@ -96,27 +114,9 @@ class ListFilesHandler(
     }
 
     private fun findDefaultDirectory(): String {
-        // Try common Android IDE project locations
-        val possibleLocations = listOf(
-            "/storage/emulated/0/AndroidIDEProjects",
-            "/storage/emulated/0/AndroidIDEProjects/MyApplication",
-            System.getProperty("user.home") + "/AndroidIDEProjects",
-            System.getProperty("user.home") + "/AndroidIDEProjects/MyApplication",
-            System.getProperty("user.home"),
-            "/sdcard/AndroidIDEProjects"
-        )
-
-        for (location in possibleLocations) {
-            val dir = File(location)
-            if (dir.exists() && dir.isDirectory && dir.listFiles()?.isNotEmpty() == true) {
-                Log.d("ListFilesHandler", "Found default directory: $location")
-                return location
-            }
-        }
-
-        // Fallback to home directory
-        val homeDir = System.getProperty("user.home") ?: "/storage/emulated/0"
-        Log.d("ListFilesHandler", "Using fallback home directory: $homeDir")
-        return homeDir
+        // Return project root only for security
+        return System.getProperty("project.dir")
+            ?: System.getProperty("user.dir")
+            ?: "/storage/emulated/0/AndroidIDEProjects"
     }
 }

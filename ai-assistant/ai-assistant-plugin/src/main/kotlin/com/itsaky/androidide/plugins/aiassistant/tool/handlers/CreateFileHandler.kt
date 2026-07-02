@@ -27,20 +27,29 @@ class CreateFileHandler(
         return try {
             Log.d("CreateFileHandler", "Creating file: $filePath")
 
-            // Resolve path against project root if it's relative
+            // Get project root for containment check
+            val projectRoot = System.getProperty("project.dir")
+                ?: System.getProperty("user.dir")
+                ?: "/storage/emulated/0/AndroidIDEProjects"
+            val projectRootCanonical = File(projectRoot).canonicalPath
+
+            // Resolve path against project root
             val file = if (filePath!!.startsWith("/")) {
-                // Absolute path - use as-is
+                // Absolute path - must still be within project root
                 File(filePath)
             } else {
                 // Relative path - resolve against project root
-                val projectRoot = System.getProperty("project.dir")
-                    ?: System.getProperty("user.dir")
-                    ?: "/storage/emulated/0/AndroidIDEProjects"
-
                 File(projectRoot, filePath)
             }
 
             Log.d("CreateFileHandler", "Resolved path: ${file.absolutePath}")
+
+            // Security: Verify file is within project root
+            val fileCanonical = file.canonicalPath
+            if (!fileCanonical.startsWith(projectRootCanonical + File.separator) && fileCanonical != projectRootCanonical) {
+                Log.e("CreateFileHandler", "Path escape attempt: $fileCanonical is outside project root $projectRootCanonical")
+                return ToolResult.failure("File path must be within project directory")
+            }
 
             if (file.exists()) {
                 Log.w("CreateFileHandler", "File already exists: ${file.absolutePath}")

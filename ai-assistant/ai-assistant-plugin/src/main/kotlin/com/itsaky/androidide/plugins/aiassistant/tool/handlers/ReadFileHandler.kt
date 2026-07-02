@@ -24,7 +24,26 @@ class ReadFileHandler(
         }
 
         return try {
-            val file = File(filePath)
+            // Get project root for containment check
+            val projectRoot = System.getProperty("project.dir")
+                ?: System.getProperty("user.dir")
+                ?: "/storage/emulated/0/AndroidIDEProjects"
+            val projectRootCanonical = File(projectRoot).canonicalPath
+
+            // Resolve path against project root if relative
+            val file = if (filePath.startsWith("/")) {
+                File(filePath)
+            } else {
+                File(projectRoot, filePath)
+            }
+
+            // Security: Verify file is within project root
+            val fileCanonical = file.canonicalPath
+            if (!fileCanonical.startsWith(projectRootCanonical + File.separator) && fileCanonical != projectRootCanonical) {
+                Log.e("ReadFileHandler", "Path escape attempt: $fileCanonical is outside project root $projectRootCanonical")
+                return ToolResult.failure("File path must be within project directory")
+            }
+
             if (!file.exists()) {
                 ToolResult.failure("File does not exist: $filePath")
             } else if (!file.isFile) {
