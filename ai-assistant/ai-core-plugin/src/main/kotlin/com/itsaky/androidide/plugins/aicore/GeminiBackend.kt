@@ -109,7 +109,7 @@ class GeminiBackend(private val context: PluginContext) : LlmBackend {
                 } else {
                     val tokenCount = text.split("\\s+".toRegex()).size  // Approximate token count
                     context.logger.info("GeminiBackend: Generated ${text.length} chars, ~$tokenCount tokens")
-                    future.complete(LlmResponse.success(text, tokenCount, startTime))
+                    future.complete(LlmResponse.success(text, tokenCount, System.currentTimeMillis() - startTime))
                 }
 
             } catch (e: Exception) {
@@ -277,7 +277,7 @@ class GeminiBackend(private val context: PluginContext) : LlmBackend {
                 } else {
                     val tokenCount = text.split("\\s+".toRegex()).size
                     context.logger.info("GeminiBackend: Generated ${text.length} chars with history, ~$tokenCount tokens")
-                    future.complete(LlmResponse.success(text, tokenCount, startTime))
+                    future.complete(LlmResponse.success(text, tokenCount, System.currentTimeMillis() - startTime))
                 }
 
             } catch (e: Exception) {
