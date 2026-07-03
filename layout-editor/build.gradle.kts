@@ -65,7 +65,6 @@ dependencies {
     compileOnly(files("../libs/plugin-api.jar"))
     compileOnly(files("../libs/eventbus-events.jar"))
     compileOnly(files("../libs/common.jar"))
-    compileOnly(files("../libs/idetooltips.jar"))
     compileOnly("org.greenrobot:eventbus:3.3.1")
     compileOnly("org.slf4j:slf4j-api:2.0.9")
 
