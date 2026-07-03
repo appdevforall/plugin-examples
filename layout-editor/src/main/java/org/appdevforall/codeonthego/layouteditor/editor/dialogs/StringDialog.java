@@ -9,6 +9,7 @@ import androidx.annotation.NonNull;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
 
+import org.appdevforall.codeonthego.layouteditor.R;
 import org.appdevforall.codeonthego.layouteditor.databinding.TextinputlayoutBinding;
 import org.appdevforall.codeonthego.layouteditor.managers.DrawableManager;
 import org.appdevforall.codeonthego.layouteditor.managers.ProjectManager;
@@ -41,14 +42,14 @@ public class StringDialog extends AttributeDialog {
     TextinputlayoutBinding binding = TextinputlayoutBinding.inflate(getDialog().getLayoutInflater());
 
     textInputLayout = binding.getRoot();
-    textInputLayout.setHint("Enter string value");
+    textInputLayout.setHint(textInputLayout.getContext().getString(R.string.hint_enter_string_value));
 
     textInputEditText = binding.textinputEdittext;
     textInputEditText.setText(savedValue);
 
     switch (argumentType) {
       case Constants.ARGUMENT_TYPE_DRAWABLE:
-        textInputLayout.setHint("Enter drawable name");
+        textInputLayout.setHint(textInputLayout.getContext().getString(R.string.hint_enter_drawable_name));
         textInputLayout.setPrefixText("@drawable/");
         textInputEditText.addTextChangedListener(
             new TextWatcher() {
@@ -65,10 +66,10 @@ public class StringDialog extends AttributeDialog {
             });
         break;
       case Constants.ARGUMENT_TYPE_TEXT:
-        textInputLayout.setHint("Enter string value");
+        textInputLayout.setHint(textInputLayout.getContext().getString(R.string.hint_enter_string_value));
         break;
       case Constants.ARGUMENT_TYPE_STRING:
-        textInputLayout.setHint("Enter string name");
+        textInputLayout.setHint(textInputLayout.getContext().getString(R.string.hint_enter_string_name));
         textInputLayout.setPrefixText("@string/");
         textInputEditText.addTextChangedListener(
             new TextWatcher() {
@@ -97,14 +98,14 @@ public class StringDialog extends AttributeDialog {
 
       if (text.isEmpty()) {
         textInputLayout.setErrorEnabled(true);
-        textInputLayout.setError("Field cannot be empty!");
+        textInputLayout.setError(textInputLayout.getContext().getString(R.string.msg_cannnot_empty));
         setEnabled(false);
         return;
       }
 
       if (!Pattern.matches("[a-z_][a-z0-9_]*", text)) {
         textInputLayout.setErrorEnabled(true);
-        textInputLayout.setError("Only small letters(a-z) and numbers!");
+        textInputLayout.setError(textInputLayout.getContext().getString(R.string.msg_only_letters_and_numbers));
         setEnabled(false);
         return;
       }
@@ -112,7 +113,7 @@ public class StringDialog extends AttributeDialog {
       if (argumentType.equals(Constants.ARGUMENT_TYPE_DRAWABLE)
           && !DrawableManager.contains(text)) {
         textInputLayout.setErrorEnabled(true);
-        textInputLayout.setError("No Drawable found");
+        textInputLayout.setError(textInputLayout.getContext().getString(R.string.error_no_drawable_found));
         setEnabled(false);
         return;
       }
@@ -124,7 +125,7 @@ public class StringDialog extends AttributeDialog {
                   ProjectManager.getInstance().getOpenedProject().getStringsPath())
               == null) {
         textInputLayout.setErrorEnabled(true);
-        textInputLayout.setError("No string found");
+        textInputLayout.setError(textInputLayout.getContext().getString(R.string.error_no_string_found));
         setEnabled(false);
         return;
       }

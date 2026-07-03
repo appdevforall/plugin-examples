@@ -10,6 +10,7 @@ import androidx.annotation.NonNull;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
 
+import org.appdevforall.codeonthego.layouteditor.R;
 import org.appdevforall.codeonthego.layouteditor.databinding.TextinputlayoutBinding;
 import org.appdevforall.codeonthego.layouteditor.utils.DimensionUtil;
 
@@ -33,7 +34,7 @@ public class DimensionDialog extends AttributeDialog {
     textInputLayout = binding.getRoot();
 
     // Set the hint of the textInputLayout
-    textInputLayout.setHint("Enter dimension value");
+    textInputLayout.setHint(textInputLayout.getContext().getString(R.string.hint_enter_dimension_value));
 
     // Set the suffix text of the textInputLayout
     textInputLayout.setSuffixText(unit);
@@ -96,7 +97,7 @@ public class DimensionDialog extends AttributeDialog {
     if (text.isEmpty()) {
       setEnabled(false);
       textInputLayout.setErrorEnabled(true);
-      textInputLayout.setError("Field cannot be empty!");
+      textInputLayout.setError(textInputLayout.getContext().getString(R.string.msg_cannnot_empty));
     } else {
       // Else enable the save button and remove the error
       setEnabled(true);

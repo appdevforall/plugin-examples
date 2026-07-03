@@ -93,9 +93,9 @@ class StringResourceAdapter(
         }
         R.id.menu_delete -> {
           MaterialAlertDialogBuilder(pluginDialogContext(v.context))
-            .setTitle("Remove String")
+            .setTitle(R.string.remove_string_dialog_title)
             .setMessage(
-              String.format("Do you want to remove %s?", stringList[position].name)
+              v.context.getString(R.string.msg_confirm_remove_string, stringList[position].name)
             )
             .setNegativeButton(R.string.no, null)
             .setPositiveButton(
@@ -129,7 +129,7 @@ class StringResourceAdapter(
 
   private fun editString(v: View, pos: Int) {
     val builder = MaterialAlertDialogBuilder(pluginDialogContext(v.context))
-    builder.setTitle("Edit String")
+    builder.setTitle(R.string.edit_string_dialog_title)
 
     val bind =
       LayoutValuesItemDialogBinding.inflate(builder.create().layoutInflater)

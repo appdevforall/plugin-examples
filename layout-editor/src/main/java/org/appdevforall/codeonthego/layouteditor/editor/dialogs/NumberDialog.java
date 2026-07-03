@@ -10,6 +10,7 @@ import androidx.annotation.NonNull;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
 
+import org.appdevforall.codeonthego.layouteditor.R;
 import org.appdevforall.codeonthego.layouteditor.databinding.TextinputlayoutBinding;
 
 public class NumberDialog extends AttributeDialog {
@@ -30,7 +31,7 @@ public class NumberDialog extends AttributeDialog {
     TextinputlayoutBinding binding = TextinputlayoutBinding.inflate(getDialog().getLayoutInflater());
 
     textInputLayout = binding.getRoot();
-    textInputLayout.setHint("Enter " + type + " value");
+    textInputLayout.setHint(textInputLayout.getContext().getString(R.string.hint_enter_number_value, type));
 
     textInputEditText = binding.textinputEdittext;
 
@@ -88,7 +89,7 @@ public class NumberDialog extends AttributeDialog {
     if (text.isEmpty()) {
       setEnabled(false);
       textInputLayout.setErrorEnabled(true);
-      textInputLayout.setError("Field cannot be empty!");
+      textInputLayout.setError(textInputLayout.getContext().getString(R.string.msg_cannnot_empty));
     } else {
       setEnabled(true);
       textInputLayout.setErrorEnabled(false);

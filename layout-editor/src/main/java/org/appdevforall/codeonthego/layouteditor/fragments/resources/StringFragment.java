@@ -123,7 +123,7 @@ public class StringFragment extends Fragment {
 
   public void addString() {
     MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(requireContext());
-    builder.setTitle("New String");
+    builder.setTitle(R.string.new_string_dialog_title);
 
     LayoutValuesItemDialogBinding bind = LayoutValuesItemDialogBinding.inflate(getLayoutInflater());
     TextInputLayout ilName = bind.textInputLayoutName;

@@ -46,7 +46,7 @@ public class SizeDialog extends AttributeDialog {
     final AppCompatRadioButton rbFixedValue = binding.rbFixedValue;
 
     textInputLayout = dialogView.findViewById(R.id.textinput_layout);
-    textInputLayout.setHint("Enter dimension value");
+    textInputLayout.setHint(textInputLayout.getContext().getString(R.string.hint_enter_dimension_value));
     textInputLayout.setSuffixText("dp");
 
     textInputEditText = dialogView.findViewById(R.id.textinput_edittext);
@@ -107,7 +107,7 @@ public class SizeDialog extends AttributeDialog {
     if (text.isEmpty()) {
       setEnabled(false);
       textInputLayout.setErrorEnabled(true);
-      textInputLayout.setError("Field cannot be empty!");
+      textInputLayout.setError(textInputLayout.getContext().getString(R.string.msg_cannnot_empty));
     } else {
       setEnabled(true);
       textInputLayout.setErrorEnabled(false);

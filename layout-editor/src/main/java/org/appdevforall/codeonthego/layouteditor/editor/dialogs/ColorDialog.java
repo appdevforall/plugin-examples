@@ -98,7 +98,7 @@ public class ColorDialog extends AttributeDialog
    * @param savedValue Saved Color Value
    */
   private void setUIValues(@NonNull String savedValue) {
-    inputLayout.setHint("Enter custom HEX code");
+    inputLayout.setHint(inputLayout.getContext().getString(R.string.hint_enter_custom_hex_code));
     inputLayout.setPrefixText("#");
     editText.setFilters(new InputFilter[] {new InputFilter.LengthFilter(8)});
     aEdittext.setFilters(new InputFilter[] {new InputFilter.LengthFilter(3)});
@@ -233,7 +233,7 @@ public class ColorDialog extends AttributeDialog
       return;
     }
     aInputLayout.setErrorEnabled(true);
-    aInputLayout.setError("Invalid Alpha value");
+    aInputLayout.setError(aInputLayout.getContext().getString(R.string.error_invalid_alpha_value));
     setEnabled(false);
   }
     
@@ -255,7 +255,7 @@ public class ColorDialog extends AttributeDialog
       return;
     }
     rInputLayout.setErrorEnabled(true);
-    rInputLayout.setError("Invalid Red value");
+    rInputLayout.setError(rInputLayout.getContext().getString(R.string.error_invalid_red_value));
     setEnabled(false);
   }
     
@@ -277,7 +277,7 @@ public class ColorDialog extends AttributeDialog
       return;
     }
     gInputLayout.setErrorEnabled(true);
-    gInputLayout.setError("Invalid Green value");
+    gInputLayout.setError(gInputLayout.getContext().getString(R.string.error_invalid_green_value));
     setEnabled(false);
   }
     
@@ -299,7 +299,7 @@ public class ColorDialog extends AttributeDialog
       return;
     }
     bInputLayout.setErrorEnabled(true);
-    bInputLayout.setError("Invalid Blue value");
+    bInputLayout.setError(bInputLayout.getContext().getString(R.string.error_invalid_blue_value));
     setEnabled(false);
   }
 
@@ -319,7 +319,7 @@ public class ColorDialog extends AttributeDialog
       return;
     }
     inputLayout.setErrorEnabled(true);
-    inputLayout.setError("Invalid HEX value");
+    inputLayout.setError(inputLayout.getContext().getString(R.string.error_invalid_hex_value));
     setEnabled(false);
   }
 

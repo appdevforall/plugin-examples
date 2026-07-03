@@ -12,6 +12,7 @@ import androidx.appcompat.app.AlertDialog;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.textfield.TextInputEditText;
 
+import org.appdevforall.codeonthego.layouteditor.R;
 import org.appdevforall.codeonthego.layouteditor.editor.dialogs.interfaces.OnSaveValueListener;
 
 public class AttributeDialog {
@@ -29,8 +30,12 @@ public class AttributeDialog {
   public AttributeDialog(Context context) {
 
     dialog = new MaterialAlertDialogBuilder(context).create();
-    dialog.setButton(AlertDialog.BUTTON_NEGATIVE, "Cancel", (di, which) -> {});
-    dialog.setButton(AlertDialog.BUTTON_POSITIVE, "Save", (di, which) -> onClickSave());
+    dialog.setButton(
+        AlertDialog.BUTTON_NEGATIVE, context.getString(R.string.cancel), (di, which) -> {});
+    dialog.setButton(
+        AlertDialog.BUTTON_POSITIVE,
+        context.getString(R.string.save),
+        (di, which) -> onClickSave());
 
     inputMethodManager =
         (InputMethodManager) context.getSystemService(Context.INPUT_METHOD_SERVICE);

@@ -272,7 +272,7 @@ class ProjectListAdapter(private val projects: MutableList<ProjectFile>) :
     allLayouts.forEach { layouts.add(it.name) }
 
     MaterialAlertDialogBuilder(v.context)
-      .setTitle("Choose layout")
+      .setTitle(string.choose_layout)
       .setAdapter(
         ArrayAdapter(
           v.context,
