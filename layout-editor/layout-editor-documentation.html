@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Layout Editor Plugin Documentation</title>
+<style>
+  :root {
+    --bg: #fdfdfd;
+    --fg: #1a1a1a;
+    --accent: #0f766e;
+    --accent-light: #e6f5f3;
+    --border: #d0d7de;
+    --code-bg: #f4f6f8;
+    --table-stripe: #f8fafb;
+    --shadow: rgba(0,0,0,0.06);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--fg);
+    background: var(--bg);
+    line-height: 1.6;
+    max-width: 52rem;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+  }
+  header { border-bottom: 3px solid var(--accent); padding-bottom: 1.2rem; margin-bottom: 2rem; }
+  header h1 { font-size: 2rem; color: var(--accent); }
+  header p.subtitle { color: #555; margin-top: 0.3rem; }
+  header .meta { font-size: 0.85rem; color: #777; margin-top: 0.5rem; }
+  nav { background: var(--accent-light); border: 1px solid var(--border); border-radius: 6px; padding: 1rem 1.5rem; margin-bottom: 2.5rem; }
+  nav h2 { font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); margin-bottom: 0.5rem; }
+  nav ol { padding-left: 1.3rem; }
+  nav li { margin: 0.25rem 0; }
+  nav a { color: var(--accent); text-decoration: none; }
+  nav a:hover { text-decoration: underline; }
+  section { margin-bottom: 2.5rem; }
+  h2 { font-size: 1.4rem; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; margin-bottom: 1rem; }
+  h3 { font-size: 1.1rem; margin: 1.2rem 0 0.5rem; }
+  p, li { margin-bottom: 0.5rem; }
+  ul, ol { padding-left: 1.4rem; }
+  code {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    background: var(--code-bg);
+    padding: 0.15em 0.35em;
+    border-radius: 3px;
+    font-size: 0.9em;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1rem 1.2rem;
+    overflow-x: auto;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    margin: 0.8rem 0 1rem;
+  }
+  pre code { background: none; padding: 0; }
+  table { width: 100%; border-collapse: collapse; margin: 0.8rem 0 1rem; font-size: 0.95rem; }
+  th, td { text-align: left; padding: 0.55rem 0.8rem; border: 1px solid var(--border); }
+  th { background: var(--accent-light); font-weight: 600; }
+  tr:nth-child(even) td { background: var(--table-stripe); }
+  .diagram {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1.2rem;
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 0.85rem;
+    line-height: 1.55;
+    overflow-x: auto;
+    white-space: pre;
+    margin: 0.8rem 0 1rem;
+  }
+  .callout {
+    background: var(--accent-light);
+    border-left: 4px solid var(--accent);
+    padding: 0.8rem 1rem;
+    border-radius: 0 6px 6px 0;
+    margin: 1rem 0;
+  }
+  .file-tree { list-style: none; padding-left: 0; font-family: monospace; font-size: 0.9rem; }
+  .file-tree ul { list-style: none; padding-left: 1.5rem; }
+  footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: 0.85rem; color: #777; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Layout Editor Plugin</h1>
+  <p class="subtitle">A visual, drag-and-drop editor for Android XML layouts, running on-device</p>
+  <div class="meta">Version 1.0.0 &middot; Author: App Dev for All &middot; Package: <code>org.appdevforall.codeonthego.layouteditor</code></div>
+</header>
+
+<nav>
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#overview">Executive Overview</a></li>
+    <li><a href="#functionality">Core Functionality</a></li>
+    <li><a href="#architecture">Technical Architecture</a></li>
+    <li><a href="#integration">Integration Points</a></li>
+    <li><a href="#deployment">Deployment &amp; Usage</a></li>
+    <li><a href="#benefits">Key Benefits</a></li>
+    <li><a href="#license">Attribution &amp; License</a></li>
+  </ol>
+</nav>
+
+<!-- ================================================================ -->
+<section id="overview">
+  <h2>1. Executive Overview</h2>
+  <p>
+    Layout Editor is a Code on the Go plugin that builds Android XML layouts
+    visually. Open a layout XML file, tap the <strong>Layout Editor</strong> action
+    in the editor toolbar, and the plugin opens a full-screen editor where you drag
+    widgets onto a canvas, arrange the view hierarchy, set attributes through typed
+    dialogs, and preview the result at different device sizes.
+  </p>
+  <p>
+    The editor was extracted from the host IDE into a standalone plugin so the host
+    APK stays smaller and its build stays shorter. The plugin carries its own copy
+    of every resource and library it needs, and it links only against the stable
+    <code>plugin-api</code> contract, never host-internal modules.
+  </p>
+  <p>
+    The plugin implements four extension interfaces (<code>IPlugin</code>,
+    <code>UIExtension</code>, <code>DocumentationExtension</code>,
+    <code>BuildStatusListener</code>) and consumes five host services for the editor,
+    project model, build system, UI, and tooltips.
+  </p>
+</section>
+
+<!-- ================================================================ -->
+<section id="functionality">
+  <h2>2. Core Functionality</h2>
+
+  <h3>The Layout Editor action</h3>
+  <p>
+    The plugin contributes one editor-toolbar action via
+    <code>UIExtension.getToolbarActions()</code>. It is content-aware: it is enabled
+    only when the open file is a layout XML file (an <code>.xml</code> file inside a
+    directory whose name starts with <code>layout</code>) and the last Gradle sync
+    did not fail. The action sits in the preview slot, the position the host's former
+    built-in Preview Layout action used. Tapping it opens the editor full-screen
+    through <code>IdeUIService.openPluginScreen()</code>.
+  </p>
+
+  <h3>Editor surfaces</h3>
+  <table>
+    <thead>
+      <tr><th>Surface</th><th>What it does</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><strong>Design</strong></td><td>Renders the layout the way it looks at runtime.</td></tr>
+      <tr><td><strong>Blueprint</strong></td><td>Shows a wireframe outline of each view's bounds, which makes spacing and nesting easier to read.</td></tr>
+      <tr><td><strong>Palette</strong></td><td>Groups the available widgets (Common, Text, Buttons, Widgets, Layouts, Containers). Drag an item onto the canvas to add it.</td></tr>
+      <tr><td><strong>Component tree</strong></td><td>Shows the view hierarchy as a tree. Tap a node to select it, long-press for information about it.</td></tr>
+      <tr><td><strong>Attributes</strong></td><td>Add or remove attributes on the selected view and edit their values through typed dialogs.</td></tr>
+      <tr><td><strong>Resource Manager</strong></td><td>Browse and edit the project's colors, strings, drawables, and fonts.</td></tr>
+      <tr><td><strong>Device size</strong></td><td>Preview the layout at different device dimensions and orientations.</td></tr>
+      <tr><td><strong>XML view</strong></td><td>Read the generated XML for the current layout.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Editing attributes</h3>
+  <p>
+    Each attribute opens the dialog that fits its format: color, dimension, size,
+    number, string, boolean, enum, flag, id, and view reference. Required attributes
+    such as <code>layout_width</code> and <code>layout_height</code> cannot be
+    removed. Saving writes the edited hierarchy back to the layout XML file.
+  </p>
+
+  <h3>Documentation on demand</h3>
+  <p>
+    Every control, palette item, and attribute carries a tooltip. Long-press it to
+    read a short description, with a button through to the IDE's fuller
+    documentation. The entries come from the plugin's
+    <code>DocumentationExtension</code>.
+  </p>
+</section>
+
+<!-- ================================================================ -->
+<section id="architecture">
+  <h2>3. Technical Architecture</h2>
+
+  <h3>File layout</h3>
+  <ul class="file-tree">
+    <li>layout-editor/
+      <ul>
+        <li>build.gradle.kts, settings.gradle.kts, proguard-rules.pro</li>
+        <li>layout-editor-documentation.html (this page)</li>
+        <li>src/main/
+          <ul>
+            <li>AndroidManifest.xml (plugin id, main class, icons, permissions)</li>
+            <li>assets/ (<code>icon_day.png</code>, <code>icon_night.png</code>; <code>tooltips.json</code>, <code>widgetclasses.json</code>; <code>palette/</code>, <code>attributes/</code>, <code>editor/</code>; default font and image)</li>
+            <li>kotlin/ and java/ org/appdevforall/codeonthego/layouteditor/
+              <ul>
+                <li><strong>LayoutEditorPlugin.kt</strong>: entry point; toolbar action, enable rule, tooltips, build-status tracking</li>
+                <li><strong>LayoutEditorFragment.kt</strong>: the full-screen editor (canvas, palette, component tree, toolbar, drawer)</li>
+                <li>editor/<strong>DesignEditor.kt</strong>: the drag-and-drop canvas that builds and manipulates the live view hierarchy</li>
+                <li>editor/dialogs/: one typed dialog per attribute format</li>
+                <li>editor/callers/, editor/initializer/: apply values to real <code>View</code> instances; track applied and available attributes</li>
+                <li><strong>ResourceManagerFragment.kt</strong> plus resource adapters: colors, strings, drawables, fonts</li>
+                <li><strong>LayoutEditorDocs.kt</strong>, <strong>PluginDialogContext.kt</strong>: tooltip helper and the dialog context wrapper</li>
+              </ul>
+            </li>
+            <li>res/layout/, res/drawable/, res/values/, res/menu/</li>
+          </ul>
+        </li>
+      </ul>
+    </li>
+  </ul>
+
+  <h3>Class overview</h3>
+  <table>
+    <thead>
+      <tr><th>Class</th><th>Role</th><th>Key interfaces</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>LayoutEditorPlugin</code></td><td>Entry point. Contributes the toolbar action and its enable rule, the long-press tooltips, and the build-status listener.</td><td><code>IPlugin</code>, <code>UIExtension</code>, <code>DocumentationExtension</code>, <code>BuildStatusListener</code></td></tr>
+      <tr><td><code>LayoutEditorFragment</code></td><td>The full-screen editor screen: canvas, palette, component tree, toolbar, and navigation drawer.</td><td>extends <code>Fragment</code></td></tr>
+      <tr><td><code>DesignEditor</code></td><td>The drag-and-drop canvas. Inflates the layout, adds and removes views, and routes selection to the attribute editors.</td><td>None</td></tr>
+      <tr><td><code>ResourceManagerFragment</code></td><td>Browses and edits the project's colors, strings, drawables, and fonts.</td><td>extends <code>Fragment</code></td></tr>
+      <tr><td>Attribute dialogs (<code>editor/dialogs</code>)</td><td>Typed editors, one per attribute format (color, dimension, enum, flag, and so on).</td><td>None</td></tr>
+      <tr><td><code>LayoutEditorDocs</code> / <code>PluginDialogContext</code></td><td>Serve long-press tooltips, and wrap the plugin context so dialogs have a valid window token.</td><td>None</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Edit pipeline</h3>
+  <div class="diagram">
+  open layout/*.xml  +  tap the Layout Editor action
+        |
+        v
+  LayoutEditorState.set(target layout)   (openPluginScreen carries no Bundle)
+        |
+        v
+  IdeUIService.openPluginScreen  ──&gt;  LayoutEditorFragment
+        |
+        v
+  DesignEditor inflates the layout with the plugin inflater
+        |
+        v
+  drag from palette  /  select on canvas  /  edit in the component tree
+        |
+        v
+  typed attribute dialog  ──&gt;  caller applies the value to the live View
+        |
+        v
+  save  ──&gt;  layout XML written back to the file</div>
+  <div class="callout">
+    <strong>Why the plugin inflater and dialog wrapper.</strong> A plugin has its own
+    resource namespace, so plugin-inflated XML is inflated with the plugin's own
+    inflater (<code>PluginFragmentHelper.getPluginInflater</code>) to make
+    <code>?attr/</code> and <code>app:</code> attributes resolve against the plugin
+    theme. Dialogs are shown through <code>PluginDialogContext</code>, which pairs the
+    host activity (for the window token) with the plugin context (for resources and
+    theme).
+  </div>
+
+  <h3>Build configuration</h3>
+  <table>
+    <tr><th>Setting</th><th>Value</th></tr>
+    <tr><td>Gradle plugin</td><td><code>com.itsaky.androidide.plugins.build</code></td></tr>
+    <tr><td>Compile / Target SDK</td><td>34</td></tr>
+    <tr><td>Min SDK</td><td>26</td></tr>
+    <tr><td>Java / Kotlin target</td><td>17</td></tr>
+    <tr><td>View binding</td><td>Enabled</td></tr>
+    <tr><td>Plugin API</td><td><code>compileOnly</code> via <code>../libs/plugin-api.jar</code></td></tr>
+    <tr><td>Output format</td><td><code>.cgp</code> package</td></tr>
+  </table>
+</section>
+
+<!-- ================================================================ -->
+<section id="integration">
+  <h2>4. Integration Points</h2>
+  <p>
+    Layout Editor implements four extension interfaces and consumes five host
+    services, all through <code>plugin-api</code>.
+  </p>
+
+  <h3>4.1 Plugin lifecycle (<code>IPlugin</code>)</h3>
+  <p>
+    <code>initialize()</code> stores the <code>PluginContext</code>;
+    <code>activate()</code> registers a build-status listener;
+    <code>deactivate()</code> and <code>dispose()</code> unregister it. The editor and
+    its sub-screens open full-screen through
+    <code>IdeUIService.openPluginScreen()</code>.
+  </p>
+
+  <h3>4.2 Toolbar action and enablement (<code>UIExtension</code>)</h3>
+  <p>
+    <code>getToolbarActions()</code> contributes the Layout Editor action with an
+    <code>isEnabledProvider</code> that enables it only when a layout XML file is open
+    and the last sync succeeded. The action uses the preview-slot order so it takes
+    the same position the built-in Preview Layout action used. No
+    <code>getHiddenToolbarActionIds()</code> is needed, because the host's built-in
+    action was removed when the editor became a plugin.
+  </p>
+
+  <h3>4.3 Host services consumed</h3>
+  <table>
+    <thead>
+      <tr><th>Service</th><th>Used for</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>IdeEditorService</code></td><td>Read the current file to decide whether the action is enabled and which layout to open.</td></tr>
+      <tr><td><code>IdeProjectService</code></td><td>Resolve the current project and its resource directories for the Resource Manager.</td></tr>
+      <tr><td><code>IdeBuildService</code></td><td>Subscribe to build status so a failed sync disables the action.</td></tr>
+      <tr><td><code>IdeUIService</code></td><td><code>openPluginScreen()</code>: present the editor and its sub-screens full-screen.</td></tr>
+      <tr><td><code>IdeTooltipService</code></td><td>Show the long-press documentation tooltips.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>4.4 Build-status tracking (<code>BuildStatusListener</code>)</h3>
+  <p>
+    <code>onBuildStarted()</code> and <code>onBuildFinished()</code> clear the
+    failed-sync flag; <code>onBuildFailed()</code> sets it. The action's enable rule
+    reads the flag, so the editor does not open against a project that failed to
+    sync.
+  </p>
+
+  <h3>4.5 Documentation (<code>DocumentationExtension</code>)</h3>
+  <p>
+    <code>getTooltipCategory()</code> returns the plugin's tooltip category, and
+    <code>getTooltipEntries()</code> provides the toolbar-action tooltip, the
+    editor-control tooltips, and one entry per widget and attribute (loaded from
+    <code>assets/tooltips.json</code>). Tooltip buttons link into the IDE's
+    documentation through direct paths, so the plugin does not bundle its own
+    documentation pages.
+  </p>
+
+  <h3>4.6 Permissions</h3>
+  <pre><code>&lt;meta-data android:name="plugin.permissions"
+           android:value="filesystem.read,filesystem.write,project.structure" /&gt;</code></pre>
+  <p>
+    Read access backs layout and resource parsing; write access backs saving edited
+    layouts and resources; project-structure access backs resource-directory
+    resolution.
+  </p>
+</section>
+
+<!-- ================================================================ -->
+<section id="deployment">
+  <h2>5. Deployment &amp; Usage</h2>
+
+  <h3>Building</h3>
+  <pre><code>cd layout-editor
+./gradlew clean assemblePluginDebug   # or assemblePlugin for release</code></pre>
+  <p>
+    Produces <code>layout-editor/build/plugin/layout-editor-debug.cgp</code>, the
+    bundle you sideload into Code on the Go.
+  </p>
+  <div class="callout">
+    <strong>Always <code>clean</code> first.</strong> The plugin builder copies the
+    built APK to the <code>.cgp</code> and then deletes the source APK, so an
+    incremental build can pick up an empty artifact.
+  </div>
+
+  <h3>Installation</h3>
+  <ol>
+    <li>Open <em>Preferences &rarr; Plugin Manager &rarr; +</em>.</li>
+    <li>Select the <code>layout-editor-debug.cgp</code> file.</li>
+    <li>The IDE discovers <code>LayoutEditorPlugin</code> via manifest metadata and activates it.</li>
+  </ol>
+
+  <h3>Using the plugin</h3>
+  <ol>
+    <li>Open a layout XML file (under a <code>layout</code> resource directory).</li>
+    <li>Tap the <strong>Layout Editor</strong> action in the editor toolbar.</li>
+    <li>Drag widgets from the palette, select views on the canvas or in the component tree, and edit their attributes.</li>
+    <li>Open the <strong>Resource Manager</strong> to edit colors, strings, drawables, and fonts.</li>
+    <li>Save to write the layout back. Long-press any control for its tooltip; this page is the full reference.</li>
+  </ol>
+
+  <h3>Runtime requirements</h3>
+  <table>
+    <tr><th>Requirement</th><th>Value</th></tr>
+    <tr><td>Min Android version</td><td>API 26 (Android 8)</td></tr>
+    <tr><td>Min IDE version</td><td>1.0.0</td></tr>
+    <tr><td>Permissions</td><td><code>filesystem.read</code>, <code>filesystem.write</code>, <code>project.structure</code></td></tr>
+    <tr><td>Network access</td><td>None</td></tr>
+  </table>
+</section>
+
+<!-- ================================================================ -->
+<section id="benefits">
+  <h2>6. Key Benefits</h2>
+  <ul>
+    <li><strong>Smaller, faster host.</strong> Moving the editor out of the host shrinks the APK and shortens the build.</li>
+    <li><strong>Visual editing on device.</strong> Build and adjust layouts without hand-writing XML.</li>
+    <li><strong>Content-aware entry point.</strong> The action is enabled only for layout XML files, and only when the project synced.</li>
+    <li><strong>Built-in guidance.</strong> Long-press documentation on every control, palette item, and attribute.</li>
+    <li><strong>Self-contained.</strong> The plugin carries its own resources and libraries and links only against <code>plugin-api</code>.</li>
+    <li><strong>Reference for a multi-screen UI plugin.</strong> Shows how to port a feature with several screens onto <code>openPluginScreen()</code>.</li>
+  </ul>
+</section>
+
+<!-- ================================================================ -->
+<section id="license">
+  <h2>7. Attribution &amp; License</h2>
+  <p>
+    Layout Editor is an open-source example plugin for Code on the Go. Its source is
+    licensed per the surrounding <code>plugin-examples</code> repository (see
+    <code>LICENSE</code> at the repo root).
+  </p>
+  <ul>
+    <li>The bundled libraries (Material Components, Glide, the color picker, the code editor, and others) are used under their respective open-source licenses.</li>
+    <li>The plugin makes no network calls. Parsing, editing, and saving happen on-device.</li>
+  </ul>
+</section>
+
+<footer>
+  Layout Editor Plugin Documentation &middot; Version 1.0.0 &middot; org.appdevforall.codeonthego.layouteditor
+</footer>
+
+</body>
+</html>
