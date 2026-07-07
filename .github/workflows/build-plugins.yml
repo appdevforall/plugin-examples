@@ -13,6 +13,10 @@ on:
         description: CodeOnTheGo branch or tag to build the libs against
         required: false
         default: stage
+      plugin:
+        description: Build only this plugin (folder name, e.g. random-xkcd). Leave empty to build all.
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -42,10 +46,18 @@ jobs:
       - name: Build libs and plugins
         env:
           CODEONTHEGO_REF: ${{ github.event.inputs.codeonthego_ref }}
-        run: ./scripts/update-libs.sh --ref "$CODEONTHEGO_REF"
+          ONLY_PLUGIN: ${{ github.event.inputs.plugin }}
+        run: |
+          if [ -n "$ONLY_PLUGIN" ]; then
+            ./scripts/update-libs.sh --ref "$CODEONTHEGO_REF" --plugin "$ONLY_PLUGIN"
+          else
+            ./scripts/update-libs.sh --ref "$CODEONTHEGO_REF"
+          fi
 
       - name: Stage built .cgp artifacts
         id: stage
+        env:
+          ONLY_PLUGIN: ${{ github.event.inputs.plugin }}
         run: |
           mkdir -p deploy-staging
 
@@ -63,6 +75,11 @@ jobs:
             [ -f "$build_file" ] || continue
             grep -qF "com.itsaky.androidide.plugins.build" "$build_file" || continue
             module="$(dirname "$build_file")"
+            # When a single plugin was requested, only that module was built —
+            # skip every other module so its absent .cgp is not treated as an error.
+            if [ -n "$ONLY_PLUGIN" ] && [ "$module" != "$ONLY_PLUGIN" ]; then
+              continue
+            fi
             skip=0
             for s in "${SKIP_PLUGINS[@]}"; do
               [ "$s" = "$module" ] && skip=1 && break
