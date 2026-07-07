@@ -7,6 +7,7 @@
 #   ./scripts/update-libs.sh                      # clone/pull github.com/appdevforall/CodeOnTheGo into .cache/, build from stage
 #   ./scripts/update-libs.sh --ref main           # build from a different branch or tag
 #   ./scripts/update-libs.sh --local ../CodeOnTheGo  # use an existing local checkout instead of cloning
+#   ./scripts/update-libs.sh --plugin random-xkcd # refresh libs, then build only this one plugin
 #
 set -euo pipefail
 
@@ -20,6 +21,7 @@ CACHE_DIR="$REPO_ROOT/.cache/CodeOnTheGo"
 
 LOCAL_PATH=""
 REF="$DEFAULT_REF"
+ONLY_PLUGIN=""
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -35,6 +37,14 @@ while [ $# -gt 0 ]; do
             REF="${2:-}"
             if [ -z "$REF" ]; then
                 echo "Error: --ref requires a branch or tag argument." >&2
+                exit 1
+            fi
+            shift 2
+            ;;
+        --plugin)
+            ONLY_PLUGIN="${2:-}"
+            if [ -z "$ONLY_PLUGIN" ]; then
+                echo "Error: --plugin requires a plugin name argument." >&2
                 exit 1
             fi
             shift 2
@@ -136,6 +146,22 @@ done
 if [ "${#PLUGINS[@]}" -eq 0 ]; then
     echo "Error: no example plugins discovered (looked for sibling dirs whose build.gradle.kts applies $PLUGIN_BUILDER_ID)." >&2
     exit 1
+fi
+
+if [ -n "$ONLY_PLUGIN" ]; then
+    found=0
+    for p in "${PLUGINS[@]}"; do
+        if [ "$p" = "$ONLY_PLUGIN" ]; then
+            found=1
+            break
+        fi
+    done
+    if [ "$found" -eq 0 ]; then
+        echo "Error: requested plugin '$ONLY_PLUGIN' is not a buildable example plugin." >&2
+        echo "Available plugins: ${PLUGINS[*]}" >&2
+        exit 1
+    fi
+    PLUGINS=("$ONLY_PLUGIN")
 fi
 
 echo ""
