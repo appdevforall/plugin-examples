@@ -2,7 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <application
-        android:label="NDK Installer"
+        android:label="NDK Installer (64-bit only)"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
 
         <meta-data
@@ -11,7 +11,7 @@
 
         <meta-data
             android:name="plugin.name"
-            android:value="NDK Installer" />
+            android:value="NDK Installer (64-bit only)" />
 
         <meta-data
             android:name="plugin.version"
