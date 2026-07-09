@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pair Plugin Documentation</title>
+<style>
+  :root {
+    --bg: #fdfdfd;
+    --fg: #1a1a1a;
+    --accent: #0f766e;
+    --accent-light: #e6f5f3;
+    --border: #d0d7de;
+    --code-bg: #f4f6f8;
+    --table-stripe: #f8fafb;
+    --shadow: rgba(0,0,0,0.06);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--fg);
+    background: var(--bg);
+    line-height: 1.6;
+    max-width: 52rem;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+  }
+  header { border-bottom: 3px solid var(--accent); padding-bottom: 1.2rem; margin-bottom: 2rem; }
+  header h1 { font-size: 2rem; color: var(--accent); }
+  header p.subtitle { color: #555; margin-top: 0.3rem; }
+  header .meta { font-size: 0.85rem; color: #777; margin-top: 0.5rem; }
+  nav { background: var(--accent-light); border: 1px solid var(--border); border-radius: 6px; padding: 1rem 1.5rem; margin-bottom: 2.5rem; }
+  nav h2 { font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); margin-bottom: 0.5rem; }
+  nav ol { padding-left: 1.3rem; }
+  nav li { margin: 0.25rem 0; }
+  nav a { color: var(--accent); text-decoration: none; }
+  nav a:hover { text-decoration: underline; }
+  section { margin-bottom: 2.5rem; }
+  h2 { font-size: 1.4rem; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; margin-bottom: 1rem; }
+  h3 { font-size: 1.1rem; margin: 1.2rem 0 0.5rem; }
+  p, li { margin-bottom: 0.5rem; }
+  ul, ol { padding-left: 1.4rem; }
+  code {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    background: var(--code-bg);
+    padding: 0.15em 0.35em;
+    border-radius: 3px;
+    font-size: 0.9em;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1rem 1.2rem;
+    overflow-x: auto;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    margin: 0.8rem 0 1rem;
+  }
+  pre code { background: none; padding: 0; }
+  table { width: 100%; border-collapse: collapse; margin: 0.8rem 0 1rem; font-size: 0.95rem; }
+  th, td { text-align: left; padding: 0.55rem 0.8rem; border: 1px solid var(--border); }
+  th { background: var(--accent-light); font-weight: 600; }
+  tr:nth-child(even) td { background: var(--table-stripe); }
+  .diagram {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1.2rem;
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 0.85rem;
+    line-height: 1.55;
+    overflow-x: auto;
+    white-space: pre;
+    margin: 0.8rem 0 1rem;
+  }
+  .callout {
+    background: var(--accent-light);
+    border-left: 4px solid var(--accent);
+    padding: 0.8rem 1rem;
+    border-radius: 0 6px 6px 0;
+    margin: 1rem 0;
+  }
+  .file-tree { list-style: none; padding-left: 0; font-family: monospace; font-size: 0.9rem; }
+  .file-tree ul { list-style: none; padding-left: 1.5rem; }
+  footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: 0.85rem; color: #777; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Pair</h1>
+  <p class="subtitle">Real-time pair programming across two devices on the same WiFi &mdash; shared editing, live cursors, no server</p>
+  <div class="meta">Version 1.0.0 &middot; Author: App Dev For All &middot; Package: <code>com.appdevforall.pair.plugin</code></div>
+</header>
+
+<nav>
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#overview">Executive Overview</a></li>
+    <li><a href="#functionality">Core Functionality</a></li>
+    <li><a href="#architecture">Technical Architecture</a></li>
+    <li><a href="#integration">Integration Points</a></li>
+    <li><a href="#deployment">Deployment &amp; Usage</a></li>
+    <li><a href="#benefits">Key Benefits</a></li>
+    <li><a href="#license">Attribution &amp; License</a></li>
+  </ol>
+</nav>
+
+<!-- ================================================================ -->
+<section id="overview">
+  <h2>1. Executive Overview</h2>
+  <p>
+    Pair is a Code on the Go plugin that turns the IDE into a real-time
+    collaborative editor. Two devices on the same local network share one editing
+    session: one device <strong>hosts</strong>, others <strong>join</strong>, and
+    from then on edits, cursor positions, and file opens flow between devices as
+    they happen. There is no server, no cloud account, and no signup &mdash; the
+    two phones talk directly over WiFi.
+  </p>
+  <p>
+    It surfaces as a <strong>Pair</strong> tab in the editor. The host taps
+    <em>Host session</em> and an invite card shows the <code>ip:port</code> and a QR
+    code; a guest either scans that code or types the address, and the handshake
+    completes. When the host types in a file, the guest sees the same file open and
+    the text arrive keystroke by keystroke, with each peer's live position shown in
+    the peer list.
+  </p>
+  <p>
+    The plugin implements three extension interfaces (<code>IPlugin</code>,
+    <code>EditorTabExtension</code>, <code>UIExtension</code>) and consumes host
+    services for the editor, project model, files, and environment. It links only
+    against the <code>plugin-api</code> contract &mdash; never host-internal
+    modules &mdash; and observes edits through the IDE's existing EventBus.
+  </p>
+</section>
+
+<!-- ================================================================ -->
+<section id="functionality">
+  <h2>2. Core Functionality</h2>
+
+  <h3>Hosting and joining</h3>
+  <p>
+    The host starts a session on the device's LAN address; the invite card shows a
+    tappable <code>ip:port</code> and a QR code. A guest joins by scanning the QR
+    with the camera or typing the address. A handshake message (<code>hi</code>)
+    exchanges each peer's id, display name, and color; a protocol-version mismatch
+    rejects the peer rather than connecting a stale build.
+  </p>
+
+  <h3>Shared editing</h3>
+  <p>
+    Every local edit becomes an <code>edit</code> message and every remote edit is
+    applied to the local buffer, so both devices converge on the same text. Edits
+    carry an operation (insert / delete / replace) and a selection range, keyed by a
+    project-relative file path.
+  </p>
+
+  <h3>Presence and cursors</h3>
+  <table>
+    <thead>
+      <tr><th>Signal</th><th>What peers see</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Peer list</td><td>Each connected device with its name, role (host / guest), color dot, and current <code>file:line:column</code>.</td></tr>
+      <tr><td>Cursor move</td><td>A <code>cur</code> message updates a peer's position as they navigate.</td></tr>
+      <tr><td>Inline caret</td><td>With the extended API (see &sect;4), a remote peer's caret is drawn inside the editor in that peer's color.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>File lifecycle</h3>
+  <p>
+    Opening, closing, and switching files propagate as <code>fo</code> /
+    <code>fc</code> / <code>ff</code> messages, so a guest's editor follows the file
+    the host is working in. A file-open message carries the full current contents so
+    the joining side starts from an identical snapshot.
+  </p>
+
+  <h3>Session history</h3>
+  <p>
+    Past sessions persist across IDE restarts as a JSON file in the plugin's private
+    data directory. The Home screen lists recent sessions (newest first) to rename,
+    delete, or tap to reconnect; it renders nothing when empty, so first-run Home
+    stays clean.
+  </p>
+</section>
+
+<!-- ================================================================ -->
+<section id="architecture">
+  <h2>3. Technical Architecture</h2>
+
+  <h3>File layout</h3>
+  <ul class="file-tree">
+    <li>pair/
+      <ul>
+        <li>build.gradle.kts, settings.gradle.kts, proguard-rules.pro</li>
+        <li>src/main/
+          <ul>
+            <li>AndroidManifest.xml (plugin id, main class, icons, permissions)</li>
+            <li>assets/ (<code>icon_day.png</code>, <code>icon_night.png</code> &mdash; the 190&times;190 interlocking-rings mark)</li>
+            <li>kotlin/com/appdevforall/pair/plugin/
+              <ul>
+                <li><strong>PairPlugin.kt</strong>: entry point; tab + sidebar registration</li>
+                <li>data/: wire protocol + codec, <code>PairWebSocketServer</code> / <code>PairWebSocketClient</code>, session models + history store</li>
+                <li>domain/: <strong>EditBroker</strong> (orchestrator), <code>EditObserver</code> / <code>EditApplier</code>, <code>PathMapper</code>, <code>PeerRegistry</code>, <code>RemoteMarkerController</code></li>
+                <li>ui/: Compose theme, components, and screens (Home / Host / Guest / Scan)</li>
+                <li>util/: LAN IP discovery, QR decode</li>
+              </ul>
+            </li>
+            <li>res/values/, res/values-night/</li>
+          </ul>
+        </li>
+      </ul>
+    </li>
+  </ul>
+
+  <h3>Class overview</h3>
+  <table>
+    <thead>
+      <tr><th>Class</th><th>Role</th><th>Key interfaces</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>PairPlugin</code></td><td>Entry point. Registers the Pair tab and sidebar entry, wires the service locator.</td><td><code>IPlugin</code>, <code>EditorTabExtension</code>, <code>UIExtension</code></td></tr>
+      <tr><td><code>EditBroker</code></td><td>Orchestrator. Connects the sockets, the EventBus observer, and the editor service; owns session state.</td><td>None</td></tr>
+      <tr><td><code>EditObserver</code> / <code>EditApplier</code></td><td>Outbound: EventBus edits &rarr; wire messages. Inbound: wire messages &rarr; <code>IdeEditorService</code> writes.</td><td>EventBus <code>@Subscribe</code></td></tr>
+      <tr><td><code>PathMapper</code></td><td>Converts between absolute paths and project-root-relative wire paths.</td><td>None</td></tr>
+      <tr><td><code>RemoteMarkerController</code></td><td>Maps peer cursors to inline editor markers via the editor decoration API.</td><td>None</td></tr>
+      <tr><td><code>SessionHistoryStore</code></td><td>JSON-file-backed <code>StateFlow</code> of recent sessions (capped, newest first).</td><td>None</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Data flow for one local edit</h3>
+  <div class="diagram">
+  user types in the IDE editor
+        |
+        v
+  IDE posts DocumentChangeEvent on the EventBus
+        |
+        v
+  EditObserver.@Subscribe   (skipped while a remote edit is being applied)
+        |   PathMapper.toWire(absolutePath)   -> project-root-relative
+        v
+  EditBroker.broadcast(Edit)
+        |
+        v
+  WebSocket server/client sends compact JSON over ws://
+        |
+        v
+  remote EditApplier.applyEdit()
+        |   PathMapper.toLocal(wirePath)   -> re-anchored to this device
+        |   loopback guard: enter / apply / exit
+        v
+  IdeEditorService.replaceRange(file, range, text)</div>
+  <div class="callout">
+    <strong>Paths are project-root-relative.</strong> A file's wire identity is its
+    path relative to <code>IdeProjectService.getCurrentProject().rootDir</code>, so a
+    session works across two devices whose projects live at different absolute
+    locations. If a remote edit names a file that does not exist locally it is
+    logged and flags the session <em>out of sync</em> &mdash; never silently dropped.
+  </div>
+
+  <h3>Transport topology</h3>
+  <p>
+    A <strong>star</strong>, not a mesh. The host runs a <code>WebSocketServer</code>;
+    each guest opens one <code>WebSocketClient</code> to the host, and the host echoes
+    inbound messages to the other guests. When a socket drops, the host removes the
+    peer and broadcasts a synthetic <code>bye</code>, so stale peer rows clear within
+    seconds.
+  </p>
+
+  <h3>WebSocket protocol</h3>
+  <p>Compact JSON over <code>ws://</code>; <code>f</code> is a project-relative path.</p>
+  <table>
+    <thead>
+      <tr><th>Type</th><th>Meaning</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>hi</code></td><td>Handshake (both directions); carries peer id, name, color, protocol version.</td></tr>
+      <tr><td><code>edit</code></td><td>An insert / delete / replace with its selection range and sequence numbers.</td></tr>
+      <tr><td><code>cur</code></td><td>A cursor-position update.</td></tr>
+      <tr><td><code>fo</code> / <code>fc</code> / <code>ff</code></td><td>File opened (with contents) / closed / focused.</td></tr>
+      <tr><td><code>sync</code></td><td>Host-authoritative full-file snapshot that clears an out-of-sync flag.</td></tr>
+      <tr><td><code>bye</code></td><td>Peer left (also synthesized by the host on a dropped socket).</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Conflict resolution</h3>
+  <p>
+    Each peer keeps a per-file sequence number; every edit carries the sequence it
+    was authored against plus the new one. On receive, a mismatch on a guest flags
+    the session <em>out of sync</em> (the edit is still applied &mdash;
+    last-write-wins). Only the host can force a resync, which broadcasts a
+    <code>sync</code> snapshot of the full file that every receiver adopts. Two edits
+    at the exact same offset are non-deterministic; the design targets two people
+    with one mostly driving.
+  </p>
+
+  <h3>Build configuration</h3>
+  <table>
+    <tr><th>Setting</th><th>Value</th></tr>
+    <tr><td>Gradle plugin</td><td><code>com.itsaky.androidide.plugins.build</code></td></tr>
+    <tr><td>Compile / Target SDK</td><td>34</td></tr>
+    <tr><td>Min SDK</td><td>26</td></tr>
+    <tr><td>Java / Kotlin target</td><td>17</td></tr>
+    <tr><td>Compose</td><td>Enabled; linked <code>compileOnly</code> (host-provided), not bundled</td></tr>
+    <tr><td>Plugin API</td><td><code>compileOnly</code> via <code>../libs/plugin-api.jar</code></td></tr>
+    <tr><td>Output format</td><td><code>.cgp</code> package</td></tr>
+  </table>
+</section>
+
+<!-- ================================================================ -->
+<section id="integration">
+  <h2>4. Integration Points</h2>
+  <p>
+    Pair implements three extension interfaces and consumes five host services, all
+    through <code>plugin-api</code>.
+  </p>
+
+  <h3>4.1 Plugin lifecycle (<code>IPlugin</code>)</h3>
+  <p>
+    <code>initialize()</code> stores the <code>PluginContext</code> and builds the
+    service locator; <code>activate()</code> / <code>deactivate()</code> /
+    <code>dispose()</code> round out the lifecycle. Sockets are started when a
+    session begins and torn down when it ends.
+  </p>
+
+  <h3>4.2 Tab and sidebar (<code>EditorTabExtension</code>, <code>UIExtension</code>)</h3>
+  <p>
+    <code>EditorTabExtension</code> contributes the Pair editor tab and
+    <code>UIExtension</code> the sidebar entry. The tab hosts a Compose UI
+    (<code>PairMainFragment</code> &rarr; <code>PairRoot</code>) with Home, Host,
+    Guest, and QR-scan screens.
+  </p>
+
+  <h3>4.3 Host services consumed</h3>
+  <table>
+    <thead>
+      <tr><th>Service</th><th>Used for</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>IdeEditorService</code></td><td>Apply remote edits (<code>replaceRange</code>), read the current cursor and file contents, and draw inline peer cursors.</td></tr>
+      <tr><td><code>IdeProjectService</code></td><td>Resolve the project root for relative paths, and <code>openProject()</code> after a pull-model file sync.</td></tr>
+      <tr><td><code>IdeFileService</code></td><td>Create, write, and delete files during project transfer.</td></tr>
+      <tr><td><code>IdeEditorTabService</code></td><td>Manage the plugin's editor tab.</td></tr>
+      <tr><td><code>IdeEnvironmentService</code></td><td>The plugin's private data directory for session history.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>4.4 EventBus subscription</h3>
+  <p>
+    Local activity is observed, not polled: Pair subscribes to
+    <code>DocumentChangeEvent</code>, <code>DocumentOpenEvent</code>,
+    <code>DocumentCloseEvent</code>, <code>DocumentSelectedEvent</code>, and the file
+    creation / deletion / rename events on the IDE's EventBus. The observer runs on
+    the main thread, ordered, which keeps the loopback guard around applied remote
+    edits correct.
+  </p>
+
+  <div class="callout">
+    <strong>Extended plugin-api requirement.</strong> Two capabilities go beyond the
+    current <code>stage</code> API surface: <code>IdeProjectService.openProject(File)</code>
+    (open a project after a pull-model sync) and
+    <code>IdeEditorService.showPeerCursor</code> / <code>hidePeerCursor</code> /
+    <code>clearPeerCursors</code> (inline remote-cursor decoration). They live on the
+    <code>feat/ADFA-4419-remote-peer-editor-decoration</code> branch. If
+    <code>assemblePlugin</code> fails with unresolved references to those symbols, the
+    shared <code>libs/</code> jars are older than the API Pair needs &mdash; refresh
+    them from a CodeOnTheGo build that includes the extensions
+    (<code>../scripts/update-libs.sh --local &lt;path&gt; --ref feat/ADFA-4419-remote-peer-editor-decoration</code>).
+  </div>
+
+  <h3>4.5 Permissions</h3>
+  <pre><code>&lt;meta-data android:name="plugin.permissions"
+           android:value="filesystem.read,filesystem.write,network.access,native.code" /&gt;</code></pre>
+  <p>
+    Filesystem access backs project transfer and history; <code>network.access</code>
+    runs the WebSocket server and client; <code>native.code</code> covers the bundled
+    camera / QR-decoding native libraries used by the scan screen.
+  </p>
+</section>
+
+<!-- ================================================================ -->
+<section id="deployment">
+  <h2>5. Deployment &amp; Usage</h2>
+
+  <h3>Building</h3>
+  <pre><code>cd pair
+./gradlew clean assemblePlugin      # or assemblePluginDebug for the debug variant</code></pre>
+  <p>
+    Produces <code>pair/build/plugin/pair.cgp</code>, the bundle you sideload into
+    Code on the Go.
+  </p>
+  <div class="callout">
+    <strong>Always <code>clean</code> first.</strong> The plugin builder copies the
+    built APK into the <code>.cgp</code> and then deletes the source APK, so an
+    incremental build can package an empty artifact.
+  </div>
+
+  <h3>Installation</h3>
+  <ol>
+    <li>Open <em>Preferences &rarr; Plugin Manager &rarr; +</em>.</li>
+    <li>Select the <code>pair.cgp</code> file.</li>
+    <li>The IDE discovers <code>PairPlugin</code> via manifest metadata and activates it.</li>
+  </ol>
+
+  <h3>Using the plugin</h3>
+  <ol>
+    <li>Put both devices on the <strong>same WiFi network</strong> (a phone hotspot works; hotel / captive-portal WiFi that blocks device-to-device traffic does not).</li>
+    <li>On the host, open the <strong>Pair</strong> tab and tap <strong>Host session</strong>.</li>
+    <li>On the guest, open the <strong>Pair</strong> tab and either scan the host's QR or type its <code>ip:port</code>.</li>
+    <li>Open the same project on both devices, then edit &mdash; text and cursors sync live.</li>
+    <li>If a session shows <strong>out of sync</strong>, the host taps <strong>resync</strong> to push an authoritative snapshot.</li>
+  </ol>
+
+  <h3>Runtime requirements</h3>
+  <table>
+    <tr><th>Requirement</th><th>Value</th></tr>
+    <tr><td>Min Android version</td><td>API 26 (Android 8)</td></tr>
+    <tr><td>Min IDE version</td><td>1.0.0</td></tr>
+    <tr><td>Permissions</td><td><code>filesystem.read</code>, <code>filesystem.write</code>, <code>network.access</code>, <code>native.code</code></td></tr>
+    <tr><td>Network</td><td>Both devices on the same LAN with device-to-device traffic allowed; no internet required.</td></tr>
+  </table>
+</section>
+
+<!-- ================================================================ -->
+<section id="benefits">
+  <h2>6. Key Benefits</h2>
+  <ul>
+    <li><strong>Real-time and local.</strong> Edits and presence sync directly between devices over WiFi &mdash; no server, no cloud, no signup.</li>
+    <li><strong>Portable sessions.</strong> Project-root-relative paths let two devices collaborate even though their projects live at different absolute locations.</li>
+    <li><strong>Observes, does not intercept.</strong> Local edits are read from the IDE's existing EventBus and applied through the public editor service &mdash; no host source changes.</li>
+    <li><strong>Presence that reads.</strong> A colored peer list plus inline carets show who is where without cluttering the editor.</li>
+    <li><strong>Recoverable.</strong> Divergence flags the session rather than losing edits, and the host can push an authoritative resync at any time.</li>
+    <li><strong>Plugin-API only.</strong> A reference for a collaborative-editing plugin built entirely on the stable <code>plugin-api</code> contract.</li>
+  </ul>
+</section>
+
+<!-- ================================================================ -->
+<section id="license">
+  <h2>7. Attribution &amp; License</h2>
+  <p>
+    Pair is an open-source example plugin for Code on the Go. Its source is licensed
+    per the surrounding <code>plugin-examples</code> repository (see
+    <code>LICENSE</code> at the repo root).
+  </p>
+  <ul>
+    <li>All session traffic stays on the local network between the paired devices; the plugin makes no cloud calls and transmits no data off-device.</li>
+    <li><code>ws://</code> traffic is plaintext on the LAN; a per-session passcode gates who may join, but the channel itself is not encrypted.</li>
+  </ul>
+</section>
+
+<footer>
+  Pair Plugin Documentation &middot; Version 1.0.0 &middot; com.appdevforall.pair.plugin
+</footer>
+
+</body>
+</html>

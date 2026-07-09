@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="pair_plugin_label">Pair</string>
+    <string name="pair_title">Pair</string>
+    <string name="sidebar_open_pair">Pair</string>
+
+    <string name="tab_home">Home</string>
+    <string name="tab_session">Session</string>
+
+    <string name="action_host_session">Host session</string>
+    <string name="action_join_session">Join session</string>
+    <string name="action_stop_session">Stop session</string>
+    <string name="action_disconnect">Disconnect</string>
+    <string name="action_force_resync">Force resync from me</string>
+
+    <string name="label_your_address">Your address</string>
+    <string name="label_enter_address">Enter address</string>
+    <string name="label_address_hint">192.168.1.42:7050</string>
+    <string name="label_peers_online">%1$d peer(s) online</string>
+    <string name="label_status_idle">Not connected</string>
+    <string name="label_status_hosting">Hosting</string>
+    <string name="label_status_joined">Connected to %1$s</string>
+    <string name="label_status_out_of_sync">Out of sync</string>
+
+    <string name="peer_you">You</string>
+    <string name="peer_host_tag">host</string>
+    <string name="peer_editing_file">editing %1$s</string>
+    <string name="peer_idle">idle</string>
+
+    <string name="empty_peer_list_title">No peers yet</string>
+    <string name="empty_peer_list_body">Share your address with someone on the same WiFi to start pair programming.</string>
+
+    <string name="error_port_in_use">Port %1$d is in use. Stop the running session or restart the IDE.</string>
+    <string name="error_no_lan_ip">No local network address. Check your WiFi connection.</string>
+    <string name="error_join_failed">Couldn\'t reach %1$s. Verify the address and WiFi.</string>
+</resources>
