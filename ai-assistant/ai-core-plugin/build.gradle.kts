@@ -65,7 +65,7 @@ android {
 }
 
 dependencies {
-    compileOnly(project(":plugin-api"))
+    compileOnly(files("../../libs/plugin-api.jar"))
     implementation(project(":llama-impl"))
     implementation(project(":llama-api"))
 

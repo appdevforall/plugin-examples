@@ -49,7 +49,7 @@ class GradleSyncHandler(
             })
 
             // Wait for sync to complete (with timeout of 2 minutes)
-            val (syncSuccess, result): Pair<Boolean, String> = try {
+            val (syncSuccess, result) = try {
                 syncComplete.get(120_000, java.util.concurrent.TimeUnit.MILLISECONDS)
             } catch (e: Exception) {
                 Log.w("GradleSyncHandler", "Gradle sync timed out or failed: ${e.message}")

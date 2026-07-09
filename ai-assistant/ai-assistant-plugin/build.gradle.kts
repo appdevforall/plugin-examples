@@ -68,7 +68,7 @@ android {
 }
 
 dependencies {
-    compileOnly(project(":plugin-api"))
+    compileOnly(files("../../libs/plugin-api.jar"))
 
     // Use 'implementation' (not 'compileOnly') for androidx libraries.
     // This is required for XML layouts: AAPT2 needs these dependencies at compile-time to process

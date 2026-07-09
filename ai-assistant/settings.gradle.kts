@@ -34,7 +34,6 @@ dependencyResolutionManagement {
 
 rootProject.name = "ai-assistant"
 
-include(":plugin-api")
 include(":llama-api")
 include(":llama-impl")
 include(":ai-core-plugin")
