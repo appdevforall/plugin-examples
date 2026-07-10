@@ -24,6 +24,7 @@ See the official [plugin documentation](https://www.appdevforall.org/codeonthego
 | [`layout-editor/`](layout-editor/)                 | Visual drag-and-drop editor for Android XML layouts. |
 | [`ai-core/`](ai-core/)                             | Shared on-device LLM inference backend (bundled llama.cpp AAR) plus a Gemini API backend, exposed to other plugins as a runtime service. |
 | [`ai-assistant/`](ai-assistant/)                   | In-IDE AI chat assistant with tool calling; talks to `ai-core` for inference over local or Gemini models. |
+| [`flutter-template/`](flutter-template/)           | Adds Flutter starter project templates (Basic, BLoC, Provider, GetX, Riverpod) to the New Project screen. |
 
 ## Building a plugin
 
