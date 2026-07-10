@@ -1,5 +1,48 @@
 # Retrospectives
 
+## 2026-07-09 — Flutter Template plugin: review + rebuild on the CoGo template system (ADFA-3857, PR #44)
+
+### Time Breakdown
+| Started | Phase | 👤 Hands-On Time | 🤖 Agent Time | Problems |
+|---------|-------|-----------------|---------------|----------|
+| Jul 9 10:16pm | PR #43 review — `/plugin-review` on `pair`, post inline PR comments | █ 5m | ██ 12m | |
+| Jul 10 1:35am | Scope + plan — Jira triage, dev-assets/Pebble study (3 Explore agents), AskUserQuestion, approved plan | ████ 20m | ████ 22m | |
+| Jul 10 1:49am | Build — rebuild submission as headless `IdeTemplateService` installer, author 5 Pebble `.cgt` templates | ██ 12m | █████ 50m | ⚠ `pubspec name:` newline-trim bug (caught on device) |
+| Jul 10 2:30am | Icons — Flutter day/night plugin icons + 5 template thumbnails (ImageMagick) | █ 6m | ███ 25m | ⚠ Glide plugin-icon disk cache showed stale PCF icon |
+| Jul 10 2:44am | Verify + ship — device install/generate/substitute, commit, push, PR #44 | ██ 10m | ████ 22m | ⚠ LeakCanary hijacked `monkey` launch; emulator UI flakiness |
+| Jul 10 4:15am | Retro + root consolidation — shared repo-root `libs/`+wrapper, docs | █ 5m | ██ 15m | |
+
+### Metrics
+| Metric | Duration |
+|--------|----------|
+| Total wall-clock (active, excl. two long idle gaps) | ~3h |
+| Hands-on | ~1h (rough; the analyzer over-counts AskUserQuestion/plan text as typing) |
+| Automated agent time | ~2h 20m |
+| Idle/away (overnight + compaction gap) | ~16h |
+| Retro analysis time | ~10 min |
+
+### Key Observations
+- **Rebuild-not-patch was the right call, and verifying the API first avoided PR #43's failure mode.** Ali's submission wrote hardcoded Dart to `/sdcard` (broken under scoped storage) because his bundled `plugin-api.jar` lacked `IdeTemplateService`. PR #43 had just failed by calling an *unreleased* API; here I confirmed `IdeTemplateService`/`CgtTemplateBuilder` exist in the **repo-root** `libs/` before building. Trusting the root jar (not a per-plugin copy) is what made the installer approach safe.
+- **Device verification earned its keep — again.** `assemblePlugin` + `unzip -l` looked clean, but installing on the emulator and actually generating a project surfaced the `pubspec.yaml` `name:` corruption (Pebble trimmed the newline after a bare `${{APP_NAME | lower}}`, merging it into `description:`). This is the second consecutive session where build-success masked a real defect.
+- **Two IDE-side quirks cost real time:** LeakCanary intercepting the `monkey` LAUNCHER intent (opened its Leaks screen instead of the IDE), and Glide's path-keyed plugin-icon disk cache showing the stale PCF icon after reinstall. Both are now documented so they're one-line fixes next time.
+- **Explore agents front-loaded the design well.** Three parallel Explore agents (dev-assets pattern, Pebble mechanics, PCFInstaller shape) delivered the whole recipe before any code was written — the build phase had almost no false starts.
+
+### Feedback
+**What worked:** The plan-first approach (Explore agents → AskUserQuestion on the 5-variant/SDK scope → approved plan) meant the rebuild went cleanly. Device verification caught the pubspec bug.
+**What didn't:** "i feel like leak canary slowed us down" — the `monkey`-launch detour into LeakCanary's UI was avoidable. Emulator UI-automation flakiness (ANRs, empty bounds) made the final device re-verify not worth it.
+
+### Actions Taken
+| Issue | Action Type | Change |
+|-------|-------------|--------|
+| LeakCanary hijacked `monkey` app-launch | CLAUDE.md + learnings.md | Documented launching via `am start -n com.itsaky.androidide/.activities.SplashActivity` (Verification §; learnings "Android / adb") |
+| Pebble bare-tag newline-trim silently corrupts generated files | CLAUDE.md + learnings.md | Documented quoting values that must survive on their own line: `name: "${{APP_NAME \| lower}}"` (template-installer subsection; new learnings section) |
+| Glide plugin-icon disk cache shows stale icon after reinstall | learnings.md + Ticket (drafted) | Documented cache-clear (`adb root` + rm `image_manager_disk_cache`); drafted CoGo bug ticket (below) — not yet filed |
+| Per-plugin `libs/` and gradle-wrapper copies drift from repo | CLAUDE.md + code | Mandated repo-root shared `libs/` **and** a single repo-root Gradle wrapper; promoted the wrapper to root and pointed `flutter-template` at `../gradlew` / `../libs/*.jar`; deleted its local copies |
+
+**Drafted CoGo bug ticket (not yet filed):**
+> **Title:** Plugin Manager shows stale plugin icon after reinstall (Glide disk cache not invalidated)
+> **Description:** CoGo renders plugin icons through Glide's `image_manager_disk_cache`, keyed by file path with no mtime/content invalidation. Reinstalling a plugin under the same `plugin.id` with a changed `icon_day/night.png` keeps rendering the previous icon — the extracted file under `app_plugin_icons/<id>/` updates correctly, but the cached bitmap does not. Repro: install plugin A, reinstall a build with different icons under the same id → old icon persists until `cache/image_manager_disk_cache` is cleared and the app restarts. Fix: key the Glide load by content hash or mtime (or `signature()`/`skipMemoryCache`+`diskCacheStrategy.NONE` for plugin icons). Template thumbnails are unaffected (re-read from the `.cgt`).
+
 ## 2026-07-01 — Code review (PR #31) + AI Literacy Course ordering fix (PR #36)
 
 ### Time Breakdown

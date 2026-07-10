@@ -42,7 +42,9 @@ Every plugin depends on two jars in the repo-root `libs/`:
 - **`plugin-api.jar`** — the IDE-side API surface (`IPlugin`, `PluginContext`, `BuildStatusListener`, `IdeBuildService`, etc.). Each plugin uses it as `compileOnly` (provided by the IDE at runtime) AND as `buildscript classpath` so the Gradle plugin can resolve symbols at configuration time.
 - **`gradle-plugin.jar`** — the Gradle plugin with id `com.itsaky.androidide.plugins.build`, applied by every plugin. It's the output of CoGo's `plugin-api/plugin-builder/` module (separate from CoGo's `gradle-plugin/` module, which is unrelated despite the name). It packages the compiled Android library into a `.cgp`.
 
-Both jars are referenced via `../libs/*.jar`. **A plugin folder is not standalone in isolation** — copy `libs/` along if you move one elsewhere. When CoGo's API changes, refresh via the script above or the **Update libs from CodeOnTheGo** GitHub Action (which also commits the refreshed jars, cuts a release, and deploys `.cgp` files to the website).
+There is also **one shared Gradle wrapper at the repo root** (`gradlew` + `gradle/wrapper/`). New plugins should use it — build them with `cd <plugin> && ../gradlew assemblePlugin` rather than bundling a per-plugin `gradlew`/`gradle/wrapper/` copy. (`flutter-template` follows this; most older plugins still carry their own local wrapper and can be migrated opportunistically.)
+
+Both jars are referenced via `../libs/*.jar`. **Always use the repo-root `libs/` jars and the repo-root Gradle wrapper — never bundle per-plugin copies.** A plugin that ships its own `libs/plugin-api.jar` / `libs/gradle-plugin.jar` (e.g. copied from another plugin) can drift out of sync with the rest of the repo; point `build.gradle.kts` (`compileOnly`) and `settings.gradle.kts` (buildscript `classpath`) at `../libs/*.jar` and delete any local `libs/`. The root `plugin-api.jar` already carries the full API surface (including `IdeTemplateService`/`CgtTemplateBuilder`), so newer sub-APIs do not justify a local copy. **A plugin folder is not standalone in isolation** — copy the root `libs/` along if you move one elsewhere. When CoGo's API changes, refresh via the script above or the **Update libs from CodeOnTheGo** GitHub Action (which also commits the refreshed jars, cuts a release, and deploys `.cgp` files to the website).
 
 ### Plugin shape
 
@@ -80,11 +82,19 @@ Plugins that extract bundled assets on-device once (currently `ai-literacy-cours
 
 **Any change to extraction OR post-extraction generation logic must bump `INSTALL_VERSION`.** Otherwise the change compiles and packages cleanly but has zero effect on existing installs — they keep the stale extracted tree, and it looks like "my fix didn't work" (costing a device round-trip). Bumping the constant forces a clean re-extract. On a device with a prior install, confirm the marker version changed (or wipe plugin data) before concluding a fix works — see Verification below.
 
+### Template-installer plugins (Pebble `.cgt`)
+
+Some plugins are headless template installers (`flutter-template`, `pebble-custom-function-template-installer`): on `activate()` they register project templates with `IdeTemplateService` (building each `.cgt` from Pebble `.peb` skeletons under `src/main/assets/templates/<Variant>/`), and unregister on `deactivate()`. The templates then appear on the New Project screen beside the core ones. The source-of-truth skeletons follow the pattern in `~/src/dev-assets/templates`.
+
+**Pebble gotcha:** a bare `${{TAG}}` at end-of-line loses its trailing newline to Pebble's newline-trimming and merges with the next line (this silently produced invalid YAML by collapsing `name:` and `description:` into one line). Ensure a non-newline character follows `}}` — the convention is to quote the value, e.g. `name: "${{APP_NAME | lower}}"`.
+
 ## Verification
 
 **`./gradlew assemblePlugin` succeeding is not verification** — it only proves the plugin compiles and packages. Real verification for these plugins is device-level: push the built `.cgp` to a connected emulator/device, install through CoGo's Plugin Manager, exercise the feature end-to-end, and observe the expected behavior (UI element appears, file written, build hook fires, DB row replaced, etc.).
 
 If device verification isn't possible in-session, say so explicitly rather than calling the change verified. Build success is necessary but never sufficient — this applies especially to plugins that mutate IDE state (`documentation.db`, settings, filesystem, project structure).
+
+**Launching CoGo via adb.** Do **not** launch with `monkey` or a bare LAUNCHER intent (`adb shell monkey -p com.itsaky.androidide …`) — debug builds bundle **LeakCanary**, which registers its own launcher activity, so the intent can open LeakCanary's "Leaks" screen or a disambiguation chooser instead of the IDE. Start the explicit component: `adb shell am start -n com.itsaky.androidide/.activities.SplashActivity`. When re-verifying a plugin **icon** change under the same plugin id, note that the Plugin Manager caches icons via Glide (`cache/image_manager_disk_cache`) keyed by path without mtime invalidation — the old icon persists until that cache is cleared (`adb root`, delete the dir, restart) or you install on a clean device.
 
 ## Adding a new plugin
 
