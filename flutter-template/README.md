@@ -27,9 +27,12 @@ enabled. This mirrors the `pebble-custom-function-template-installer` example.
 
 ## Building
 
+This plugin uses the repo-root Gradle wrapper and shared `../libs/` jars — it has no local copies.
+Build it from its own directory via the parent wrapper:
+
 ```sh
 cd flutter-template
-./gradlew clean assemblePlugin
+../gradlew clean assemblePlugin
 ```
 
 The `.cgp` lands in `build/plugin/fluttertemplate.cgp`. Install it from inside Code on the Go via
