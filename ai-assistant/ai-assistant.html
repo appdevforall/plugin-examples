@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Assistant Plugin — Documentation</title>
+<style>
+  body {
+    background: #ffffff;
+    color: #000000;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.65;
+    margin: 0 auto;
+    padding: 2rem 1.25rem;
+    max-width: 820px;
+  }
+  h1 { font-size: 1.8rem; margin: 0 0 0.5rem; }
+  h2 { font-size: 1.25rem; margin: 2rem 0 0.6rem; border-bottom: 1px solid #ddd; padding-bottom: 0.3rem; }
+  h3 { font-size: 1.05rem; margin: 1.25rem 0 0.4rem; }
+  p, li { font-size: 1rem; }
+  ul { padding-left: 1.35rem; }
+  li { margin: 0.3rem 0; }
+  code {
+    background: #f4f4f4;
+    padding: 0.1rem 0.35rem;
+    border-radius: 3px;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.9em;
+  }
+  pre {
+    background: #f4f4f4;
+    padding: 0.9rem;
+    border-radius: 5px;
+    overflow-x: auto;
+  }
+  pre code { background: none; padding: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 0.5rem 0; }
+  th, td { border: 1px solid #ccc; padding: 0.4rem 0.6rem; text-align: left; font-size: 0.95rem; }
+  th { background: #f4f4f4; }
+  .lead { font-size: 1.1rem; }
+</style>
+</head>
+<body>
+  <h1>AI Assistant Plugin</h1>
+  <p class="lead">An AI coding assistant for Code on the Go (CoGo), with
+  on-device LLM inference and an optional Google Gemini cloud backend.</p>
+
+  <h2>1. Executive Overview</h2>
+  <p>The AI Assistant brings an interactive coding agent into the CoGo IDE. It
+  adds an <b>Agent</b> tab where you chat with a language model that can read,
+  search, and edit files in your project through an approval-gated tool loop.
+  It ships as <b>two cooperating plugins</b>:</p>
+  <ul>
+    <li><b>AI Core</b> — the inference engine. Provides an
+      <code>LlmInferenceService</code> with two backends: a local, on-device
+      model (llama.cpp) and Google Gemini. Install this first.</li>
+    <li><b>AI Assistant</b> — the user interface. Contributes the Agent tab, the
+      editor context-menu actions, and the agent tool-loop that drives the
+      model.</li>
+  </ul>
+  <p>The two plugins are bridged by a shared service registry
+  (<code>SharedServices</code>), so the UI plugin discovers the inference
+  service the core plugin registers at runtime.</p>
+
+  <h2>2. Core Functionality</h2>
+  <ul>
+    <li><b>Conversational agent</b> — chat with streaming responses in the
+      Agent tab.</li>
+    <li><b>Project-aware tools</b> — read files, search the project, create and
+      update files, trigger a Gradle sync, read build output, add dependencies,
+      and generate code from templates.</li>
+    <li><b>Dual inference backends</b> — fully offline on-device inference, or
+      Gemini in the cloud, selectable in Settings.</li>
+    <li><b>Editor context actions</b> — <b>Explain Code</b> and
+      <b>Generate Code</b> from the editor selection.</li>
+    <li><b>Safety controls</b> — filesystem tools are confined to the project
+      root, and mutating tools require explicit user approval.</li>
+  </ul>
+
+  <h2>3. Technical Architecture</h2>
+  <pre><code>ai-assistant-plugin  (UI, agent tool-loop)
+        │  discovers via SharedServices
+        ▼
+ai-core-plugin       (LlmInferenceService)
+        ├── LocalLlmBackend  ──► llama-impl ──► llama.cpp (native, JNI)
+        └── GeminiBackend    ──► Google GenAI SDK (HTTPS)</code></pre>
+  <ul>
+    <li><b>llama-impl / llama-api</b> — Android modules wrapping the native
+      llama.cpp build via JNI; compiled from the
+      <code>subprojects/llama.cpp</code> git submodule.</li>
+    <li><b>Network</b> — only <b>AI Core</b> holds the
+      <code>network.access</code> permission and <code>INTERNET</code>, because
+      only its Gemini backend performs network calls.</li>
+    <li><b>Lifecycle</b> — on dispose, the native model is unloaded and all
+      background coroutine scopes are cancelled.</li>
+  </ul>
+
+  <h2>4. Usage</h2>
+  <h3>Build</h3>
+  <pre><code>git submodule update --init --recursive
+./gradlew :ai-core-plugin:assemblePlugin
+./gradlew :ai-assistant-plugin:assemblePlugin</code></pre>
+  <p>Outputs land at <code>ai-core-plugin/build/plugin/ai-core.cgp</code> and
+  <code>ai-assistant-plugin/build/plugin/ai-assistant.cgp</code>. See
+  <code>BUILDING.md</code> for full prerequisites.</p>
+  <h3>Install &amp; configure</h3>
+  <ul>
+    <li>Copy both <code>.cgp</code> files to the device and install via the CoGo
+      Plugin Manager — <b>AI Core first</b>, then AI Assistant. Restart the IDE.</li>
+    <li>Open <b>Settings</b> and either select a <code>.gguf</code> model (Local)
+      or enter a Gemini API key (Gemini).</li>
+    <li>Open the <b>Agent</b> tab and start chatting.</li>
+  </ul>
+
+  <h2>5. Key Benefits</h2>
+  <table>
+    <tr><th>Benefit</th><th>Why it matters</th></tr>
+    <tr><td>Offline capable</td><td>On-device inference works with no network and keeps code private.</td></tr>
+    <tr><td>Cloud option</td><td>Gemini backend offers higher-quality responses when connectivity is available.</td></tr>
+    <tr><td>Project-aware</td><td>The agent operates on your actual files through IDE services, not copy-paste.</td></tr>
+    <tr><td>Safe by default</td><td>Path containment plus approval prompts keep file edits scoped and consented.</td></tr>
+  </table>
+
+  <p style="margin-top:2rem;color:#555;font-size:0.9rem;">
+    Author: AndroidIDE / appdevforall. See <code>README.md</code> for developer
+    details and the in-IDE Agent-tab tooltip for quick help.</p>
+</body>
+</html>

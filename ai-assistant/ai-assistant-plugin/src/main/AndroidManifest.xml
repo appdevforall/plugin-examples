@@ -2,8 +2,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.itsaky.androidide.plugins.aiassistant">
 
-    <uses-permission android:name="android.permission.INTERNET" />
-
     <application
         android:label="AI Assistant Plugin"
         android:theme="@style/PluginTheme">
@@ -31,11 +29,20 @@
 
         <meta-data
             android:name="plugin.min_ide_version"
-            android:value="1.0.0" />
+            android:value="26.17" />
+
+        <meta-data
+            android:name="plugin.max_ide_version"
+            android:value="26.28" />
+
+        <!-- Number of editor tabs contributed via getEditorTabs() (the "Agent" tab) -->
+        <meta-data
+            android:name="plugin.editor_tabs"
+            android:value="1" />
 
         <meta-data
             android:name="plugin.permissions"
-            android:value="filesystem.read,filesystem.write,network.access,system.commands,project.structure" />
+            android:value="filesystem.read,filesystem.write,system.commands,project.structure" />
 
         <meta-data
             android:name="plugin.main_class"

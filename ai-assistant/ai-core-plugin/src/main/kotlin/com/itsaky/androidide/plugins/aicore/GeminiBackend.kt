@@ -13,6 +13,7 @@ import com.itsaky.androidide.plugins.services.SharedServices
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import java.util.concurrent.CompletableFuture
 
@@ -405,6 +406,15 @@ User: $userPrompt"""
                 callback.onError(formatErrorMessage(e))
             }
         }
+    }
+
+    /**
+     * Release all resources: cancel the backend scope and any in-flight
+     * request. Called from AiCorePlugin.dispose().
+     */
+    fun close() {
+        currentJob?.cancel()
+        scope.cancel()
     }
 
     /**

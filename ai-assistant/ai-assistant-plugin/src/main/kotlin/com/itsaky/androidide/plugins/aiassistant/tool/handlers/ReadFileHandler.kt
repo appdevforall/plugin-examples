@@ -4,7 +4,6 @@ import android.util.Log
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aiassistant.models.ToolResult
 import com.itsaky.androidide.plugins.aiassistant.tool.ToolHandler
-import java.io.File
 
 /**
  * Handler for reading file contents.
@@ -24,25 +23,9 @@ class ReadFileHandler(
         }
 
         return try {
-            // Get project root for containment check
-            val projectRoot = System.getProperty("project.dir")
-                ?: System.getProperty("user.dir")
-                ?: "/storage/emulated/0/AndroidIDEProjects"
-            val projectRootCanonical = File(projectRoot).canonicalPath
-
-            // Resolve path against project root if relative
-            val file = if (filePath.startsWith("/")) {
-                File(filePath)
-            } else {
-                File(projectRoot, filePath)
-            }
-
-            // Security: Verify file is within project root
-            val fileCanonical = file.canonicalPath
-            if (!fileCanonical.startsWith(projectRootCanonical + File.separator) && fileCanonical != projectRootCanonical) {
-                Log.e("ReadFileHandler", "Path escape attempt: $fileCanonical is outside project root $projectRootCanonical")
-                return ToolResult.failure("File path must be within project directory")
-            }
+            // Security: resolve against the project root and reject any escape.
+            val file = PathGuard.resolveWithin(filePath)
+                ?: return ToolResult.failure("File path must be within project directory")
 
             if (!file.exists()) {
                 ToolResult.failure("File does not exist: $filePath")

@@ -4,7 +4,6 @@ import android.util.Log
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aiassistant.models.ToolResult
 import com.itsaky.androidide.plugins.aiassistant.tool.ToolHandler
-import java.io.File
 
 /**
  * Handler for updating existing files.
@@ -25,7 +24,8 @@ class UpdateFileHandler(
         }
 
         return try {
-            val file = File(filePath)
+            val file = PathGuard.resolveWithin(filePath)
+                ?: return ToolResult.failure("File path must be within project directory")
             if (!file.exists()) {
                 ToolResult.failure("File does not exist: $filePath")
             } else if (!file.isFile) {

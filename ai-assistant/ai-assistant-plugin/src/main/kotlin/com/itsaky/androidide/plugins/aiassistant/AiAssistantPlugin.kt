@@ -4,19 +4,24 @@ import com.itsaky.androidide.plugins.IPlugin
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.extensions.UIExtension
 import com.itsaky.androidide.plugins.extensions.ContextMenuContext
+import com.itsaky.androidide.plugins.extensions.DocumentationExtension
 import com.itsaky.androidide.plugins.extensions.MenuItem
+import com.itsaky.androidide.plugins.extensions.PluginTooltipButton
+import com.itsaky.androidide.plugins.extensions.PluginTooltipEntry
 import com.itsaky.androidide.plugins.extensions.TabItem
 import com.itsaky.androidide.plugins.services.LlmInferenceService
 import com.itsaky.androidide.plugins.services.SharedServices
 import com.itsaky.androidide.plugins.aiassistant.fragments.ChatFragment
 import java.io.File
 
-class AiAssistantPlugin : IPlugin, UIExtension {
+class AiAssistantPlugin : IPlugin, UIExtension, DocumentationExtension {
 
     private lateinit var context: PluginContext
     private var llmService: LlmInferenceService? = null
 
     companion object {
+        const val TOOLTIP_TAG_TAB = "agent_chat_tab"
+
         @Volatile
         private var pluginContext: PluginContext? = null
 
@@ -58,6 +63,13 @@ class AiAssistantPlugin : IPlugin, UIExtension {
 
     override fun dispose() {
         context.logger.info("AI Assistant Plugin disposing...")
+
+        // Release the shared references set up in initialize() so the plugin's
+        // PluginContext (and everything it holds) can be garbage-collected when
+        // the plugin is unloaded.
+        SharedServices.unregister(PluginContext::class.java)
+        pluginContext = null
+        llmService = null
     }
 
     // Register Agent tab
@@ -70,7 +82,7 @@ class AiAssistantPlugin : IPlugin, UIExtension {
                 fragmentFactory = { ChatFragment() },
                 isEnabled = true,
                 isVisible = true,
-                tooltipTag = "agent_chat_tab"
+                tooltipTag = TOOLTIP_TAG_TAB
             )
         )
     }
@@ -100,6 +112,46 @@ class AiAssistantPlugin : IPlugin, UIExtension {
     }
 
     override fun getMainMenuItems(): List<MenuItem> = emptyList()
+
+    // --- DocumentationExtension: three-tier tooltip help for the Agent tab ---
+    //
+    //   Tier 1 = `summary`        (one-liner shown on long-press)
+    //   Tier 2 = `detail`         (HTML paragraph behind "See More")
+    //   Tier 3 = `buttons[].uri`  (offline HTML page served from
+    //                              src/main/assets/docs/ at localhost)
+
+    override fun getTooltipCategory(): String = "plugin_ai_assistant"
+
+    override fun getTooltipEntries(): List<PluginTooltipEntry> = listOf(
+        PluginTooltipEntry(
+            tag = TOOLTIP_TAG_TAB,
+            summary = "AI Agent: chat with an on-device or Gemini model that can read, search and edit your project.",
+            detail = """
+                <p>The <b>Agent</b> tab opens a chat assistant backed by the
+                <b>AI Core</b> plugin. It can answer questions and run an
+                agentic tool-loop over your project.</p>
+                <p>Backends:</p>
+                <ul>
+                  <li><b>Local</b> — on-device inference via llama.cpp (select a
+                      <code>.gguf</code> model in Settings).</li>
+                  <li><b>Gemini</b> — Google's cloud API (needs an API key in
+                      Settings; requests leave the device over HTTPS).</li>
+                </ul>
+                <p>File-editing tools are confined to the current project and
+                ask for approval before writing.</p>
+            """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(
+                    description = "AI Assistant guide",
+                    uri = "index.html",  // resolves to plugin/<id>/index.html
+                    order = 0
+                )
+            )
+        )
+    )
+
+    /** Subdirectory under src/main/assets/ holding the Tier 3 offline docs. */
+    override fun getTier3DocsAssetPath(): String = "docs"
 
     private fun migrateDataIfNeeded() {
         migrateChatHistory()

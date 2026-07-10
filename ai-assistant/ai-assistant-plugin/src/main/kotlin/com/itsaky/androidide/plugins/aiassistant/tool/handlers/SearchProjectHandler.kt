@@ -25,10 +25,14 @@ class SearchProjectHandler(
         val projectDir = args["project_dir"]?.toString()?.trim()
         val searchInContents = args["search_in_contents"]?.toString()?.toBoolean() ?: false
 
+        // Confine the search to the project root. Default to it, and reject any
+        // explicit project_dir that resolves outside it, so a prompt-injected
+        // model can't read/exfiltrate arbitrary files on external storage.
         val searchRoot = if (projectDir.isNullOrBlank()) {
-            File("/storage/emulated/0")  // Default to storage root
+            File(PathGuard.projectRoot())
         } else {
-            File(projectDir)
+            PathGuard.resolveWithin(projectDir)
+                ?: return ToolResult.failure("Search directory must be within the project directory")
         }
 
         return try {

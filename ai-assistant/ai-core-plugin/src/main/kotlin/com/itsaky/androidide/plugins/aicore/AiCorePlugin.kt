@@ -89,5 +89,16 @@ class AiCorePlugin : IPlugin {
         if (::llmService.isInitialized) {
             llmService.cancelGeneration()
         }
+
+        // Free the native model and cancel backend scopes so nothing leaks
+        // when the plugin is unloaded.
+        if (::localBackend.isInitialized) {
+            localBackend.close()
+            context.logger.info("AiCorePlugin: Released local LLM backend")
+        }
+        if (::geminiBackend.isInitialized) {
+            geminiBackend.close()
+            context.logger.info("AiCorePlugin: Released Gemini backend")
+        }
     }
 }

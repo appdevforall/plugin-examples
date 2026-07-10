@@ -77,30 +77,29 @@ See [BUILDING.md](BUILDING.md) for detailed setup instructions.
 - Android SDK (API 33+)
 - Android NDK (r26+)
 - JDK 17+
-- **llama.cpp** cloned in sibling directory (see [BUILDING.md](BUILDING.md#step-1-clone-llamacpp))
+- **llama.cpp** sources, provided by the `subprojects/llama.cpp` git submodule (see [BUILDING.md](BUILDING.md#step-1-initialize-the-llamacpp-submodule))
 
 **Build Commands:**
 
 ```bash
-# 1. Clone llama.cpp (if not already done)
-cd .. && git clone https://github.com/ggml-org/llama.cpp.git && cd ai-assistant
+# 1. Initialize the llama.cpp submodule (once, from the repo root)
+git submodule update --init --recursive
 
-# 2. Build plugins
-./gradlew assembleV8Debug
-
-# 3. Rename outputs to .cgp
-mv ai-core-plugin/build/outputs/apk/v8/debug/*.apk ai-core-plugin.cgp
-mv ai-assistant-plugin/build/outputs/apk/v8/debug/*.apk ai-assistant-plugin.cgp
+# 2. Build each plugin (release .cgp)
+./gradlew :ai-core-plugin:assemblePlugin
+./gradlew :ai-assistant-plugin:assemblePlugin
 ```
 
 **Output Locations:**
-- `ai-core-plugin/build/outputs/apk/v8/debug/ai-core-plugin-v8-debug.apk`
-- `ai-assistant-plugin/build/outputs/apk/v8/debug/ai-assistant-plugin-v8-debug.apk`
+- `ai-core-plugin/build/plugin/ai-core.cgp`
+- `ai-assistant-plugin/build/plugin/ai-assistant.cgp`
+
+> Use `assemblePluginDebug` instead of `assemblePlugin` for the debug variant.
 
 ## Installation
 
 1. **Build both plugins** (ai-core and ai-assistant)
-2. **Copy APKs** to device Downloads folder (rename to .cgp extension)
+2. **Copy the `.cgp` files** (`build/plugin/*.cgp`) to the device Downloads folder
 3. **Install via AndroidIDE Plugin Manager**
    - Install ai-core-plugin first
    - Then install ai-assistant-plugin

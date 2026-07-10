@@ -18,40 +18,38 @@ This guide explains how to build the AI assistant plugins from source, including
 
 ---
 
-## Step 1: Clone llama.cpp
+## Step 1: Initialize the llama.cpp submodule
 
-The AI plugins depend on a customized version of llama.cpp with Android-specific improvements.
+The AI plugins depend on a customized version of llama.cpp with Android-specific
+improvements. It is wired in as a **git submodule** at
+`ai-assistant/subprojects/llama.cpp` — `llama-impl/src/main/cpp/CMakeLists.txt`
+compiles it from there via `add_subdirectory(../../../../subprojects/llama.cpp/ …)`.
+You do **not** clone it into a sibling directory.
 
 ### Directory Structure
 
-The build expects llama.cpp to be at: `../../llama.cpp/` relative to the plugin-examples repo root.
-
 **Expected layout:**
 ```
-cogo/
-├── plugin-examples/        # This repo
-│   └── ai-assistant/
-└── llama.cpp/              # llama.cpp clone (sibling directory)
+plugin-examples/                    # This repo
+└── ai-assistant/
+    └── subprojects/
+        └── llama.cpp/              # git submodule (compiled by llama-impl)
 ```
 
-### Clone llama.cpp
+### Initialize the submodule
 
 ```bash
-# Navigate to the parent directory of plugin-examples
-cd /path/to/cogo
-
-# Clone the official llama.cpp repository
-git clone https://github.com/ggml-org/llama.cpp.git
-
-# Optional: If there's a custom fork with Android improvements
-# git clone https://github.com/YOUR-ORG/llama.cpp.git -b android-optimizations
+# From the plugin-examples repo root
+git submodule update --init --recursive
 ```
+
+The submodule URL (`https://github.com/appdevforall/llama.cpp.git`) is defined in
+the repo-root `.gitmodules`.
 
 ### Verify the structure
 
 ```bash
-cd plugin-examples/ai-assistant/llama-impl/src/main/cpp
-ls ../../../../../../llama.cpp/
+ls ai-assistant/subprojects/llama.cpp/
 # Should show: CMakeLists.txt, common/, ggml/, src/, examples/, etc.
 ```
 
@@ -164,14 +162,15 @@ adb push ai-assistant-plugin.cgp /sdcard/Download/
 
 **Error:**
 ```
-CMake Error: add_subdirectory given source "../../../../../../llama.cpp" which is not an existing directory
+CMake Error: add_subdirectory given source ".../subprojects/llama.cpp" which is not an existing directory
 ```
 
 **Solution:**
 ```bash
-# Verify llama.cpp location
-ls ../../llama.cpp/
-# If missing, clone it as shown in Step 1
+# Verify the submodule is checked out
+ls ai-assistant/subprojects/llama.cpp/
+# If empty, initialize it as shown in Step 1:
+git submodule update --init --recursive
 ```
 
 ### NDK Not Found

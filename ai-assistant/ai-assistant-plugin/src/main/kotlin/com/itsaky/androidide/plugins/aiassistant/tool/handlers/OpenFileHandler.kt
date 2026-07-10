@@ -5,7 +5,6 @@ import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aiassistant.models.ToolResult
 import com.itsaky.androidide.plugins.aiassistant.tool.ToolHandler
 import com.itsaky.androidide.plugins.services.IdeEditorService
-import java.io.File
 
 /**
  * Handler for opening files in the IDE editor.
@@ -26,7 +25,8 @@ class OpenFileHandler(
         Log.d("OpenFileHandler", "Opening file: $filePath")
 
         return try {
-            val file = File(filePath)
+            val file = PathGuard.resolveWithin(filePath)
+                ?: return ToolResult.failure("File path must be within project directory")
             if (!file.exists()) {
                 Log.w("OpenFileHandler", "File does not exist: $filePath")
                 return ToolResult.failure(

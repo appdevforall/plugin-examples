@@ -8,6 +8,7 @@ import com.itsaky.androidide.plugins.services.SharedServices
 import com.itsaky.androidide.plugins.PluginContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import java.io.File
@@ -325,5 +326,14 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend {
             currentModelPath = null
             context.logger.info("Model unloaded")
         }
+    }
+
+    /**
+     * Release all resources: cancel in-flight generation and free the native
+     * model. Called from AiCorePlugin.dispose().
+     */
+    fun close() {
+        scope.cancel()
+        unloadModel()
     }
 }
