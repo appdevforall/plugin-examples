@@ -15,6 +15,7 @@ class OpenFileHandler(
     override val toolName = "open_file"
     override val description = "Open a file in the IDE editor"
     override val requiresApproval = false
+    override val pathArgs = listOf("file_path")
 
     override suspend fun execute(args: Map<String, Any?>): ToolResult {
         val filePath = args["file_path"]?.toString()?.trim()

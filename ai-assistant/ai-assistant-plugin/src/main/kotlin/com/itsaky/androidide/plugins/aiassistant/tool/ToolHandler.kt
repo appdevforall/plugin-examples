@@ -29,4 +29,12 @@ interface ToolHandler {
      */
     val requiresApproval: Boolean
         get() = false
+
+    /**
+     * Arg keys whose values are filesystem paths. The Executor verifies each of
+     * these resolves within the project root before the tool runs, so no handler
+     * can forget the containment check. Empty by default (non-filesystem tools).
+     */
+    val pathArgs: List<String>
+        get() = emptyList()
 }

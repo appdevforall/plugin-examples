@@ -553,7 +553,7 @@ class ChatViewModel(
                     override fun onComplete(response: LlmInferenceService.LlmResponse) {
                         viewModelScope.launch(Dispatchers.IO) {
                             val durationMs = System.currentTimeMillis() - startTime
-                            val finalText = responseBuilder.toString()
+                            val finalText = response.text
 
                             // Mark message as completed with final text
                             launch(Dispatchers.Main) {

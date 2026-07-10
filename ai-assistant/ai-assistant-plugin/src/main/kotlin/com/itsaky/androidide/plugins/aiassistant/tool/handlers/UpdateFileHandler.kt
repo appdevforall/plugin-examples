@@ -14,6 +14,7 @@ class UpdateFileHandler(
     override val toolName = "update_file"
     override val description = "Update an existing file with new content"
     override val requiresApproval = true  // Requires approval for file modification
+    override val pathArgs = listOf("file_path")
 
     override suspend fun execute(args: Map<String, Any?>): ToolResult {
         val filePath = args["file_path"]?.toString()?.trim()

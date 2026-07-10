@@ -10,7 +10,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import java.io.File
 import java.io.FileOutputStream
 import java.util.concurrent.CompletableFuture
@@ -199,6 +198,8 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend {
                     "User: $prompt\nAssistant:"
                 }
 
+                val startTime = System.currentTimeMillis()
+
                 // Collect all tokens
                 val responseBuilder = StringBuilder()
                 var tokenCount = 0
@@ -216,7 +217,7 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend {
                 val responseText = responseBuilder.toString()
                 context.logger.info("Generated response: ${responseText.take(50)}... ($tokenCount tokens)")
 
-                future.complete(LlmResponse.success(responseText, tokenCount, System.currentTimeMillis()))
+                future.complete(LlmResponse.success(responseText, tokenCount, System.currentTimeMillis() - startTime))
             } catch (e: Exception) {
                 context.logger.error("Error during generation", e)
                 future.complete(LlmResponse.failure("Error: ${e.message}"))
@@ -264,6 +265,7 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend {
                     "User: $prompt\nAssistant:"
                 }
 
+                val startTime = System.currentTimeMillis()
                 var tokenCount = 0
                 val responseBuilder = StringBuilder()
 
@@ -278,7 +280,7 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend {
                     tokenCount++
                 }
 
-                callback.onComplete(LlmResponse.success(responseBuilder.toString(), tokenCount, System.currentTimeMillis()))
+                callback.onComplete(LlmResponse.success(responseBuilder.toString(), tokenCount, System.currentTimeMillis() - startTime))
             } catch (e: Exception) {
                 context.logger.error("Error during streaming generation", e)
                 callback.onError("Error: ${e.message}")
@@ -317,11 +319,10 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend {
         return generate(conversationBuilder.toString(), config)
     }
 
-    fun unloadModel() {
+    /** Suspending model unload — safe to call from any coroutine. */
+    private suspend fun unloadModelInternal() {
         if (modelLoaded) {
-            runBlocking {
-                llama.unload()
-            }
+            llama.unload()
             modelLoaded = false
             currentModelPath = null
             context.logger.info("Model unloaded")
@@ -329,11 +330,21 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend {
     }
 
     /**
-     * Release all resources: cancel in-flight generation and free the native
-     * model. Called from AiCorePlugin.dispose().
+     * Release all resources. Called from AiCorePlugin.dispose(), which may run on
+     * the main thread; llama.unload() drains a single-threaded native run loop and
+     * can block while inference is in flight, so it must never run via runBlocking
+     * on Main. Cancel generation, then unload on a background thread.
      */
     fun close() {
         scope.cancel()
-        unloadModel()
+        if (modelLoaded) {
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    unloadModelInternal()
+                } catch (e: Exception) {
+                    context.logger.error("Error unloading model during close()", e)
+                }
+            }
+        }
     }
 }

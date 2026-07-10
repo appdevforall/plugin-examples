@@ -75,17 +75,16 @@ See [BUILDING.md](BUILDING.md) for detailed setup instructions.
 
 **Prerequisites:**
 - Android SDK (API 33+)
-- Android NDK (r26+)
 - JDK 17+
-- **llama.cpp** sources, provided by the `subprojects/llama.cpp` git submodule (see [BUILDING.md](BUILDING.md#step-1-initialize-the-llamacpp-submodule))
+
+The native llama.cpp library ships prebuilt as `ai-core-plugin/libs/v8/llama-v8-release.aar`,
+so a normal build needs **no git submodule, NDK, or CMake**. (Those are only
+needed to regenerate that AAR — see [BUILDING.md](BUILDING.md#updating-llamacpp-regenerating-the-aar).)
 
 **Build Commands:**
 
 ```bash
-# 1. Initialize the llama.cpp submodule (once, from the repo root)
-git submodule update --init --recursive
-
-# 2. Build each plugin (release .cgp)
+# Build each plugin (release .cgp)
 ./gradlew :ai-core-plugin:assemblePlugin
 ./gradlew :ai-assistant-plugin:assemblePlugin
 ```

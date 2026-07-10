@@ -14,6 +14,7 @@ class CreateFileHandler(
     override val toolName = "create_file"
     override val description = "Create a new file with given content"
     override val requiresApproval = true  // Requires approval for file creation
+    override val pathArgs = listOf("file_path")
 
     override suspend fun execute(args: Map<String, Any?>): ToolResult {
         var filePath = args["file_path"]?.toString()?.trim()

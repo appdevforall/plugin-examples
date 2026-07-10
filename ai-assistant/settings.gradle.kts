@@ -34,7 +34,9 @@ dependencyResolutionManagement {
 
 rootProject.name = "ai-assistant"
 
-include(":llama-api")
-include(":llama-impl")
+if (file("subprojects/llama.cpp/CMakeLists.txt").exists()) {
+    include(":llama-api")
+    include(":llama-impl")
+}
 include(":ai-core-plugin")
 include(":ai-assistant-plugin")

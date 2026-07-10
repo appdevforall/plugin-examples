@@ -179,7 +179,11 @@ class ToolCallExtractor {
         private fun parseToolJson(jsonStr: String): ToolCall? {
             return try {
                 val json = JSONObject(jsonStr)
-                val toolName = json.optString("tool") ?: json.optString("name") ?: return null
+                val toolName = json.optString("tool").ifEmpty { json.optString("name") }
+                if (toolName.isEmpty()) {
+                    Log.w(TAG, "Tool JSON has neither 'tool' nor 'name': $jsonStr")
+                    return null
+                }
                 val argsJson = json.optJSONObject("args") ?: json.optJSONObject("arguments") ?: JSONObject()
 
                 val args = mutableMapOf<String, Any?>()

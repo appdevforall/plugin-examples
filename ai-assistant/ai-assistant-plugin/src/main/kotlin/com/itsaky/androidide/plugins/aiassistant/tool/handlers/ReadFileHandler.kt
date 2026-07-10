@@ -14,6 +14,7 @@ class ReadFileHandler(
     override val toolName = "read_file"
     override val description = "Read the contents of a file"
     override val requiresApproval = false
+    override val pathArgs = listOf("file_path", "path")
 
     override suspend fun execute(args: Map<String, Any?>): ToolResult {
         // Accept both "file_path" (standardized) and "path" (legacy LLM responses)

@@ -2,6 +2,7 @@ package com.itsaky.androidide.plugins.aiassistant.tool
 
 import android.util.Log
 import com.itsaky.androidide.plugins.aiassistant.models.ToolResult
+import com.itsaky.androidide.plugins.aiassistant.tool.handlers.PathGuard
 import com.itsaky.androidide.plugins.aiassistant.utils.ToolExecutionTracker
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -48,24 +49,24 @@ class Executor(
     suspend fun execute(toolCalls: List<ToolCall>): List<ToolResult> = coroutineScope {
         Log.i(TAG, "Executing ${toolCalls.size} tool call(s)...")
 
-        val (parallelCalls, sequentialCalls) = toolCalls.partition { call ->
-            PARALLEL_SAFE_TOOLS.contains(call.name)
+        val results = arrayOfNulls<ToolResult>(toolCalls.size)
+
+        // Read-only tools run concurrently.
+        val parallelJobs = toolCalls.mapIndexedNotNull { index, call ->
+            if (call.name in PARALLEL_SAFE_TOOLS) {
+                async { results[index] = executeCall(call, "Parallel") }
+            } else null
         }
 
-        // Execute parallel calls concurrently
-        val parallelResults = parallelCalls.map { call ->
-            async {
-                executeCall(call, "Parallel")
+        // Write tools run one at a time, in input order.
+        toolCalls.forEachIndexed { index, call ->
+            if (call.name !in PARALLEL_SAFE_TOOLS) {
+                results[index] = executeCall(call, "Sequential")
             }
         }
 
-        // Execute sequential calls one by one
-        val sequentialResults = mutableListOf<ToolResult>()
-        for (call in sequentialCalls) {
-            sequentialResults.add(executeCall(call, "Sequential"))
-        }
-
-        sequentialResults + parallelResults.awaitAll()
+        parallelJobs.awaitAll()
+        results.requireNoNulls().toList()
     }
 
     /**
@@ -104,6 +105,14 @@ class Executor(
             val message = "Missing required argument(s): ${missingArgs.joinToString(", ")}"
             Log.i(TAG, "($executionMode): Tool '$toolName' missing args: $missingArgs")
             return ToolResult.failure(message)
+        }
+
+        for (key in handler.pathArgs) {
+            val raw = normalizedArgs[key]?.toString()?.trim()
+            if (!raw.isNullOrEmpty() && PathGuard.resolveWithin(raw) == null) {
+                Log.w(TAG, "($executionMode): '$toolName' arg '$key' escapes project root: $raw")
+                return ToolResult.failure("Path '$raw' is outside the project directory")
+            }
         }
 
         // Check approval

@@ -180,7 +180,7 @@ class GeminiBackend(private val context: PluginContext) : LlmBackend {
                     } else {
                         val tokenCount = finalText.split("\\s+".toRegex()).size
                         context.logger.info("GeminiBackend: Streamed ${finalText.length} chars in $chunkCount chunks, ~$tokenCount tokens")
-                        callback.onComplete(LlmResponse.success(finalText, tokenCount, startTime))
+                        callback.onComplete(LlmResponse.success(finalText, tokenCount, System.currentTimeMillis() - startTime))
                     }
                 } finally {
                     responseStream.close()

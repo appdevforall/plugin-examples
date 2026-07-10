@@ -15,6 +15,7 @@ class SearchProjectHandler(
     override val toolName = "search_project"
     override val description = "Search for files by name or content in the project"
     override val requiresApproval = false
+    override val pathArgs = listOf("project_dir")
 
     override suspend fun execute(args: Map<String, Any?>): ToolResult {
         val query = args["query"]?.toString()?.trim()
