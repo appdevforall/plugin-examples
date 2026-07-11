@@ -36,12 +36,10 @@
 |-------|-------------|--------|
 | LeakCanary hijacked `monkey` app-launch | CLAUDE.md + learnings.md | Documented launching via `am start -n com.itsaky.androidide/.activities.SplashActivity` (Verification §; learnings "Android / adb") |
 | Pebble bare-tag newline-trim silently corrupts generated files | CLAUDE.md + learnings.md | Documented quoting values that must survive on their own line: `name: "${{APP_NAME \| lower}}"` (template-installer subsection; new learnings section) |
-| Glide plugin-icon disk cache shows stale icon after reinstall | learnings.md + Ticket (drafted) | Documented cache-clear (`adb root` + rm `image_manager_disk_cache`); drafted CoGo bug ticket (below) — not yet filed |
+| Glide plugin-icon disk cache shows stale icon after reinstall | learnings.md (bug already tracked) | Documented cache-clear (`adb root` + rm `image_manager_disk_cache`). Underlying CoGo bug is already filed as **ADFA-4446** (Glide load in `PluginListAdapter.kt` lacks a content signature) — no new ticket needed |
 | Per-plugin `libs/` and gradle-wrapper copies drift from repo | CLAUDE.md + code | Mandated repo-root shared `libs/` **and** a single repo-root Gradle wrapper; promoted the wrapper to root and pointed `flutter-template` at `../gradlew` / `../libs/*.jar`; deleted its local copies |
 
-**Drafted CoGo bug ticket (not yet filed):**
-> **Title:** Plugin Manager shows stale plugin icon after reinstall (Glide disk cache not invalidated)
-> **Description:** CoGo renders plugin icons through Glide's `image_manager_disk_cache`, keyed by file path with no mtime/content invalidation. Reinstalling a plugin under the same `plugin.id` with a changed `icon_day/night.png` keeps rendering the previous icon — the extracted file under `app_plugin_icons/<id>/` updates correctly, but the cached bitmap does not. Repro: install plugin A, reinstall a build with different icons under the same id → old icon persists until `cache/image_manager_disk_cache` is cleared and the app restarts. Fix: key the Glide load by content hash or mtime (or `signature()`/`skipMemoryCache`+`diskCacheStrategy.NONE` for plugin icons). Template thumbnails are unaffected (re-read from the `.cgt`).
+**Glide icon-cache bug — already tracked as [ADFA-4446](https://appdevforall.atlassian.net/browse/ADFA-4446)** (filed 2026-06-25). Root cause: `PluginListAdapter.kt` (~line 71) loads the extracted icon `File` with Glide and no cache signature, so `ObjectKey(File)` hashes the stable path and serves the old bitmap when content changes in place. Fix on file: `.signature(ObjectKey(iconFile.lastModified()))`. No new ticket was created; my session draft turned out to duplicate it.
 
 ## 2026-07-01 — Code review (PR #31) + AI Literacy Course ordering fix (PR #36)
 
