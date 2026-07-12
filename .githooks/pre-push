@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+#
+# pre-push nudge (ADFA-4678)
+#
+# Reminds the developer to run the Code On The Go plugin-review skill
+# (/plugin-review) before finishing a PR, so peer review isn't spent on
+# issues the skill catches automatically.
+#
+# This is a NUDGE, not a gate: it always exits 0 and never blocks a push.
+#
+# NOTE: git only honors a single core.hooksPath. This hook lives in the repo
+# but is NOT active until a contributor opts in once:
+#     ./scripts/setup-hooks.sh      (runs: git config core.hooksPath .githooks)
+
+set -euo pipefail
+
+# A plugin folder is any top-level dir whose build.gradle.kts applies the
+# plugin-builder Gradle plugin. Discover them dynamically so new plugins are
+# picked up automatically.
+plugin_dirs() {
+  local f
+  for f in */build.gradle.kts; do
+    [ -e "$f" ] || continue
+    if grep -q 'com.itsaky.androidide.plugins.build' "$f"; then
+      printf '%s\n' "${f%/build.gradle.kts}"
+    fi
+  done
+}
+
+# Determine the set of commits being pushed. git feeds pre-push one line per
+# ref on stdin: "<local ref> <local sha> <remote ref> <remote sha>".
+# For each pushed ref, diff its new commit against what the remote already has
+# (or against origin/main when the remote branch is brand new).
+zero='0000000000000000000000000000000000000000'
+changed_files=""
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ "$local_sha" = "$zero" ] && continue            # branch deletion; nothing to review
+
+  if [ "$remote_sha" = "$zero" ]; then
+    # New branch on the remote: compare against origin/main if we have it.
+    base="$(git rev-parse --verify --quiet origin/main || true)"
+    range="${base:+$base..}$local_sha"
+  else
+    range="$remote_sha..$local_sha"
+  fi
+
+  changed_files+="$(git diff --name-only "$range" 2>/dev/null || true)"$'\n'
+done
+
+# No stdin (e.g. manual invocation) or nothing to compare: fall back to the
+# diff against origin/main so the hook is still useful when run by hand.
+if [ -z "${changed_files//[$'\n\t ']/}" ]; then
+  base="$(git rev-parse --verify --quiet origin/main || true)"
+  [ -n "$base" ] && changed_files="$(git diff --name-only "$base...HEAD" 2>/dev/null || true)"
+fi
+
+# Which plugin folders were touched?
+mapfile -t all_plugins < <(plugin_dirs)
+touched=()
+for p in "${all_plugins[@]}"; do
+  if printf '%s\n' "$changed_files" | grep -q "^$p/"; then
+    touched+=("$p")
+  fi
+done
+
+# Clean skip: docs-only / libs-only / non-plugin pushes get no noise.
+[ ${#touched[@]} -eq 0 ] && exit 0
+
+yellow=$'\033[33m'; bold=$'\033[1m'; reset=$'\033[0m'
+{
+  echo
+  echo "${yellow}${bold}┌───────────────────────────────────────────────────────────────┐${reset}"
+  echo "${yellow}${bold}│  Reminder: run the plugin-review skill before opening your PR  │${reset}"
+  echo "${yellow}${bold}└───────────────────────────────────────────────────────────────┘${reset}"
+  echo "  You changed these plugin folder(s):"
+  for p in "${touched[@]}"; do
+    echo "    ${bold}• $p${reset}"
+  done
+  echo
+  echo "  In Claude Code, run:  ${bold}/plugin-review${reset}"
+  echo "  It builds, audits security, and scores against the submission rubric,"
+  echo "  catching issues (resource leaks, missing manifest entries, missing"
+  echo "  in-IDE help) that a clean build won't surface."
+  echo
+  echo "  (This is a reminder only — your push is proceeding.)"
+  echo
+} >&2
+
+exit 0

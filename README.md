@@ -34,6 +34,24 @@ cd Beepy
 
 The resulting `.cgp` file lands under the plugin's `build/plugin/` directory. Install it from inside CodeOnTheGo via the Plugin Manager.
 
+## Git hooks
+
+This repo ships a `pre-push` nudge in `.githooks/` that reminds you to run the
+plugin-review skill (`/plugin-review` in Claude Code) whenever you're pushing
+changes to a plugin folder. Running the skill before opening a PR keeps peer
+review focused on substance instead of issues the skill catches automatically
+(resource leaks, missing manifest entries, missing in-IDE help).
+
+Git honors only a single `core.hooksPath`, so the committed hook does nothing
+until you enable it once after cloning:
+
+```sh
+./scripts/setup-hooks.sh   # runs: git config core.hooksPath .githooks
+```
+
+The hook is a **reminder only** — it never blocks a push, and it stays quiet
+when your push doesn't touch any plugin folder.
+
 ## The `libs/` folder
 
 Every plugin depends on two jars produced by the CodeOnTheGo source tree:
