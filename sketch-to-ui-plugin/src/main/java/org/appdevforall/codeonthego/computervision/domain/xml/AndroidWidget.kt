@@ -2,6 +2,7 @@ package org.appdevforall.codeonthego.computervision.domain.xml
 
 import org.appdevforall.codeonthego.computervision.domain.model.ScaledBox
 import org.appdevforall.codeonthego.computervision.domain.parser.AttributeKey
+import org.appdevforall.codeonthego.computervision.domain.WidgetTagParser
 import org.appdevforall.codeonthego.computervision.utils.extractOcrEntries
 
 sealed class AndroidWidget(
@@ -259,12 +260,15 @@ class CheckBoxWidget(
 class SwitchWidget(
     override val box: ScaledBox, parsedAttrs: Map<String, String>
 ) : AndroidWidget(box, parsedAttrs) {
-    override val tag = AndroidWidgetTags.SWITCH
+    override val tag = AndroidWidgetTags.SWITCH_COMPAT
     override fun fallbackIdLabel(): String = "switch"
 
     override fun specificAttributes(): Map<String, String> {
         val attrs = mutableMapOf<String, String>()
-        val switchText = parsedAttrs[AttributeKey.TEXT.xmlName] ?: box.text.trim().takeIf { it.isNotEmpty() && it != box.label } ?: AndroidWidgetTags.SWITCH
+        val switchText = parsedAttrs[AttributeKey.TEXT.xmlName]
+            ?: box.text.trim().takeIf { it.isVisibleSwitchLabel(box.label) }
+                ?.normalizeCollapsedSwitchLabel()
+            ?: ""
 
         attrs[AttributeKey.TEXT.xmlName] = switchText
         attrs["tools:ignore"] = "HardcodedText"
@@ -273,6 +277,14 @@ class SwitchWidget(
             attrs[AttributeKey.CHECKED.xmlName] = parsedAttrs[AttributeKey.CHECKED.xmlName] ?: AndroidConstants.TRUE
         }
         return attrs
+    }
+
+    private fun String.isVisibleSwitchLabel(label: String): Boolean {
+        return isNotEmpty() && this != label && !WidgetTagParser.isTagSequence(this)
+    }
+
+    private fun String.normalizeCollapsedSwitchLabel(): String {
+        return replace(Regex("\\bRememberme\\b", RegexOption.IGNORE_CASE), "Remember me")
     }
 }
 
@@ -290,6 +302,19 @@ class InputWidget(
             AttributeKey.INPUT_TYPE.xmlName to resolvedInputType,
             "tools:ignore" to "HardcodedText"
         )
+    }
+
+    override fun processAttributes(context: XmlContext, id: String, attrs: Map<String, String>): Map<String, String> {
+        return super.processAttributes(context, id, attrs)
+            .filterNot { (key, value) ->
+                key == AttributeKey.TEXT.xmlName && shouldSuppressText(value, attrs)
+            }
+            .toMap()
+    }
+
+    private fun shouldSuppressText(text: String, attrs: Map<String, String>): Boolean {
+        return attrs[AttributeKey.INPUT_TYPE.xmlName]?.contains("textPassword", ignoreCase = true) == true ||
+            text.contains(Regex("\\b(?:layout|inputtype|textpassword|textcolor|textsize)\\b", RegexOption.IGNORE_CASE))
     }
 }
 

@@ -10,6 +10,7 @@ See the official [plugin documentation](https://www.appdevforall.org/codeonthego
 | -------------------------------------------------- | ----------------------------------------------------------------- |
 | [`Beepy/`](Beepy/)                                 | Plays a sound when a build starts, succeeds, or fails.            |
 | [`apk-viewer/`](apk-viewer/)                       | Inspects an APK's contents and surfaces a structural breakdown.   |
+| [`bookshelf/`](bookshelf/)                         | Adds reference textbooks (C, C++, Java, Kotlin, Android) accessible from CoGo's in-IDE Bookshelf help page. |
 | [`markdown-preview/`](markdown-preview/)           | Renders Markdown files with a live preview pane in the editor.    |
 | [`keystore-generator/`](keystore-generator/)       | Generates signing keystores from inside the IDE.                  |
 | [`snippets/`](snippets/)                           | Adds user-managed code snippets with prefix-triggered expansions. |
@@ -17,6 +18,10 @@ See the official [plugin documentation](https://www.appdevforall.org/codeonthego
 | [`icons-repository/`](icons-repository/)           | Browse a bundled Material icon catalog and import any icon as a Vector Drawable into the active project. |
 | [`client-time-tracker/`](client-time-tracker/)                       | Tracks billable coding sessions per project and generates PDF/Excel/CSV invoices. |
 | [`python-tools/`](python-tools/)                   | Adds Python + Flask project templates, with on-device Python install and run/install/test actions. |
+| [`rainbow-on-the-go/`](rainbow-on-the-go/)         | Colors matching parentheses, brackets, and braces by nesting depth, with light/dark palettes. |
+| [`compose-preview/`](compose-preview/)             | Renders Jetpack Compose `@Preview` functions on-device — no full app build or run. |
+| [`ai-literacy-course/`](ai-literacy-course/)       | Bundles Learn AI Anywhere's offline "Introduction to AI" course (26 videos + interactive activities) and plays it full-screen, fully offline. |
+| [`layout-editor/`](layout-editor/)                 | Visual drag-and-drop editor for Android XML layouts. |
 | [`maps/`](maps/)                                   | Offline OpenStreetMap: a "Maps" bottom-sheet tab to download OSM tiles and bundle them into your project for offline use. |
 
 ## Building a plugin

@@ -22,7 +22,9 @@ import com.itsaky.androidide.plugins.extensions.ToolbarAction;
 import com.itsaky.androidide.plugins.extensions.UIExtension;
 
 import com.itsaky.androidide.plugins.services.IdeProjectService;
+import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 
 public abstract class BasePlugin implements IPlugin, UIExtension, EditorTabExtension {
 
@@ -131,5 +133,9 @@ public abstract class BasePlugin implements IPlugin, UIExtension, EditorTabExten
     @Override
     public List<FabAction> getFabActions() {
         return null;
+    }
+
+    public Set<String> getHiddenToolbarActionIds() {
+        return Collections.emptySet();
     }
 }

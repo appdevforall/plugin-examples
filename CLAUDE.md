@@ -28,6 +28,11 @@ The script clones CoGo into `.cache/CodeOnTheGo/` on first run, rebuilds both ja
 
 `local.properties` must contain `sdk.dir=...`. The committed `local.properties` at the repo root is harmless leftover; each plugin needs its own.
 
+## Git workflow
+
+- **Always work on a branch.** Never commit directly to `main` — branch first (`git switch -c ...`) even for a one-line fix. Working on `main` is almost never right for this repo.
+- **Fetch before you diff against `main`.** Any time you compute or reason about a diff against `main` (code review, PR base, "what changed"), run `git fetch origin` first and compare against `origin/main`. A stale local `main` produces phantom findings — a `/code-review` here once flagged 3 issues that were outside the actual PR diff because local `main` was ~50 files behind `origin/main`. When a diff-against-main is requested, suggest fetching first.
+
 ## Architecture
 
 ### `libs/` is the load-bearing piece
@@ -65,15 +70,31 @@ This is intentional — the `application`-as-library packaging trips those check
 
 ### Asset downloads (rare)
 
-Some plugins (currently `ndk-installer-plugin`) register a `downloadAssets` task that fetches a tarball at build time with MD5 verification. `scripts/update-libs.sh` runs it automatically before `assemblePlugin` when the build file references it.
+Some plugins (`ndk-installer-plugin`, `ai-literacy-course`) register a `downloadAssets` task that fetches large files at build time with pinned-MD5 verification. These assets are **not committed to git** (e.g. `ai-literacy-course` pulls a ~110 MB course ZIP plus `pdfjs.zip`). `scripts/update-libs.sh` runs `downloadAssets` automatically before `assemblePlugin` when the build file references it.
+
+**Gotcha: a bare `./gradlew assemblePlugin` does NOT run `downloadAssets` and does not warn when the assets are missing** — it silently packages a broken `.cgp` (e.g. a course with no PDF viewer). When building such a plugin by hand, run `./gradlew downloadAssets assemblePlugin` (or the script), and confirm the expected files exist under `src/main/assets/` (or `unzip -l` the `.cgp`) before trusting it.
+
+### One-time on-device install markers
+
+Plugins that extract bundled assets on-device once (currently `ai-literacy-course`, via `CourseInstaller`) gate the work behind a marker file named from a version constant (`INSTALL_VERSION` → `.installed-vN`). If the marker for the current version exists, extraction **and** any post-extraction generation (e.g. `CourseShell.generate()`) are skipped entirely.
+
+**Any change to extraction OR post-extraction generation logic must bump `INSTALL_VERSION`.** Otherwise the change compiles and packages cleanly but has zero effect on existing installs — they keep the stale extracted tree, and it looks like "my fix didn't work" (costing a device round-trip). Bumping the constant forces a clean re-extract. On a device with a prior install, confirm the marker version changed (or wipe plugin data) before concluding a fix works — see Verification below.
+
+## Verification
+
+**`./gradlew assemblePlugin` succeeding is not verification** — it only proves the plugin compiles and packages. Real verification for these plugins is device-level: push the built `.cgp` to a connected emulator/device, install through CoGo's Plugin Manager, exercise the feature end-to-end, and observe the expected behavior (UI element appears, file written, build hook fires, DB row replaced, etc.).
+
+If device verification isn't possible in-session, say so explicitly rather than calling the change verified. Build success is necessary but never sufficient — this applies especially to plugins that mutate IDE state (`documentation.db`, settings, filesystem, project structure).
 
 ## Adding a new plugin
 
 1. Copy `random-xkcd/` — it's the canonical starting template (small but complete, includes the in-IDE help HTML pattern that submissions are expected to follow).
 2. Update `settings.gradle.kts` `rootProject.name`, `build.gradle.kts` `pluginBuilder { pluginName }` + `android { namespace, applicationId }`, and `src/main/AndroidManifest.xml` (`plugin.id`, `plugin.name`, `plugin.main_class`).
 3. Add a row to the README's Examples table.
-4. If your plugin should ship via the website, add it to the `MAP` array in `.github/workflows/build-plugins.yml` and `.github/workflows/update-libs.yml` so the filename mapping picks it up.
+4. If your plugin should ship via the website, add it to the `MAP` array in `.github/workflows/update-libs.yml` so the filename mapping picks it up. (`.github/workflows/build-plugins.yml` needs no change — it auto-discovers plugins by scanning `*/build.gradle.kts` for the plugin-builder Gradle plugin.)
 
 ## Plugin review skill
 
 `.claude/skills/plugin-review/` contains the `cogo-plugin-review` skill — invoke via `/plugin-review` or `/cotg-plugin-review` when the user asks to review, audit, or check a CoGo plugin for submission readiness. It builds, audits security, and scores against the submission rubric.
+
+**Proactively offer `/plugin-review`** (don't wait for the user to ask) after any substantive change to a plugin: importing a new plugin folder, modifying dependencies, touching the `IPlugin`/`PluginContext` API surface, adding shipped assets, or updating `libs/`. It has caught real defects (resource leaks, missing manifest entries, missing in-IDE help HTML) that aren't visible from a clean `assemblePlugin` build.

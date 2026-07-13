@@ -77,9 +77,9 @@ enum class AttributeKey(
     val aliases: List<String>,
     val valueType: ValueType = ValueType.RAW
 ) {
-    WIDTH("android:layout_width", listOf("layout_width", "width"), ValueType.DIMENSION),
+    WIDTH("android:layout_width", listOf("layout_width", "width", "layout_idth", "layaut_width"), ValueType.DIMENSION),
     HEIGHT("android:layout_height", listOf("layout_height", "height"), ValueType.DIMENSION),
-    ID("android:id", listOf("id"), ValueType.ID),
+    ID("android:id", listOf("id", "idl", "idi", "icl", "ld"), ValueType.ID),
     TEXT("android:text", listOf("text"), ValueType.TEXT_CONTENT),
     HINT("android:hint", listOf("hint"), ValueType.TEXT_CONTENT),
     BACKGROUND("android:background", listOf("background", "bg"), ValueType.COLOR),
@@ -88,7 +88,21 @@ enum class AttributeKey(
     CONTENT_DESCRIPTION("android:contentDescription", listOf("contentdescription", "content_description")),
 
     TEXT_SIZE("android:textSize", listOf("textsize", "text_size"), ValueType.SP_DIMENSION),
-    TEXT_COLOR("android:textColor", listOf("textcolor", "text_color", "color", "text_colar", "textcolar"), ValueType.COLOR),
+    TEXT_COLOR(
+        "android:textColor",
+        listOf(
+            "textcolor",
+            "text_color",
+            "text_calar",
+            "text_colar",
+            "text_colour",
+            "textcalar",
+            "textcolar",
+            "textcolour",
+            "color"
+        ),
+        ValueType.COLOR
+    ),
     TEXT_STYLE("android:textStyle", listOf("textstyle", "text_style"), ValueType.TEXT_STYLE),
     TEXT_ALIGNMENT("android:textAlignment", listOf("textalignment", "text_alignment")),
     TEXT_ALL_CAPS("android:textAllCaps", listOf("textallcaps", "text_all_caps")),
@@ -131,7 +145,7 @@ enum class AttributeKey(
     LAYOUT_MARGIN_RIGHT("android:layout_marginRight", listOf("layout_marginright", "layout_margin_right", "margin_right"), ValueType.DIMENSION),
 
     LAYOUT_WEIGHT("android:layout_weight", listOf("layout_weight", "weight"), ValueType.FLOAT),
-    LAYOUT_GRAVITY("android:layout_gravity", listOf("layout_gravity", "layaut_gravity")),
+    LAYOUT_GRAVITY("android:layout_gravity", listOf("layout_gravity", "layoutgravity", "layout_graity", "layoutgraity", "layaut_gravity", "layautgravity", "layaut_graity")),
     GRAVITY("android:gravity", listOf("gravity")),
     ORIENTATION("android:orientation", listOf("orientation")),
 

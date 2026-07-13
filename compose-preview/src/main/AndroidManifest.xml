@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application
+        android:label="@string/compose_preview_label"
+        android:theme="@style/PluginTheme">
+
+        <meta-data
+            android:name="plugin.id"
+            android:value="org.appdevforall.composepreview" />
+
+        <meta-data
+            android:name="plugin.name"
+            android:value="Jetpack Compose Preview" />
+
+        <meta-data
+            android:name="plugin.version"
+            android:value="${pluginVersion}" />
+
+        <meta-data
+            android:name="plugin.description"
+            android:value="Render Jetpack Compose @Preview composables on-device." />
+
+        <meta-data
+            android:name="plugin.author"
+            android:value="App Dev for All" />
+
+        <meta-data
+            android:name="plugin.min_ide_version"
+            android:value="1.0.0" />
+
+        <meta-data
+            android:name="plugin.permissions"
+            android:value="filesystem.read,project.structure,native.code" />
+
+        <meta-data
+            android:name="plugin.main_class"
+            android:value="org.appdevforall.composepreview.ComposePreviewPlugin" />
+
+        <meta-data
+            android:name="plugin.icon_day"
+            android:value="assets/icon_day.png" />
+
+        <meta-data
+            android:name="plugin.icon_night"
+            android:value="assets/icon_night.png" />
+
+    </application>
+</manifest>

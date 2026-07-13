@@ -1,6 +1,11 @@
 package org.appdevforall.codeonthego.computervision.domain
 
+import org.appdevforall.codeonthego.computervision.domain.model.DetectionLabels
 import org.appdevforall.codeonthego.computervision.domain.model.ScaledBox
+import org.appdevforall.codeonthego.computervision.domain.model.WidgetTypes
+import org.appdevforall.codeonthego.computervision.domain.widgettag.WidgetTagPrefixes
+import java.util.Collections
+import java.util.IdentityHashMap
 
 class WidgetAnnotationMatcher {
     internal fun matchAnnotationsToElements(
@@ -8,8 +13,8 @@ class WidgetAnnotationMatcher {
         uiElements: List<ScaledBox>,
         annotations: Map<String, String>
     ): Map<ScaledBox, String> {
-        val finalAnnotations = mutableMapOf<ScaledBox, String>()
-        val claimedWidgets = mutableSetOf<ScaledBox>()
+        val finalAnnotations = IdentityHashMap<ScaledBox, String>()
+        val claimedWidgets = Collections.newSetFromMap(IdentityHashMap<ScaledBox, Boolean>())
 
         val deduplicatedTags = canvasTags
             .distinctBy { WidgetTagParser.normalizeTagText(it.text) }
@@ -64,30 +69,37 @@ class WidgetAnnotationMatcher {
 
     internal fun isTag(text: String): Boolean = WidgetTagParser.isTag(text)
 
+    internal fun isTagLikeText(text: String): Boolean {
+        return WidgetTagParser.isTag(text) || WidgetTagParser.isTagSequence(text)
+    }
+
     private fun getTagType(tag: String): String? {
         return when {
-            tag.startsWith("B-") -> "button"
-            tag.startsWith("P-") -> "image_placeholder"
-            tag.startsWith("D-") -> "dropdown"
-            tag.startsWith("T-") -> "text_entry_box"
-            tag.startsWith("C-") -> "checkbox"
-            tag.startsWith("R-") -> "radio"
-            tag.startsWith("SW-") -> "switch"
-            tag.startsWith("S-") -> "slider"
+            tag.startsWith(WidgetTagPrefixes.BUTTON) -> WidgetTypes.BUTTON
+            tag.startsWith(WidgetTagPrefixes.IMAGE_PLACEHOLDER) -> WidgetTypes.IMAGE_PLACEHOLDER
+            tag.startsWith(WidgetTagPrefixes.DROPDOWN) -> WidgetTypes.DROPDOWN
+            tag.startsWith(WidgetTagPrefixes.TEXT_ENTRY) -> WidgetTypes.TEXT_ENTRY_BOX
+            tag.startsWith(WidgetTagPrefixes.CHECKBOX) -> WidgetTypes.CHECKBOX
+            tag.startsWith(WidgetTagPrefixes.RADIO) -> WidgetTypes.RADIO
+            tag.startsWith(WidgetTagPrefixes.SWITCH) -> WidgetTypes.SWITCH
+            tag.startsWith(WidgetTagPrefixes.SLIDER) -> WidgetTypes.SLIDER
             else -> null
         }
     }
 
-    private fun normalizeWidgetType(label: String): String = when {
-        label.startsWith("text_entry_box") -> "text_entry_box"
-        label.startsWith("button") -> "button"
-        label.startsWith("switch") -> "switch"
-        label.startsWith("checkbox") -> "checkbox"
-        label.startsWith("radio") -> "radio"
-        label.startsWith("dropdown") -> "dropdown"
-        label.startsWith("slider") -> "slider"
-        label.startsWith("image_placeholder") || label.startsWith("icon") -> "image_placeholder"
-        else -> label
+    private fun normalizeWidgetType(label: String): String {
+        return when {
+            label.startsWith(DetectionLabels.TEXT_ENTRY_BOX_PREFIX) -> WidgetTypes.TEXT_ENTRY_BOX
+            label.startsWith(DetectionLabels.BUTTON_PREFIX) -> WidgetTypes.BUTTON
+            label.startsWith(DetectionLabels.SWITCH_PREFIX) -> WidgetTypes.SWITCH
+            label.startsWith(DetectionLabels.CHECKBOX_PREFIX) -> WidgetTypes.CHECKBOX
+            label.startsWith(DetectionLabels.RADIO_BUTTON_PREFIX) -> WidgetTypes.RADIO
+            label.startsWith(DetectionLabels.DROPDOWN_PREFIX) -> WidgetTypes.DROPDOWN
+            label.startsWith(DetectionLabels.SLIDER_PREFIX) -> WidgetTypes.SLIDER
+            label.startsWith(DetectionLabels.IMAGE_PLACEHOLDER_PREFIX) ||
+                label.startsWith(DetectionLabels.ICON_PREFIX) -> WidgetTypes.IMAGE_PLACEHOLDER
+            else -> label
+        }
     }
 
     private fun findWidgetByOrdinalOrFallback(

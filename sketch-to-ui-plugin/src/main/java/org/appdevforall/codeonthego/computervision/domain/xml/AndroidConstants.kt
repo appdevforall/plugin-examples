@@ -13,6 +13,13 @@ object AndroidConstants {
     const val DEFAULT_TEXT_SIZE = "16sp"
 }
 
+object AndroidIdLabels {
+    const val CHECKBOX_GROUP = "cb_group"
+    const val RADIO_BUTTON = "radio_button"
+    const val RADIO_GROUP = "radio_group"
+    const val RADIO_BUTTON_GROUP = "rb_group"
+}
+
 object AndroidWidgetTags {
     const val LINEAR_LAYOUT = "LinearLayout"
     const val RADIO_GROUP = "RadioGroup"
@@ -23,6 +30,7 @@ object AndroidWidgetTags {
     const val CHECK_BOX = "CheckBox"
     const val RADIO_BUTTON = "RadioButton"
     const val SWITCH = "Switch"
+    const val SWITCH_COMPAT = "androidx.appcompat.widget.SwitchCompat"
     const val EDIT_TEXT = "EditText"
     const val SPINNER = "Spinner"
     const val SEEK_BAR = "SeekBar"
