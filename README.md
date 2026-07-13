@@ -22,6 +22,7 @@ See the official [plugin documentation](https://www.appdevforall.org/codeonthego
 | [`compose-preview/`](compose-preview/)             | Renders Jetpack Compose `@Preview` functions on-device — no full app build or run. |
 | [`ai-literacy-course/`](ai-literacy-course/)       | Bundles Learn AI Anywhere's offline "Introduction to AI" course (26 videos + interactive activities) and plays it full-screen, fully offline. |
 | [`layout-editor/`](layout-editor/)                 | Visual drag-and-drop editor for Android XML layouts. |
+| [`maps/`](maps/)                                   | Offline OpenStreetMap: a "Maps" bottom-sheet tab to download OSM tiles and bundle them into your project for offline use. |
 
 ## Building a plugin
 
