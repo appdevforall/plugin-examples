@@ -78,10 +78,10 @@
   </ul>
 
   <h2>3. Technical Architecture</h2>
-  <pre><code>ai-assistant-plugin  (UI, agent tool-loop)
+  <pre><code>ai-assistant  (UI, agent tool-loop)
         │  discovers via SharedServices
         ▼
-ai-core-plugin       (LlmInferenceService)
+ai-core       (LlmInferenceService)
         ├── LocalLlmBackend  ──► llama-impl ──► llama.cpp (native, JNI)
         └── GeminiBackend    ──► Google GenAI SDK (HTTPS)</code></pre>
   <ul>
@@ -97,12 +97,13 @@ ai-core-plugin       (LlmInferenceService)
 
   <h2>4. Usage</h2>
   <h3>Build</h3>
-  <pre><code>git submodule update --init --recursive
-./gradlew :ai-core-plugin:assemblePlugin
-./gradlew :ai-assistant-plugin:assemblePlugin</code></pre>
-  <p>Outputs land at <code>ai-core-plugin/build/plugin/ai-core.cgp</code> and
-  <code>ai-assistant-plugin/build/plugin/ai-assistant.cgp</code>. See
-  <code>BUILDING.md</code> for full prerequisites.</p>
+  <p><b>ai-core</b> and <b>ai-assistant</b> are independent Gradle builds; a
+  normal build needs no submodule or NDK (the llama.cpp AAR ships prebuilt).</p>
+  <pre><code>cd ai-core       &amp;&amp; ./gradlew assemblePlugin
+cd ../ai-assistant &amp;&amp; ./gradlew assemblePlugin</code></pre>
+  <p>Outputs land at <code>ai-core/build/plugin/ai-core.cgp</code> and
+  <code>ai-assistant/build/plugin/ai-assistant.cgp</code>. See
+  <code>../ai-core/BUILDING.md</code> for full prerequisites.</p>
   <h3>Install &amp; configure</h3>
   <ul>
     <li>Copy both <code>.cgp</code> files to the device and install via the CoGo

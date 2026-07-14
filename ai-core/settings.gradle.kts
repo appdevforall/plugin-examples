@@ -32,4 +32,13 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "ai-assistant"
+rootProject.name = "ai-core"
+
+// The llama.cpp native modules are only needed to regenerate the prebuilt
+// AAR under libs/ (see scripts/rebuild-llama-aar.sh). A normal plugin build
+// consumes the committed AAR and needs neither the submodule nor the NDK, so
+// they are included only when the submodule is checked out.
+if (file("subprojects/llama.cpp/CMakeLists.txt").exists()) {
+    include(":llama-api")
+    include(":llama-impl")
+}

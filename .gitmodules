@@ -1,4 +1,4 @@
-[submodule "ai-assistant/subprojects/llama.cpp"]
-	path = ai-assistant/subprojects/llama.cpp
+[submodule "ai-core/subprojects/llama.cpp"]
+	path = ai-core/subprojects/llama.cpp
 	url = https://github.com/appdevforall/llama.cpp.git
 	branch = androidide-custom

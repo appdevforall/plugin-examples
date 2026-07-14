@@ -3,7 +3,7 @@
 This guide explains how to build the AI assistant plugins.
 
 > **TL;DR** — A normal build needs only the Android SDK + JDK 17. The native
-> llama.cpp library ships **prebuilt** as `ai-core-plugin/libs/v8/llama-v8-release.aar`,
+> llama.cpp library ships **prebuilt** as `ai-core/libs/v8/llama-v8-release.aar`,
 > so you do **not** need the git submodule, the NDK, or CMake to build the
 > plugins. Those are only required when *regenerating* that AAR (see
 > [Updating llama.cpp](#updating-llamacpp-regenerating-the-aar)).
@@ -29,7 +29,8 @@ This guide explains how to build the AI assistant plugins.
 
 ## Step 1: Configure the Android SDK
 
-Create or update `local.properties` in the `ai-assistant/` directory:
+Create or update `local.properties` in **each plugin directory** you build
+(`ai-core/` and, for the frontend, `ai-assistant/`):
 
 ```properties
 # Path to Android SDK (required)
@@ -40,9 +41,9 @@ ndk.dir=/Users/your-username/Library/Android/sdk/ndk/27.0.12077973
 ```
 
 That's the only setup a normal build needs. The native llama.cpp library is
-already committed as `ai-core-plugin/libs/v8/llama-v8-release.aar` (the JNI
+already committed as `ai-core/libs/v8/llama-v8-release.aar` (the JNI
 wrapper plus `.so` files for arm64-v8a, armeabi-v7a, x86 and x86_64), with its
-tiny interface jar at `ai-core-plugin/libs/llama-api.jar`.
+tiny interface jar at `ai-core/libs/llama-api.jar`.
 
 ---
 
@@ -50,23 +51,24 @@ tiny interface jar at `ai-core-plugin/libs/llama-api.jar`.
 
 ### Option A: Build via Gradle (Recommended)
 
-```bash
-cd plugin-examples/ai-assistant
+`ai-core` and `ai-assistant` are **independent** Gradle builds — build each in
+its own directory:
 
-# Build each plugin as a release .cgp
-./gradlew :ai-core-plugin:assemblePlugin
-./gradlew :ai-assistant-plugin:assemblePlugin
+```bash
+# release .cgp for each plugin
+cd plugin-examples/ai-core     && ./gradlew assemblePlugin
+cd ../ai-assistant             && ./gradlew assemblePlugin
 
 # Debug variant
-./gradlew :ai-core-plugin:assemblePluginDebug
+cd plugin-examples/ai-core     && ./gradlew assemblePluginDebug
 ```
 
 ### Option B: Build via Android Studio
 
 1. Open Android Studio
-2. **File → Open** → Select `plugin-examples/ai-assistant/`
+2. **File → Open** → Select `plugin-examples/ai-core/` (or `plugin-examples/ai-assistant/`)
 3. Wait for Gradle sync
-4. Run the `assemblePlugin` task for each module from the Gradle panel
+4. Run the `assemblePlugin` task from the Gradle panel
 
 ---
 
@@ -77,8 +79,8 @@ cd plugin-examples/ai-assistant
 `assemblePlugin` writes ready-to-install `.cgp` files directly:
 
 ```
-ai-core-plugin/build/plugin/ai-core.cgp
-ai-assistant-plugin/build/plugin/ai-assistant.cgp
+ai-core/build/plugin/ai-core.cgp
+ai-assistant/build/plugin/ai-assistant.cgp
 ```
 
 No renaming needed.
@@ -87,8 +89,8 @@ No renaming needed.
 
 ```bash
 # Push plugins to device
-adb push ai-core-plugin/build/plugin/ai-core.cgp /sdcard/Download/
-adb push ai-assistant-plugin/build/plugin/ai-assistant.cgp /sdcard/Download/
+adb push ai-core/build/plugin/ai-core.cgp /sdcard/Download/
+adb push ai-assistant/build/plugin/ai-assistant.cgp /sdcard/Download/
 
 # Then install via CodeOnTheGo Plugin Manager:
 # 1. Open CodeOnTheGo app
@@ -107,10 +109,9 @@ You only need this when your llama.cpp fork changes. It requires the NDK/CMake
 toolchain and the submodule; a normal build does not.
 
 ```bash
-cd plugin-examples/ai-assistant
-
-# One command: inits the submodule, compiles :llama-impl + :llama-api from
-# source, and copies the fresh artifacts into ai-core-plugin/libs/.
+# Run from the ai-core plugin dir. One command: inits the submodule, compiles
+# :llama-impl + :llama-api from source, copies fresh artifacts into ai-core/libs/.
+cd plugin-examples/ai-core
 ./scripts/rebuild-llama-aar.sh
 
 # To point at a specific fork commit first:
@@ -119,8 +120,8 @@ git -C subprojects/llama.cpp checkout <commit-or-branch>
 ./scripts/rebuild-llama-aar.sh
 ```
 
-Then commit the refreshed `ai-core-plugin/libs/v8/llama-v8-release.aar` and
-`ai-core-plugin/libs/llama-api.jar`. The `:llama-impl` / `:llama-api` Gradle
+Then commit the refreshed `ai-core/libs/v8/llama-v8-release.aar` and
+`ai-core/libs/llama-api.jar`. The `:llama-impl` / `:llama-api` Gradle
 modules load only while the submodule is checked out, so they never affect a
 normal build.
 
@@ -138,7 +139,7 @@ The prebuilt AAR bundles arm64-v8a, armeabi-v7a, x86 and x86_64. If you rebuilt
 it with a restricted ABI set, confirm your device's ABI is included:
 
 ```bash
-unzip -l ai-core-plugin/libs/v8/llama-v8-release.aar | grep 'jni/'
+unzip -l ai-core/libs/v8/llama-v8-release.aar | grep 'jni/'
 ```
 
 ### llama.cpp Not Found (only when regenerating the AAR)
@@ -296,7 +297,7 @@ Regeneration path (only when rebuilding the AAR from source):
 ```
 llama-impl → llama.cpp (native, git submodule)
 llama-api  → interfaces
-   ⇒ scripts/rebuild-llama-aar.sh copies their output into ai-core-plugin/libs/
+   ⇒ scripts/rebuild-llama-aar.sh copies their output into ai-core/libs/
 ```
 
 Both plugins depend on `plugin-api` from the parent `plugin-examples/libs/` directory.
@@ -324,10 +325,9 @@ cd ../llama.cpp
 git fetch origin
 git merge origin/master
 
-# Resolve any conflicts in Android-specific code
-# Test the build
-cd ../plugin-examples/ai-assistant
-./gradlew assembleV8Debug
+# Resolve any conflicts in Android-specific code, then regenerate the AAR
+cd ../plugin-examples/ai-core
+./scripts/rebuild-llama-aar.sh
 ```
 
 ---
@@ -341,8 +341,8 @@ cd ../plugin-examples/ai-assistant
 ./gradlew assembleV8Release
 
 # Outputs with ProGuard/R8 optimization
-ai-core-plugin/build/outputs/apk/v8/release/ai-core-plugin-v8-release.apk
-ai-assistant-plugin/build/outputs/apk/v8/release/ai-assistant-plugin-v8-release.apk
+ai-core/build/outputs/apk/v8/release/ai-core-plugin-v8-release.apk
+ai-assistant/build/outputs/apk/v8/release/ai-assistant-plugin-v8-release.apk
 ```
 
 ### Code Signing
