@@ -27,6 +27,7 @@ See the official [plugin documentation](https://www.appdevforall.org/codeonthego
 | [`flutter-template/`](flutter-template/)           | Adds Flutter starter project templates (Basic, BLoC, Provider, GetX, Riverpod) to the New Project screen. |
 | [`code-suggestions-plugin/`](code-suggestions-plugin/) | Inline ghost-text code completions powered by AI. |
 | [`speech-to-text-plugin/`](speech-to-text-plugin/) | Voice-to-code: converts speech to code with AI generation. |
+| [`vector-search-plugin/`](vector-search-plugin/) | Semantic code search using embeddings and vector similarity. |
 
 ## Building a plugin
 

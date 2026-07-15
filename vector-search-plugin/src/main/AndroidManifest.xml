@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.itsaky.androidide.plugins.vectorsearch">
+
+    <application
+        android:label="Vector Search Plugin"
+        android:theme="@style/PluginTheme">
+
+        <!-- Plugin metadata -->
+        <meta-data
+            android:name="plugin.id"
+            android:value="com.itsaky.androidide.plugins.vectorsearch" />
+
+        <meta-data
+            android:name="plugin.name"
+            android:value="Vector Search (Built: 20260702_110712)" />
+
+        <meta-data
+            android:name="plugin.version"
+            android:value="${pluginVersion}" />
+
+        <meta-data
+            android:name="plugin.description"
+            android:value="Semantic code search using embeddings and vector similarity" />
+
+        <meta-data
+            android:name="plugin.author"
+            android:value="AndroidIDE" />
+
+        <meta-data
+            android:name="plugin.min_ide_version"
+            android:value="1.0.0" />
+
+        <meta-data
+            android:name="plugin.permissions"
+            android:value="filesystem.read,project.structure" />
+
+        <meta-data
+            android:name="plugin.main_class"
+            android:value="com.itsaky.androidide.plugins.vectorsearch.VectorSearchPlugin" />
+
+        <meta-data
+            android:name="icon_day"
+            android:value="@drawable/icon_day" />
+
+        <meta-data
+            android:name="icon_night"
+            android:value="@drawable/icon_night" />
+
+    </application>
+
+</manifest>
