@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Active/recording state: three equalizer bars that scale vertically and loop
+  forever (repeatCount="infinite"). The host starts this AnimatedVectorDrawable
+  automatically when it is placed on the toolbar. The bar colors are tinted by
+  the toolbar at render time, so the fillColor here is just a placeholder.
+-->
+<animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt">
+
+    <aapt:attr name="android:drawable">
+        <vector
+            android:width="24dp"
+            android:height="24dp"
+            android:viewportWidth="24"
+            android:viewportHeight="24">
+            <group
+                android:name="bar1"
+                android:pivotX="6"
+                android:pivotY="12">
+                <path
+                    android:name="p1"
+                    android:fillColor="#000000"
+                    android:pathData="M5,7 h2 v10 h-2 z"/>
+            </group>
+            <group
+                android:name="bar2"
+                android:pivotX="12"
+                android:pivotY="12">
+                <path
+                    android:name="p2"
+                    android:fillColor="#000000"
+                    android:pathData="M11,4 h2 v16 h-2 z"/>
+            </group>
+            <group
+                android:name="bar3"
+                android:pivotX="18"
+                android:pivotY="12">
+                <path
+                    android:name="p3"
+                    android:fillColor="#000000"
+                    android:pathData="M17,7 h2 v10 h-2 z"/>
+            </group>
+        </vector>
+    </aapt:attr>
+
+    <target android:name="bar1">
+        <aapt:attr name="android:animation">
+            <objectAnimator
+                android:propertyName="scaleY"
+                android:duration="500"
+                android:valueFrom="0.35"
+                android:valueTo="1.0"
+                android:valueType="floatType"
+                android:repeatCount="infinite"
+                android:repeatMode="reverse"
+                android:interpolator="@android:interpolator/accelerate_decelerate"/>
+        </aapt:attr>
+    </target>
+
+    <target android:name="bar2">
+        <aapt:attr name="android:animation">
+            <objectAnimator
+                android:propertyName="scaleY"
+                android:duration="720"
+                android:valueFrom="1.0"
+                android:valueTo="0.4"
+                android:valueType="floatType"
+                android:repeatCount="infinite"
+                android:repeatMode="reverse"
+                android:interpolator="@android:interpolator/accelerate_decelerate"/>
+        </aapt:attr>
+    </target>
+
+    <target android:name="bar3">
+        <aapt:attr name="android:animation">
+            <objectAnimator
+                android:propertyName="scaleY"
+                android:duration="620"
+                android:valueFrom="0.5"
+                android:valueTo="1.0"
+                android:valueType="floatType"
+                android:repeatCount="infinite"
+                android:repeatMode="reverse"
+                android:interpolator="@android:interpolator/accelerate_decelerate"/>
+        </aapt:attr>
+    </target>
+</animated-vector>

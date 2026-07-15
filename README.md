@@ -26,6 +26,7 @@ See the official [plugin documentation](https://www.appdevforall.org/codeonthego
 | [`ai-assistant/`](ai-assistant/)                   | In-IDE AI chat assistant with tool calling; talks to `ai-core` for inference over local or Gemini models. |
 | [`flutter-template/`](flutter-template/)           | Adds Flutter starter project templates (Basic, BLoC, Provider, GetX, Riverpod) to the New Project screen. |
 | [`code-suggestions-plugin/`](code-suggestions-plugin/) | Inline ghost-text code completions powered by AI. |
+| [`speech-to-text-plugin/`](speech-to-text-plugin/) | Voice-to-code: converts speech to code with AI generation. |
 
 ## Building a plugin
 
