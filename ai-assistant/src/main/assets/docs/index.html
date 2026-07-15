@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Assistant — Guide</title>
+<style>
+  body {
+    background: #ffffff;
+    color: #000000;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+    margin: 0;
+    padding: 1.25rem;
+    max-width: 760px;
+  }
+  h1 { font-size: 1.5rem; margin: 0 0 0.75rem; }
+  h2 { font-size: 1.15rem; margin: 1.5rem 0 0.5rem; }
+  code {
+    background: #f4f4f4;
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.9em;
+  }
+  ul { padding-left: 1.25rem; }
+  li { margin: 0.25rem 0; }
+  .note {
+    border-left: 3px solid #999;
+    padding: 0.25rem 0.75rem;
+    margin: 1rem 0;
+    background: #fafafa;
+  }
+</style>
+</head>
+<body>
+  <h1>AI Assistant — Agent Guide</h1>
+
+  <p>The <b>Agent</b> tab is a chat assistant that can read, search, and edit
+  your project through an approval-gated tool loop. Inference is served by the
+  companion <b>AI Core</b> plugin, so install <b>AI Core first</b>.</p>
+
+  <h2>Choosing a backend</h2>
+  <ul>
+    <li><b>Local (on-device)</b> — runs a <code>.gguf</code> model via
+      llama.cpp. Open <b>Settings</b>, pick a model file from your Downloads
+      folder. Nothing leaves the device.</li>
+    <li><b>Gemini (cloud)</b> — enter a Gemini API key in <b>Settings</b>.
+      Prompts and any file contents the agent reads are sent to Google over
+      HTTPS.</li>
+  </ul>
+
+  <h2>What the agent can do</h2>
+  <ul>
+    <li>Read and search files <b>within the current project</b>.</li>
+    <li>Create and update files (asks for approval before writing).</li>
+    <li>Trigger a Gradle sync and read build output.</li>
+    <li>Add dependencies and generate code from templates.</li>
+  </ul>
+
+  <div class="note">
+    File tools are confined to the project root: paths that resolve outside it
+    are rejected, so the model cannot read or overwrite arbitrary files on the
+    device.
+  </div>
+
+  <h2>Context-menu actions</h2>
+  <p>Select code in the editor and open the context menu for
+  <b>Explain Code</b> and <b>Generate Code</b> shortcuts.</p>
+
+  <h2>Troubleshooting</h2>
+  <ul>
+    <li><b>"No model configured"</b> — select a <code>.gguf</code> file (Local)
+      or set an API key (Gemini) in Settings.</li>
+    <li><b>Gemini errors</b> — check the API key, network connection, and quota.</li>
+    <li><b>Agent tab missing</b> — confirm both AI Core and AI Assistant are
+      installed and the IDE was restarted.</li>
+  </ul>
+</body>
+</html>
