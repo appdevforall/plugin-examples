@@ -5,11 +5,8 @@ import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import android.content.Context
 import android.util.Log
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import java.io.File
 import java.nio.ByteBuffer
-import java.util.concurrent.atomic.AtomicBoolean
 
 private const val TAG = "EmbeddingIndexing"
 
@@ -48,7 +45,6 @@ class EmbeddingsDbHelper(context: Context) : SQLiteOpenHelper(context, "embeddin
 class EmbeddingIndexingService(private val context: Context) {
 
     private val dbHelper = EmbeddingsDbHelper(context)
-    private val isIndexing = AtomicBoolean(false)
 
     /**
      * Stores a pre-computed embedding in the database.
@@ -71,6 +67,10 @@ class EmbeddingIndexingService(private val context: Context) {
      */
     fun collectFiles(projectRoot: File, maxFiles: Int = 500): List<File> {
         return collectCodeFiles(projectRoot, maxFiles)
+    }
+
+    fun languageFor(file: File): String {
+        return getLanguageFromExtension(file.extension)
     }
 
     /**
