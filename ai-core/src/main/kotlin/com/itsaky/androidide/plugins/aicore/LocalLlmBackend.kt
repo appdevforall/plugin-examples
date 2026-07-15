@@ -148,11 +148,22 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend {
         // Resolve content URI to actual file path
         val resolvedPath = resolveContentUriToPath(modelPath)
         if (resolvedPath == null) {
-            throw IllegalStateException("Could not read the selected model file. Re-select the .gguf model in AI Settings.")
+            throw ModelNotConfiguredException("Could not read the selected model file. Re-select the .gguf model in AI Settings.")
         }
 
         if (modelLoaded && currentModelPath == resolvedPath) {
             return // Already loaded
+        }
+
+        // Guard the chat path against encoder-only embedding models. Running causal generation on
+        // one aborts natively (SIGABRT) and takes the IDE down. Classify BEFORE unloading any
+        // working chat model, so a wrong selection never tears down a good one. See ADFA-4388.
+        val kind = GgufModelInspector.classify(resolvedPath)
+        if (kind.isEmbeddingOnly) {
+            throw IncompatibleModelException(
+                "The selected model is an embedding model and can't be used for chat. " +
+                    "Choose a chat model in AI Settings."
+            )
         }
 
         // Unload old model if loaded
@@ -235,6 +246,9 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend {
                 future.complete(LlmResponse.success(responseText, tokenCount, System.currentTimeMillis() - startTime))
             } catch (e: Exception) {
                 context.logger.error("Error during generation", e)
+                if (e is ModelNotConfiguredException || e is IncompatibleModelException) {
+                    UserFeedback.notify(context.androidContext, e.message ?: "Local LLM is not configured.")
+                }
                 future.complete(LlmResponse.failure("Error: ${e.message}"))
             }
         }
@@ -298,6 +312,9 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend {
                 callback.onComplete(LlmResponse.success(responseBuilder.toString(), tokenCount, System.currentTimeMillis() - startTime))
             } catch (e: Exception) {
                 context.logger.error("Error during streaming generation", e)
+                if (e is ModelNotConfiguredException || e is IncompatibleModelException) {
+                    UserFeedback.notify(context.androidContext, e.message ?: "Local LLM is not configured.")
+                }
                 callback.onError("Error: ${e.message}")
             }
         }
