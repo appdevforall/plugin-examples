@@ -2,7 +2,7 @@ package com.itsaky.androidide.plugins.aicore
 
 import android.llama.cpp.LLamaAndroid
 import android.net.Uri
-import android.provider.DocumentsContract
+import android.provider.OpenableColumns
 import com.itsaky.androidide.plugins.services.LlmInferenceService.*
 import com.itsaky.androidide.plugins.services.SharedServices
 import com.itsaky.androidide.plugins.PluginContext
@@ -49,91 +49,106 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend {
     }
 
     /**
-     * Resolves a content URI to an actual file path that native code can access.
-     * If the URI points to a real file, returns the file path. Otherwise, returns null.
+     * Resolves the user-selected model reference to a real filesystem path the native
+     * loader can `fopen`.
+     *
+     * - A plain path is returned as-is.
+     * - A `content://` URI (what SAF `OpenDocument` returns, held with persistable read
+     *   permission) is streamed into a private cache file and that path is returned.
+     *
+     * IMPORTANT: this loads *exactly* the file the user selected. It must never fall back
+     * to "some other .gguf on disk" — doing so silently loads the wrong model (e.g. an
+     * embedding model), which aborts native inference and takes the IDE down. See ADFA-4388.
      */
     private fun resolveContentUriToPath(uriString: String): String? {
         if (!uriString.startsWith("content://")) {
-            return uriString // Already a file path
+            return uriString // Already a real file path
         }
 
         val uri = Uri.parse(uriString)
-        context.logger.info("Resolving content URI: $uri")
+        context.logger.info("Resolving selected model URI: $uri")
 
+        val resolver = context.androidContext.contentResolver
+
+        // Read the selected document's display name + size (used to key the cache copy).
+        var displayName = "model.gguf"
+        var size = -1L
         try {
-            // Try to get the actual file path using DocumentsContract
-            if (DocumentsContract.isDocumentUri(context.androidContext, uri)) {
-                val docId = DocumentsContract.getDocumentId(uri)
-                context.logger.debug("Document ID: $docId")
-
-                // For downloads provider, the path is typically in the downloads folder
-                if (uri.authority == "com.android.providers.downloads.documents") {
-                    // The docId for downloads provider can be in different formats
-                    // Try to construct the file path
-                    val downloadsDir = android.os.Environment.getExternalStoragePublicDirectory(
-                        android.os.Environment.DIRECTORY_DOWNLOADS
-                    )
-
-                    // Try common patterns for file names in downloads
-                    // The docId might be a number (media store ID) or "msf:number" or "raw:/path"
-                    val filePath = when {
-                        docId.startsWith("raw:") -> {
-                            docId.substring(4) // Remove "raw:" prefix
-                        }
-                        docId.startsWith("msf:") -> {
-                            // This is a media store file ID, we need to query it
-                            // For now, try to find .gguf files in downloads
-                            findGgufFileInDownloads(downloadsDir)
-                        }
-                        else -> {
-                            // Might be a direct file ID, try downloads folder
-                            findGgufFileInDownloads(downloadsDir)
-                        }
-                    }
-
-                    if (filePath != null && File(filePath).exists()) {
-                        context.logger.info("Resolved to file path: $filePath")
-                        return filePath
+            resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null)
+                ?.use { c ->
+                    if (c.moveToFirst()) {
+                        val nameIdx = c.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                        val sizeIdx = c.getColumnIndex(OpenableColumns.SIZE)
+                        if (nameIdx >= 0 && !c.isNull(nameIdx)) displayName = c.getString(nameIdx)
+                        if (sizeIdx >= 0 && !c.isNull(sizeIdx)) size = c.getLong(sizeIdx)
                     }
                 }
-            }
         } catch (e: Exception) {
-            context.logger.error("Error resolving content URI", e)
+            context.logger.warn("Could not query model metadata for $uri: ${e.message}")
         }
 
-        return null
+        // Deterministic cache path keyed by URI + size, so the same selection reuses the
+        // same copy and a different selection can never collide with it.
+        val modelsDir = File(context.androidContext.filesDir, "llm-models").apply { mkdirs() }
+        val safeName = displayName.replace(Regex("[^A-Za-z0-9._-]"), "_")
+        val cacheFile = File(modelsDir, "${kotlin.math.abs(uriString.hashCode())}_${size}_$safeName")
+
+        // Reuse a complete prior copy.
+        if (cacheFile.exists() && (size < 0 || cacheFile.length() == size)) {
+            context.logger.info("Using cached model copy: ${cacheFile.absolutePath}")
+            pruneOtherModels(modelsDir, cacheFile)
+            return cacheFile.absolutePath
+        }
+
+        // Materialize the selected URI into the cache. Copy to a temp file then rename, so an
+        // interrupted copy can't be mistaken for a complete model on the next launch.
+        return try {
+            context.logger.info("Copying selected model into app storage: $displayName ($size bytes)")
+            val tmp = File(modelsDir, cacheFile.name + ".tmp")
+            val copied = resolver.openInputStream(uri)?.use { input ->
+                FileOutputStream(tmp).use { output -> input.copyTo(output, 1 shl 20) }
+            }
+            if (copied == null) {
+                context.logger.error("Could not open input stream for selected model $uri")
+                tmp.delete()
+                return null
+            }
+            if (size >= 0 && tmp.length() != size) {
+                context.logger.error("Model copy incomplete: expected $size bytes, got ${tmp.length()}")
+                tmp.delete()
+                return null
+            }
+            if (!tmp.renameTo(cacheFile)) {
+                tmp.copyTo(cacheFile, overwrite = true)
+                tmp.delete()
+            }
+            pruneOtherModels(modelsDir, cacheFile)
+            context.logger.info("Model ready at ${cacheFile.absolutePath}")
+            cacheFile.absolutePath
+        } catch (e: Exception) {
+            context.logger.error("Failed to copy selected model into app storage", e)
+            null
+        }
     }
 
     /**
-     * Scans the downloads directory for .gguf files and returns the first one found.
-     * This is a fallback when we can't directly resolve the content URI.
+     * Keeps only the active model copy in the cache dir. Model files are large, and we only
+     * ever need the currently-selected one on disk. Deleting a file that native code has
+     * already mmap'd is safe on Android — the mapping stays valid until the model is freed.
      */
-    private fun findGgufFileInDownloads(downloadsDir: File): String? {
-        if (!downloadsDir.exists() || !downloadsDir.isDirectory) {
-            context.logger.warn("Downloads directory not found: ${downloadsDir.absolutePath}")
-            return null
+    private fun pruneOtherModels(modelsDir: File, keep: File) {
+        modelsDir.listFiles()?.forEach { f ->
+            if (f.absolutePath != keep.absolutePath && f.delete()) {
+                context.logger.debug("Pruned old model copy: ${f.name}")
+            }
         }
-
-        val ggufFiles = downloadsDir.listFiles { file ->
-            file.isFile && file.name.endsWith(".gguf", ignoreCase = true)
-        }
-
-        if (ggufFiles != null && ggufFiles.isNotEmpty()) {
-            // Return the most recently modified .gguf file
-            val latestFile = ggufFiles.maxByOrNull { it.lastModified() }
-            context.logger.info("Found .gguf file in downloads: ${latestFile?.absolutePath}")
-            return latestFile?.absolutePath
-        }
-
-        context.logger.warn("No .gguf files found in downloads directory")
-        return null
     }
 
     private suspend fun ensureModelLoaded(modelPath: String) {
         // Resolve content URI to actual file path
         val resolvedPath = resolveContentUriToPath(modelPath)
         if (resolvedPath == null) {
-            throw IllegalStateException("Could not resolve model path: $modelPath. Make sure the .gguf file is in the Downloads folder.")
+            throw IllegalStateException("Could not read the selected model file. Re-select the .gguf model in AI Settings.")
         }
 
         if (modelLoaded && currentModelPath == resolvedPath) {
