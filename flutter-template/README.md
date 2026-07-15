@@ -48,5 +48,7 @@ lower-cased for `pubspec.yaml`'s `name:` field.
 
 ## Credit
 
-Contributed by **Ali** via the Code on the Go community submission process, rebuilt on the IDE's
-template system.
+Original idea by **Raju Kumar** ([ADFA-2599](https://appdevforall.atlassian.net/browse/ADFA-2599)).
+
+Contributed by **RJ Ali** &lt;rjali3232@gmail.com&gt; via the Code on the Go community submission
+process, rebuilt on the IDE's template system ([ADFA-3857](https://appdevforall.atlassian.net/browse/ADFA-3857)).

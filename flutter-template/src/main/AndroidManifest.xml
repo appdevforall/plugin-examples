@@ -23,7 +23,7 @@
 
         <meta-data
             android:name="plugin.author"
-            android:value="Ali" />
+            android:value="RJ Ali" />
 
         <meta-data
             android:name="plugin.min_ide_version"
