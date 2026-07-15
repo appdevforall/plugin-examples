@@ -6,6 +6,7 @@ import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.services.EditorContentChangeListener
 import com.itsaky.androidide.plugins.services.IdeEditorService
 import com.itsaky.androidide.plugins.services.LlmInferenceService
+import com.itsaky.androidide.plugins.services.SharedServices
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -16,7 +17,6 @@ import kotlinx.coroutines.launch
 
 private const val TAG = "CodeSuggestionsPlugin"
 private const val DEBOUNCE_MS = 800L
-private const val AI_CORE_PLUGIN_ID = "com.itsaky.androidide.plugins.aicore"
 
 /**
  * Code Suggestions Plugin provides inline ghost-text completions.
@@ -80,8 +80,10 @@ class CodeSuggestionsPlugin : IPlugin {
     private fun tryResolveLlmService(): Boolean {
         if (suggestionProvider != null) return true
         val svc = try {
-            // Provided by the ai-core plugin -> resolve via getPluginService().
-            context.getPluginService(AI_CORE_PLUGIN_ID, LlmInferenceService::class.java)
+            // ai-core publishes this service through SharedServices. Keep the
+            // context registry fallback for IDE builds that bridge shared
+            // services into PluginContext.services.
+            SharedServices.get(LlmInferenceService::class.java)
                 ?: context.services.get(LlmInferenceService::class.java)
         } catch (e: Exception) {
             Log.w(TAG, "Error resolving LlmInferenceService", e)
