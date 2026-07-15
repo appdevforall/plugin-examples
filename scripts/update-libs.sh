@@ -172,10 +172,14 @@ for plugin in "${PLUGINS[@]}"; do
     echo "→ $plugin"
     (
         cd "$REPO_ROOT/$plugin"
+        # Newer plugins (e.g. flutter-template) drop their per-plugin wrapper and
+        # use the repo-root gradlew; fall back to it when no local gradlew exists.
+        gradlew="./gradlew"
+        [ -x "$gradlew" ] || gradlew="$REPO_ROOT/gradlew"
         if grep -q 'downloadAssets' build.gradle.kts; then
-            ./gradlew --console=plain downloadAssets
+            "$gradlew" --console=plain downloadAssets
         fi
-        ./gradlew --console=plain assemblePlugin
+        "$gradlew" --console=plain assemblePlugin
     )
 done
 echo ""
