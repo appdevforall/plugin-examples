@@ -86,6 +86,16 @@ class ChatFragment : Fragment() {
         setupBackendIndicator()
         observeViewModel()
 
+        // The settings screen is a DialogFragment, so this fragment's onResume does not fire
+        // when it closes. Listen for its dismissal to re-resolve the selected backend (routing +
+        // availability) and refresh the indicator label.
+        parentFragmentManager.setFragmentResultListener(
+            AiSettingsFragment.RESULT_SETTINGS_CLOSED, viewLifecycleOwner
+        ) { _, _ ->
+            viewModel.checkBackendAvailability()
+            viewModel.refreshBackendLabel()
+        }
+
         // Check for test prompt from broadcast receiver (E2E testing)
         injectPendingTestPrompt()
     }
@@ -139,6 +149,8 @@ class ChatFragment : Fragment() {
         // Check backend availability when fragment becomes visible
         // This ensures we check after all plugins have loaded
         viewModel.checkBackendAvailability()
+        // Reflect the currently selected backend (updates after returning from settings).
+        viewModel.refreshBackendLabel()
     }
 
     private fun initializeViewModel() {
@@ -225,7 +237,13 @@ class ChatFragment : Fragment() {
     }
 
     private fun setupBackendIndicator() {
-        binding.backendStatusText.text = "Gemini"
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.activeBackendLabel.collect { label ->
+                    binding.backendStatusText.text = label
+                }
+            }
+        }
     }
 
     private fun observeViewModel() {
