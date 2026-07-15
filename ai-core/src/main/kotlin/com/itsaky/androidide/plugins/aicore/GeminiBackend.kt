@@ -28,9 +28,20 @@ class GeminiBackend(private val context: PluginContext) : LlmBackend {
     @Volatile
     private var currentJob: Job? = null
 
+    companion object {
+        /** Current default model. gemini-1.5-* is retired on v1beta and now 404s. */
+        const val DEFAULT_MODEL = "gemini-2.5-flash"
+
+        /** ListModels endpoint for the same API version the SDK uses for generateContent. */
+        private const val LIST_MODELS_URL =
+            "https://generativelanguage.googleapis.com/v1beta/models"
+
+        /** Only models advertising this generation method can be used for chat. */
+        private const val METHOD_GENERATE_CONTENT = "generateContent"
+    }
+
     /**
-     * Get the model name from preferences, or use default.
-     * Default to gemini-1.5-flash for compatibility, fallback to gemini-2.5-flash.
+     * Get the model name from preferences, or use the current default.
      */
     private fun getModelName(): String {
         val prefs = try {
@@ -40,7 +51,19 @@ class GeminiBackend(private val context: PluginContext) : LlmBackend {
             context.logger.error("GeminiBackend: Error getting preferences", e)
             null
         }
-        return prefs?.getString("gemini_model", "gemini-1.5-flash") ?: "gemini-1.5-flash"
+        return prefs?.getString("gemini_model", DEFAULT_MODEL) ?: DEFAULT_MODEL
+    }
+
+    /** Read the saved Gemini API key from ai-assistant's shared prefs, or null. */
+    private fun readGeminiApiKey(): String? {
+        val prefs = try {
+            SharedServices.get(PluginContext::class.java)
+                ?.getPluginSharedPreferences("AgentSettings")
+        } catch (e: Exception) {
+            context.logger.error("GeminiBackend: Error getting preferences", e)
+            null
+        }
+        return prefs?.getString("gemini_api_key", null)?.trim()?.takeIf { it.isNotBlank() }
     }
 
     override fun getId(): String = "gemini"
@@ -291,42 +314,91 @@ class GeminiBackend(private val context: PluginContext) : LlmBackend {
     }
 
     /**
-     * List available Gemini models.
-     * Returns a CompletableFuture with list of model names.
+     * List the Gemini models currently available to the saved API key that support chat
+     * (i.e. advertise the `generateContent` method). The result reflects the live v1beta
+     * catalog, so any name returned here is safe to pass to [generate] / [generateStreaming]
+     * without a 404 for a retired model.
      *
-     * Note: The Gemini Java SDK 1.16.0 doesn't have a direct list models API,
-     * so we return a curated list of commonly available models.
+     * The Gemini Java SDK 1.16.0 has no list-models call, so this queries the REST
+     * `ListModels` endpoint directly. Returns an empty list when no key is configured and
+     * completes exceptionally on a network/API failure, so the caller can fall back to a
+     * current-models-only list and never advertise a dead model.
      */
     fun listModels(): CompletableFuture<List<String>> {
         val future = CompletableFuture<List<String>>()
 
         scope.launch {
             try {
-                context.logger.info("GeminiBackend: Returning available models list")
-
-                // Return list of known Gemini models
-                // gemini-1.5-* may be deprecated, but included for fallback
-                future.complete(listOf(
-                    "gemini-1.5-flash",
-                    "gemini-1.5-pro",
-                    "gemini-2.5-flash",
-                    "gemini-2.5-flash-lite",
-                    "gemini-2.5-pro",
-                    "gemini-3-flash",
-                    "gemini-3.5-flash"
-                ))
+                val key = readGeminiApiKey()
+                if (key.isNullOrBlank()) {
+                    context.logger.warn("GeminiBackend: no API key configured; cannot list live models")
+                    future.complete(emptyList())
+                    return@launch
+                }
+                val models = fetchAvailableModels(key)
+                context.logger.info("GeminiBackend: ${models.size} models support $METHOD_GENERATE_CONTENT")
+                future.complete(models)
             } catch (e: Exception) {
                 context.logger.error("GeminiBackend: Error in listModels", e)
-                // Return minimal fallback list on error
-                future.complete(listOf(
-                    "gemini-1.5-flash",
-                    "gemini-2.5-flash",
-                    "gemini-3.5-flash"
-                ))
+                future.completeExceptionally(e)
             }
         }
 
         return future
+    }
+
+    /**
+     * Fetch and parse the ListModels catalog, following pagination, keeping only
+     * models that support [METHOD_GENERATE_CONTENT] and stripping the `models/`
+     * prefix from each name. Runs on the caller's (IO) coroutine.
+     */
+    private fun fetchAvailableModels(apiKey: String): List<String> {
+        val encodedKey = java.net.URLEncoder.encode(apiKey, "UTF-8")
+        val names = mutableListOf<String>()
+        var pageToken: String? = null
+
+        do {
+            val url = buildString {
+                append(LIST_MODELS_URL)
+                append("?key=").append(encodedKey)
+                append("&pageSize=1000")
+                pageToken?.let { append("&pageToken=").append(java.net.URLEncoder.encode(it, "UTF-8")) }
+            }
+
+            val conn = (java.net.URL(url).openConnection() as java.net.HttpURLConnection).apply {
+                requestMethod = "GET"
+                connectTimeout = 15_000
+                readTimeout = 15_000
+            }
+
+            val body = try {
+                val code = conn.responseCode
+                if (code !in 200..299) {
+                    val err = conn.errorStream?.bufferedReader()?.use { it.readText() }.orEmpty()
+                    throw java.io.IOException("ListModels HTTP $code: $err")
+                }
+                conn.inputStream.bufferedReader().use { it.readText() }
+            } finally {
+                conn.disconnect()
+            }
+
+            val json = org.json.JSONObject(body)
+            val models = json.optJSONArray("models")
+            if (models != null) {
+                for (i in 0 until models.length()) {
+                    val model = models.getJSONObject(i)
+                    val methods = model.optJSONArray("supportedGenerationMethods") ?: continue
+                    val supportsChat = (0 until methods.length())
+                        .any { methods.optString(it) == METHOD_GENERATE_CONTENT }
+                    if (!supportsChat) continue
+                    val name = model.optString("name").removePrefix("models/")
+                    if (name.isNotBlank()) names.add(name)
+                }
+            }
+            pageToken = json.optString("nextPageToken").takeIf { it.isNotBlank() }
+        } while (pageToken != null)
+
+        return names.distinct()
     }
 
     /**

@@ -42,6 +42,20 @@ class AiSettingsViewModel(
     private val getContext: () -> com.itsaky.androidide.plugins.PluginContext?
 ) : ViewModel() {
 
+    companion object {
+        private const val TAG = "AiSettingsViewModel"
+
+        /** Default selection; kept in sync with GeminiBackend.DEFAULT_MODEL. */
+        private const val DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
+
+        /** Shown only when the live catalog can't be fetched — current models, no retired ones. */
+        private val FALLBACK_MODELS = listOf(
+            "gemini-2.5-flash",
+            "gemini-2.5-pro",
+            "gemini-2.0-flash",
+        )
+    }
+
     private val _savedModelPath = MutableLiveData<String?>(null)
     val savedModelPath: LiveData<String?> get() = _savedModelPath
 
@@ -152,7 +166,7 @@ class AiSettingsViewModel(
     }
 
     fun getGeminiModel(): String {
-        return getPluginPrefs()?.getString("gemini_model", "gemini-1.5-flash") ?: "gemini-1.5-flash"
+        return getPluginPrefs()?.getString("gemini_model", DEFAULT_GEMINI_MODEL) ?: DEFAULT_GEMINI_MODEL
     }
 
     private val _geminiModels = MutableLiveData<List<String>>(emptyList())
@@ -161,77 +175,52 @@ class AiSettingsViewModel(
     private val _geminiModelsLoading = MutableLiveData<Boolean>(false)
     val geminiModelsLoading: LiveData<Boolean> get() = _geminiModelsLoading
 
+    /**
+     * Ask ai-core's Gemini backend for the models the current API key can actually
+     * use, and publish them to [geminiModels]. Falls back to [FALLBACK_MODELS] (current
+     * models only — never a retired one) when there is no key, no backend, or the live
+     * lookup fails, so the picker is never populated with a model that would 404.
+     */
     fun fetchGeminiModels() {
         viewModelScope.launch(Dispatchers.IO) {
             _geminiModelsLoading.postValue(true)
 
             try {
-                // Get the LlmInferenceService from SharedServices
+                val apiKey = getGeminiApiKey()?.trim()
+                if (apiKey.isNullOrBlank()) {
+                    android.util.Log.w(TAG, "No Gemini API key saved; showing fallback models")
+                    _geminiModels.postValue(FALLBACK_MODELS)
+                    return@launch
+                }
+
                 val llmService = SharedServices.get(LlmInferenceService::class.java)
-                if (llmService == null) {
-                    android.util.Log.e("AiSettingsViewModel", "LlmInferenceService not available")
-                    _geminiModels.postValue(listOf(
-                        "gemini-1.5-flash",
-                        "gemini-1.5-pro",
-                        "gemini-2.5-flash",
-                        "gemini-2.5-pro",
-                        "gemini-3-flash",
-                        "gemini-3.5-flash"
-                    ))
-                    _geminiModelsLoading.postValue(false)
-                    return@launch
-                }
-
-                // Get the Gemini backend
-                val geminiBackend = llmService.getBackend("gemini")
+                val geminiBackend = llmService?.getBackend("gemini")
                 if (geminiBackend == null) {
-                    android.util.Log.e("AiSettingsViewModel", "Gemini backend not available")
-                    _geminiModels.postValue(listOf(
-                        "gemini-1.5-flash",
-                        "gemini-1.5-pro",
-                        "gemini-2.5-flash",
-                        "gemini-2.5-pro",
-                        "gemini-3-flash",
-                        "gemini-3.5-flash"
-                    ))
-                    _geminiModelsLoading.postValue(false)
+                    android.util.Log.e(TAG, "Gemini backend not available")
+                    _geminiModels.postValue(FALLBACK_MODELS)
                     return@launch
                 }
 
-                // Try to get list models method via reflection
-                // (since GeminiBackend is not in the interface)
-                try {
-                    val listModelsMethod = geminiBackend.javaClass.getMethod("listModels")
-                    val futureResult = listModelsMethod.invoke(geminiBackend)
+                // listModels() lives in the ai-core plugin and isn't part of the shared
+                // LlmBackend interface, so reach it reflectively across the plugin
+                // classloader boundary. It reads the saved key itself and returns the live
+                // v1beta catalog (empty when unavailable).
+                val method = geminiBackend.javaClass.getMethod("listModels")
+                val futureResult = method.invoke(geminiBackend)
 
-                    if (futureResult is java.util.concurrent.CompletableFuture<*>) {
-                        @Suppress("UNCHECKED_CAST")
-                        val models = (futureResult as java.util.concurrent.CompletableFuture<List<String>>).get()
-                        android.util.Log.d("AiSettingsViewModel", "Fetched ${models.size} Gemini models")
-                        _geminiModels.postValue(models)
-                    }
-                } catch (e: Exception) {
-                    android.util.Log.e("AiSettingsViewModel", "Error fetching models", e)
-                    // Fallback to default list
-                    _geminiModels.postValue(listOf(
-                        "gemini-1.5-flash",
-                        "gemini-1.5-pro",
-                        "gemini-2.5-flash",
-                        "gemini-2.5-pro",
-                        "gemini-3-flash",
-                        "gemini-3.5-flash"
-                    ))
+                @Suppress("UNCHECKED_CAST")
+                val models: List<String> =
+                    (futureResult as? java.util.concurrent.CompletableFuture<List<String>>)?.get().orEmpty()
+                if (models.isEmpty()) {
+                    android.util.Log.w(TAG, "Live model list empty; showing fallback models")
+                    _geminiModels.postValue(FALLBACK_MODELS)
+                } else {
+                    android.util.Log.d(TAG, "Fetched ${models.size} Gemini models")
+                    _geminiModels.postValue(models)
                 }
             } catch (e: Exception) {
-                android.util.Log.e("AiSettingsViewModel", "Error in fetchGeminiModels", e)
-                _geminiModels.postValue(listOf(
-                    "gemini-1.5-flash",
-                    "gemini-1.5-pro",
-                    "gemini-2.5-flash",
-                    "gemini-2.5-pro",
-                    "gemini-3-flash",
-                    "gemini-3.5-flash"
-                ))
+                android.util.Log.e(TAG, "Error fetching Gemini models", e)
+                _geminiModels.postValue(FALLBACK_MODELS)
             } finally {
                 _geminiModelsLoading.postValue(false)
             }
