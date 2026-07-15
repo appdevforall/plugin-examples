@@ -31,7 +31,7 @@
 
         <meta-data
             android:name="plugin.max_ide_version"
-            android:value="26.28" />
+            android:value="26.51" />
 
         <!--
             Available permissions (comma-separated):
