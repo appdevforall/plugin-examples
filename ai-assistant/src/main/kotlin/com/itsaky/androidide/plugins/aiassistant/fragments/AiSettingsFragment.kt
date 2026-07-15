@@ -387,11 +387,18 @@ class AiSettingsFragment : DialogFragment() {
             adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
             modelSpinner.adapter = adapter
 
-            // Set current selection
+            // Set current selection. If the saved model is no longer offered
+            // migrate to the first available one so the next chat request
+            // doesn't 404 on a dead model name.
             val currentModel = viewModel.getGeminiModel()
             val currentIndex = models.indexOf(currentModel)
             if (currentIndex >= 0) {
                 modelSpinner.setSelection(currentIndex)
+            } else if (models.isNotEmpty()) {
+                modelSpinner.setSelection(0)
+                val migrated = models[0]
+                viewModel.saveGeminiModel(migrated)
+                currentModelText?.text = "Current: $migrated"
             }
         }
 
