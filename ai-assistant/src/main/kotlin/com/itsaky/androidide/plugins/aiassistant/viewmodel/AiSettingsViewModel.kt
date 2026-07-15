@@ -71,14 +71,58 @@ class AiSettingsViewModel(
 
     private fun checkInitialState() {
         val prefs = getPluginPrefs()
-        _savedModelPath.value = prefs?.getString("local_llm_model_path", null)
+        val savedPath = prefs?.getString("local_llm_model_path", null)
+        _savedModelPath.value = savedPath
 
         // For plugin, engine is always "ready" since it's managed by ai-core plugin
         _engineState.value = EngineState.Initialized
-        _modelLoadingState.value = ModelLoadingState.Idle
+        // Reflect a previously selected model so it survives closing/reopening settings,
+        // using the display name persisted at load time (no content-provider query here).
+        _modelLoadingState.value = if (savedPath != null) {
+            ModelLoadingState.Loaded(getSavedModelName() ?: fallbackDisplayName(savedPath))
+        } else {
+            ModelLoadingState.Idle
+        }
     }
 
     private fun getPluginPrefs() = getContext()?.getPluginSharedPreferences("AgentSettings")
+
+    /** Human-readable name persisted alongside the model path at load time, if any. */
+    fun getSavedModelName(): String? =
+        getPluginPrefs()?.getString("local_llm_model_name", null)?.takeIf { it.isNotBlank() }
+
+    private fun saveLocalModelName(name: String?) {
+        getPluginPrefs()?.edit()?.putString("local_llm_model_name", name)?.apply()
+    }
+
+    /** Decoded last path segment — a cheap fallback that at least avoids raw %3A escapes. */
+    fun fallbackDisplayName(uriOrPath: String): String =
+        (try { android.net.Uri.decode(uriOrPath) } catch (e: Exception) { uriOrPath }).substringAfterLast('/')
+
+    /**
+     * Resolve the real file name for a selected model. For a `content://` URI this queries the
+     * document provider's [OpenableColumns.DISPLAY_NAME] (e.g. "Llama-3.2-1B.gguf"); otherwise,
+     * and on any failure, it falls back to the decoded last path segment. Do NOT call on the main
+     * thread — the provider query can block.
+     */
+    private fun resolveDisplayName(uriString: String): String {
+        if (uriString.startsWith("content://")) {
+            try {
+                val uri = android.net.Uri.parse(uriString)
+                getContext()?.androidContext?.contentResolver
+                    ?.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)
+                    ?.use { c ->
+                        val idx = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                        if (idx >= 0 && c.moveToFirst() && !c.isNull(idx)) {
+                            c.getString(idx)?.takeIf { it.isNotBlank() }?.let { return it }
+                        }
+                    }
+            } catch (e: Exception) {
+                android.util.Log.w(TAG, "Could not resolve display name for $uriString", e)
+            }
+        }
+        return fallbackDisplayName(uriString)
+    }
 
     fun getAvailableBackends(): List<AiBackend> = AiBackend.entries
 
@@ -237,10 +281,11 @@ class AiSettingsViewModel(
             _modelLoadingState.postValue(ModelLoadingState.Loading)
 
             try {
-                // Extract filename from URI for display
-                val fileName = uriString.substringAfterLast("/")
+                // Resolve the real file name (not the raw content-URI doc id) for display.
+                val fileName = resolveDisplayName(uriString)
 
-                // Save the path
+                // Persist the name before the path so the savedModelPath observer can read it.
+                saveLocalModelName(fileName)
                 saveLocalModelPath(uriString)
 
                 // In plugin context, we don't directly load the model
@@ -249,7 +294,7 @@ class AiSettingsViewModel(
                     ModelLoadingState.Loaded(fileName)
                 )
 
-                android.util.Log.d("AiSettingsViewModel", "Model path saved: $uriString")
+                android.util.Log.d(TAG, "Model path saved: $uriString ($fileName)")
             } catch (e: Exception) {
                 android.util.Log.e("AiSettingsViewModel", "Error saving model path", e)
                 _modelLoadingState.postValue(

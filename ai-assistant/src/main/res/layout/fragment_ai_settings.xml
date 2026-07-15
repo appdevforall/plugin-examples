@@ -29,7 +29,7 @@
             android:layout_weight="1"
             android:text="AI Settings"
             android:textAppearance="?android:attr/textAppearanceLarge"
-            android:textColor="?android:attr/textColorPrimaryInverse" />
+            android:textColor="?android:attr/textColorPrimary" />
     </LinearLayout>
 
     <ScrollView

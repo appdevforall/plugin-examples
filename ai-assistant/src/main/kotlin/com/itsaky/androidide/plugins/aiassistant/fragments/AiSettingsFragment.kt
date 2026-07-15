@@ -24,6 +24,11 @@ import java.util.Locale
 
 class AiSettingsFragment : DialogFragment() {
 
+    companion object {
+        /** FragmentResult key signalling the chat screen that settings were closed. */
+        const val RESULT_SETTINGS_CLOSED = "ai_settings_closed"
+    }
+
     private lateinit var viewModel: AiSettingsViewModel
     private lateinit var settingsToolbar: LinearLayout
     private lateinit var backButton: ImageButton
@@ -75,6 +80,15 @@ class AiSettingsFragment : DialogFragment() {
         initializeViews(view)
         setupToolbar()
         setupBackendSelector()
+    }
+
+    override fun onDismiss(dialog: android.content.DialogInterface) {
+        super.onDismiss(dialog)
+        // This is a dialog, so the chat screen behind it never gets onResume when we close.
+        // Signal it to re-resolve the selected backend (routing + availability + label).
+        if (isAdded) {
+            parentFragmentManager.setFragmentResult(RESULT_SETTINGS_CLOSED, Bundle.EMPTY)
+        }
     }
 
     private fun initializeViewModel() {
@@ -213,7 +227,7 @@ class AiSettingsFragment : DialogFragment() {
 
             if (path != null) {
                 modelPathTextView.visibility = View.VISIBLE
-                val fileName = path.substringAfterLast("/")
+                val fileName = viewModel.getSavedModelName() ?: viewModel.fallbackDisplayName(path)
                 modelPathTextView.text = "Saved: $fileName"
             } else {
                 modelPathTextView.visibility = View.GONE
