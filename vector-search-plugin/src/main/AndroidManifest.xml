@@ -13,7 +13,7 @@
 
         <meta-data
             android:name="plugin.name"
-            android:value="Vector Search (Built: 20260702_110712)" />
+            android:value="Vector Search" />
 
         <meta-data
             android:name="plugin.version"
