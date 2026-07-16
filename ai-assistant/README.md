@@ -56,6 +56,22 @@ The build resolves `plugin-api.jar` from the repo-root `../libs/`.
 - `fragments/AiSettingsFragment.kt`, `viewmodel/AiSettingsViewModel.kt` — model/backend config
 - `tool/` — the agent tool-loop (executor, router, per-tool handlers, approval)
 
+## Security
+
+- **Gemini API key at rest.** When you use the Gemini backend, the API key is
+  stored in this plugin's private `SharedPreferences` (`AgentSettings`). That
+  store is **app-sandboxed** — other apps cannot read it — but it is **not
+  encrypted at rest**, so it is recoverable on a rooted or otherwise compromised
+  device. Remove it any time from **AI Settings** (or `clearGeminiApiKey()`).
+  Encryption is deliberately not layered on here: the key is shared at runtime
+  with the sibling `ai-core` plugin (which performs the Gemini calls), and
+  `EncryptedSharedPreferences` would force both independent plugins to agree on a
+  master-key alias and crypto library version — a fragile cross-plugin coupling.
+  A host-provided secure-storage service is the correct long-term fix.
+- **Gemini API key in transit.** The key is sent to Google as an `x-goog-api-key`
+  request header (and via the SDK on the chat path), never in a URL query string.
+- **File tools are confined to the project root** — see the in-IDE help page.
+
 ## License
 
 GPL-3.0 — same as AndroidIDE / CodeOnTheGo.

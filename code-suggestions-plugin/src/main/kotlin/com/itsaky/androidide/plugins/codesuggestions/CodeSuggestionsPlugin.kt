@@ -3,6 +3,9 @@ package com.itsaky.androidide.plugins.codesuggestions
 import android.util.Log
 import com.itsaky.androidide.plugins.IPlugin
 import com.itsaky.androidide.plugins.PluginContext
+import com.itsaky.androidide.plugins.extensions.DocumentationExtension
+import com.itsaky.androidide.plugins.extensions.PluginTooltipButton
+import com.itsaky.androidide.plugins.extensions.PluginTooltipEntry
 import com.itsaky.androidide.plugins.services.EditorContentChangeListener
 import com.itsaky.androidide.plugins.services.IdeEditorService
 import com.itsaky.androidide.plugins.services.LlmInferenceService
@@ -11,6 +14,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
@@ -30,7 +34,7 @@ private const val DEBOUNCE_MS = 800L
  * - Language-aware suggestions (Kotlin, Java, Python, etc.)
  * - Graceful degradation when ai-core plugin not loaded
  */
-class CodeSuggestionsPlugin : IPlugin {
+class CodeSuggestionsPlugin : IPlugin, DocumentationExtension {
 
     private val scope = CoroutineScope(Dispatchers.IO)
     private lateinit var context: PluginContext
@@ -111,6 +115,9 @@ class CodeSuggestionsPlugin : IPlugin {
 
     override fun dispose() {
         Log.i(TAG, "CodeSuggestionsPlugin disposed")
+        // Cancel any in-flight debounce/suggestion job and tear down the scope so
+        // the plugin doesn't leak coroutines after unload.
+        scope.cancel()
         suggestionProvider?.clearCache()
     }
 
@@ -184,5 +191,34 @@ class CodeSuggestionsPlugin : IPlugin {
             Log.w(TAG, "Error extracting prefix", e)
             ""
         }
+    }
+
+    override fun getTooltipCategory(): String = "plugin_code_suggestions"
+
+    override fun getTooltipEntries(): List<PluginTooltipEntry> = listOf(
+        PluginTooltipEntry(
+            tag = TOOLTIP_TAG_PLUGIN,
+            summary = "Code Suggestions shows inline ghost-text completions after a short pause while typing.",
+            detail = """
+                <p><b>Code Suggestions</b> listens to editor changes, debounces
+                typing, and asks the configured AI Core backend for a completion
+                at the cursor.</p>
+                <p>The surrounding file context is sent to the selected backend:
+                on-device for Local, or to Google over HTTPS for Gemini.</p>
+            """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(
+                    description = "Code Suggestions guide",
+                    uri = "index.html",
+                    order = 0
+                )
+            )
+        )
+    )
+
+    override fun getTier3DocsAssetPath(): String = "docs"
+
+    private companion object {
+        const val TOOLTIP_TAG_PLUGIN = "plugin_code_suggestions"
     }
 }

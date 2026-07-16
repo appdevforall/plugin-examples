@@ -2,6 +2,9 @@ package com.itsaky.androidide.plugins.aicore
 
 import com.itsaky.androidide.plugins.IPlugin
 import com.itsaky.androidide.plugins.PluginContext
+import com.itsaky.androidide.plugins.extensions.DocumentationExtension
+import com.itsaky.androidide.plugins.extensions.PluginTooltipButton
+import com.itsaky.androidide.plugins.extensions.PluginTooltipEntry
 import com.itsaky.androidide.plugins.services.LlmInferenceService
 import com.itsaky.androidide.plugins.services.SharedServices
 
@@ -9,7 +12,7 @@ import com.itsaky.androidide.plugins.services.SharedServices
  * AI Core Plugin providing LLM inference capabilities.
  * Implements LlmInferenceService and registers local LLM backend.
  */
-class AiCorePlugin : IPlugin {
+class AiCorePlugin : IPlugin, DocumentationExtension {
 
     private lateinit var context: PluginContext
     private lateinit var llmService: LlmInferenceServiceImpl
@@ -18,6 +21,7 @@ class AiCorePlugin : IPlugin {
 
     companion object {
         const val PLUGIN_ID = "com.itsaky.androidide.plugins.aicore"
+        private const val TOOLTIP_TAG_PLUGIN = "plugin_ai_core"
     }
 
     override fun initialize(context: PluginContext): Boolean {
@@ -101,4 +105,30 @@ class AiCorePlugin : IPlugin {
             context.logger.info("AiCorePlugin: Released Gemini backend")
         }
     }
+
+    override fun getTooltipCategory(): String = "plugin_ai_core"
+
+    override fun getTooltipEntries(): List<PluginTooltipEntry> = listOf(
+        PluginTooltipEntry(
+            tag = TOOLTIP_TAG_PLUGIN,
+            summary = "AI Core provides the shared local and Gemini LLM backends used by the AI plugins.",
+            detail = """
+                <p><b>AI Core</b> is a headless plugin that registers the shared
+                LLM inference service used by AI Assistant, Code Suggestions,
+                Speech to Text, and Vector Search.</p>
+                <p>Configure the backend and model from <b>AI Assistant → AI
+                Settings</b>. Local models stay on-device; Gemini requests are
+                sent to Google over HTTPS.</p>
+            """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(
+                    description = "AI Core guide",
+                    uri = "index.html",
+                    order = 0
+                )
+            )
+        )
+    )
+
+    override fun getTier3DocsAssetPath(): String = "docs"
 }

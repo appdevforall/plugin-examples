@@ -178,6 +178,12 @@ class AiSettingsViewModel(
         return getPluginPrefs()?.getBoolean("use_simple_local_prompt", true) ?: true
     }
 
+    /**
+     * Persists the Gemini API key in this plugin's private SharedPreferences.
+     * The store is app-sandboxed (not world-readable) but NOT encrypted at rest;
+     * it is recoverable on a rooted/compromised device. Use [clearGeminiApiKey]
+     * to remove it. See the plugin README "Security" section for the tradeoff.
+     */
     fun saveGeminiApiKey(apiKey: String) {
         getPluginPrefs()?.edit()?.apply {
             putString("gemini_api_key", apiKey)

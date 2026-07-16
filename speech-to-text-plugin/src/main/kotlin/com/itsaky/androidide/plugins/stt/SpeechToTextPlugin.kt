@@ -16,6 +16,9 @@ import android.widget.Toast
 import androidx.core.content.ContextCompat
 import com.itsaky.androidide.plugins.IPlugin
 import com.itsaky.androidide.plugins.PluginContext
+import com.itsaky.androidide.plugins.extensions.DocumentationExtension
+import com.itsaky.androidide.plugins.extensions.PluginTooltipButton
+import com.itsaky.androidide.plugins.extensions.PluginTooltipEntry
 import com.itsaky.androidide.plugins.extensions.ShowAsAction
 import com.itsaky.androidide.plugins.extensions.ToolbarAction
 import com.itsaky.androidide.plugins.extensions.UIExtension
@@ -24,6 +27,7 @@ import com.itsaky.androidide.plugins.services.IdeUIService
 import com.itsaky.androidide.plugins.services.LlmInferenceService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -41,7 +45,7 @@ private const val TAG = "SpeechToTextPlugin"
  * implementing [UIExtension.getToolbarActions]. The action is only visible
  * while a file is open in the editor.
  */
-class SpeechToTextPlugin : IPlugin, UIExtension {
+class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
 
     private val scope = CoroutineScope(Dispatchers.IO)
     private lateinit var context: PluginContext
@@ -110,9 +114,10 @@ class SpeechToTextPlugin : IPlugin, UIExtension {
     override fun dispose() {
         Log.i(TAG, "SpeechToTextPlugin disposed")
         destroyRecognizer()
+        // Tear down the transcript-processing scope so no LLM/generation coroutine
+        // outlives the plugin after unload.
+        scope.cancel()
     }
-
-    // region UIExtension ------------------------------------------------------
 
     /**
      * Contributes the "Voice to Code" button to the editor toolbar. The IDE
@@ -120,7 +125,7 @@ class SpeechToTextPlugin : IPlugin, UIExtension {
      */
     override fun getToolbarActions(): List<ToolbarAction> = listOf(
         ToolbarAction(
-            id = "stt_voice_to_code",
+            id = TOOLBAR_ACTION_ID,
             title = "Voice to Code",
             // Static fallback for hosts that don't support iconProvider.
             icon = R.drawable.ic_mic,
@@ -143,8 +148,33 @@ class SpeechToTextPlugin : IPlugin, UIExtension {
     } catch (e: Exception) {
         false
     }
+    override fun getTooltipCategory(): String = "plugin_speech_to_text"
 
-    // endregion ---------------------------------------------------------------
+    override fun getTooltipEntries(): List<PluginTooltipEntry> = listOf(
+        PluginTooltipEntry(
+            tag = TOOLBAR_ACTION_ID,
+            summary = "Voice to Code: tap, speak, and insert the transcript — or code generated from it — at the cursor.",
+            detail = """
+                <p>The <b>microphone</b> button in the editor toolbar records a
+                short voice command and inserts the result at the cursor.</p>
+                <p>Recognition uses Android's on-device recognizer when available.
+                If the <b>AI Core</b> plugin is installed, the transcript is turned
+                into code by the model; otherwise the raw transcript is inserted.</p>
+                <p>The button is enabled only while a file is open, and microphone
+                permission is requested on first use.</p>
+            """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(
+                    description = "Speech to Text guide",
+                    uri = "index.html",
+                    order = 0
+                )
+            )
+        )
+    )
+
+    /** Subdirectory under src/main/assets/ holding the Tier 3 offline docs. */
+    override fun getTier3DocsAssetPath(): String = "docs"
 
     /**
      * Entry point for the toolbar action. Runs on the UI thread (the toolbar
@@ -423,5 +453,6 @@ class SpeechToTextPlugin : IPlugin, UIExtension {
 
     companion object {
         private const val PERMISSION_REQUEST_CODE = 100
+        private const val TOOLBAR_ACTION_ID = "stt_voice_to_code"
     }
 }
