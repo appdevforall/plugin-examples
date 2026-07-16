@@ -229,8 +229,6 @@ class AiAssistantPlugin : IPlugin, UIExtension, DocumentationExtension {
                 }
             }
 
-            // Note: Encrypted Gemini API key migration handled by EncryptedPrefs
-
             if (migratedCount > 0) {
                 context.logger.info("Migrated $migratedCount settings from app to plugin")
             } else {

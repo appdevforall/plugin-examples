@@ -3,6 +3,9 @@ package com.itsaky.androidide.plugins.vectorsearch
 import android.util.Log
 import com.itsaky.androidide.plugins.IPlugin
 import com.itsaky.androidide.plugins.PluginContext
+import com.itsaky.androidide.plugins.extensions.DocumentationExtension
+import com.itsaky.androidide.plugins.extensions.PluginTooltipButton
+import com.itsaky.androidide.plugins.extensions.PluginTooltipEntry
 import com.itsaky.androidide.plugins.extensions.ProjectSearchExtension
 import com.itsaky.androidide.plugins.extensions.ProjectSearchRequest
 import com.itsaky.androidide.plugins.extensions.ProjectSearchResult
@@ -26,7 +29,7 @@ private const val FALLBACK_EMBEDDING_DIMENSIONS = 384
  * and stores them in a local SQLite database. Other plugins can use
  * this service to perform semantic searches.
  */
-class VectorSearchPlugin : IPlugin, ProjectSearchExtension {
+class VectorSearchPlugin : IPlugin, ProjectSearchExtension, DocumentationExtension {
 
     private lateinit var context: PluginContext
     private lateinit var indexingService: EmbeddingIndexingService
@@ -265,5 +268,35 @@ class VectorSearchPlugin : IPlugin, ProjectSearchExtension {
             endLine = endLine.coerceAtLeast(startLine).coerceAtLeast(1) - 1,
             endColumn = 0,
         )
+    }
+
+    override fun getTooltipCategory(): String = "plugin_vector_search"
+
+    override fun getTooltipEntries(): List<PluginTooltipEntry> = listOf(
+        PluginTooltipEntry(
+            tag = TOOLTIP_TAG_PLUGIN,
+            summary = "Vector Search adds semantic, meaning-based matches to project search.",
+            detail = """
+                <p><b>Vector Search</b> chunks project files, generates
+                embeddings, and ranks matches by semantic similarity instead of
+                only exact text.</p>
+                <p>AI Core provides model embeddings when available. If it is not
+                loaded, Vector Search falls back to local lexical embeddings with
+                lower result quality.</p>
+            """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(
+                    description = "Vector Search guide",
+                    uri = "index.html",
+                    order = 0
+                )
+            )
+        )
+    )
+
+    override fun getTier3DocsAssetPath(): String = "docs"
+
+    private companion object {
+        const val TOOLTIP_TAG_PLUGIN = "plugin_vector_search"
     }
 }

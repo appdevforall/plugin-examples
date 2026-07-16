@@ -353,15 +353,13 @@ class GeminiBackend(private val context: PluginContext) : LlmBackend {
      * prefix from each name. Runs on the caller's (IO) coroutine.
      */
     private fun fetchAvailableModels(apiKey: String): List<String> {
-        val encodedKey = java.net.URLEncoder.encode(apiKey, "UTF-8")
         val names = mutableListOf<String>()
         var pageToken: String? = null
 
         do {
             val url = buildString {
                 append(LIST_MODELS_URL)
-                append("?key=").append(encodedKey)
-                append("&pageSize=1000")
+                append("?pageSize=1000")
                 pageToken?.let { append("&pageToken=").append(java.net.URLEncoder.encode(it, "UTF-8")) }
             }
 
@@ -369,6 +367,9 @@ class GeminiBackend(private val context: PluginContext) : LlmBackend {
                 requestMethod = "GET"
                 connectTimeout = 15_000
                 readTimeout = 15_000
+                // Pass the API key as a header, never in the URL query string: query
+                // strings leak into logs, proxies, and crash reports.
+                setRequestProperty("x-goog-api-key", apiKey)
             }
 
             val body = try {
