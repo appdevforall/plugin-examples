@@ -365,17 +365,21 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend {
      * Release all resources. Called from AiCorePlugin.dispose(), which may run on
      * the main thread; llama.unload() drains a single-threaded native run loop and
      * can block while inference is in flight, so it must never run via runBlocking
-     * on Main. Cancel generation, then unload on a background thread.
+     * on Main. Cancel generation, then unload on a background thread, then stop
+     * the Llm-RunLoop thread so it doesn't outlive the plugin.
      */
     fun close() {
         scope.cancel()
-        if (modelLoaded) {
-            CoroutineScope(Dispatchers.IO).launch {
-                try {
-                    unloadModelInternal()
-                } catch (e: Exception) {
-                    context.logger.error("Error unloading model during close()", e)
-                }
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                unloadModelInternal()
+            } catch (e: Exception) {
+                context.logger.error("Error unloading model during close()", e)
+            } finally {
+                // The Llm-RunLoop executor thread exists even if no model was
+                // ever loaded; shut it down unconditionally so the plugin's
+                // classloader can be collected after unload.
+                llama.shutdown()
             }
         }
     }

@@ -1,7 +1,7 @@
 package android.llama.cpp
 
 import com.itsaky.androidide.llamacpp.api.ILlamaController
-import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -94,7 +94,7 @@ class LLamaAndroid : ILlamaController {
 
     private val isStopped = AtomicBoolean(false)
 
-    private val runLoop: CoroutineDispatcher = Executors.newSingleThreadExecutor {
+    private val runLoop: ExecutorCoroutineDispatcher = Executors.newSingleThreadExecutor {
         thread(start = false, name = "Llm-RunLoop") {
             log.debug("Dedicated thread for native code: {}", Thread.currentThread().name)
 
@@ -164,6 +164,17 @@ class LLamaAndroid : ILlamaController {
     override fun stop() {
         log.info("Stop requested for current generation.")
         isStopped.set(true)
+    }
+
+    /**
+     * Permanently stops the dedicated Llm-RunLoop thread by shutting down the
+     * underlying single-thread executor. Call only at plugin disposal, after
+     * unload() has completed — the instance cannot dispatch native work
+     * afterwards (any further withContext(runLoop) is rejected).
+     */
+    fun shutdown() {
+        log.info("Shutting down Llm-RunLoop dispatcher")
+        runLoop.close()
     }
 
     suspend fun bench(pp: Int, tg: Int, pl: Int, nr: Int = 1): String {
