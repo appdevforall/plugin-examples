@@ -47,12 +47,12 @@
             android:value="com.itsaky.androidide.plugins.stt.SpeechToTextPlugin" />
 
         <meta-data
-            android:name="icon_day"
-            android:value="@drawable/icon_day" />
+            android:name="plugin.icon_day"
+            android:value="assets/icon_day.png" />
 
         <meta-data
-            android:name="icon_night"
-            android:value="@drawable/icon_night" />
+            android:name="plugin.icon_night"
+            android:value="assets/icon_night.png" />
 
     </application>
 
