@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.text.method.HideReturnsTransformationMethod
+import android.text.method.PasswordTransformationMethod
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -266,6 +268,7 @@ class AiSettingsFragment : DialogFragment() {
     private fun setupGeminiApiUi(view: View) {
         val apiKeyLayout = view.findViewById<LinearLayout>(R.id.gemini_api_key_layout)
         val apiKeyInput = view.findViewById<EditText>(R.id.gemini_api_key_input)
+        val toggleVisibilityButton = view.findViewById<ImageButton>(R.id.btn_toggle_api_key_visibility)
         val saveButton = view.findViewById<Button>(R.id.btn_save_api_key)
         val editButton = view.findViewById<Button>(R.id.btn_edit_api_key)
         val clearButton = view.findViewById<Button>(R.id.btn_clear_api_key)
@@ -300,37 +303,69 @@ class AiSettingsFragment : DialogFragment() {
             if (timestamp > 0) {
                 val sdf = SimpleDateFormat("MMMM d, yyyy", Locale.getDefault())
                 val savedDate = sdf.format(Date(timestamp))
-                statusTextView.text = "API Key saved on: $savedDate"
+                statusTextView.text = getString(R.string.msg_api_key_saved_on, savedDate)
             } else {
-                statusTextView.text = "API Key is saved"
+                statusTextView.text = getString(R.string.msg_api_key_is_saved)
             }
         }
 
-        saveButton.setOnClickListener {
-            val apiKey = apiKeyInput.text.toString()
-            if (apiKey.isNotBlank()) {
-                viewModel.saveGeminiApiKey(apiKey)
-                Toast.makeText(requireContext(), "API Key saved", Toast.LENGTH_SHORT).show()
+        toggleVisibilityButton.setColorFilter(apiKeyInput.currentHintTextColor)
 
-                updateUiState(isEditing = false)
-                val timestamp = viewModel.getGeminiApiKeySaveTimestamp()
-                val sdf = SimpleDateFormat("MMMM d, yyyy", Locale.getDefault())
-                val savedDate = sdf.format(Date(timestamp))
-                statusTextView.text = "API Key saved on: $savedDate"
+        var isKeyVisible = false
+
+        fun applyKeyVisibility() {
+            apiKeyInput.transformationMethod = if (isKeyVisible) {
+                HideReturnsTransformationMethod.getInstance()
             } else {
-                Toast.makeText(requireContext(), "API Key cannot be empty", Toast.LENGTH_SHORT).show()
+                PasswordTransformationMethod.getInstance()
             }
+            toggleVisibilityButton.setImageResource(
+                if (isKeyVisible) R.drawable.ic_visibility_off else R.drawable.ic_visibility
+            )
+            toggleVisibilityButton.contentDescription = getString(
+                if (isKeyVisible) R.string.cd_hide_api_key else R.string.cd_show_api_key
+            )
+            toggleVisibilityButton.setColorFilter(apiKeyInput.currentHintTextColor)
+            apiKeyInput.setSelection(apiKeyInput.text?.length ?: 0)
+        }
+
+        applyKeyVisibility()
+
+        toggleVisibilityButton.setOnClickListener {
+            isKeyVisible = !isKeyVisible
+            applyKeyVisibility()
+        }
+
+        saveButton.setOnClickListener {
+            val apiKey = apiKeyInput.text.toString().trim()
+            if (apiKey.isBlank()) {
+                Toast.makeText(requireContext(), getString(R.string.msg_api_key_empty), Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            if (!viewModel.saveGeminiApiKey(apiKey)) {
+                Toast.makeText(requireContext(), getString(R.string.msg_api_key_save_failed), Toast.LENGTH_LONG).show()
+                return@setOnClickListener
+            }
+            Toast.makeText(requireContext(), getString(R.string.msg_api_key_saved), Toast.LENGTH_SHORT).show()
+
+            updateUiState(isEditing = false)
+            val timestamp = viewModel.getGeminiApiKeySaveTimestamp()
+            val sdf = SimpleDateFormat("MMMM d, yyyy", Locale.getDefault())
+            val savedDate = sdf.format(Date(timestamp))
+            statusTextView.text = getString(R.string.msg_api_key_saved_on, savedDate)
         }
 
         editButton.setOnClickListener {
             updateUiState(isEditing = true)
-            apiKeyInput.setText("••••••••••••••••")
+            apiKeyInput.setText(viewModel.getGeminiApiKey().orEmpty())
+            isKeyVisible = false
+            applyKeyVisibility()
             apiKeyInput.requestFocus()
         }
 
         clearButton.setOnClickListener {
             viewModel.clearGeminiApiKey()
-            Toast.makeText(requireContext(), "API Key cleared", Toast.LENGTH_SHORT).show()
+            Toast.makeText(requireContext(), getString(R.string.msg_api_key_cleared), Toast.LENGTH_SHORT).show()
             updateUiState(isEditing = true)
             apiKeyInput.setText("")
         }

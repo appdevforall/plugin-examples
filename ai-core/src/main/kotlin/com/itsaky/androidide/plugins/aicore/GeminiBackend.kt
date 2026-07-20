@@ -63,7 +63,8 @@ class GeminiBackend(private val context: PluginContext) : LlmBackend {
             context.logger.error("GeminiBackend: Error getting preferences", e)
             null
         }
-        return prefs?.getString("gemini_api_key", null)?.trim()?.takeIf { it.isNotBlank() }
+        val stored = prefs?.getString("gemini_api_key", null)
+        return SecureApiKeyStore.decrypt(stored)?.trim()?.takeIf { it.isNotBlank() }
     }
 
     override fun getId(): String = "gemini"
@@ -71,17 +72,8 @@ class GeminiBackend(private val context: PluginContext) : LlmBackend {
     override fun getName(): String = "Gemini API"
 
     override fun isAvailable(): Boolean {
-        // Check if API key is configured
-        val prefs = try {
-            // Get ai-assistant plugin's preferences
-            val aiAssistantContext = SharedServices.get(PluginContext::class.java)
-            aiAssistantContext?.getPluginSharedPreferences("AgentSettings")
-        } catch (e: Exception) {
-            context.logger.error("GeminiBackend: Error getting preferences", e)
-            null
-        }
-
-        val apiKey = prefs?.getString("gemini_api_key", null)
+        // Check if a (decryptable) API key is configured
+        val apiKey = readGeminiApiKey()
         context.logger.debug("GeminiBackend.isAvailable() - API key configured: ${!apiKey.isNullOrBlank()}")
 
         return !apiKey.isNullOrBlank()
@@ -406,15 +398,7 @@ class GeminiBackend(private val context: PluginContext) : LlmBackend {
      * Create Gemini client with API key from settings.
      */
     private fun createClient(): Client? {
-        val prefs = try {
-            val aiAssistantContext = SharedServices.get(PluginContext::class.java)
-            aiAssistantContext?.getPluginSharedPreferences("AgentSettings")
-        } catch (e: Exception) {
-            context.logger.error("GeminiBackend: Error getting preferences", e)
-            return null
-        }
-
-        val apiKey = prefs?.getString("gemini_api_key", null)
+        val apiKey = readGeminiApiKey()
         if (apiKey.isNullOrBlank()) {
             context.logger.error("GeminiBackend: API key not found")
             return null
@@ -422,7 +406,7 @@ class GeminiBackend(private val context: PluginContext) : LlmBackend {
 
         return try {
             Client.builder()
-                .apiKey(apiKey.trim())
+                .apiKey(apiKey)
                 .build()
         } catch (e: Exception) {
             context.logger.error("GeminiBackend: Error creating client", e)

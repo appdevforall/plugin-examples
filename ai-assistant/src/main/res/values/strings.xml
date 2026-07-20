@@ -92,6 +92,15 @@
 
     <!-- Settings -->
     <string name="settings_title">AI Settings</string>
+    <string name="cd_show_api_key">Show API key</string>
+    <string name="cd_hide_api_key">Hide API key</string>
+    <string name="hint_gemini_api_key">Enter your Gemini API key</string>
+    <string name="msg_api_key_saved">API Key saved</string>
+    <string name="msg_api_key_saved_on">API Key saved on: %s</string>
+    <string name="msg_api_key_is_saved">API Key is saved</string>
+    <string name="msg_api_key_empty">API Key cannot be empty</string>
+    <string name="msg_api_key_cleared">API Key cleared</string>
+    <string name="msg_api_key_save_failed">Couldn\'t save the API key on this device. Please try again.</string>
     <string name="settings_backend">Backend</string>
     <string name="settings_model">Model</string>
     <string name="settings_temperature">Temperature</string>
@@ -105,4 +114,11 @@
     <string name="experimental_ai_use_at_your_own_risk">⚠️ Experimental AI. Use at your own risk.</string>
     <string name="current_ai_backend">Current AI backend</string>
     <string name="send">Send</string>
+
+    <!-- File picker -->
+    <string name="file_picker_title">Select Files</string>
+    <string name="file_picker_title_current">Select Files: %s</string>
+    <string name="file_picker_add_selected">Add Selected</string>
+    <string name="file_picker_toggle_all">Toggle All</string>
+    <string name="file_picker_error_not_found">Project directory not found</string>
 </resources>

@@ -27,13 +27,33 @@
             android:textAppearance="?android:attr/textAppearanceSmall"
             android:paddingBottom="4dp"/>
 
-        <EditText
-            android:id="@+id/gemini_api_key_input"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:inputType="textPassword"
-            android:hint="Enter your Gemini API key"
-            android:maxLines="1" />
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <EditText
+                android:id="@+id/gemini_api_key_input"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:inputType="textPassword"
+                android:hint="@string/hint_gemini_api_key"
+                android:maxLines="1" />
+
+            <ImageButton
+                android:id="@+id/btn_toggle_api_key_visibility"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/cd_show_api_key"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:padding="4dp"
+                android:src="@drawable/ic_visibility" />
+        </LinearLayout>
     </LinearLayout>
 
     <LinearLayout
