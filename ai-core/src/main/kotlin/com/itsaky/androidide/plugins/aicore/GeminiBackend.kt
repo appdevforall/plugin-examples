@@ -21,7 +21,7 @@ import java.util.concurrent.CompletableFuture
  * Gemini API backend for cloud-based LLM inference.
  * Uses Google's Generative AI SDK to make API calls.
  */
-class GeminiBackend(private val context: PluginContext) : LlmBackend {
+class GeminiBackend(private val context: PluginContext) : LlmBackend, CancellableBackend {
 
     private val scope = CoroutineScope(Dispatchers.IO)
 
@@ -184,15 +184,11 @@ class GeminiBackend(private val context: PluginContext) : LlmBackend {
                 var chunkCount = 0
 
                 try {
-                    // Iterate through stream chunks as they arrive
                     for (response in responseStream) {
-                        val chunk = response.text()
-                        if (chunk != null && chunk.isNotEmpty()) {
+                        val chunk = extractChunk(response)
+                        if (chunk.isNotEmpty()) {
                             chunkCount++
                             fullText.append(chunk)
-                            context.logger.debug("GeminiBackend: Stream chunk #$chunkCount: ${chunk.length} chars")
-
-                            // Send each chunk to UI immediately
                             callback.onToken(chunk)
                         }
                     }
@@ -479,6 +475,32 @@ User: $userPrompt"""
                 callback.onError(formatErrorMessage(e))
             }
         }
+    }
+
+    /**
+     * Extracts text from one streaming chunk via the non-throwing `candidates()`
+     * getter; `response.text()`/`parts()` throw on non-STOP finishes and kill the turn.
+     *
+     * @param response the streaming chunk to read
+     * @return the chunk's text, or an empty string if it carries none
+     */
+    private fun extractChunk(response: GenerateContentResponse): String {
+        val sb = StringBuilder()
+        val candidates = response.candidates().orElse(emptyList())
+        for (candidate in candidates) {
+            val content = candidate.content().orElse(null) ?: continue
+            val parts = content.parts().orElse(emptyList())
+            for (part in parts) {
+                part.text().ifPresent { if (it.isNotEmpty()) sb.append(it) }
+            }
+        }
+        return sb.toString()
+    }
+
+    /** Cancel any in-flight generation (user pressed Stop). */
+    override fun cancelStreaming() {
+        currentJob?.cancel()
+        currentJob = null
     }
 
     /**

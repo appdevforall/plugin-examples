@@ -15,6 +15,7 @@ class ReadFileHandler(
     override val description = "Read the contents of a file"
     override val requiresApproval = false
     override val pathArgs = listOf("file_path", "path")
+    override val resolvesPathsInternally = true
 
     override suspend fun execute(args: Map<String, Any?>): ToolResult {
         // Accept both "file_path" (standardized) and "path" (legacy LLM responses)
@@ -24,26 +25,35 @@ class ReadFileHandler(
         }
 
         return try {
-            // Security: resolve against the project root and reject any escape.
-            val file = PathGuard.resolveWithin(filePath)
-                ?: return ToolResult.failure("File path must be within project directory")
+            val file = when (val resolution = PathGuard.resolve(filePath)) {
+                is PathGuard.Resolution.Resolved -> resolution.file
+                is PathGuard.Resolution.Ambiguous -> {
+                    val root = java.io.File(PathGuard.projectRoot())
+                    return ToolResult.failure(
+                        "Multiple files named '${resolution.baseName}' — specify a path",
+                        resolution.matches.joinToString("\n") { it.relativeToOrSelf(root).path }
+                    )
+                }
+                PathGuard.Resolution.Escaped ->
+                    return ToolResult.failure("File path must be within project directory")
+                PathGuard.Resolution.NotFound ->
+                    return ToolResult.failure("File does not exist: $filePath")
+            }
 
-            if (!file.exists()) {
-                ToolResult.failure("File does not exist: $filePath")
-            } else if (!file.isFile) {
-                ToolResult.failure("Path is not a file: $filePath")
-            } else if (!file.canRead()) {
-                ToolResult.failure("Cannot read file: $filePath")
-            } else {
-                val content = file.readText()
-                ToolResult.success(
-                    message = "Read ${content.length} characters from $filePath",
-                    data = content
-                )
+            when {
+                !file.isFile -> ToolResult.failure("Path is not a file: $filePath")
+                !file.canRead() -> ToolResult.failure("Cannot read file: $filePath")
+                else -> {
+                    val content = file.readText()
+                    ToolResult.success(
+                        message = "Read ${content.length} characters from $filePath",
+                        data = content
+                    )
+                }
             }
         } catch (e: Exception) {
             Log.e("ReadFileHandler", "Error reading file", e)
-            ToolResult.failure("Error reading file: ${e.message}", e.stackTraceToString())
+            ToolResult.failure("Error reading file: ${e.message}")
         }
     }
 }

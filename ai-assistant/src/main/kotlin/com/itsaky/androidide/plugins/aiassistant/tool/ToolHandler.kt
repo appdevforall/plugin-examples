@@ -37,4 +37,7 @@ interface ToolHandler {
      */
     val pathArgs: List<String>
         get() = emptyList()
+
+    val resolvesPathsInternally: Boolean
+        get() = false
 }

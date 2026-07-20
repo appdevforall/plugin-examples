@@ -130,5 +130,8 @@ class LlmInferenceServiceImpl : LlmInferenceService {
     override fun cancelGeneration() {
         currentGeneration?.cancel(true)
         currentGeneration = null
+
+        backends.values.filterIsInstance<CancellableBackend>()
+            .forEach { it.cancelStreaming() }
     }
 }

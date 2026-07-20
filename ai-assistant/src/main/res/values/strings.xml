@@ -105,4 +105,33 @@
     <string name="experimental_ai_use_at_your_own_risk">⚠️ Experimental AI. Use at your own risk.</string>
     <string name="current_ai_backend">Current AI backend</string>
     <string name="send">Send</string>
+
+    <!-- Agent loop / chat runtime messages -->
+    <string name="agent_max_steps_reached">Reached the %1$d-step limit. Ask me to continue if the task isn\'t finished.</string>
+    <string name="agent_repeated_calls">Stopped: the model kept requesting the same action. Try rephrasing your request.</string>
+    <string name="agent_action_failed">I couldn\'t complete that, the last action failed. See the details above.</string>
+    <string name="agent_no_response">(No response. Try rephrasing, or pick a larger model in AI Settings — very small models struggle with tool use.)</string>
+    <string name="generating_response">Generating response…</string>
+    <string name="system_log">System Log</string>
+
+    <!-- Settings: engine / model status -->
+    <string name="engine_initializing">Initializing engine…</string>
+    <string name="engine_ready">Engine ready</string>
+    <string name="model_saved_path">Saved: %s</string>
+    <string name="model_none_loaded">No model is currently loaded</string>
+    <string name="model_loading_wait">Loading model, please wait…</string>
+    <string name="model_loaded">✅ Model loaded: %s</string>
+    <string name="model_load_error">❌ Error: %s</string>
+    <string name="model_loading_toast">Loading model…</string>
+
+    <!-- Settings: Gemini API key + models -->
+    <string name="api_key_saved_on">API Key saved on: %s</string>
+    <string name="api_key_saved">API Key is saved</string>
+    <string name="api_key_saved_toast">API Key saved</string>
+    <string name="api_key_empty">API Key cannot be empty</string>
+    <string name="api_key_cleared">API Key cleared</string>
+    <string name="current_model">Current: %s</string>
+    <string name="loading">Loading…</string>
+    <string name="refresh_models">Refresh Models</string>
+    <string name="model_changed">Model changed to %s</string>
 </resources>

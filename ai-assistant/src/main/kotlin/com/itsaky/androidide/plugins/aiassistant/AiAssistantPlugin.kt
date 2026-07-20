@@ -3,15 +3,16 @@ package com.itsaky.androidide.plugins.aiassistant
 import com.itsaky.androidide.plugins.IPlugin
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.extensions.UIExtension
-import com.itsaky.androidide.plugins.extensions.ContextMenuContext
 import com.itsaky.androidide.plugins.extensions.DocumentationExtension
 import com.itsaky.androidide.plugins.extensions.MenuItem
 import com.itsaky.androidide.plugins.extensions.PluginTooltipButton
 import com.itsaky.androidide.plugins.extensions.PluginTooltipEntry
 import com.itsaky.androidide.plugins.extensions.TabItem
+import com.itsaky.androidide.plugins.services.IdeProjectService
 import com.itsaky.androidide.plugins.services.LlmInferenceService
 import com.itsaky.androidide.plugins.services.SharedServices
 import com.itsaky.androidide.plugins.aiassistant.fragments.ChatFragment
+import com.itsaky.androidide.plugins.aiassistant.tool.handlers.PathGuard
 import java.io.File
 
 class AiAssistantPlugin : IPlugin, UIExtension, DocumentationExtension {
@@ -54,6 +55,16 @@ class AiAssistantPlugin : IPlugin, UIExtension, DocumentationExtension {
             context.logger.info("LlmInferenceService available from SharedServices")
         }
 
+        PathGuard.setProjectRootProvider {
+            try {
+                context.services.get(IdeProjectService::class.java)
+                    ?.getCurrentProject()?.rootDir?.absolutePath
+            } catch (e: Exception) {
+                context.logger.warn("Could not resolve project root from IdeProjectService", e)
+                null
+            }
+        }
+
         // Migrate chat history and settings on first activation
         migrateDataIfNeeded()
 
@@ -62,6 +73,7 @@ class AiAssistantPlugin : IPlugin, UIExtension, DocumentationExtension {
 
     override fun deactivate(): Boolean {
         context.logger.info("AI Assistant Plugin deactivating...")
+        PathGuard.setProjectRootProvider(null)
         return true
     }
 
@@ -72,6 +84,7 @@ class AiAssistantPlugin : IPlugin, UIExtension, DocumentationExtension {
         // PluginContext (and everything it holds) can be garbage-collected when
         // the plugin is unloaded.
         SharedServices.unregister(PluginContext::class.java)
+        PathGuard.setProjectRootProvider(null)
         pluginContext = null
         llmService = null
     }
@@ -87,30 +100,6 @@ class AiAssistantPlugin : IPlugin, UIExtension, DocumentationExtension {
                 isEnabled = true,
                 isVisible = true,
                 tooltipTag = TOOLTIP_TAG_TAB
-            )
-        )
-    }
-
-    override fun getContextMenuItems(menuContext: ContextMenuContext): List<MenuItem> {
-        val selectedText = menuContext.selectedText
-        if (selectedText.isNullOrBlank()) {
-            return emptyList()
-        }
-
-        return listOf(
-            MenuItem(
-                id = "ai_explain_code",
-                title = "Explain Code",
-                isEnabled = true,
-                isVisible = true,
-                action = { context.logger.info("Explain Code clicked") }
-            ),
-            MenuItem(
-                id = "ai_generate_code",
-                title = "Generate Code",
-                isEnabled = true,
-                isVisible = true,
-                action = { context.logger.info("Generate Code clicked") }
             )
         )
     }
