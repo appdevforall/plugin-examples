@@ -33,6 +33,7 @@ class Executor(
         fun requiredArgsForTool(toolName: String): List<String> {
             return when (toolName) {
                 "read_file" -> listOf("file_path")
+                "open_file" -> listOf("file_path")
                 "list_files" -> emptyList()  // directory is optional, defaults to "."
                 "search_project" -> listOf("query")
                 "create_file" -> listOf("file_path", "content")
@@ -107,13 +108,7 @@ class Executor(
             return ToolResult.failure(message)
         }
 
-        for (key in handler.pathArgs) {
-            val raw = normalizedArgs[key]?.toString()?.trim()
-            if (!raw.isNullOrEmpty() && PathGuard.resolveWithin(raw) == null) {
-                Log.w(TAG, "($executionMode): '$toolName' arg '$key' escapes project root: $raw")
-                return ToolResult.failure("Path '$raw' is outside the project directory")
-            }
-        }
+        pathContainmentFailure(toolName, handler, normalizedArgs, executionMode)?.let { return it }
 
         // Check approval
         val approvalResponse = approvalManager.ensureApproved(toolName, handler, normalizedArgs)
@@ -136,6 +131,30 @@ class Executor(
 
         Log.i(TAG, "($executionMode): Result: ${result.toResultMap()}")
         return result
+    }
+
+    /**
+     * Confine model-supplied paths to the project root: fail if any of the
+     * handler's [ToolHandler.pathArgs] escapes it. Handlers that resolve paths
+     * themselves opt out via [ToolHandler.resolvesPathsInternally].
+     *
+     * @return a failure [ToolResult] for the first escaping arg, or null if all are safe.
+     */
+    private fun pathContainmentFailure(
+        toolName: String,
+        handler: ToolHandler,
+        args: Map<String, Any?>,
+        executionMode: String,
+    ): ToolResult? {
+        if (handler.resolvesPathsInternally) return null
+        for (key in handler.pathArgs) {
+            val raw = args[key]?.toString()?.trim()
+            if (raw.isNullOrEmpty()) continue
+            if (PathGuard.resolveWithin(raw) != null) continue
+            Log.w(TAG, "($executionMode): '$toolName' arg '$key' escapes project root: $raw")
+            return ToolResult.failure("Path '$raw' is outside the project directory")
+        }
+        return null
     }
 }
 

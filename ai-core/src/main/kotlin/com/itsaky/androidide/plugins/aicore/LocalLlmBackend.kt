@@ -6,10 +6,12 @@ import android.provider.OpenableColumns
 import com.itsaky.androidide.plugins.services.LlmInferenceService.*
 import com.itsaky.androidide.plugins.services.SharedServices
 import com.itsaky.androidide.plugins.PluginContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -22,9 +24,16 @@ import java.util.concurrent.CompletableFuture
  * Local LLM backend using llama-impl for on-device inference.
  * Wraps llama-impl APIs and implements LlmBackend interface.
  */
-class LocalLlmBackend(private val context: PluginContext) : LlmBackend {
+class LocalLlmBackend(private val context: PluginContext) : LlmBackend, CancellableBackend {
 
     companion object {
+        /**
+         * [LlmConfig.extraParams] key for an optional GBNF grammar. The caller
+         * owns it (keeping this backend free of any tool vocabulary); absent →
+         * unconstrained sampling.
+         */
+        const val EXTRA_PARAM_GRAMMAR = "grammar"
+
         /**
          * Belt-and-braces guard: `<|im_end|>` is an EOG control token, so the native loop
          * normally stops on it by itself. This only matters if a model emits it as plain
@@ -35,6 +44,8 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend {
 
     private val llama by lazy { LLamaAndroid.instance() }
     private val scope = CoroutineScope(Dispatchers.IO)
+
+    @Volatile private var currentStreamingJob: Job? = null
 
     /**
      * Separate from [scope] because [close] cancels [scope] and then has to run the unload —
@@ -295,6 +306,10 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend {
                 val responseBuilder = StringBuilder()
                 var tokenCount = 0
 
+                // Unconstrained path: clear any grammar left by a concurrent
+                // streaming call so completions never inherit a tool-call grammar.
+                llama.setGrammar(null)
+
                 llama.send(
                     message = fullPrompt,
                     formatChat = true,
@@ -339,7 +354,7 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend {
             return
         }
 
-        scope.launch {
+        currentStreamingJob = scope.launch {
             try {
                 // Configure sampling (use defaults for topP and topK)
                 LLamaAndroid.configureSampling(
@@ -359,26 +374,43 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend {
                 var tokenCount = 0
                 val responseBuilder = StringBuilder()
 
+                // Apply the caller-supplied grammar (cleared in finally); relies
+                // on the single-threaded native run loop serializing generations.
+                val grammar = config.extraParams?.get(EXTRA_PARAM_GRAMMAR) as? String
+                llama.setGrammar(grammar?.takeIf { it.isNotBlank() })
+
                 llama.send(
                     message = fullPrompt,
                     formatChat = true,
                     stop = CHAT_STOP,
-                    clearCache = false
+                    clearCache = true
                 ).collect { token ->
+                    ensureActive()
                     callback.onToken(token)
                     responseBuilder.append(token)
                     tokenCount++
                 }
 
                 callback.onComplete(LlmResponse.success(responseBuilder.toString(), tokenCount, System.currentTimeMillis() - startTime))
+            } catch (ce: CancellationException) {
+                context.logger.info("Streaming generation cancelled")
+                throw ce
             } catch (e: Exception) {
                 context.logger.error("Error during streaming generation", e)
                 if (e is ModelNotConfiguredException || e is IncompatibleModelException) {
                     UserFeedback.notify(context.androidContext, e.message ?: "Local LLM is not configured.")
                 }
                 callback.onError("Error: ${e.message}")
+            } finally {
+                llama.setGrammar(null)
             }
         }
+    }
+
+    /** Cancel any in-flight streaming generation (user pressed Stop). */
+    override fun cancelStreaming() {
+        currentStreamingJob?.cancel()
+        currentStreamingJob = null
     }
 
     override fun generateWithHistory(

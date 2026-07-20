@@ -123,4 +123,28 @@
     <string name="file_picker_toggle_all">Toggle All</string>
     <string name="file_picker_error_no_project">Open a project first — context files are picked from the project you have open.</string>
     <string name="file_picker_error_not_found">Project directory not found</string>
+
+    <!-- Agent loop / chat runtime messages -->
+    <string name="agent_max_steps_reached">Reached the %1$d-step limit. Ask me to continue if the task isn\'t finished.</string>
+    <string name="agent_repeated_calls">Stopped: the model kept requesting the same action. Try rephrasing your request.</string>
+    <string name="agent_action_failed">I couldn\'t complete that, the last action failed. See the details above.</string>
+    <string name="agent_no_response">(No response. Try rephrasing, or pick a larger model in AI Settings — very small models struggle with tool use.)</string>
+    <string name="generating_response">Generating response…</string>
+    <string name="system_log">System Log</string>
+
+    <!-- Settings: engine / model status -->
+    <string name="engine_initializing">Initializing engine…</string>
+    <string name="engine_ready">Engine ready</string>
+    <string name="model_saved_path">Saved: %s</string>
+    <string name="model_none_loaded">No model is currently loaded</string>
+    <string name="model_loading_wait">Loading model, please wait…</string>
+    <string name="model_loaded">✅ Model loaded: %s</string>
+    <string name="model_load_error">❌ Error: %s</string>
+    <string name="model_loading_toast">Loading model…</string>
+
+    <!-- Settings: models -->
+    <string name="current_model">Current: %s</string>
+    <string name="loading">Loading…</string>
+    <string name="refresh_models">Refresh Models</string>
+    <string name="model_changed">Model changed to %s</string>
 </resources>

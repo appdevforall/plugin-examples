@@ -554,6 +554,43 @@ Java_android_llama_cpp_LLamaAndroid_new_1sampler(JNIEnv *, jobject) {
     return reinterpret_cast<jlong>(smpl);
 }
 
+/**
+ * Build a sampler chain constrained by a GBNF grammar, so the model can only
+ * emit tokens the grammar allows — used for reliable text-based tool calls on
+ * weak local models.
+ *
+ * @param model_pointer native llama_model handle.
+ * @param grammar       GBNF grammar text, entered at its "root" rule.
+ * @return the native sampler handle, or 0 if the model is null or the grammar
+ *         fails to parse (the caller falls back to the plain sampler).
+ */
+extern "C"
+JNIEXPORT jlong JNICALL
+Java_android_llama_cpp_LLamaAndroid_new_1grammar_1sampler(
+        JNIEnv *env, jobject, jlong model_pointer, jstring grammar) {
+    const auto model = reinterpret_cast<llama_model *>(model_pointer);
+    if (model == nullptr) return 0;
+    const llama_vocab *vocab = llama_model_get_vocab(model);
+
+    const char *grammar_cstr = env->GetStringUTFChars(grammar, nullptr);
+    llama_sampler *grmr = llama_sampler_init_grammar(vocab, grammar_cstr, "root");
+    env->ReleaseStringUTFChars(grammar, grammar_cstr);
+    if (grmr == nullptr) return 0;  // invalid grammar — caller falls back
+
+    auto sparams = llama_sampler_chain_default_params();
+    sparams.no_perf = true;
+    llama_sampler *smpl = llama_sampler_chain_init(sparams);
+
+    // Grammar first: it masks tokens that would violate the grammar, so the
+    // selector below only ever picks a valid token.
+    llama_sampler_chain_add(smpl, grmr);
+    llama_sampler_chain_add(smpl, llama_sampler_init_penalties(64, 1.1f, 0.0f, 0.0f));
+    // Greedy: with the grammar mask in place, pick the most likely valid token.
+    llama_sampler_chain_add(smpl, llama_sampler_init_greedy());
+
+    return reinterpret_cast<jlong>(smpl);
+}
+
 extern "C"
 JNIEXPORT void JNICALL
 Java_android_llama_cpp_LLamaAndroid_free_1sampler(JNIEnv *, jobject, jlong sampler_pointer) {

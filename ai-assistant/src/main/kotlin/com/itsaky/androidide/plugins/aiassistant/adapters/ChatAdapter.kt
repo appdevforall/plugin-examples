@@ -12,7 +12,6 @@ import android.widget.LinearLayout
 import android.widget.PopupMenu
 import android.widget.ProgressBar
 import android.widget.TextView
-import android.widget.Toast
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
@@ -21,6 +20,7 @@ import com.itsaky.androidide.plugins.aiassistant.R
 import com.itsaky.androidide.plugins.aiassistant.models.ChatMessage
 import com.itsaky.androidide.plugins.aiassistant.models.MessageStatus
 import com.itsaky.androidide.plugins.aiassistant.models.Sender
+import com.google.android.material.snackbar.Snackbar
 import io.noties.markwon.Markwon
 import java.text.DecimalFormat
 import java.text.SimpleDateFormat
@@ -219,7 +219,7 @@ class ChatAdapter(
                 hideGeneratingDots(holder)
                 holder.messageContent.text = message.text
                 if (message.sender == Sender.SYSTEM) {
-                    holder.btnRetry.text = "Open AI Settings"
+                    holder.btnRetry.text = holder.btnRetry.context.getString(R.string.action_open_settings)
                     holder.btnRetry.setOnClickListener {
                         onMessageAction(ACTION_OPEN_SETTINGS, message)
                     }
@@ -227,7 +227,7 @@ class ChatAdapter(
                     // tag has to follow the role it currently has.
                     wireTooltip(holder.btnRetry, AiAssistantPlugin.TOOLTIP_TAG_MESSAGE_OPEN_SETTINGS)
                 } else {
-                    holder.btnRetry.text = "Retry"
+                    holder.btnRetry.text = holder.btnRetry.context.getString(R.string.action_retry)
                     holder.btnRetry.setOnClickListener {
                         onMessageAction(ACTION_RETRY, message)
                     }
@@ -257,7 +257,7 @@ class ChatAdapter(
     private fun updateSystemMessageExpansion(holder: SystemMessageViewHolder, message: ChatMessage) {
         val isExpanded = expandedMessageIds.contains(message.id)
         if (isExpanded) {
-            holder.messageHeaderTitle.text = "System Log"
+            holder.messageHeaderTitle.text = holder.messageHeaderTitle.context.getString(R.string.system_log)
             holder.messageContent.visibility = View.VISIBLE
             holder.expandIcon.rotation = 180f
         } else {
@@ -268,14 +268,14 @@ class ChatAdapter(
     }
 
     /**
-     * Starts — or restarts — the "..." animation, cancelling any step already queued for [holder]
-     * so repeated binds of one recycled row cannot stack loops. The step is posted on the dots
-     * view, not a bare main-looper Handler, so [hideGeneratingDots] can cancel it.
+     * Starts the "..." animation, or leaves an already-running one alone: restarting on every
+     * streaming rebind would reset the loop to "." and it would never visibly advance. The step is
+     * posted on the dots view, not a bare main-looper Handler, so [hideGeneratingDots] can cancel it.
      *
      * @param holder the row whose dots should animate
      */
     private fun animateGeneratingDots(holder: DefaultMessageViewHolder) {
-        hideGeneratingDots(holder)
+        if (holder.generatingDotsStep != null) return
         holder.generatingDots.visibility = View.VISIBLE
         val dotStates = arrayOf(".", "..", "...")
         var currentIndex = 0
@@ -383,7 +383,7 @@ class ChatAdapter(
                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                     val clip = ClipData.newPlainText("chat_message", message.text)
                     clipboard.setPrimaryClip(clip)
-                    Toast.makeText(context, "Copied", Toast.LENGTH_SHORT).show()
+                    Snackbar.make(view, view.context.getString(R.string.msg_copied), Snackbar.LENGTH_SHORT).show()
                     true
                 }
                 2 -> {

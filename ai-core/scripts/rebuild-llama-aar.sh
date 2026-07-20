@@ -11,12 +11,12 @@
 
 set -euo pipefail
 
-# Run from the ai-assistant/ project root regardless of where it's invoked.
+# Run from the ai-core/ project root regardless of where it's invoked.
 cd "$(dirname "$0")/.."
 
-AAR_DST="ai-core-plugin/libs/v8/llama-v8-release.aar"
+AAR_DST="libs/v8/llama-v8-release.aar"
 AAR_SRC="llama-impl/build/outputs/aar/llama-impl-release.aar"
-API_DST="ai-core-plugin/libs/llama-api.jar"
+API_DST="libs/llama-api.jar"
 API_SRC="llama-api/build/libs/llama-api.jar"
 
 echo "==> Initializing the llama.cpp submodule (source for the native build)"
@@ -25,7 +25,7 @@ git submodule update --init --recursive
 echo "==> Building :llama-impl (native lib) and :llama-api (interface jar)"
 ./gradlew :llama-impl:assembleRelease :llama-api:jar
 
-echo "==> Copying artifacts into ai-core-plugin/libs"
+echo "==> Copying artifacts into ai-core/libs"
 cp "$AAR_SRC" "$AAR_DST"
 cp "$API_SRC" "$API_DST"
 

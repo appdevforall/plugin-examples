@@ -94,6 +94,19 @@ class LLamaAndroid : ILlamaController {
 
     private val isStopped = AtomicBoolean(false)
 
+    /**
+     * Optional GBNF grammar constraining the next generation(s). When set, [send]
+     * builds a fresh grammar-constrained sampler per call (grammar state is
+     * per-generation) and frees it afterward. Null → the plain load-time sampler.
+     */
+    @Volatile
+    private var grammar: String? = null
+
+    /** Set (or clear, with null) the GBNF grammar used to constrain generation. */
+    fun setGrammar(gbnf: String?) {
+        grammar = gbnf?.takeIf { it.isNotBlank() }
+    }
+
     @Volatile
     private var runLoopDispatcher: ExecutorCoroutineDispatcher = createRunLoop()
 
@@ -152,6 +165,7 @@ class LLamaAndroid : ILlamaController {
     private external fun new_batch(nTokens: Int, embd: Int, nSeqMax: Int): Long
     private external fun free_batch(batch: Long)
     private external fun new_sampler(): Long
+    private external fun new_grammar_sampler(model: Long, grammar: String): Long
     private external fun free_sampler(sampler: Long)
     private external fun bench_model(
         context: Long,
@@ -263,28 +277,43 @@ class LLamaAndroid : ILlamaController {
                     kv_cache_clear(state.context)
                 }
 
-                val ncur = IntVar(
-                    completion_init(
-                        state.context,
-                        state.batch,
-                        message,
-                        formatChat,
-                        nlen,
-                        stop.toTypedArray()
+                // A grammar sampler is stateful, so build a fresh one for this
+                // generation and free it when done. Fall back to the plain
+                // load-time sampler if there's no grammar or it fails to build.
+                val grammarText = grammar
+                val grammarSampler = grammarText?.let { new_grammar_sampler(state.model, it) }
+                    ?.takeIf { it != 0L }
+                if (grammarText != null && grammarSampler == null) {
+                    log.warn("Grammar sampler failed to build; falling back to the plain sampler")
+                }
+                val sampler = grammarSampler ?: state.sampler
+
+                try {
+                    val ncur = IntVar(
+                        completion_init(
+                            state.context,
+                            state.batch,
+                            message,
+                            formatChat,
+                            nlen,
+                            stop.toTypedArray()
+                        )
                     )
-                )
 
-                while (true) {
-                    if (isStopped.get()) {
-                        log.info("Stopping generation loop because stop flag was set.")
-                        break
-                    }
+                    while (true) {
+                        if (isStopped.get()) {
+                            log.info("Stopping generation loop because stop flag was set.")
+                            break
+                        }
 
-                    val str = completion_loop(state.context, state.batch, state.sampler, nlen, ncur)
-                    if (str == null) {
-                        break
+                        val str = completion_loop(state.context, state.batch, sampler, nlen, ncur)
+                        if (str == null) {
+                            break
+                        }
+                        emit(str)
                     }
-                    emit(str)
+                } finally {
+                    if (grammarSampler != null) free_sampler(grammarSampler)
                 }
             }
 

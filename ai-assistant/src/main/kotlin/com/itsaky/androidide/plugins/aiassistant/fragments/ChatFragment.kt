@@ -320,33 +320,33 @@ class ChatFragment : Fragment() {
                 is AgentState.Idle -> {
                     binding.agentStatusContainer.isVisible = false
                     binding.sendButton.isEnabled = true
-                    binding.sendButton.text = "Send"
+                    binding.sendButton.text = getString(R.string.send)
                 }
                 is AgentState.Executing -> {
                     binding.agentStatusContainer.isVisible = true
                     binding.agentStatusMessage.text = state.formattedProgress
                     binding.agentStatusTimer.text = state.formattedTiming
                     binding.sendButton.isEnabled = true
-                    binding.sendButton.text = "Stop"
+                    binding.sendButton.text = getString(R.string.btn_stop)
                     viewModel.startStateTimer(state)
                 }
                 is AgentState.Processing -> {
                     binding.agentStatusContainer.isVisible = true
-                    binding.agentStatusMessage.text = "Generating response..."
+                    binding.agentStatusMessage.text = getString(R.string.generating_response)
                     binding.agentStatusTimer.text = ""
                     binding.sendButton.isEnabled = true
-                    binding.sendButton.text = "Stop"
+                    binding.sendButton.text = getString(R.string.btn_stop)
                 }
                 is AgentState.Error -> {
                     binding.agentStatusContainer.isVisible = false
                     binding.sendButton.isEnabled = true
-                    binding.sendButton.text = "Send"
+                    binding.sendButton.text = getString(R.string.send)
                     viewModel.stopStateTimer()
                     showErrorSnackbar(state.message)
                 }
                 else -> {
                     binding.sendButton.isEnabled = false
-                    binding.sendButton.text = "Send"
+                    binding.sendButton.text = getString(R.string.send)
                 }
             }
         }
