@@ -73,7 +73,8 @@ class GeminiBackend(private val context: PluginContext) : LlmBackend {
             context.logger.error("GeminiBackend: Error getting preferences", e)
             null
         }
-        return prefs?.getString("gemini_api_key", null)?.trim()?.takeIf { it.isNotBlank() }
+        val stored = prefs?.getString("gemini_api_key", null)
+        return SecureApiKeyStore.decrypt(stored)?.trim()?.takeIf { it.isNotBlank() }
     }
 
     override fun getId(): String = "gemini"
@@ -81,7 +82,7 @@ class GeminiBackend(private val context: PluginContext) : LlmBackend {
     override fun getName(): String = "Gemini API"
 
     override fun isAvailable(): Boolean {
-        // Available once an API key is configured.
+        // Available once a (decryptable) API key is configured.
         val apiKey = readGeminiApiKey()
         context.logger.debug("GeminiBackend.isAvailable() - API key configured: ${!apiKey.isNullOrBlank()}")
         return !apiKey.isNullOrBlank()

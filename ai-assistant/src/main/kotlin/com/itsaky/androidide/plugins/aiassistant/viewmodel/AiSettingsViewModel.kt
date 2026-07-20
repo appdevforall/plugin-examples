@@ -5,6 +5,7 @@ import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.itsaky.androidide.plugins.aiassistant.security.SecureApiKeyStore
 import com.itsaky.androidide.plugins.services.LlmInferenceService
 import com.itsaky.androidide.plugins.services.SharedServices
 import kotlinx.coroutines.Dispatchers
@@ -188,21 +189,33 @@ class AiSettingsViewModel(
     }
 
     /**
-     * Persists the Gemini API key in this plugin's private SharedPreferences.
-     * The store is app-sandboxed (not world-readable) but NOT encrypted at rest;
-     * it is recoverable on a rooted/compromised device. Use [clearGeminiApiKey]
-     * to remove it. See the plugin README "Security" section for the tradeoff.
+     * Persists the Gemini API key in this plugin's private SharedPreferences,
+     * encrypted at rest with a hardware-backed Android Keystore secret (see
+     * [SecureApiKeyStore]). Only ciphertext is written, so the prefs file alone
+     * (root, `adb backup`, forensic dump) does not disclose the key. Use
+     * [clearGeminiApiKey] to remove it.
+     *
+     * Returns false (persisting nothing) if encryption fails — e.g. a hardware Keystore
+     * fault the automatic key-regeneration retry couldn't recover — so the caller can warn
+     * the user instead of the whole IDE crashing on Save.
      */
-    fun saveGeminiApiKey(apiKey: String) {
+    fun saveGeminiApiKey(apiKey: String): Boolean {
+        val encrypted = try {
+            SecureApiKeyStore.encrypt(apiKey.trim())
+        } catch (e: Exception) {
+            android.util.Log.e(TAG, "Failed to encrypt Gemini API key", e)
+            return false
+        }
         getPluginPrefs()?.edit()?.apply {
-            putString("gemini_api_key", apiKey)
+            putString("gemini_api_key", encrypted)
             putLong("gemini_api_key_timestamp", System.currentTimeMillis())
             apply()
         }
+        return true
     }
 
     fun getGeminiApiKey(): String? {
-        return getPluginPrefs()?.getString("gemini_api_key", null)
+        return SecureApiKeyStore.decrypt(getPluginPrefs()?.getString("gemini_api_key", null))
     }
 
     fun getGeminiApiKeySaveTimestamp(): Long {
