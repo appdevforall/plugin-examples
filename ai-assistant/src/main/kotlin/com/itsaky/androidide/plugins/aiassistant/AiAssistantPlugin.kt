@@ -20,6 +20,10 @@ class AiAssistantPlugin : IPlugin, UIExtension, DocumentationExtension {
     private var llmService: LlmInferenceService? = null
 
     companion object {
+        /** Must match `plugin.id` in AndroidManifest.xml — keys the host's plugin Context lookup
+         *  used by [com.itsaky.androidide.plugins.base.PluginFragmentHelper.getPluginInflater]. */
+        const val PLUGIN_ID = "com.itsaky.androidide.plugins.aiassistant"
+
         const val TOOLTIP_TAG_TAB = "agent_chat_tab"
 
         @Volatile

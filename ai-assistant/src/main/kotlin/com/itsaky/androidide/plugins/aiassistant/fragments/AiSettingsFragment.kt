@@ -59,18 +59,24 @@ class AiSettingsFragment : DialogFragment() {
             }
         }
 
+    /**
+     * Route inflation through the host so the dialog's views resolve against a Context whose
+     * Configuration tracks the IDE's day/night setting (DayNight PluginTheme + values-night/
+     * colors). Replaces the old cloneInContext(pluginContext), which pinned the UI to light mode.
+     */
+    override fun onGetLayoutInflater(savedInstanceState: Bundle?): LayoutInflater {
+        val inflater = super.onGetLayoutInflater(savedInstanceState)
+        return com.itsaky.androidide.plugins.base.PluginFragmentHelper.getPluginInflater(
+            com.itsaky.androidide.plugins.aiassistant.AiAssistantPlugin.PLUGIN_ID, inflater
+        )
+    }
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View? {
-        // Get plugin context to ensure proper resource inflation
-        val pluginContext = getPluginContext()?.androidContext ?: requireContext()
-
-        // Create inflater with plugin context
-        val pluginInflater = inflater.cloneInContext(pluginContext)
-
-        return pluginInflater.inflate(R.layout.fragment_ai_settings, container, false)
+        return inflater.inflate(R.layout.fragment_ai_settings, container, false)
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -145,18 +151,17 @@ class AiSettingsFragment : DialogFragment() {
     private fun updateBackendSpecificUi(backend: AiBackend) {
         backendSpecificContainer.removeAllViews()
 
-        // Use plugin context for inflating layouts
-        val pluginContext = getPluginContext()?.androidContext ?: requireContext()
-
+        // Reuse the fragment's theme-aware inflater (routed through getPluginInflater) so these
+        // sub-layouts follow the IDE day/night theme like the rest of the dialog.
         when (backend) {
             AiBackend.LOCAL_LLM -> {
-                val localLlmView = LayoutInflater.from(pluginContext)
+                val localLlmView = layoutInflater
                     .inflate(R.layout.layout_settings_local_llm, backendSpecificContainer, false)
                 backendSpecificContainer.addView(localLlmView)
                 setupLocalLlmUi(localLlmView)
             }
             AiBackend.GEMINI -> {
-                val geminiApiView = LayoutInflater.from(pluginContext)
+                val geminiApiView = layoutInflater
                     .inflate(R.layout.layout_settings_gemini_api, backendSpecificContainer, false)
                 backendSpecificContainer.addView(geminiApiView)
                 setupGeminiApiUi(geminiApiView)
