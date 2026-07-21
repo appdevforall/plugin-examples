@@ -3,14 +3,14 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="#FFFFFF">
+    android:background="@color/plugin_surface">
 
     <!-- Toolbar with title and menu buttons -->
     <LinearLayout
         android:id="@+id/chat_toolbar"
         android:layout_width="match_parent"
         android:layout_height="56dp"
-        android:background="#E0E0E0"
+        android:background="@color/plugin_surface_variant"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingStart="16dp"
@@ -21,7 +21,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="AI Agent"
-            android:textColor="#212121"
+            android:textColor="@color/plugin_on_surface"
             android:textSize="20sp"
             android:textStyle="bold" />
 
@@ -31,7 +31,7 @@
             android:layout_height="48dp"
             android:text="⋮"
             android:textSize="24sp"
-            android:textColor="#212121"
+            android:textColor="@color/plugin_on_surface"
             android:background="?android:attr/selectableItemBackground"
             android:padding="0dp" />
     </LinearLayout>
@@ -42,7 +42,7 @@
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:background="#FAFAFA" />
+        android:background="@color/plugin_surface" />
 
     <!-- Hidden views that code expects -->
     <TextView
@@ -72,7 +72,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:background="#FFFFFF"
+        android:background="@color/plugin_surface_variant"
         android:elevation="8dp"
         android:padding="12dp">
 

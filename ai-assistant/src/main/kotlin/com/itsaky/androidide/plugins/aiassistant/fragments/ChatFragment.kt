@@ -50,18 +50,25 @@ class ChatFragment : Fragment() {
     }
 
 
+    /**
+     * Route inflation through the host so the plugin's views resolve against a Context whose
+     * Configuration tracks the IDE's day/night setting — this is what lets values-night/ colors
+     * and the DayNight PluginTheme take effect. Replaces the old cloneInContext(pluginContext),
+     * which used the plugin's base Context and stayed pinned to light mode.
+     */
+    override fun onGetLayoutInflater(savedInstanceState: Bundle?): LayoutInflater {
+        val inflater = super.onGetLayoutInflater(savedInstanceState)
+        return com.itsaky.androidide.plugins.base.PluginFragmentHelper.getPluginInflater(
+            com.itsaky.androidide.plugins.aiassistant.AiAssistantPlugin.PLUGIN_ID, inflater
+        )
+    }
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        // Get plugin context to ensure proper resource inflation
-        val pluginContext = getPluginContext()?.androidContext ?: requireContext()
-
-        // Create inflater with plugin context
-        val pluginInflater = inflater.cloneInContext(pluginContext)
-
-        _binding = FragmentChatBinding.inflate(pluginInflater, container, false)
+        _binding = FragmentChatBinding.inflate(inflater, container, false)
         return binding.root
     }
 
@@ -168,9 +175,9 @@ class ChatFragment : Fragment() {
     }
 
     private fun setupRecyclerView() {
-        // Use plugin context for adapter to ensure proper resource inflation
-        val pluginContext = getPluginContext()?.androidContext ?: requireContext()
-        chatAdapter = ChatAdapter(pluginContext, markwon) { action, message ->
+        // The adapter inflates item views from parent.context (the RecyclerView's theme-aware
+        // Context), so it no longer needs a Context passed in.
+        chatAdapter = ChatAdapter(markwon) { action, message ->
             onMessageAction(action, message)
         }
         binding.chatRecyclerView.apply {
@@ -183,9 +190,9 @@ class ChatFragment : Fragment() {
 
     private fun setupToolbar() {
         binding.btnOverflowMenu.setOnClickListener { view ->
-            // Use plugin context for PopupMenu to access menu resources
-            val pluginContext = getPluginContext()?.androidContext ?: requireContext()
-            val popup = android.widget.PopupMenu(pluginContext, view)
+            // Anchor's Context is the theme-aware plugin Context (inflated via getPluginInflater),
+            // so the menu resource resolves and follows the IDE day/night theme.
+            val popup = android.widget.PopupMenu(view.context, view)
             popup.menuInflater.inflate(com.itsaky.androidide.plugins.aiassistant.R.menu.chat_overflow_menu, popup.menu)
 
             popup.setOnMenuItemClickListener { menuItem ->
@@ -302,6 +309,7 @@ class ChatFragment : Fragment() {
                     binding.sendButton.isEnabled = true
                     binding.sendButton.text = "Send"
                     viewModel.stopStateTimer()
+                    showErrorSnackbar(state.message)
                 }
                 else -> {
                     binding.sendButton.isEnabled = false
@@ -386,6 +394,20 @@ class ChatFragment : Fragment() {
         val settingsFragment = AiSettingsFragment()
         // Show as dialog fragment to avoid overlapping with chat UI
         settingsFragment.show(parentFragmentManager, "ai_settings")
+    }
+
+    /**
+     * Surface an [AgentState.Error] as a transient, actionable Snackbar with a shortcut into
+     * settings. Snackbar (not Toast) is mandatory here: a Toast built from the plugin's Context
+     * crashes the IDE with a SecurityException because the plugin package isn't a real installed
+     * UID; Snackbar attaches to the existing host view hierarchy instead.
+     */
+    private fun showErrorSnackbar(message: String) {
+        val binding = _binding ?: return
+        com.google.android.material.snackbar.Snackbar
+            .make(binding.root, message, com.google.android.material.snackbar.Snackbar.LENGTH_LONG)
+            .setAction("Settings") { openSettingsFragment() }
+            .show()
     }
 
 }

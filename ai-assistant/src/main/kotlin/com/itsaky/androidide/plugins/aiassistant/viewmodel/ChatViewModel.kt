@@ -227,6 +227,24 @@ class ChatViewModel(
     }
 
     /**
+     * Surface a configuration/setup problem to the user both ways: a persistent SYSTEM error
+     * bubble in the transcript, and [AgentState.Error] so the fragment can show a transient,
+     * actionable Snackbar. Used by the [sendMessage] pre-flight guards, which reject the request
+     * before any backend runs — so the downstream `onError`/UserFeedback feedback never fires.
+     */
+    private fun emitSystemError(text: String) {
+        val errorMessage = ChatMessage(
+            id = UUID.randomUUID().toString(),
+            text = text,
+            sender = Sender.SYSTEM,
+            status = MessageStatus.ERROR
+        )
+        _messages.value = _messages.value + errorMessage
+        syncMessageToSession(errorMessage)
+        _agentState.value = AgentState.Error(text)
+    }
+
+    /**
      * Build context string from selected files.
      */
     private fun buildContextString(): String {
@@ -473,13 +491,16 @@ class ChatViewModel(
         val llmService = getLlmService()
         if (llmService == null) {
             android.util.Log.d("ChatViewModel", "sendMessage: LLM service not available")
-            _agentState.value = AgentState.Error("LLM service not available. Install AI Core plugin.")
+            emitSystemError("LLM service not available. Install the AI Core plugin.")
             return
         }
 
         if (!_isBackendAvailable.value) {
             android.util.Log.d("ChatViewModel", "sendMessage: Backend not available")
-            _agentState.value = AgentState.Error("No LLM backend available. Please configure one in AI Core plugin.")
+            emitSystemError(
+                "No LLM backend is set up yet. Open Settings to select a local .gguf model, " +
+                    "or add a Gemini API key."
+            )
             return
         }
 
