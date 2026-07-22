@@ -122,7 +122,11 @@ class LlmInferenceServiceImpl : LlmInferenceService {
                 override fun onComplete(response: LlmResponse) = callback.onComplete(response)
                 override fun onError(error: String) = callback.onError(error)
             }
-            backend.generateStreaming(prompt, config, streamCallback)
+            if (backend is LocalLlmBackend) {
+                backend.generateStreamingWithHistory(history, prompt, config, streamCallback)
+            } else {
+                backend.generateStreaming(prompt, config, streamCallback)
+            }
             return
         }
 

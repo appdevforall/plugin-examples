@@ -6,22 +6,14 @@ import com.itsaky.androidide.plugins.services.LlmInferenceService.ChatMessage
 import com.itsaky.androidide.plugins.services.LlmInferenceService.ChatMessage.Role
 
 /**
- * The agentic tool-loop.
- *
- * Text-based tool calling has no "tool" message role and no streaming+history
- * API, so the loop keeps its own transcript and re-renders it into the prompt
- * each turn — feeding tool results back (the edge that had made the agent
- * single-shot) and giving it cross-turn memory.
- *
- * Each turn: render transcript → prompt, [generate] a reply, extract tool calls;
- * if none, stop; otherwise run the tools, append their results, and loop.
- *
- * Free of Android/coroutine/UI deps so it unit-tests with plain fakes;
- * [ChatViewModel] injects the real streaming generation and tool executor.
+ * The agentic tool-loop: each turn renders the transcript into a prompt, generates a
+ * reply, and runs any tool calls, looping until the model stops or a limit is hit.
+ * Free of Android/coroutine/UI deps so it unit-tests with plain fakes.
  */
 class AgentLoop(
     private val maxIterations: Int = DEFAULT_MAX_ITERATIONS,
     private val toolOutputCharLimit: Int = DEFAULT_TOOL_OUTPUT_CHAR_LIMIT,
+    private val maxConsecutiveRepeats: Int = DEFAULT_MAX_CONSECUTIVE_REPEATS,
     private val extractToolCalls: (String) -> List<ToolCall> = ToolCallExtractor::extractToolCalls,
     private val terminalTool: String? = null,
 ) {
@@ -32,50 +24,87 @@ class AgentLoop(
 
         /** Per-tool-result cap fed back into the prompt, so big outputs don't blow a local model's context. */
         const val DEFAULT_TOOL_OUTPUT_CHAR_LIMIT = 4000
+
+        /**
+         * Consecutive identical tool-call batches tolerated before aborting as
+         * [StopReason.REPEATED]; a truncated result can make one repeat legitimate.
+         */
+        const val DEFAULT_MAX_CONSECUTIVE_REPEATS = 2
     }
 
     /** Callbacks so the caller can drive UI/state; all no-ops by default. */
     interface Events {
-        /** A model turn finished with [text] (already streamed into the UI by the generator). */
+        /**
+         * A model turn finished.
+         * @param turn 1-based turn index.
+         * @param text the model's reply, already streamed into the UI.
+         */
         suspend fun onModelTurn(turn: Int, text: String) {}
 
-        /** [calls] were executed with [results]; the caller renders them in the UI. */
+        /**
+         * A tool batch was executed; the caller renders it.
+         * @param turn 1-based turn index.
+         * @param calls the tool calls that ran.
+         * @param results their results, positionally aligned with [calls].
+         */
         suspend fun onToolResults(turn: Int, calls: List<ToolCall>, results: List<ToolResult>) {}
 
-        /** The loop stopped because it hit [maxIterations] while still calling tools. */
+        /**
+         * The loop stopped after hitting the iteration cap while still calling tools.
+         * @param turns total turns run.
+         */
         suspend fun onMaxIterationsReached(turns: Int) {}
 
-        /** The loop stopped because the model asked for the exact same tool calls twice in a row. */
+        /**
+         * The loop stopped after the model repeated identical tool calls.
+         * @param turns total turns run.
+         */
         suspend fun onRepeatedToolCalls(turns: Int) {}
 
-        /** The model called the terminal tool to finish; [message] is its final answer. */
+        /**
+         * The model called the terminal tool to finish.
+         * @param turn 1-based turn index.
+         * @param message the model's final answer.
+         */
         suspend fun onFinalAnswer(turn: Int, message: String) {}
     }
 
     /** Why the loop stopped. */
     enum class StopReason { COMPLETED, MAX_ITERATIONS, REPEATED }
 
-    /** Outcome of a run. [completed] is true when the model ended on its own (no more tool calls). */
+    /**
+     * Outcome of a run; [completed] is true when the model ended on its own.
+     * @property turns model turns executed.
+     * @property reason why the loop stopped.
+     */
     data class Result(val turns: Int, val reason: StopReason) {
         val completed: Boolean get() = reason == StopReason.COMPLETED
     }
 
     /**
-     * Run the loop against [history] (mutated in place; seed it with the user
-     * message). [generate] renders one model turn; [executeTools] runs a tool batch.
+     * Runs the tool loop until the model stops calling tools or a limit is hit.
+     * @param history transcript, mutated in place; seed it with the user message.
+     * @param generate renders one model turn from the transcript so far. Receives the turns
+     *   structurally rather than pre-flattened, so a backend that speaks a real chat format can
+     *   emit one turn per message; flattening callers can use [renderTranscript].
+     * @param executeTools runs a batch of tool calls.
+     * @param events UI/state callbacks.
+     * @return the run [Result].
      */
     suspend fun run(
         history: MutableList<ChatMessage>,
-        generate: suspend (prompt: String) -> String,
+        generate: suspend (turns: List<ChatMessage>) -> String,
         executeTools: suspend (List<ToolCall>) -> List<ToolResult>,
         events: Events = object : Events {},
     ): Result {
         var turn = 0
         var previousSignature: String? = null
+        var consecutiveRepeats = 0
+        var previousBatchSucceeded = false
         while (turn < maxIterations) {
             turn++
 
-            val text = generate(renderTranscript(history))
+            val text = generate(history.toList())
             history.add(ChatMessage(Role.ASSISTANT, text))
             events.onModelTurn(turn, text)
 
@@ -84,47 +113,62 @@ class AgentLoop(
                 return Result(turn, StopReason.COMPLETED)
             }
 
-            // Terminal tool: the model signals it's finished by calling it (with a
-            // `message`). Emit that as the final answer and stop — don't dispatch
-            // it as a real tool (there's no handler for it).
+            // Terminal tool alone ends the loop; if co-emitted with real tools, run those first.
+            val realCalls = terminalTool?.let { tt -> calls.filterNot { it.name == tt } } ?: calls
             terminalTool?.let { tt ->
-                calls.firstOrNull { it.name == tt }?.let { done ->
-                    events.onFinalAnswer(turn, done.args["message"]?.toString().orEmpty())
+                val terminal = calls.firstOrNull { it.name == tt }
+                if (terminal != null && realCalls.isEmpty()) {
+                    events.onFinalAnswer(turn, terminal.args["message"]?.toString().orEmpty())
                     return Result(turn, StopReason.COMPLETED)
                 }
             }
 
-            // Stuck-detection: a weak model can loop by re-requesting the exact
-            // same tool calls forever. If it does, stop instead of spinning.
-            val signature = signatureOf(calls)
+            val signature = signatureOf(realCalls)
             if (signature == previousSignature) {
-                events.onRepeatedToolCalls(turn)
-                return Result(turn, StopReason.REPEATED)
+                if (previousBatchSucceeded) {
+                    return Result(turn, StopReason.COMPLETED)
+                }
+                consecutiveRepeats++
+                if (consecutiveRepeats >= maxConsecutiveRepeats) {
+                    events.onRepeatedToolCalls(turn)
+                    return Result(turn, StopReason.REPEATED)
+                }
+            } else {
+                consecutiveRepeats = 0
             }
             previousSignature = signature
 
-            val results = executeTools(calls)
-            events.onToolResults(turn, calls, results)
-            history.add(ChatMessage(Role.USER, formatToolResults(calls, results)))
+            val results = executeTools(realCalls)
+            previousBatchSucceeded = results.isNotEmpty() && results.all { it.success }
+            events.onToolResults(turn, realCalls, results)
+            history.add(ChatMessage(Role.USER, formatToolResults(realCalls, results)))
         }
 
         events.onMaxIterationsReached(turn)
         return Result(turn, StopReason.MAX_ITERATIONS)
     }
 
-    /** A stable fingerprint of a batch of tool calls (name + args), order-sensitive. */
+    /**
+     * Builds a stable, order-sensitive fingerprint of a tool-call batch (name + args).
+     * @param calls the batch to fingerprint.
+     * @return the fingerprint string.
+     */
     private fun signatureOf(calls: List<ToolCall>): String =
         calls.joinToString("|") { call ->
             call.name + "(" + call.args.toSortedMap().entries.joinToString(",") { "${it.key}=${it.value}" } + ")"
         }
 
     /**
-     * Flatten the transcript into a single prompt string.
+     * Flattens the transcript into one prompt string, with no trailing "Assistant:" cue
+     * (the backend appends its own; a doubled cue makes local models repeat).
      *
-     * The backend appends its own trailing "Assistant:" cue, so we must not add
-     * one (a doubled "Assistant:" made local models degenerate into repetition).
-     * We render only the body: assistant turns are labelled, tool-result turns
-     * already carry their own prefix, and there is no trailing cue.
+     * For backends whose transport carries only a single string. A backend that renders real
+     * conversation turns must be given the [ChatMessage] list instead — flattening a multi-turn
+     * run into one string leaves the assistant's tool calls and the tool results sitting inside
+     * whatever single turn the backend wraps this in.
+     *
+     * @param history the conversation so far.
+     * @return the rendered prompt.
      */
     fun renderTranscript(history: List<ChatMessage>): String {
         val sb = StringBuilder()
@@ -138,9 +182,21 @@ class AgentLoop(
         return sb.toString()
     }
 
-    /** Render tool results for feeding back into the next prompt, capping each body. */
+    /**
+     * Renders tool results for feeding back into the next prompt, capping each body.
+     *
+     * Each result is wrapped in `<tool_response>` tags. Chat-tuned models are trained to read
+     * tool output inside that delimiter, and it reads as a single token once the backend
+     * tokenizes with special tokens enabled. Handed the same content as bare prose, a small
+     * model tends not to register that the call already ran and re-issues it, which the
+     * [maxConsecutiveRepeats] guard then has to abort.
+     *
+     * @param calls the tool calls that ran.
+     * @param results their results, positionally aligned with [calls].
+     * @return the formatted results block.
+     */
     fun formatToolResults(calls: List<ToolCall>, results: List<ToolResult>): String {
-        val sb = StringBuilder("Tool results:\n")
+        val sb = StringBuilder()
         results.forEachIndexed { index, result ->
             val name = calls.getOrNull(index)?.name ?: "tool"
             val body = if (result.success) {
@@ -154,7 +210,9 @@ class AgentLoop(
                     result.error_details?.takeIf { it.isNotBlank() }?.let { append("\n").append(it) }
                 }
             }
-            sb.append("[").append(name).append("] ").append(truncate(body)).append("\n\n")
+            sb.append("<tool_response>\n")
+                .append("[").append(name).append("] ").append(truncate(body)).append("\n")
+                .append("</tool_response>\n\n")
         }
         sb.append(
             "Base your reply strictly on the tool result(s) above — report only what they actually say; " +

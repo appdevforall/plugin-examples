@@ -41,6 +41,7 @@ class ChatAdapter(
     private val timeFormatter = SimpleDateFormat("h:mm a", Locale.getDefault())
     private val decimalSecondsFormatter = DecimalFormat("0.0")
     private val expandedMessageIds = mutableSetOf<String>()
+    private val animatingHolders = mutableSetOf<DefaultMessageViewHolder>()
 
     companion object {
         private const val VIEW_TYPE_DEFAULT = 0
@@ -292,6 +293,7 @@ class ChatAdapter(
             }
         }
         holder.generatingDotsStep = step
+        animatingHolders.add(holder)
         holder.generatingDots.post(step)
     }
 
@@ -304,13 +306,27 @@ class ChatAdapter(
     private fun hideGeneratingDots(holder: DefaultMessageViewHolder) {
         holder.generatingDotsStep?.let { holder.generatingDots.removeCallbacks(it) }
         holder.generatingDotsStep = null
+        animatingHolders.remove(holder)
         holder.generatingDots.visibility = View.GONE
     }
 
-    /** Stops the dots animation of a row leaving the screen, so its step can't outlive the view. */
+    /**
+     * Stop every live "…" animation. Call from the host fragment's `onDestroyView`:
+     * a message still streaming when the tab closes never reaches a terminal status
+     * and its holder is never recycled, so nothing else cancels its Runnable.
+     */
+    fun stopAllAnimations() {
+        animatingHolders.toList().forEach { hideGeneratingDots(it) }
+    }
+
     override fun onViewRecycled(holder: RecyclerView.ViewHolder) {
         super.onViewRecycled(holder)
         if (holder is DefaultMessageViewHolder) hideGeneratingDots(holder)
+    }
+
+    override fun onDetachedFromRecyclerView(recyclerView: RecyclerView) {
+        super.onDetachedFromRecyclerView(recyclerView)
+        stopAllAnimations()
     }
 
     private fun createPreview(rawText: String): String {

@@ -4,6 +4,7 @@ import com.itsaky.androidide.plugins.aiassistant.models.ToolResult
 import com.itsaky.androidide.plugins.aiassistant.tool.handlers.PathGuard
 import kotlinx.coroutines.runBlocking
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -75,6 +76,30 @@ class ExecutorTest {
         assertFalse("handler must NOT run for an escaping write path", handler.dispatched)
         assertFalse(results.single().success)
         assertTrue(results.single().message.contains("outside the project directory"))
+    }
+
+    @Test
+    fun givenOpenFileWithAPathAlias_whenExecuting_thenPathIsRemappedToFilePathAndItRuns() = runBlocking {
+        // open_file requires file_path (like read_file); a model emitting
+        // {"path":"..."} must be remapped, not rejected for a missing file_path.
+        val handler = object : ToolHandler {
+            override val toolName = "open_file"
+            override val description = "fake open"
+            override val requiresApproval = false
+            override val pathArgs = listOf("file_path")
+            override val resolvesPathsInternally = true
+            var seenArgs: Map<String, Any?>? = null
+            override suspend fun execute(args: Map<String, Any?>): ToolResult {
+                seenArgs = args
+                return ToolResult.success("opened")
+            }
+        }
+        val executor = executorFor(handler)
+
+        val results = executor.execute(listOf(ToolCall("open_file", mapOf("path" to "MainActivity.java"))))
+
+        assertTrue("open_file with a path alias should run", results.single().success)
+        assertEquals("MainActivity.java", handler.seenArgs?.get("file_path"))
     }
 
     @Test

@@ -72,18 +72,32 @@ class ToolCallExtractor {
             val toolCalls = mutableListOf<ToolCall>()
             var found = 0
 
-            // Find JSON objects with balanced braces containing "tool" field
+            // Find JSON objects with balanced braces containing "tool" field.
             var i = 0
             while (i < text.length) {
                 if (text[i] == '{') {
-                    // Try to extract a balanced JSON object
+                    // Extract a balanced object, ignoring braces inside string values.
                     var braceCount = 0
                     var j = i
                     var hasToolField = false
+                    var inString = false
+                    var escaped = false
 
                     while (j < text.length) {
-                        if (text[j] == '{') braceCount++
-                        else if (text[j] == '}') braceCount--
+                        val c = text[j]
+                        if (inString) {
+                            when {
+                                escaped -> escaped = false
+                                c == '\\' -> escaped = true
+                                c == '"' -> inString = false
+                            }
+                        } else {
+                            when (c) {
+                                '"' -> inString = true
+                                '{' -> braceCount++
+                                '}' -> braceCount--
+                            }
+                        }
 
                         // Check if this substring contains "tool"
                         if (!hasToolField && text.substring(i, minOf(j + 1, text.length)).contains("\"tool\"")) {
@@ -92,7 +106,7 @@ class ToolCallExtractor {
 
                         j++
 
-                        if (braceCount == 0) {
+                        if (!inString && braceCount == 0) {
                             // Found complete object
                             if (hasToolField) {
                                 val jsonStr = text.substring(i, j)

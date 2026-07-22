@@ -16,6 +16,7 @@ import com.google.android.material.chip.Chip
 import com.google.android.material.snackbar.Snackbar
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aiassistant.AiAssistantPlugin
+import com.itsaky.androidide.plugins.aiassistant.BuildConfig
 import com.itsaky.androidide.plugins.aiassistant.R
 import com.itsaky.androidide.plugins.aiassistant.adapters.ChatAdapter
 import com.itsaky.androidide.plugins.aiassistant.databinding.FragmentChatBinding
@@ -61,21 +62,6 @@ class ChatFragment : Fragment() {
         }
     }
 
-    companion object {
-        // Test prompt injection (for E2E testing via broadcast receiver)
-        @Volatile
-        private var pendingTestPrompt: String? = null
-
-        fun injectTestPrompt(prompt: String) {
-            pendingTestPrompt = prompt
-        }
-
-        fun getPendingTestPrompt(): String? {
-            return pendingTestPrompt?.also { pendingTestPrompt = null }
-        }
-    }
-
-
     /**
      * Route inflation through the host so the plugin's views resolve against a Context whose
      * Configuration tracks the IDE's day/night setting — this is what lets values-night/ colors
@@ -99,6 +85,9 @@ class ChatFragment : Fragment() {
     }
 
     override fun onDestroyView() {
+        if (::chatAdapter.isInitialized) {
+            chatAdapter.stopAllAnimations()
+        }
         super.onDestroyView()
         viewModel.stopProcessing()
         _binding = null
@@ -136,8 +125,12 @@ class ChatFragment : Fragment() {
     /**
      * Check for test prompt from broadcast receiver and auto-send if present.
      * Uses SharedPreferences set by TestBroadcastReceiver for reliable communication.
+     *
+     * Debug builds only. This path auto-drives the agent — which owns file-mutating
+     * tools — without any user gesture, so it must not exist in a released plugin.
      */
     private fun injectPendingTestPrompt() {
+        if (!BuildConfig.DEBUG) return
         try {
             // Check SharedPreferences for pending test prompt (set by TestBroadcastReceiver)
             val context = requireContext()

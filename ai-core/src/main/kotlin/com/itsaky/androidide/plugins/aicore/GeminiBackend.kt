@@ -454,6 +454,12 @@ User: $userPrompt"""
         }
     }
 
+    /** Cancel any in-flight generation (user pressed Stop). */
+    override fun cancelStreaming() {
+        currentJob?.cancel()
+        currentJob = null
+    }
+
     /**
      * Release all resources: cancel the backend scope and any in-flight
      * request. Called from AiCorePlugin.dispose().
