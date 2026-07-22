@@ -46,6 +46,13 @@ Requirements:
 
 This is distinct from 6.6: 6.6 is the install-decision page that ships at the plugin's top level; 6.7 is the in-IDE tooltip + Tier 3 help wired through `DocumentationExtension`. A plugin can pass 6.6 and still fail 6.7.
 
+## 6.8 Plugin icons and imagery
+
+The Plugin Manager renders a day/night icon pair for every plugin, and template-installer plugins additionally render a thumbnail for each template variant on the New Project screen. Both must be present and correct.
+
+- **Plugin icon (day/night pair).** The manifest declares `plugin.icon_day` and `plugin.icon_night` as `<meta-data>` on `<application>`, each `android:value` pointing at an in-`.cgp` path (`assets/<name>.png`). Both variants are required — the IDE picks the light or dark icon per theme, and debug installs enforce the icon (release builds skip the check). The images are real PNGs (not res-drawables, not `android:icon`, not Git LFS stubs), conventionally ~192×192.
+- **Template variant thumbnails.** Every template variant a plugin registers via `CgtTemplateBuilder.thumbnailFromAssets(...)` supplies a real, distinct `thumb.png` (512×512 PNG) at the referenced asset path. Identical placeholder thumbnails shared across variants, or a missing `thumb.png` for a registered variant, is a defect — each variant must be visually distinguishable on the New Project screen.
+
 ## Manifest
 
 The manifest must declare every extension, every permission, the supported IDE version range, and the minimum Android SDK level.
