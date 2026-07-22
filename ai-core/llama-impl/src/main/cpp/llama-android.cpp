@@ -17,6 +17,16 @@
 #define LOGi(...) __android_log_print(ANDROID_LOG_INFO, TAG, __VA_ARGS__)
 #define LOGe(...) __android_log_print(ANDROID_LOG_ERROR, TAG, __VA_ARGS__)
 
+// Verbose, per-token tracing. It fires once per prompt token and once per
+// generated token — hundreds of log/JNI calls per reply on the hot path — so it
+// is compiled out of release builds (NDEBUG). The __VA_ARGS__ are not evaluated
+// in release, so any string-building in the arguments is skipped too.
+#ifdef NDEBUG
+#define LOGv(...) ((void) 0)
+#else
+#define LOGv(...) __android_log_print(ANDROID_LOG_INFO, TAG, __VA_ARGS__)
+#endif
+
 jclass la_int_var;
 jmethodID la_int_var_value;
 jmethodID la_int_var_inc;
@@ -669,7 +679,7 @@ Java_android_llama_cpp_LLamaAndroid_completion_1init(
     g_prompt_tokens = static_cast<int>(tokens_list.size());
 
     for (auto id: tokens_list) {
-        LOGi("token: `%s`-> %d ", common_token_to_piece(context, id).c_str(), id);
+        LOGv("token: `%s`-> %d ", common_token_to_piece(context, id).c_str(), id);
     }
 
     common_batch_clear(*batch);
@@ -834,11 +844,15 @@ Java_android_llama_cpp_LLamaAndroid_completion_1loop(
             new_token = new_jstring_utf8(env, cached_token_chars.c_str());
         }
 
+#ifndef NDEBUG
+        // Per-token JNI upcall into the Kotlin logger — debug-only; on the hot
+        // path in release it would add a JNI round-trip (and a lock) per token.
         {
             std::lock_guard<std::mutex> lock(g_globals_mutex);
             log_info_to_kt("cached: %s, new_token_chars: `%s`, id: %d", cached_token_chars.c_str(),
                        new_token_chars.c_str(), new_token_id);
         }
+#endif
 
         {
             std::lock_guard<std::mutex> lock(g_globals_mutex);
