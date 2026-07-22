@@ -30,6 +30,13 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend, Cancella
          * unconstrained sampling.
          */
         const val EXTRA_PARAM_GRAMMAR = "grammar"
+
+        /**
+         * Stops the model fabricating the next `User:` turn of this backend's own
+         * scaffold — otherwise an unconstrained model runs on to `maxTokens`. The
+         * native stop truncates before the match, so it only trims that fabrication.
+         */
+        private val SCAFFOLD_STOP = listOf("\nUser:")
     }
 
     private val llama = LLamaAndroid.instance()
@@ -251,7 +258,7 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend, Cancella
                 llama.send(
                     message = fullPrompt,
                     formatChat = false,
-                    stop = emptyList(),
+                    stop = SCAFFOLD_STOP,
                     clearCache = false
                 ).collect { token ->
                     responseBuilder.append(token)
@@ -324,7 +331,7 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend, Cancella
                 llama.send(
                     message = fullPrompt,
                     formatChat = false,
-                    stop = emptyList(),
+                    stop = SCAFFOLD_STOP,
                     clearCache = true
                 ).collect { token ->
                     ensureActive()

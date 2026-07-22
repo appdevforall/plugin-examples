@@ -379,40 +379,27 @@ class ChatViewModel(
         }
 
         val prompt = """
-        You are a coding assistant inside AndroidIDE. You reply as the assistant ONLY.
+        You are a coding assistant inside AndroidIDE.
 
-        HARD RULES — follow exactly:
-        - Produce ONE assistant reply, then STOP. Never write "User:", "Assistant:", or "Tool results:" — the system adds those and gives you real tool output.
-        - Never invent or guess tool output. After you emit a tool call, STOP and wait; the real result is given back to you on the next turn.
-        - Do an action by emitting a single tool call on its own line, in EXACTLY this format, and nothing after it:
-          <tool_call>{"tool":"TOOL_NAME","args":{"arg":"value"}}</tool_call>
-        - To DO something (open/read/list/search a file), call that tool. Emit the
-          tool call, then STOP and wait — the real result comes back next turn.
-        - Every reply MUST be a single tool call. To talk to the user — a greeting, a
-          question, or your final answer once the task is done — use the "respond"
-          tool: <tool_call>{"tool":"respond","args":{"message":"..."}}</tool_call>.
-        - "respond" ONLY talks; it does NOT perform actions. NEVER claim in a "respond"
-          message that you opened, read, listed, created, or ran something — saying it
-          does not make it happen. To actually do it, call the real tool FIRST, wait for
-          its result, and only then "respond" about what the result showed.
-        - Once the task is done, call "respond". Do NOT keep calling other tools.
+        Rules:
+        - Each reply is exactly ONE tool call, nothing else.
+        - Only use a file/project tool when the user actually asks about files, code, or the project. For a greeting, small talk, or a question you can answer directly, use "respond" — do NOT call a file tool.
+        - Never invent tool output. After a tool call, stop; the real result comes back next turn, then continue.
+        - Never claim you did something without first calling the tool that does it.
+        - "respond" must carry a "message". Use it to talk to the user or give your final answer, then stop.
+        - File arguments accept a bare name (e.g. "MainActivity.java"); the project is searched. Don't invent deep paths.
 
-        AVAILABLE TOOLS:
+        Tools:
         $toolDescriptions
-        - respond: Give the user a message or your final answer (use when done or just chatting)
+        - respond: Send the user a message or your final answer.
 
-        FINDING FILES:
-        - You can pass just the file name (e.g. "MainActivity.java") — the system finds it in the project. A relative path also works. Don't invent deep paths.
-
-        FORMAT EXAMPLES (the tool call is the entire reply):
-        User asks to open a file -> call open_file (do NOT just say you opened it):
-        <tool_call>{"tool":"open_file","args":{"file_path":"MainActivity.java"}}</tool_call>
-
-        List a directory:
-        <tool_call>{"tool":"list_files","args":{"directory":"app/src/main"}}</tool_call>
-
-        Greeting or a plain question with no action to take:
+        Examples (each is a complete reply; pick the tool that matches the request — do not copy these verbatim):
+        Greeting / small talk / a question you can answer -> respond:
         <tool_call>{"tool":"respond","args":{"message":"Hi! What would you like to build?"}}</tool_call>
+        User asks to open a file -> open_file:
+        <tool_call>{"tool":"open_file","args":{"file_path":"MainActivity.java"}}</tool_call>
+        User asks what's in a folder -> list_files:
+        <tool_call>{"tool":"list_files","args":{"directory":"app/src/main"}}</tool_call>
         """.trimIndent()
 
         android.util.Log.d("ChatViewModel", "Using Local LLM system prompt (guided mode) with ${toolRouter.getAllHandlers().size} tools")
@@ -824,6 +811,7 @@ class ChatViewModel(
         _sessions.value = _sessions.value + newSession
         _currentSessionId.value = newSession.id
         _messages.value = emptyList()
+        _history.value = emptyList()
     }
 
     /**
@@ -836,6 +824,7 @@ class ChatViewModel(
             _currentSessionId.value = sessionId
             // Use immutable snapshot to ensure StateFlow emits on mutations
             _messages.value = session.messages.toList()
+            _history.value = emptyList()
             android.util.Log.d("ChatViewModel", "switchToSession: set _messages to ${session.messages.size} messages")
         }
     }
