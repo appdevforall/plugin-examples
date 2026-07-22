@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- Toolbar action -->
+    <string name="stt_action_title">Voice to Code</string>
+
+    <!-- Pre-flight checks before recording -->
+    <string name="stt_need_open_file">Open a file first. Voice to Code inserts text where your cursor is.</string>
+    <string name="stt_need_mic_permission">Microphone access is needed to record your voice. Please allow it, then tap the microphone again.</string>
+    <string name="stt_recognition_unavailable">Speech recognition isn\'t available on this device. It may need the Google app or a language pack installed.</string>
+
+    <!-- Recording lifecycle -->
+    <string name="stt_listening">Listening… speak now.</string>
+    <string name="stt_start_failed">Couldn\'t start recording. Please close any app using the microphone and try again.</string>
+
+    <!-- Results -->
+    <string name="stt_no_words">No words were recognized. Speak clearly and a little louder, then tap the microphone to try again.</string>
+    <string name="stt_inserted">Voice input inserted at the cursor.</string>
+    <!-- %1$s is the text that was recognized -->
+    <string name="stt_recognized_no_file">Heard \"%1$s\", but there\'s no open file to insert it into. Open a file and try again.</string>
+
+    <!-- Code generation (AI Core) -->
+    <string name="stt_generation_failed">Couldn\'t turn your voice into code. Please try again, or rephrase your request.</string>
+
+    <!-- Recognizer error messages (shown to the user) -->
+    <string name="stt_error_audio">Couldn\'t capture audio from the microphone. Check that no other app is using it, then try again.</string>
+    <string name="stt_error_client">Speech recognition ran into a problem on this device. Please try again.</string>
+    <string name="stt_error_permissions">Microphone permission is missing. Enable it for Code on the Go in Android Settings, then try again.</string>
+    <string name="stt_error_network">Speech recognition needs a network connection, but none is available. Check your connection and try again.</string>
+    <string name="stt_error_network_timeout">The speech recognition service took too long to respond. Check your connection and try again.</string>
+    <string name="stt_error_no_match">Couldn\'t make out any words. Reduce background noise, speak clearly, and try again.</string>
+    <string name="stt_error_busy">Speech recognition is still finishing the previous request. Wait a moment, then try again.</string>
+    <string name="stt_error_server">The speech recognition service returned an error. Please try again in a moment.</string>
+    <string name="stt_error_speech_timeout">No speech was detected. Tap the microphone and start speaking right away.</string>
+    <!-- %1$d is the raw recognizer error code -->
+    <string name="stt_error_unknown">Speech recognition failed (error %1$d). Please try again.</string>
+
+</resources>

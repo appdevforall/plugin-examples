@@ -126,7 +126,7 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
     override fun getToolbarActions(): List<ToolbarAction> = listOf(
         ToolbarAction(
             id = TOOLBAR_ACTION_ID,
-            title = "Voice to Code",
+            title = str(R.string.stt_action_title),
             // Static fallback for hosts that don't support iconProvider.
             icon = R.drawable.ic_mic,
             showAsAction = ShowAsAction.IF_ROOM,
@@ -187,18 +187,18 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
         // Belt-and-suspenders: the toolbar already disables the button when no file is open,
         // but guard here too so a stale enabled state can't start a pointless recording.
         if (!hasOpenFile()) {
-            toast("Open a file in the editor to insert voice input.")
+            toast(str(R.string.stt_need_open_file))
             return
         }
 
         if (!hasMicrophonePermission()) {
             requestMicrophonePermission()
-            toast("Microphone permission needed. Grant it, then tap again.")
+            toast(str(R.string.stt_need_mic_permission))
             return
         }
 
         if (!SpeechRecognizer.isRecognitionAvailable(ctx)) {
-            toast("Speech recognition is not available on this device.")
+            toast(str(R.string.stt_recognition_unavailable))
             return
         }
 
@@ -217,12 +217,12 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
                 // Prefer on-device recognition; falls back to network if unsupported.
                 putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
             }
-            toast("Listening… speak your command.")
+            toast(str(R.string.stt_listening))
             recognizer.startListening(intent)
             setState(RecordingState.RECORDING)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start speech recognition", e)
-            toast("Could not start recording: ${e.message}")
+            toast(str(R.string.stt_start_failed))
             destroyRecognizer()
             setState(RecordingState.IDLE)
         }
@@ -236,7 +236,7 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
                 ?.trim()
             destroyRecognizer()
             if (transcript.isNullOrBlank()) {
-                toast("Didn't catch that. Try again.")
+                toast(str(R.string.stt_no_words))
                 setState(RecordingState.IDLE)
                 return
             }
@@ -246,7 +246,7 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
 
         override fun onError(error: Int) {
             destroyRecognizer()
-            toast("Recording error: ${describeError(error)}")
+            toast(describeError(error))
             setState(RecordingState.IDLE)
         }
 
@@ -266,6 +266,8 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
     private fun handleTranscript(transcript: String) {
         Log.i(TAG, "Recognized: $transcript")
         scope.launch {
+            // With AI Core present we try to generate code; a null result means generation
+            // failed (details are logged). Without it, we insert the raw transcript.
             val output = if (llmService != null) {
                 generateCodeFromVoice(transcript)
             } else {
@@ -273,14 +275,14 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
             }
             withContext(Dispatchers.Main) {
                 try {
-                    if (output.startsWith("Error:")) {
-                        toast(output)
+                    if (output == null) {
+                        toast(str(R.string.stt_generation_failed))
                         return@withContext
                     }
                     val inserted = insertCodeAtCursor(output)
                     toast(
-                        if (inserted) "Inserted from voice."
-                        else "Recognized: \"$transcript\" (open a file to insert)."
+                        if (inserted) str(R.string.stt_inserted)
+                        else str(R.string.stt_recognized_no_file, transcript)
                     )
                 } finally {
                     // Back to idle (mic) regardless of how processing ended.
@@ -295,12 +297,13 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
      *
      * @param voiceText The transcribed text from speech-to-text
      * @param language Programming language context (e.g., "kotlin", "java")
-     * @return Generated code snippet or error message
+     * @return Generated code snippet, or null if generation failed (details are logged).
      */
-    suspend fun generateCodeFromVoice(voiceText: String, language: String = "kotlin"): String {
+    suspend fun generateCodeFromVoice(voiceText: String, language: String = "kotlin"): String? {
         return try {
-            if (llmService == null) {
-                return "Error: LlmInferenceService not available"
+            val service = llmService ?: run {
+                Log.w(TAG, "LlmInferenceService not available - cannot generate code")
+                return null
             }
 
             // Build a completion prompt for code generation
@@ -312,15 +315,16 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
             """.trimIndent()
 
             val config = LlmInferenceService.LlmConfig("local")
-            val response = llmService!!.generateCompletion(prompt, config).get()
+            val response = service.generateCompletion(prompt, config).get()
             if (response.success) {
                 response.text.trim()
             } else {
-                "Error: ${response.error}"
+                Log.w(TAG, "Code generation failed: ${response.error}")
+                null
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error generating code from voice", e)
-            "Error: ${e.message}"
+            null
         }
     }
 
@@ -406,17 +410,21 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
         }
     }
 
+    /**
+     * Maps a [SpeechRecognizer] error code to a full, user-facing message that says
+     * what went wrong and what the user can do about it.
+     */
     private fun describeError(error: Int): String = when (error) {
-        SpeechRecognizer.ERROR_AUDIO -> "audio recording error"
-        SpeechRecognizer.ERROR_CLIENT -> "client error"
-        SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "insufficient permissions"
-        SpeechRecognizer.ERROR_NETWORK -> "network error"
-        SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "network timeout"
-        SpeechRecognizer.ERROR_NO_MATCH -> "no speech matched"
-        SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "recognizer busy"
-        SpeechRecognizer.ERROR_SERVER -> "server error"
-        SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "no speech detected"
-        else -> "code $error"
+        SpeechRecognizer.ERROR_AUDIO -> str(R.string.stt_error_audio)
+        SpeechRecognizer.ERROR_CLIENT -> str(R.string.stt_error_client)
+        SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> str(R.string.stt_error_permissions)
+        SpeechRecognizer.ERROR_NETWORK -> str(R.string.stt_error_network)
+        SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> str(R.string.stt_error_network_timeout)
+        SpeechRecognizer.ERROR_NO_MATCH -> str(R.string.stt_error_no_match)
+        SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> str(R.string.stt_error_busy)
+        SpeechRecognizer.ERROR_SERVER -> str(R.string.stt_error_server)
+        SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> str(R.string.stt_error_speech_timeout)
+        else -> str(R.string.stt_error_unknown, error)
     }
 
     /**
@@ -435,9 +443,16 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
     private fun hostContext(): Context =
         hostActivity() ?: context.androidContext.applicationContext
 
+    /**
+     * Resolves a plugin string resource. Uses [PluginContext.androidContext] (which carries the
+     * plugin's own resources) rather than the host Context, whose resources don't include ours.
+     */
+    private fun str(resId: Int, vararg formatArgs: Any): String =
+        context.androidContext.getString(resId, *formatArgs)
+
     private fun toast(message: String) = runOnMain {
         try {
-            Toast.makeText(hostContext(), message, Toast.LENGTH_SHORT).show()
+            Toast.makeText(hostContext(), message, Toast.LENGTH_LONG).show()
         } catch (e: Exception) {
             Log.w(TAG, "Failed to show toast", e)
         }
