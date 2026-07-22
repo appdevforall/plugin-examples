@@ -52,9 +52,7 @@ class AgentLoopTest {
 
     @Test
     fun givenAModelThatCallsTheTerminalTool_whenTheLoopRuns_thenItFinishesViaOnFinalAnswerWithoutDispatchingIt() = runTest {
-        // The terminal tool ("respond") signals completion; it has no handler, so
-        // the loop must emit its message via onFinalAnswer and stop — never send
-        // it to executeTools.
+        // Terminal tool ("respond") finishes via onFinalAnswer and is never dispatched.
         val model = ScriptedModel(
             listOf("""<tool_call>{"tool":"respond","args":{"message":"All set!"}}</tool_call>""")
         )
@@ -155,12 +153,13 @@ class AgentLoopTest {
     }
 
     @Test
-    fun givenAModelThatRepeatsTheIdenticalToolCall_whenTheLoopRuns_thenItStops() = runTest {
+    fun givenAModelThatRepeatsTheIdenticalToolCall_whenTheLoopRuns_thenItStopsAfterToleratingBoundedRepeats() = runTest {
         val model = ScriptedModel(listOf(toolCall("list_files")))  // same call every turn
         val history = mutableListOf(ChatMessage(Role.USER, "go"))
         var repeatedTurns = -1
         var toolBatches = 0
 
+        // Default tolerance is 2: one repeat allowed, the second aborts.
         val result = AgentLoop(maxIterations = 8).run(
             history = history,
             generate = model::generate,
@@ -172,9 +171,77 @@ class AgentLoopTest {
 
         assertFalse(result.completed)
         assertEquals(AgentLoop.StopReason.REPEATED, result.reason)
-        assertEquals(2, result.turns)   // caught on the 2nd identical turn
-        assertEquals(2, repeatedTurns)
-        assertEquals(1, toolBatches)    // executed once, not repeatedly
+        assertEquals(3, result.turns)   // turn1 + one tolerated repeat, abort on turn3
+        assertEquals(3, repeatedTurns)
+        assertEquals(2, toolBatches)    // executed twice, then stopped
+    }
+
+    @Test
+    fun givenMaxConsecutiveRepeatsOfOne_whenAModelRepeatsImmediately_thenItStopsOnTheSecondTurn() = runTest {
+        val model = ScriptedModel(listOf(toolCall("list_files")))
+        val history = mutableListOf(ChatMessage(Role.USER, "go"))
+        var toolBatches = 0
+
+        val result = AgentLoop(maxIterations = 8, maxConsecutiveRepeats = 1).run(
+            history = history,
+            generate = model::generate,
+            executeTools = { toolBatches++; listOf(ToolResult.success("ok")) }
+        )
+
+        assertEquals(AgentLoop.StopReason.REPEATED, result.reason)
+        assertEquals(2, result.turns)
+        assertEquals(1, toolBatches)
+    }
+
+    @Test
+    fun givenATurnCoEmittingRespondAndARealTool_whenTheLoopRuns_thenTheRealToolStillRuns() = runTest {
+        // `respond` co-emitted with a real tool must not drop the real tool.
+        val model = ScriptedModel(
+            listOf(
+                """<tool_call>{"tool":"open_file","args":{"file_path":"MainActivity.java"}}</tool_call>""" +
+                    """<tool_call>{"tool":"respond","args":{"message":"Opening it."}}</tool_call>""",
+                "Done."
+            )
+        )
+        val history = mutableListOf(ChatMessage(Role.USER, "open MainActivity"))
+        val executed = mutableListOf<List<ToolCall>>()
+
+        val result = AgentLoop(terminalTool = "respond").run(
+            history = history,
+            generate = model::generate,
+            executeTools = { calls ->
+                executed += calls
+                listOf(ToolResult.success("Opened file in editor", "path/MainActivity.java"))
+            }
+        )
+
+        assertTrue(result.completed)
+        assertEquals(1, executed.size)
+        assertEquals(listOf("open_file"), executed[0].map { it.name })  // respond dropped, open_file kept
+    }
+
+    @Test
+    fun givenATurnWithOnlyTheTerminalTool_whenTheLoopRuns_thenItFinishesImmediately() = runTest {
+        val model = ScriptedModel(
+            listOf("""<tool_call>{"tool":"respond","args":{"message":"Hi!"}}</tool_call>""")
+        )
+        val history = mutableListOf(ChatMessage(Role.USER, "hello"))
+        var toolsInvoked = 0
+        var finalMessage: String? = null
+
+        val result = AgentLoop(terminalTool = "respond").run(
+            history = history,
+            generate = model::generate,
+            executeTools = { toolsInvoked++; emptyList() },
+            events = object : AgentLoop.Events {
+                override suspend fun onFinalAnswer(turn: Int, message: String) { finalMessage = message }
+            }
+        )
+
+        assertTrue(result.completed)
+        assertEquals(1, result.turns)
+        assertEquals(0, toolsInvoked)
+        assertEquals("Hi!", finalMessage)
     }
 
     @Test
@@ -268,8 +335,7 @@ class AgentLoopTest {
         assertTrue(transcript.contains("hi"))
         assertTrue(transcript.contains("Assistant: hello"))
         assertTrue(transcript.contains("Tool results:"))
-        // The backend appends its own "Assistant:" cue; we must NOT add one, or a
-        // doubled cue makes local models loop. Lock that in.
+        // Must not append a trailing "Assistant:" cue (the backend adds its own).
         assertFalse("must not append a trailing Assistant cue", transcript.trimEnd().endsWith("Assistant:"))
     }
 }

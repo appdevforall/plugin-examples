@@ -88,12 +88,14 @@ class Executor(
             return ToolResult.failure("Unknown function '$toolName'")
         }
 
-        // Normalize arg keys for read_file: if "path" is present but "file_path" is missing, remap
+        // Alias "path" → "file_path" for any tool that requires "file_path".
         val normalizedArgs = args.toMutableMap()
-        if (toolName == "read_file" && normalizedArgs.containsKey("path") && !normalizedArgs.containsKey("file_path")) {
+        if ("file_path" in requiredArgsForTool(toolName) &&
+            normalizedArgs.containsKey("path") && !normalizedArgs.containsKey("file_path")
+        ) {
             normalizedArgs["path"]?.let { normalizedArgs["file_path"] = it }
             if (normalizedArgs.containsKey("file_path")) {
-                Log.d(TAG, "($executionMode): Remapped 'path' → 'file_path' for read_file tool")
+                Log.d(TAG, "($executionMode): Remapped 'path' → 'file_path' for $toolName tool")
             }
         }
 
@@ -134,10 +136,12 @@ class Executor(
     }
 
     /**
-     * Confine model-supplied paths to the project root: fail if any of the
-     * handler's [ToolHandler.pathArgs] escapes it. Handlers that resolve paths
-     * themselves opt out via [ToolHandler.resolvesPathsInternally].
-     *
+     * Confines model-supplied path args to the project root; handlers that resolve
+     * paths themselves opt out via [ToolHandler.resolvesPathsInternally].
+     * @param toolName the tool being dispatched (for logging).
+     * @param handler the tool's handler, source of [ToolHandler.pathArgs].
+     * @param args the normalized call arguments.
+     * @param executionMode "Parallel"/"Sequential", for logging.
      * @return a failure [ToolResult] for the first escaping arg, or null if all are safe.
      */
     private fun pathContainmentFailure(

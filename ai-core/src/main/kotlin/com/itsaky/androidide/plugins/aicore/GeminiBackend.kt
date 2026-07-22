@@ -13,9 +13,12 @@ import com.itsaky.androidide.plugins.services.SharedServices
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import java.util.concurrent.CompletableFuture
+import kotlin.coroutines.coroutineContext
 
 /**
  * Gemini API backend for cloud-based LLM inference.
@@ -185,6 +188,8 @@ class GeminiBackend(private val context: PluginContext) : LlmBackend, Cancellabl
 
                 try {
                     for (response in responseStream) {
+                        // Observe cancellation; the blocking iterator has no suspension point.
+                        coroutineContext.ensureActive()
                         val chunk = extractChunk(response)
                         if (chunk.isNotEmpty()) {
                             chunkCount++
@@ -202,9 +207,13 @@ class GeminiBackend(private val context: PluginContext) : LlmBackend, Cancellabl
                         callback.onComplete(LlmResponse.success(finalText, tokenCount, System.currentTimeMillis() - startTime))
                     }
                 } finally {
+                    // Runs on cancel too, closing the stream promptly.
                     responseStream.close()
                 }
 
+            } catch (ce: CancellationException) {
+                context.logger.info("GeminiBackend: Streaming cancelled")
+                throw ce
             } catch (e: Exception) {
                 context.logger.error("GeminiBackend: Error in streaming", e)
                 callback.onError(formatErrorMessage(e))

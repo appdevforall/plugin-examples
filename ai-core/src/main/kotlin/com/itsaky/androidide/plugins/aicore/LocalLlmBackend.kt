@@ -13,9 +13,12 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.io.File
 import java.io.FileOutputStream
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Local LLM backend using llama-impl for on-device inference.
@@ -42,10 +45,17 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend, Cancella
     private val llama = LLamaAndroid.instance()
     private val scope = CoroutineScope(Dispatchers.IO)
 
+    /** Single-flight guard serializing whole generations on the shared native context. */
+    private val generationMutex = Mutex()
+
     @Volatile private var currentStreamingJob: Job? = null
+    @Volatile private var currentGenerateJob: Job? = null
 
     @Volatile private var modelLoaded = false
     @Volatile private var currentModelPath: String? = null
+
+    /** Ensures the background warm-up load is launched at most once. */
+    private val warmUpStarted = AtomicBoolean(false)
 
     override fun getId(): String = "local"
 
@@ -65,8 +75,35 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend, Cancella
 
         context.logger.debug("LocalLlmBackend.isAvailable() - configured path: $configuredPath, modelLoaded: $modelLoaded")
 
+        // Chat-open hits this; start loading now so the first message isn't gated on a cold load.
+        maybeWarmUp(configuredPath, prefs?.getString("ai_backend_preference", "LOCAL_LLM"))
+
         // Available if model is loaded OR if a path is configured
         return modelLoaded || !configuredPath.isNullOrBlank()
+    }
+
+    /**
+     * Preloads the configured model in the background, once, so the first generation
+     * doesn't pay the cold-load cost. No-op unless the local backend is the selected one.
+     * @param configuredPath the configured model path/URI, or null/blank if unset.
+     * @param backendPreference the `ai_backend_preference` value ("LOCAL_LLM"/"GEMINI").
+     */
+    private fun maybeWarmUp(configuredPath: String?, backendPreference: String?) {
+        if (configuredPath.isNullOrBlank() || modelLoaded) return
+        if (backendPreference == "GEMINI") return // user isn't using the local backend
+        if (!warmUpStarted.compareAndSet(false, true)) return
+
+        scope.launch {
+            try {
+                // Serialize with real generations so a mid-warm-up send just waits for this load.
+                generationMutex.withLock { ensureModelLoaded(configuredPath) }
+                context.logger.info("Local model warm-up complete")
+            } catch (e: Exception) {
+                // Stay silent (the real send surfaces config errors); allow a later retry.
+                context.logger.warn("Local model warm-up failed: ${e.message}")
+                warmUpStarted.set(false)
+            }
+        }
     }
 
     /**
@@ -225,50 +262,59 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend, Cancella
 
         val future = CompletableFuture<LlmResponse>()
 
-        scope.launch {
+        currentGenerateJob = scope.launch {
             try {
-                // Configure sampling (use defaults for topP and topK)
-                LLamaAndroid.configureSampling(
-                    config.temperature,
-                    0.9f,  // topP default
-                    40     // topK default
-                )
-                LLamaAndroid.configureMaxTokens(config.maxTokens)
+                // Serialize against other generations on the shared native context.
+                generationMutex.withLock {
+                    // Configure sampling (use defaults for topP and topK)
+                    LLamaAndroid.configureSampling(
+                        config.temperature,
+                        0.9f,  // topP default
+                        40     // topK default
+                    )
+                    LLamaAndroid.configureMaxTokens(config.maxTokens)
 
-                // Ensure model is loaded
-                ensureModelLoaded(configuredPath)
+                    // Ensure model is loaded
+                    ensureModelLoaded(configuredPath)
 
-                // Build full prompt with system message
-                val fullPrompt = if (config.systemPrompt != null) {
-                    "${config.systemPrompt}\n\nUser: $prompt\nAssistant:"
-                } else {
-                    "User: $prompt\nAssistant:"
+                    // Build full prompt with system message
+                    val fullPrompt = if (config.systemPrompt != null) {
+                        "${config.systemPrompt}\n\nUser: $prompt\nAssistant:"
+                    } else {
+                        "User: $prompt\nAssistant:"
+                    }
+
+                    val startTime = System.currentTimeMillis()
+
+                    // Collect all tokens
+                    val responseBuilder = StringBuilder()
+                    var tokenCount = 0
+
+                    // Unconstrained path: clear any grammar left by a concurrent
+                    // streaming call so completions never inherit a tool-call grammar.
+                    llama.setGrammar(null)
+
+                    llama.send(
+                        message = fullPrompt,
+                        formatChat = false,
+                        stop = SCAFFOLD_STOP,
+                        clearCache = false
+                    ).collect { token ->
+                        // Honor cancellation so Stop frees the run loop early.
+                        ensureActive()
+                        responseBuilder.append(token)
+                        tokenCount++
+                    }
+
+                    val responseText = responseBuilder.toString()
+                    context.logger.info("Generated response: ${responseText.take(50)}... ($tokenCount tokens)")
+
+                    future.complete(LlmResponse.success(responseText, tokenCount, System.currentTimeMillis() - startTime))
                 }
-
-                val startTime = System.currentTimeMillis()
-
-                // Collect all tokens
-                val responseBuilder = StringBuilder()
-                var tokenCount = 0
-
-                // Unconstrained path: clear any grammar left by a concurrent
-                // streaming call so completions never inherit a tool-call grammar.
-                llama.setGrammar(null)
-
-                llama.send(
-                    message = fullPrompt,
-                    formatChat = false,
-                    stop = SCAFFOLD_STOP,
-                    clearCache = false
-                ).collect { token ->
-                    responseBuilder.append(token)
-                    tokenCount++
-                }
-
-                val responseText = responseBuilder.toString()
-                context.logger.info("Generated response: ${responseText.take(50)}... ($tokenCount tokens)")
-
-                future.complete(LlmResponse.success(responseText, tokenCount, System.currentTimeMillis() - startTime))
+            } catch (ce: CancellationException) {
+                context.logger.info("Generation cancelled")
+                future.completeExceptionally(ce)
+                throw ce
             } catch (e: Exception) {
                 context.logger.error("Error during generation", e)
                 if (e is ModelNotConfiguredException || e is IncompatibleModelException) {
@@ -301,46 +347,53 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend, Cancella
 
         currentStreamingJob = scope.launch {
             try {
-                // Configure sampling (use defaults for topP and topK)
-                LLamaAndroid.configureSampling(
-                    config.temperature,
-                    0.9f,  // topP default
-                    40     // topK default
-                )
-                LLamaAndroid.configureMaxTokens(config.maxTokens)
+                // Hold the single-flight lock for the whole streaming generation.
+                generationMutex.withLock {
+                    try {
+                        // Configure sampling (use defaults for topP and topK)
+                        LLamaAndroid.configureSampling(
+                            config.temperature,
+                            0.9f,  // topP default
+                            40     // topK default
+                        )
+                        LLamaAndroid.configureMaxTokens(config.maxTokens)
 
-                // Ensure model is loaded
-                ensureModelLoaded(configuredPath)
+                        // Ensure model is loaded
+                        ensureModelLoaded(configuredPath)
 
-                // Build full prompt with system message
-                val fullPrompt = if (config.systemPrompt != null) {
-                    "${config.systemPrompt}\n\nUser: $prompt\nAssistant:"
-                } else {
-                    "User: $prompt\nAssistant:"
+                        // Build full prompt with system message
+                        val fullPrompt = if (config.systemPrompt != null) {
+                            "${config.systemPrompt}\n\nUser: $prompt\nAssistant:"
+                        } else {
+                            "User: $prompt\nAssistant:"
+                        }
+
+                        val startTime = System.currentTimeMillis()
+                        var tokenCount = 0
+                        val responseBuilder = StringBuilder()
+
+                        // Apply the caller's grammar for this send() only; reset in the finally.
+                        val grammar = config.extraParams?.get(EXTRA_PARAM_GRAMMAR) as? String
+                        llama.setGrammar(grammar?.takeIf { it.isNotBlank() })
+
+                        llama.send(
+                            message = fullPrompt,
+                            formatChat = false,
+                            // Keep the KV cache so the native layer reuses the common prefix (system prompt).
+                            stop = SCAFFOLD_STOP,
+                            clearCache = false
+                        ).collect { token ->
+                            ensureActive()
+                            callback.onToken(token)
+                            responseBuilder.append(token)
+                            tokenCount++
+                        }
+
+                        callback.onComplete(LlmResponse.success(responseBuilder.toString(), tokenCount, System.currentTimeMillis() - startTime))
+                    } finally {
+                        llama.setGrammar(null)
+                    }
                 }
-
-                val startTime = System.currentTimeMillis()
-                var tokenCount = 0
-                val responseBuilder = StringBuilder()
-
-                // Apply the caller-supplied grammar (cleared in finally); relies
-                // on the single-threaded native run loop serializing generations.
-                val grammar = config.extraParams?.get(EXTRA_PARAM_GRAMMAR) as? String
-                llama.setGrammar(grammar?.takeIf { it.isNotBlank() })
-
-                llama.send(
-                    message = fullPrompt,
-                    formatChat = false,
-                    stop = SCAFFOLD_STOP,
-                    clearCache = true
-                ).collect { token ->
-                    ensureActive()
-                    callback.onToken(token)
-                    responseBuilder.append(token)
-                    tokenCount++
-                }
-
-                callback.onComplete(LlmResponse.success(responseBuilder.toString(), tokenCount, System.currentTimeMillis() - startTime))
             } catch (ce: CancellationException) {
                 context.logger.info("Streaming generation cancelled")
                 throw ce
@@ -350,16 +403,19 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend, Cancella
                     UserFeedback.notify(context.androidContext, e.message ?: "Local LLM is not configured.")
                 }
                 callback.onError("Error: ${e.message}")
-            } finally {
-                llama.setGrammar(null)
             }
         }
     }
 
-    /** Cancel any in-flight streaming generation (user pressed Stop). */
+    /**
+     * Cancels any in-flight streaming or non-streaming generation (user pressed Stop),
+     * cancelling the coroutine Job so the single-threaded run loop is freed early.
+     */
     override fun cancelStreaming() {
         currentStreamingJob?.cancel()
         currentStreamingJob = null
+        currentGenerateJob?.cancel()
+        currentGenerateJob = null
     }
 
     override fun generateWithHistory(

@@ -11,12 +11,9 @@ import java.io.File
 import java.nio.file.Files
 
 /**
- * Unit tests for [PathGuard] — the shared containment guard for filesystem
- * tools.
- *
- * These cover the regression that made `open_file .gitignore` fail with
- * "outside the project directory": the guard was anchored to `user.dir` ("/" on
- * Android) instead of the open project, so every relative path was rejected.
+ * Unit tests for [PathGuard] — the shared containment guard for filesystem tools;
+ * covers the regression where anchoring to `user.dir` ("/" on Android) rejected
+ * every relative path (`open_file .gitignore` → "outside the project directory").
  */
 class PathGuardTest {
 
@@ -47,15 +44,19 @@ class PathGuardTest {
     }
 
     @Test
-    fun givenTheFilesystemRootAsProjectRoot_whenARelativePathIsResolved_thenItIsNotRejected() {
-        // Reproduces the exact failure mode: with root "/", the old
-        // `root + File.separator` produced "//" and rejected everything.
+    fun givenTheFilesystemRootAsProjectRoot_whenAnyPathIsResolved_thenItIsRejected() {
+        // A root of "/" means no project is open; the guard must reject everything.
         PathGuard.setProjectRootForTesting("/")
 
-        val resolved = PathGuard.resolveWithin(".gitignore")
+        assertNull("a relative path under '/' must be rejected", PathGuard.resolveWithin(".gitignore"))
+        assertNull("an absolute path under '/' must be rejected", PathGuard.resolveWithin("/etc/passwd"))
+    }
 
-        assertNotNull("A relative path under '/' must not self-reject", resolved)
-        assertEquals(File("/.gitignore").canonicalPath, resolved!!.canonicalPath)
+    @Test
+    fun givenANonExistentProjectRoot_whenAPathIsResolved_thenItIsRejected() {
+        PathGuard.setProjectRootForTesting("/no/such/project/dir/anywhere")
+
+        assertNull(PathGuard.resolveWithin("build.gradle.kts"))
     }
 
     // --- Normal containment ---------------------------------------------------
@@ -162,6 +163,28 @@ class PathGuardTest {
         assertTrue(PathGuard.findByName("DoesNotExist.kt").isEmpty())
     }
 
+    @Test
+    fun givenAFileReachableOnlyThroughASymlinkedDir_whenFindByNameIsCalled_thenItIsNotMatched() {
+        // A symlinked project subdir must not let the walk escape the root.
+        val outside = Files.createTempDirectory("pathguard-outside").toFile().canonicalFile
+        try {
+            File(outside, "Secret.kt").writeText("x")
+            val link = File(projectRoot, "linked").toPath()
+            try {
+                Files.createSymbolicLink(link, outside.toPath())
+            } catch (e: Exception) {
+                // Filesystem/OS without symlink support — nothing to assert.
+                return
+            }
+            assertTrue(
+                "a match reachable only via a symlinked dir must be dropped",
+                PathGuard.findByName("Secret.kt").isEmpty()
+            )
+        } finally {
+            outside.deleteRecursively()
+        }
+    }
+
     // --- resolve() — the shared handler resolution policy --------------------
 
     @Test
@@ -177,8 +200,7 @@ class PathGuardTest {
 
     @Test
     fun givenASlashPrefixedPath_whenResolveIsCalled_thenItRetriesAsRelativeBeforeBasenameSearch() {
-        // Two matching basenames would make a basename search ambiguous; the
-        // slash-stripped relative retry must resolve the exact one first.
+        // The slash-stripped relative retry must resolve before an ambiguous basename search.
         File(projectRoot, "app").mkdirs(); File(projectRoot, "app/.gitignore").writeText("x")
         File(projectRoot, ".gitignore").writeText("x")
 
@@ -220,8 +242,7 @@ class PathGuardTest {
 
     @Test
     fun givenASlashPrefixedInRootPathThatDoesNotExist_whenResolveIsCalled_thenItReturnsNotFound() {
-        // "/does/exist.kt" resolves outside as absolute, but its relative reading
-        // is in-root — so a miss is NotFound, not Escaped.
+        // Absolute miss but in-root as relative → NotFound, not Escaped.
         assertEquals(PathGuard.Resolution.NotFound, PathGuard.resolve("/does/exist.kt"))
     }
 

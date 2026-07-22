@@ -32,7 +32,7 @@
 
         <meta-data
             android:name="plugin.max_ide_version"
-            android:value="26.28" />
+            android:value="26.30" />
 
         <!-- Number of editor tabs contributed via getEditorTabs() (the "Agent" tab) -->
         <meta-data

@@ -63,24 +63,30 @@ class ChatViewModel(
 
         /** [LlmConfig.extraParams] key for the local-backend GBNF; must match ai-core's `LocalLlmBackend.EXTRA_PARAM_GRAMMAR`. */
         private const val EXTRA_PARAM_GRAMMAR = "grammar"
+    }
 
-        /**
-         * GBNF forcing a weak local model to emit one well-formed `<tool_call>`;
-         * passed to the local backend via [EXTRA_PARAM_GRAMMAR] (cloud ignores it).
-         * `args` may be empty or hold multiple `"key":"value"` pairs; values are
-         * JSON strings (newlines allowed). Keep the `tool` alternatives in sync with
-         * the exposed handlers. `~` stands in for an escaped quote, substituted below.
-         */
-        private val localToolCallGrammar: String = """
+    /**
+     * Builds the local-backend GBNF forcing one well-formed `<tool_call>`. The `tool`
+     * alternatives come from the registered handlers (+ [RESPOND_TOOL]) so the token
+     * mask can't drift; control chars are excluded so `org.json` accepts the strings.
+     * @return the GBNF grammar string.
+     */
+    private fun buildLocalToolCallGrammar(): String {
+        val toolNames = (toolRouter.getAllHandlers().map { it.toolName } + RESPOND_TOOL).distinct()
+        val toolAlternatives = toolNames.joinToString(" | ") { "\"~$it~\"" }
+        return """
             root ::= "<tool_call>{~tool~:" tool ",~args~:" args "}</tool_call>"
-            tool ::= "~open_file~" | "~read_file~" | "~list_files~" | "~search_project~" | "~$RESPOND_TOOL~"
+            tool ::= $toolAlternatives
             args ::= "{}" | "{" pair ("," pair)* "}"
             pair ::= "~" key "~:~" val "~"
             key  ::= [a-z_]+
             val  ::= char*
-            char ::= [^~\\] | "\\" [~\\/bfnrt]
+            char ::= [^~\\\x00-\x1F] | "\\" [~\\/bfnrt]
         """.trimIndent().replace("~", "\\\"")
     }
+
+    /** Local-backend GBNF, built once from the registered handlers. */
+    private val localToolCallGrammar: String by lazy { buildLocalToolCallGrammar() }
 
     private fun getLlmService(): LlmInferenceService? {
         return try {
@@ -149,6 +155,13 @@ class ChatViewModel(
     /** The in-flight agent run (streaming + tool loop), so it can be cancelled. */
     private var generationJob: Job? = null
     private val generationEpoch = java.util.concurrent.atomic.AtomicInteger(0)
+
+    /** True while a generation is admitted and its coroutine has not yet unwound; gates re-entry. */
+    private val isGenerating = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    /** Whether the current run's most recent tool batch failed; reset per run. */
+    @Volatile
+    private var lastToolFailedThisRun = false
 
     private val _pendingApprovalRequest = MutableStateFlow<ApprovalRequest?>(null)
     val pendingApprovalRequest: StateFlow<ApprovalRequest?> = _pendingApprovalRequest.asStateFlow()
@@ -382,24 +395,21 @@ class ChatViewModel(
         You are a coding assistant inside AndroidIDE.
 
         Rules:
-        - Each reply is exactly ONE tool call, nothing else.
-        - Only use a file/project tool when the user actually asks about files, code, or the project. For a greeting, small talk, or a question you can answer directly, use "respond" — do NOT call a file tool.
-        - Never invent tool output. After a tool call, stop; the real result comes back next turn, then continue.
-        - Never claim you did something without first calling the tool that does it.
-        - "respond" must carry a "message". Use it to talk to the user or give your final answer, then stop.
+        - Reply with exactly ONE tool call, nothing else.
+        - Use a file/project tool only when the user asks about files, code, or the project; for a greeting, small talk, or a question you can answer, use "respond".
+        - Never invent tool output or claim an action you didn't perform via a tool. After a tool call, stop; the real result returns next turn.
+        - "respond" must carry a "message" — your reply or final answer.
         - File arguments accept a bare name (e.g. "MainActivity.java"); the project is searched. Don't invent deep paths.
 
         Tools:
         $toolDescriptions
         - respond: Send the user a message or your final answer.
 
-        Examples (each is a complete reply; pick the tool that matches the request — do not copy these verbatim):
-        Greeting / small talk / a question you can answer -> respond:
+        Examples (pick the tool that matches; don't copy verbatim):
+        Greeting / question you can answer -> respond:
         <tool_call>{"tool":"respond","args":{"message":"Hi! What would you like to build?"}}</tool_call>
-        User asks to open a file -> open_file:
+        Open a file -> open_file:
         <tool_call>{"tool":"open_file","args":{"file_path":"MainActivity.java"}}</tool_call>
-        User asks what's in a folder -> list_files:
-        <tool_call>{"tool":"list_files","args":{"directory":"app/src/main"}}</tool_call>
         """.trimIndent()
 
         android.util.Log.d("ChatViewModel", "Using Local LLM system prompt (guided mode) with ${toolRouter.getAllHandlers().size} tools")
@@ -407,9 +417,11 @@ class ChatViewModel(
     }
 
     /**
-     * Execute a batch of tool calls, render each result as a TOOL message, and
-     * return the results so the [agentLoop] can feed them back to the model.
-     * Does NOT touch [AgentState.Idle] — the loop owns the terminal state.
+     * Executes a batch of tool calls, renders each result as a TOOL message, and
+     * returns the results for the [agentLoop] to feed back; leaves [AgentState.Idle]
+     * to the loop.
+     * @param toolCalls the calls to execute.
+     * @return the results, positionally aligned with [toolCalls].
      */
     private suspend fun executeToolCalls(toolCalls: List<ToolCall>): List<ToolResult> {
         if (toolCalls.isEmpty()) return emptyList()
@@ -423,6 +435,9 @@ class ChatViewModel(
         startStateTimer(executingState)
 
         val results = executor.execute(toolCalls)
+
+        // Record whether this batch's last tool failed (read by runModelTurn).
+        lastToolFailedThisRun = results.lastOrNull()?.success == false
 
         // Add tool results as messages
         withContext(Dispatchers.Main) {
@@ -546,16 +561,15 @@ class ChatViewModel(
             return
         }
 
-        // Guard against re-entry: an in-flight run must be stopped (Stop button)
-        // before a new one starts, so the ViewModel is correct regardless of the
-        // UI. Otherwise the old loop keeps executing tools and a second concurrent
-        // generation races the first on the single-threaded backend.
-        if (generationJob?.isActive == true) {
+        // Reject re-entry while a generation is still in flight.
+        if (!isGenerating.compareAndSet(false, true)) {
             android.util.Log.d("ChatViewModel", "sendMessage: generation already in progress; ignoring")
             return
         }
 
         android.util.Log.d("ChatViewModel", "sendMessage: Starting message processing")
+        // Reset per-run tool-failure tracking.
+        lastToolFailedThisRun = false
         val epoch = generationEpoch.incrementAndGet()
         generationJob = viewModelScope.launch(Dispatchers.IO) {
             try {
@@ -576,8 +590,7 @@ class ChatViewModel(
                     temperature = 0.7f
                     maxTokens = 4096  // headroom for complete tool calls
                     systemPrompt = buildSystemPrompt()
-                    // Local backend constrains generation to this grammar; cloud
-                    // backends ignore the key.
+                    // Local backend constrains generation to this grammar; cloud ignores it.
                     extraParams = mapOf(EXTRA_PARAM_GRAMMAR to localToolCallGrammar)
                 }
 
@@ -620,7 +633,10 @@ class ChatViewModel(
                         }
                     )
                 } finally {
-                    _history.value = history.toList()
+                    // Persist history only if this run wasn't superseded (epoch bumped).
+                    if (generationEpoch.get() == epoch) {
+                        _history.value = history.toList()
+                    }
                     stopStateTimer()
                 }
 
@@ -633,14 +649,21 @@ class ChatViewModel(
                 stopStateTimer()
                 _agentState.value = AgentState.Error(str(R.string.state_error, e.message))
                 addSystemMessage(str(R.string.state_error, e.message), MessageStatus.ERROR)
+            } finally {
+                // Allow re-entry once the coroutine unwinds.
+                isGenerating.set(false)
             }
         }
     }
 
     /**
-     * Run a single streaming model turn: create an agent bubble, stream tokens
-     * into it, and suspend until completion. Returns the final response text (so
-     * the [agentLoop] can extract tool calls from it). Throws on backend error.
+     * Runs one streaming model turn: creates an agent bubble, streams tokens into it,
+     * and suspends until completion. Throws on backend error.
+     * @param llmService the inference service.
+     * @param prompt the rendered prompt for this turn.
+     * @param config the generation config.
+     * @param epoch this run's epoch, for staleness checks against Stop/newer sends.
+     * @return the final response text (raw, for tool-call extraction).
      */
     private suspend fun runModelTurn(
         llmService: LlmInferenceService,
@@ -672,11 +695,13 @@ class ChatViewModel(
                 override fun onToken(token: String) {
                     if (isStale()) return  // Stop pressed — ignore late tokens.
                     responseBuilder.append(token)
+                    // Snapshot on the producer thread; only the immutable String crosses to Main.
+                    val snapshot = responseBuilder.toString()
                     viewModelScope.launch(Dispatchers.Main) {
                         if (isStale()) return@launch
                         val updated = ChatMessage(
                             id = agentMessageId,
-                            text = responseBuilder.toString(),
+                            text = snapshot,
                             sender = Sender.AGENT,
                             status = MessageStatus.SENT
                         )
@@ -696,15 +721,13 @@ class ChatViewModel(
                     val respondCall = toolCalls.firstOrNull { it.name == RESPOND_TOOL }
                     val respondMessage = respondCall?.args?.get("message")?.toString()
 
-                    val lastToolResult = _messages.value.lastOrNull { it.sender == Sender.TOOL }
-                    val lastToolFailed = lastToolResult?.status == MessageStatus.ERROR
+                    // Per-run flag (set by executeToolCalls), not a session-wide scan.
+                    val lastToolFailed = lastToolFailedThisRun
 
                     val displayText = when {
                         respondCall != null && lastToolFailed ->
                             str(R.string.agent_action_failed)
-                        // A "respond" call is the model's message to the user; render
-                        // it (falling back if the model left the message blank) rather
-                        // than showing a "🔧 respond()" tool badge.
+                        // Render the "respond" message to the user, not a tool badge.
                         respondCall != null ->
                             respondMessage?.takeIf { it.isNotBlank() } ?: str(R.string.agent_no_response)
                         toolCalls.isNotEmpty() -> toolCalls.joinToString("\n") { c ->
@@ -743,8 +766,7 @@ class ChatViewModel(
                 }
             })
         } catch (e: Exception) {
-            // A synchronous throw fires no callback, so complete `deferred` here or
-            // await() below hangs forever.
+            // A synchronous throw fires no callback; complete deferred so await() doesn't hang.
             android.util.Log.e("ChatViewModel", "generateStreaming threw synchronously", e)
             viewModelScope.launch(Dispatchers.Main) {
                 _messages.value = _messages.value.filter { it.id != agentMessageId }
@@ -755,7 +777,10 @@ class ChatViewModel(
         return deferred.await()
     }
 
-    /** Append an AGENT message to the chat (terminal state, no streaming dots). */
+    /**
+     * Appends an AGENT message to the chat (terminal state, no streaming dots).
+     * @param text the message text.
+     */
     private suspend fun addAgentMessage(text: String) {
         val message = ChatMessage(
             id = UUID.randomUUID().toString(),
@@ -770,11 +795,20 @@ class ChatViewModel(
         }
     }
 
-    /** Resolve a UI string resource via the plugin's Android context. */
+    /**
+     * Resolves a UI string resource via the plugin's Android context.
+     * @param resId the string resource id.
+     * @param args format arguments.
+     * @return the resolved string, or empty if the context is gone.
+     */
     private fun str(resId: Int, vararg args: Any?): String =
         getContext()?.androidContext?.getString(resId, *args).orEmpty()
 
-    /** Append a SYSTEM message to the chat (on the main thread). */
+    /**
+     * Appends a SYSTEM message to the chat (on the main thread).
+     * @param text the message text.
+     * @param status the message status.
+     */
     private suspend fun addSystemMessage(text: String, status: MessageStatus) {
         val message = ChatMessage(
             id = UUID.randomUUID().toString(),

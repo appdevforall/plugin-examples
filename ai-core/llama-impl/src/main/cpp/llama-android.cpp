@@ -580,9 +580,17 @@ Java_android_llama_cpp_LLamaAndroid_new_1grammar_1sampler(
         JNIEnv *env, jobject, jlong model_pointer, jstring grammar) {
     const auto model = reinterpret_cast<llama_model *>(model_pointer);
     if (model == nullptr) return 0;
-    const llama_vocab *vocab = llama_model_get_vocab(model);
+    if (grammar == nullptr) return 0;  // no grammar string — caller falls back
 
+    const llama_vocab *vocab = llama_model_get_vocab(model);
+    if (vocab == nullptr) return 0;    // model has no vocab — can't build a grammar sampler
+
+    // NULL under memory pressure (pending OOM); clear the exception and fall back.
     const char *grammar_cstr = env->GetStringUTFChars(grammar, nullptr);
+    if (grammar_cstr == nullptr) {
+        if (env->ExceptionCheck()) env->ExceptionClear();
+        return 0;
+    }
     llama_sampler *grmr = llama_sampler_init_grammar(vocab, grammar_cstr, "root");
     env->ReleaseStringUTFChars(grammar, grammar_cstr);
     if (grmr == nullptr) return 0;  // invalid grammar — caller falls back
@@ -684,50 +692,40 @@ Java_android_llama_cpp_LLamaAndroid_completion_1init(
 
     common_batch_clear(*batch);
 
-    bool reuse = false;
-    size_t reuse_prefix = 0;
+    // Reuse the longest common prefix with the cached sequence so the unchanged prefix (system prompt) isn't re-prefilled.
+    size_t lcp = 0;
     {
         std::lock_guard<std::mutex> lock(g_globals_mutex);
         if (g_kv_cache_reuse.load() && !g_cached_tokens.empty()) {
-            if (g_cached_tokens.size() <= tokens_list.size()) {
-                reuse = true;
-                for (size_t i = 0; i < g_cached_tokens.size(); i++) {
-                    if (g_cached_tokens[i] != tokens_list[i]) {
-                        reuse = false;
-                        break;
-                    }
-                }
-                if (reuse) {
-                    reuse_prefix = g_cached_tokens.size();
-                }
+            const size_t maxlcp = std::min(g_cached_tokens.size(), tokens_list.size());
+            while (lcp < maxlcp && g_cached_tokens[lcp] == tokens_list[lcp]) {
+                lcp++;
             }
         }
     }
 
-    if (!reuse) {
-        // Fully reset KV cache to avoid non-consecutive sequence positions.
-        llama_memory_clear(llama_get_memory(context), true);
-        {
-            std::lock_guard<std::mutex> lock(g_globals_mutex);
-            if (!g_kv_cache_reuse.load()) {
-                g_cached_tokens.clear();
-            }
-            g_cached_tokens.assign(tokens_list.begin(), tokens_list.end());
-        }
-        // evaluate the initial prompt
-        for (auto i = 0; i < tokens_list.size(); i++) {
-            common_batch_add(*batch, tokens_list[i], i, {0}, false);
-        }
+    // Always leave at least one token to decode, so we get logits for the next token.
+    if (lcp == tokens_list.size() && lcp > 0) {
+        lcp--;
+    }
+
+    llama_memory_t mem = llama_get_memory(context);
+    if (lcp == 0) {
+        // Nothing reusable — full reset.
+        llama_memory_clear(mem, true);
     } else {
-        {
-            std::lock_guard<std::mutex> lock(g_globals_mutex);
-            g_cached_tokens.assign(tokens_list.begin(), tokens_list.end());
-        }
-        if (reuse_prefix < tokens_list.size()) {
-            for (auto i = reuse_prefix; i < tokens_list.size(); i++) {
-                common_batch_add(*batch, tokens_list[i], i, {0}, false);
-            }
-        }
+        // Evict cached positions past the common prefix.
+        llama_memory_seq_rm(mem, 0, (llama_pos) lcp, -1);
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(g_globals_mutex);
+        g_cached_tokens.assign(tokens_list.begin(), tokens_list.end());
+    }
+
+    // Prefill only the divergent tail.
+    for (size_t i = lcp; i < tokens_list.size(); i++) {
+        common_batch_add(*batch, tokens_list[i], (llama_pos) i, {0}, false);
     }
 
     if (batch->n_tokens > 0) {

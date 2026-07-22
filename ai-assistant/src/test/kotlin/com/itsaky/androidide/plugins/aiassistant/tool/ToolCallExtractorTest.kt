@@ -31,6 +31,18 @@ class ToolCallExtractorTest {
     }
 
     @Test
+    fun givenABareJsonToolCallWhoseValueContainsBraces_whenExtracting_thenItIsExtractedIntact() {
+        // The brace counter must ignore braces inside string values.
+        val calls = ToolCallExtractor.extractToolCalls(
+            """{"tool":"create_file","args":{"file_path":"A.kt","content":"fun f() { if (x) { y() } }"}}"""
+        )
+        assertEquals(1, calls.size)
+        assertEquals("create_file", calls[0].name)
+        assertEquals("A.kt", calls[0].args["file_path"])
+        assertEquals("fun f() { if (x) { y() } }", calls[0].args["content"])
+    }
+
+    @Test
     fun givenAChattyReplyMentioningBuildingApps_whenExtracting_thenNoToolIsFired() {
         val calls = ToolCallExtractor.extractToolCalls(
             "Hi! I can help you build Android apps. What would you like to run or create next?"
