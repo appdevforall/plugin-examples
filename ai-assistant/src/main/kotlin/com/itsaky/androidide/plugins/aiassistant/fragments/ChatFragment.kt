@@ -15,9 +15,11 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.chip.Chip
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aiassistant.adapters.ChatAdapter
+import com.itsaky.androidide.plugins.aiassistant.tool.handlers.PathGuard
 import com.itsaky.androidide.plugins.aiassistant.databinding.FragmentChatBinding
 import com.itsaky.androidide.plugins.aiassistant.models.AgentState
 import com.itsaky.androidide.plugins.aiassistant.viewmodel.ChatViewModel
+import com.itsaky.androidide.plugins.services.IdeProjectService
 import io.noties.markwon.Markwon
 import kotlinx.coroutines.launch
 import java.io.File
@@ -334,9 +336,16 @@ class ChatFragment : Fragment() {
         dialog.show(parentFragmentManager, "approval_dialog")
     }
 
+    /**
+     * Opens the file picker rooted at the open project. The host's
+     * [IdeProjectService] is the source of truth for the project root; the
+     * `System.getProperty` chain in [PathGuard] resolves to "/" at runtime (the
+     * IDE process cwd), which lists nothing, so it is only a last-resort fallback.
+     */
     private fun showFilePicker() {
-        // Start from AndroidIDE projects directory by default
-        val startPath = "/storage/emulated/0/AndroidIDEProjects"
+        val projectService = getPluginContext()?.services?.get(IdeProjectService::class.java)
+        val startPath = projectService?.getCurrentProject()?.rootDir?.absolutePath
+            ?: PathGuard.projectRoot()
 
         val dialog = FilePickerDialogFragment.newInstance(startPath) { files ->
             addContextFiles(files)
