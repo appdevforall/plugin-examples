@@ -3,11 +3,14 @@ package com.itsaky.androidide.plugins.aiassistant.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.itsaky.androidide.plugins.PluginContext
+import com.itsaky.androidide.plugins.aiassistant.R
 import com.itsaky.androidide.plugins.aiassistant.models.AgentState
 import com.itsaky.androidide.plugins.aiassistant.models.ChatMessage
 import com.itsaky.androidide.plugins.aiassistant.models.ChatSession
 import com.itsaky.androidide.plugins.aiassistant.models.MessageStatus
 import com.itsaky.androidide.plugins.aiassistant.models.Sender
+import com.itsaky.androidide.plugins.aiassistant.models.ToolResult
+import com.itsaky.androidide.plugins.aiassistant.tool.AgentLoop
 import com.itsaky.androidide.plugins.aiassistant.tool.Executor
 import com.itsaky.androidide.plugins.aiassistant.tool.ToolApprovalManager
 import com.itsaky.androidide.plugins.aiassistant.tool.ToolCall
@@ -29,6 +32,8 @@ import com.itsaky.androidide.plugins.aiassistant.data.ChatStorageManager
 import com.itsaky.androidide.plugins.aiassistant.utils.ToolExecutionTracker
 import com.itsaky.androidide.plugins.services.LlmInferenceService
 import com.itsaky.androidide.plugins.services.SharedServices
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -40,6 +45,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
 import java.util.UUID
@@ -50,6 +56,37 @@ import java.util.UUID
 class ChatViewModel(
     private val getContext: () -> PluginContext?
 ) : ViewModel() {
+
+    companion object {
+        /** Terminal tool: shared by [agentLoop] (stops on it) and [runModelTurn] (renders its message). */
+        const val RESPOND_TOOL = "respond"
+
+        /** [LlmConfig.extraParams] key for the local-backend GBNF; must match ai-core's `LocalLlmBackend.EXTRA_PARAM_GRAMMAR`. */
+        private const val EXTRA_PARAM_GRAMMAR = "grammar"
+    }
+
+    /**
+     * Builds the local-backend GBNF forcing one well-formed `<tool_call>`. The `tool`
+     * alternatives come from the registered handlers (+ [RESPOND_TOOL]) so the token
+     * mask can't drift; control chars are excluded so `org.json` accepts the strings.
+     * @return the GBNF grammar string.
+     */
+    private fun buildLocalToolCallGrammar(): String {
+        val toolNames = (toolRouter.getAllHandlers().map { it.toolName } + RESPOND_TOOL).distinct()
+        val toolAlternatives = toolNames.joinToString(" | ") { "\"~$it~\"" }
+        return """
+            root ::= "<tool_call>{~tool~:" tool ",~args~:" args "}</tool_call>"
+            tool ::= $toolAlternatives
+            args ::= "{}" | "{" pair ("," pair)* "}"
+            pair ::= "~" key "~:~" val "~"
+            key  ::= [a-z_]+
+            val  ::= char*
+            char ::= [^~\\\x00-\x1F] | "\\" [~\\/bfnrt]
+        """.trimIndent().replace("~", "\\\"")
+    }
+
+    /** Local-backend GBNF, built once from the registered handlers. */
+    private val localToolCallGrammar: String by lazy { buildLocalToolCallGrammar() }
 
     private fun getLlmService(): LlmInferenceService? {
         return try {
@@ -112,7 +149,19 @@ class ChatViewModel(
     private val approvalManager = ToolApprovalManager()
     private val toolRouter: ToolRouter
     private val executor: Executor
+    private val agentLoop = AgentLoop(terminalTool = RESPOND_TOOL)
     val toolExecutionTracker = ToolExecutionTracker()
+
+    /** The in-flight agent run (streaming + tool loop), so it can be cancelled. */
+    private var generationJob: Job? = null
+    private val generationEpoch = java.util.concurrent.atomic.AtomicInteger(0)
+
+    /** True while a generation is admitted and its coroutine has not yet unwound; gates re-entry. */
+    private val isGenerating = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    /** Whether the current run's most recent tool batch failed; reset per run. */
+    @Volatile
+    private var lastToolFailedThisRun = false
 
     private val _pendingApprovalRequest = MutableStateFlow<ApprovalRequest?>(null)
     val pendingApprovalRequest: StateFlow<ApprovalRequest?> = _pendingApprovalRequest.asStateFlow()
@@ -301,6 +350,25 @@ class ChatViewModel(
         - After each file modification, verify the build compiles
         - Generate apps that actually run and work as described
 
+        RULES:
+        - Never fabricate tool output. Emit a tool call, then wait for the real result before continuing.
+        - Never write "User:", "Assistant:", or "Tool results:" — the system supplies those.
+        - Paths are relative to the project root and must be complete. If you don't know a file's exact path, find it with search_project or list_files first, then act on the real path — don't guess.
+        - For plain chat (e.g. "Hi"), just reply briefly with no tool call. When the task is done, give a short summary with no tool call.
+
+        TOOL CALL FORMAT — to run a tool, emit a single line in EXACTLY this format and nothing after it:
+        <tool_call>{"tool":"TOOL_NAME","args":{"arg":"value"}}</tool_call>
+        Do NOT describe the action in prose (e.g. "Okay, I'll open the file…") — narrating does nothing.
+        The tool only runs when you emit the <tool_call> line itself.
+
+        FORMAT EXAMPLES (the tool call is the entire reply):
+        Open a file once you know its path:
+        <tool_call>{"tool":"open_file","args":{"file_path":"app/src/main/java/com/example/app/MainActivity.java"}}</tool_call>
+        Find a file by name:
+        <tool_call>{"tool":"search_project","args":{"query":"MainActivity"}}</tool_call>
+        List a directory:
+        <tool_call>{"tool":"list_files","args":{"directory":"app/src/main"}}</tool_call>
+
         WORKFLOW:
         1. Understand the user's request
         2. List files to understand the project structure
@@ -309,8 +377,6 @@ class ChatViewModel(
         5. Sync gradle and verify compilation
         6. Run the app to confirm it works
         7. Report success and what was built
-
-        You have full access to tools - use them continuously throughout the workflow.
         """.trimIndent()
 
         android.util.Log.d("ChatViewModel", "Using Gemini system prompt (high autonomy mode) with ${toolRouter.getAllHandlers().size} tools")
@@ -326,38 +392,24 @@ class ChatViewModel(
         }
 
         val prompt = """
-        You are a helpful coding assistant integrated into AndroidIDE. Help the user build Android apps step-by-step.
+        You are a coding assistant inside AndroidIDE.
 
-        CRITICAL: You MUST use tools for ANY action-related request. Do NOT just describe what you would do.
+        Rules:
+        - Reply with exactly ONE tool call, nothing else.
+        - Use a file/project tool only when the user asks about files, code, or the project; for a greeting, small talk, or a question you can answer, use "respond".
+        - Never invent tool output or claim an action you didn't perform via a tool. After a tool call, stop; the real result returns next turn.
+        - "respond" must carry a "message" — your reply or final answer.
+        - File arguments accept a bare name (e.g. "MainActivity.java"); the project is searched. Don't invent deep paths.
 
-        AVAILABLE TOOLS:
+        Tools:
         $toolDescriptions
+        - respond: Send the user a message or your final answer.
 
-        TOOL CALLING RULES:
-        1. When user asks to perform an action (list, read, search, create, update, run), IMMEDIATELY call the tool
-        2. Do NOT explain or apologize - just execute the tool call
-        3. Always provide the tool call in this EXACT format:
-           <tool_call>{"tool":"TOOL_NAME","args":{"param1":"value1"}}</tool_call>
-        4. Execute tools BEFORE saying anything else
-
-        STEP-BY-STEP WORKFLOW:
-        1. List files to understand the project
-        2. Read existing files to know what to change
-        3. Create or update one file at a time
-        4. After each file, ask the user what to do next
-        5. Add dependencies when needed
-        6. Sync gradle to check for errors
-        7. Run the app to test it
-        8. Ask for feedback and iterate
-
-        EXAMPLES:
-        User: "list files in src"
-        <tool_call>{"tool":"list_files","args":{"directory":"src"}}</tool_call>
-
-        User: "read MainActivity.kt"
-        <tool_call>{"tool":"read_file","args":{"file_path":"MainActivity.kt"}}</tool_call>
-
-        After each tool call, analyze the result and ask: "What would you like to do next?"
+        Examples (pick the tool that matches; don't copy verbatim):
+        Greeting / question you can answer -> respond:
+        <tool_call>{"tool":"respond","args":{"message":"Hi! What would you like to build?"}}</tool_call>
+        Open a file -> open_file:
+        <tool_call>{"tool":"open_file","args":{"file_path":"MainActivity.java"}}</tool_call>
         """.trimIndent()
 
         android.util.Log.d("ChatViewModel", "Using Local LLM system prompt (guided mode) with ${toolRouter.getAllHandlers().size} tools")
@@ -365,51 +417,51 @@ class ChatViewModel(
     }
 
     /**
-     * Parse tool calls from text using multi-strategy extraction.
-     * Tries: XML tags → JSON objects → Implicit actions
+     * Executes a batch of tool calls, renders each result as a TOOL message, and
+     * returns the results for the [agentLoop] to feed back; leaves [AgentState.Idle]
+     * to the loop.
+     * @param toolCalls the calls to execute.
+     * @return the results, positionally aligned with [toolCalls].
      */
-    private fun parseToolCalls(text: String): List<ToolCall> {
-        return ToolCallExtractor.extractToolCalls(text)
-    }
-
-    /**
-     * Execute tool calls and add results to chat.
-     */
-    private suspend fun executeToolCalls(toolCalls: List<ToolCall>) {
-        if (toolCalls.isEmpty()) return
+    private suspend fun executeToolCalls(toolCalls: List<ToolCall>): List<ToolResult> {
+        if (toolCalls.isEmpty()) return emptyList()
 
         val executingState = AgentState.Executing(
             currentStepIndex = 0,
             totalSteps = toolCalls.size,
             description = toolCalls.first().name
         )
-        _agentState.value = executingState
+        withContext(Dispatchers.Main) { _agentState.value = executingState }
         startStateTimer(executingState)
 
         val results = executor.execute(toolCalls)
 
+        // Record whether this batch's last tool failed (read by runModelTurn).
+        lastToolFailedThisRun = results.lastOrNull()?.success == false
+
         // Add tool results as messages
-        results.forEachIndexed { index, result ->
-            val toolCall = toolCalls[index]
-            val resultText = if (result.success) {
-                "${toolCall.name}: ${result.message}\n${result.data ?: ""}"
-            } else {
-                "${toolCall.name} failed: ${result.message}\n${result.error_details ?: ""}"
+        withContext(Dispatchers.Main) {
+            results.forEachIndexed { index, result ->
+                val toolCall = toolCalls[index]
+                val resultText = if (result.success) {
+                    "${toolCall.name}: ${result.message}\n${result.data ?: ""}"
+                } else {
+                    "${toolCall.name} failed: ${result.message}\n${result.error_details ?: ""}"
+                }
+                val resultMessage = ChatMessage(
+                    id = UUID.randomUUID().toString(),
+                    text = resultText,
+                    sender = Sender.TOOL,
+                    status = if (result.success) MessageStatus.SENT else MessageStatus.ERROR
+                )
+                android.util.Log.d("ChatViewModel", "Adding tool result message: $resultText")
+                _messages.value = _messages.value + resultMessage
+                syncMessageToSession(resultMessage)
             }
-            val resultMessage = ChatMessage(
-                id = UUID.randomUUID().toString(),
-                text = resultText,
-                sender = Sender.TOOL,
-                status = if (result.success) MessageStatus.SENT else MessageStatus.ERROR
-            )
-            android.util.Log.d("ChatViewModel", "Adding tool result message: $resultText")
-            _messages.value = _messages.value + resultMessage
-            android.util.Log.d("ChatViewModel", "Total messages after tool result: ${_messages.value.size}")
-            syncMessageToSession(resultMessage)
         }
 
         stopStateTimer()
-        _agentState.value = AgentState.Idle
+        return results
     }
 
     /**
@@ -509,168 +561,264 @@ class ChatViewModel(
             return
         }
 
+        // Reject re-entry while a generation is still in flight.
+        if (!isGenerating.compareAndSet(false, true)) {
+            android.util.Log.d("ChatViewModel", "sendMessage: generation already in progress; ignoring")
+            return
+        }
+
         android.util.Log.d("ChatViewModel", "sendMessage: Starting message processing")
-        viewModelScope.launch(Dispatchers.IO) {
+        // Reset per-run tool-failure tracking.
+        lastToolFailedThisRun = false
+        val epoch = generationEpoch.incrementAndGet()
+        generationJob = viewModelScope.launch(Dispatchers.IO) {
             try {
-                // Add user message
+                // Add user message to the UI.
                 val userChatMessage = ChatMessage(
                     id = UUID.randomUUID().toString(),
                     text = userMessage,
                     sender = Sender.USER,
                     status = MessageStatus.SENT
                 )
-                _messages.value = _messages.value + userChatMessage
-                android.util.Log.d("ChatViewModel", "sendMessage: Added user message, total messages=${_messages.value.size}")
-                syncMessageToSession(userChatMessage)
+                withContext(Dispatchers.Main) {
+                    _messages.value = _messages.value + userChatMessage
+                    syncMessageToSession(userChatMessage)
+                    _agentState.value = AgentState.Processing(str(R.string.msg_generating))
+                }
 
-                // Add empty agent message that will be updated with streaming tokens
-                val agentMessageId = UUID.randomUUID().toString()
-                val agentMessage = ChatMessage(
-                    id = agentMessageId,
-                    text = "",
-                    sender = Sender.AGENT,
-                    status = MessageStatus.SENT  // SENT so text is visible immediately
-                )
-                _messages.value = _messages.value + agentMessage
-                syncMessageToSession(agentMessage)
-
-                // Set processing state
-                _agentState.value = AgentState.Processing("Generating...")
-
-                // Record start time
-                val startTime = System.currentTimeMillis()
-
-                // Create LLM config
                 val config = LlmInferenceService.LlmConfig(currentBackendId).apply {
                     temperature = 0.7f
-                    maxTokens = 4096  // Increased from 2048 to ensure complete tool calls are generated
+                    maxTokens = 4096  // headroom for complete tool calls
                     systemPrompt = buildSystemPrompt()
+                    // Local backend constrains generation to this grammar; cloud ignores it.
+                    extraParams = mapOf(EXTRA_PARAM_GRAMMAR to localToolCallGrammar)
                 }
 
-                // Build message with context if any files are selected
                 val messageWithContext = buildString {
                     append(userMessage)
-                    val context = buildContextString()
-                    if (context.isNotEmpty()) {
-                        append(context)
+                    append(buildContextString())
+                }
+                val history = _history.value.toMutableList()
+                history.add(
+                    LlmInferenceService.ChatMessage(
+                        LlmInferenceService.ChatMessage.Role.USER,
+                        messageWithContext
+                    )
+                )
+
+                try {
+                    agentLoop.run(
+                        history = history,
+                        generate = { prompt ->
+                            withContext(Dispatchers.Main) {
+                                _agentState.value = AgentState.Processing(str(R.string.msg_generating))
+                            }
+                            runModelTurn(llmService, prompt, config, epoch)
+                        },
+                        executeTools = { calls -> executeToolCalls(calls) },
+                        events = object : AgentLoop.Events {
+                            override suspend fun onMaxIterationsReached(turns: Int) {
+                                addSystemMessage(
+                                    str(R.string.agent_max_steps_reached, turns),
+                                    MessageStatus.SENT
+                                )
+                            }
+
+                            override suspend fun onRepeatedToolCalls(turns: Int) {
+                                addSystemMessage(
+                                    str(R.string.agent_repeated_calls),
+                                    MessageStatus.SENT
+                                )
+                            }
+                        }
+                    )
+                } finally {
+                    // Persist history only if this run wasn't superseded (epoch bumped).
+                    if (generationEpoch.get() == epoch) {
+                        _history.value = history.toList()
+                    }
+                    stopStateTimer()
+                }
+
+                withContext(Dispatchers.Main) { _agentState.value = AgentState.Idle }
+            } catch (ce: CancellationException) {
+                stopStateTimer()
+                throw ce
+            } catch (e: Exception) {
+                android.util.Log.e("ChatViewModel", "sendMessage failed", e)
+                stopStateTimer()
+                _agentState.value = AgentState.Error(str(R.string.state_error, e.message))
+                addSystemMessage(str(R.string.state_error, e.message), MessageStatus.ERROR)
+            } finally {
+                // Allow re-entry once the coroutine unwinds.
+                isGenerating.set(false)
+            }
+        }
+    }
+
+    /**
+     * Runs one streaming model turn: creates an agent bubble, streams tokens into it,
+     * and suspends until completion. Throws on backend error.
+     * @param llmService the inference service.
+     * @param prompt the rendered prompt for this turn.
+     * @param config the generation config.
+     * @param epoch this run's epoch, for staleness checks against Stop/newer sends.
+     * @return the final response text (raw, for tool-call extraction).
+     */
+    private suspend fun runModelTurn(
+        llmService: LlmInferenceService,
+        prompt: String,
+        config: LlmInferenceService.LlmConfig,
+        epoch: Int
+    ): String {
+        val deferred = CompletableDeferred<String>()
+        val agentMessageId = UUID.randomUUID().toString()
+        val startTime = System.currentTimeMillis()
+        val responseBuilder = StringBuilder()
+
+        // True once Stop (or a newer message) has superseded this generation.
+        fun isStale() = generationEpoch.get() != epoch
+
+        withContext(Dispatchers.Main) {
+            val agentMessage = ChatMessage(
+                id = agentMessageId,
+                text = "",
+                sender = Sender.AGENT,
+                status = MessageStatus.SENT
+            )
+            _messages.value = _messages.value + agentMessage
+            syncMessageToSession(agentMessage)
+        }
+
+        try {
+            llmService.generateStreaming(prompt, config, object : LlmInferenceService.StreamCallback {
+                override fun onToken(token: String) {
+                    if (isStale()) return  // Stop pressed — ignore late tokens.
+                    responseBuilder.append(token)
+                    // Snapshot on the producer thread; only the immutable String crosses to Main.
+                    val snapshot = responseBuilder.toString()
+                    viewModelScope.launch(Dispatchers.Main) {
+                        if (isStale()) return@launch
+                        val updated = ChatMessage(
+                            id = agentMessageId,
+                            text = snapshot,
+                            sender = Sender.AGENT,
+                            status = MessageStatus.SENT
+                        )
+                        _messages.value = _messages.value.map { if (it.id == agentMessageId) updated else it }
+                        syncMessageToSession(updated)
                     }
                 }
 
-                // Add user message to conversation history for LLM context
-                val userHistoryMessage = LlmInferenceService.ChatMessage(
-                    LlmInferenceService.ChatMessage.Role.USER,
-                    messageWithContext
-                )
-                _history.value = _history.value + userHistoryMessage
-                android.util.Log.d("ChatViewModel", "Added user to history. Total history length: ${_history.value.size}")
+                override fun onComplete(response: LlmInferenceService.LlmResponse) {
+                    if (isStale()) {
+                        // Already cancelled; the awaiting loop was unblocked by job cancel.
+                        deferred.complete(response.text)
+                        return
+                    }
+                    val durationMs = System.currentTimeMillis() - startTime
+                    val toolCalls = ToolCallExtractor.extractToolCalls(response.text)
+                    val respondCall = toolCalls.firstOrNull { it.name == RESPOND_TOOL }
+                    val respondMessage = respondCall?.args?.get("message")?.toString()
 
-                // Accumulated response text
-                val responseBuilder = StringBuilder()
+                    // Per-run flag (set by executeToolCalls), not a session-wide scan.
+                    val lastToolFailed = lastToolFailedThisRun
 
-                // Use streaming API with callback
-                llmService.generateStreaming(messageWithContext, config, object : LlmInferenceService.StreamCallback {
-                    override fun onToken(token: String) {
-                        viewModelScope.launch(Dispatchers.Main) {
-                            // Accumulate token
-                            responseBuilder.append(token)
-
-                            // Update the message with new text using map() to trigger DiffUtil
-                            val updatedMessage = ChatMessage(
-                                id = agentMessageId,
-                                text = responseBuilder.toString(),
-                                sender = Sender.AGENT,
-                                status = MessageStatus.SENT
-                            )
-                            _messages.value = _messages.value.map { msg ->
-                                if (msg.id == agentMessageId) {
-                                    updatedMessage
-                                } else {
-                                    msg
-                                }
-                            }
-
-                            // Also update current session's message
-                            syncMessageToSession(updatedMessage)
+                    val displayText = when {
+                        respondCall != null && lastToolFailed ->
+                            str(R.string.agent_action_failed)
+                        // Render the "respond" message to the user, not a tool badge.
+                        respondCall != null ->
+                            respondMessage?.takeIf { it.isNotBlank() } ?: str(R.string.agent_no_response)
+                        toolCalls.isNotEmpty() -> toolCalls.joinToString("\n") { c ->
+                            "🔧 ${c.name}(${c.args.entries.joinToString(", ") { "${it.key}=${it.value}" }})"
+                        }
+                        else -> response.text.ifBlank {
+                            str(R.string.agent_no_response)
                         }
                     }
-
-                    override fun onComplete(response: LlmInferenceService.LlmResponse) {
-                        viewModelScope.launch(Dispatchers.IO) {
-                            val durationMs = System.currentTimeMillis() - startTime
-                            val finalText = response.text
-
-                            // Mark message as completed with final text
-                            launch(Dispatchers.Main) {
-                                val updatedMessage = ChatMessage(
-                                    id = agentMessageId,
-                                    text = finalText,
-                                    sender = Sender.AGENT,
-                                    status = MessageStatus.COMPLETED,
-                                    durationMs = durationMs
-                                )
-                                _messages.value = _messages.value.map { msg ->
-                                    if (msg.id == agentMessageId) {
-                                        updatedMessage
-                                    } else {
-                                        msg
-                                    }
-                                }
-
-                                syncMessageToSession(updatedMessage)
-                            }
-
-                            // Add assistant response to conversation history for LLM context
-                            val assistantHistoryMessage = LlmInferenceService.ChatMessage(
-                                LlmInferenceService.ChatMessage.Role.ASSISTANT,
-                                finalText
-                            )
-                            _history.value = _history.value + assistantHistoryMessage
-                            android.util.Log.d("ChatViewModel", "Added assistant to history. Total history length: ${_history.value.size}")
-
-                            // Parse and execute tool calls if any
-                            val toolCalls = parseToolCalls(finalText)
-                            if (toolCalls.isNotEmpty()) {
-                                executeToolCalls(toolCalls)
-                            } else {
-                                launch(Dispatchers.Main) {
-                                    _agentState.value = AgentState.Idle
-                                }
-                            }
-                        }
+                    viewModelScope.launch(Dispatchers.Main) {
+                        if (isStale()) return@launch
+                        val finalMsg = ChatMessage(
+                            id = agentMessageId,
+                            text = displayText,
+                            sender = Sender.AGENT,
+                            status = MessageStatus.COMPLETED,
+                            durationMs = durationMs
+                        )
+                        _messages.value = _messages.value.map { if (it.id == agentMessageId) finalMsg else it }
+                        syncMessageToSession(finalMsg)
                     }
+                    // Return the RAW text to the loop so extraction/stop logic is unaffected.
+                    deferred.complete(response.text)
+                }
 
-                    override fun onError(error: String) {
-                        viewModelScope.launch(Dispatchers.Main) {
-                            val durationMs = System.currentTimeMillis() - startTime
-
-                            // Remove the agent message
-                            _messages.value = _messages.value.filter { it.id != agentMessageId }
-
-                            // Add error message
-                            _agentState.value = AgentState.Error(error)
-                            val errorMessage = ChatMessage(
-                                id = UUID.randomUUID().toString(),
-                                text = error,
-                                sender = Sender.SYSTEM,
-                                status = MessageStatus.ERROR,
-                                durationMs = durationMs
-                            )
-                            _messages.value = _messages.value + errorMessage
-                            syncMessageToSession(errorMessage)
-                        }
+                override fun onError(error: String) {
+                    if (isStale()) {
+                        deferred.completeExceptionally(CancellationException("stopped"))
+                        return
                     }
-                })
-
-            } catch (e: Exception) {
-                _agentState.value = AgentState.Error("Error: ${e.message}")
-                val errorMessage = ChatMessage(
-                    id = UUID.randomUUID().toString(),
-                    text = "Error: ${e.message}",
-                    sender = Sender.SYSTEM,
-                    status = MessageStatus.ERROR
-                )
-                _messages.value = _messages.value + errorMessage
+                    viewModelScope.launch(Dispatchers.Main) {
+                        // Drop the empty/partial bubble; the error surfaces as a SYSTEM message.
+                        _messages.value = _messages.value.filter { it.id != agentMessageId }
+                    }
+                    deferred.completeExceptionally(RuntimeException(error))
+                }
+            })
+        } catch (e: Exception) {
+            // A synchronous throw fires no callback; complete deferred so await() doesn't hang.
+            android.util.Log.e("ChatViewModel", "generateStreaming threw synchronously", e)
+            viewModelScope.launch(Dispatchers.Main) {
+                _messages.value = _messages.value.filter { it.id != agentMessageId }
             }
+            if (!deferred.isCompleted) deferred.completeExceptionally(e)
+        }
+
+        return deferred.await()
+    }
+
+    /**
+     * Appends an AGENT message to the chat (terminal state, no streaming dots).
+     * @param text the message text.
+     */
+    private suspend fun addAgentMessage(text: String) {
+        val message = ChatMessage(
+            id = UUID.randomUUID().toString(),
+            text = text,
+            sender = Sender.AGENT,
+            status = MessageStatus.COMPLETED,
+            durationMs = 0L
+        )
+        withContext(Dispatchers.Main) {
+            _messages.value = _messages.value + message
+            syncMessageToSession(message)
+        }
+    }
+
+    /**
+     * Resolves a UI string resource via the plugin's Android context.
+     * @param resId the string resource id.
+     * @param args format arguments.
+     * @return the resolved string, or empty if the context is gone.
+     */
+    private fun str(resId: Int, vararg args: Any?): String =
+        getContext()?.androidContext?.getString(resId, *args).orEmpty()
+
+    /**
+     * Appends a SYSTEM message to the chat (on the main thread).
+     * @param text the message text.
+     * @param status the message status.
+     */
+    private suspend fun addSystemMessage(text: String, status: MessageStatus) {
+        val message = ChatMessage(
+            id = UUID.randomUUID().toString(),
+            text = text,
+            sender = Sender.SYSTEM,
+            status = status
+        )
+        withContext(Dispatchers.Main) {
+            _messages.value = _messages.value + message
+            syncMessageToSession(message)
         }
     }
 
@@ -678,7 +826,14 @@ class ChatViewModel(
      * Clear all messages from the conversation.
      */
     fun clearMessages() {
+        // Clear Chat must also stop any in-flight run, not just wipe the list.
+        generationEpoch.incrementAndGet()
+        generationJob?.cancel()
+        generationJob = null
+        getLlmService()?.cancelGeneration()
+        stopStateTimer()
         _messages.value = emptyList()
+        _history.value = emptyList()
         _agentState.value = AgentState.Idle
     }
 
@@ -690,6 +845,7 @@ class ChatViewModel(
         _sessions.value = _sessions.value + newSession
         _currentSessionId.value = newSession.id
         _messages.value = emptyList()
+        _history.value = emptyList()
     }
 
     /**
@@ -702,6 +858,7 @@ class ChatViewModel(
             _currentSessionId.value = sessionId
             // Use immutable snapshot to ensure StateFlow emits on mutations
             _messages.value = session.messages.toList()
+            _history.value = emptyList()
             android.util.Log.d("ChatViewModel", "switchToSession: set _messages to ${session.messages.size} messages")
         }
     }
@@ -722,10 +879,38 @@ class ChatViewModel(
      * Stop any ongoing processing.
      */
     fun stopProcessing() {
-        if (_agentState.value is AgentState.Processing) {
-            _agentState.value = AgentState.Cancelling
-            getLlmService()?.cancelGeneration()
-            _agentState.value = AgentState.Idle
+        generationEpoch.incrementAndGet()
+        _agentState.value = AgentState.Cancelling
+        generationJob?.cancel()
+        generationJob = null
+        getLlmService()?.cancelGeneration()
+        stopStateTimer()
+        finalizeInProgressMessages()
+        _agentState.value = AgentState.Idle
+    }
+
+    /**
+     * Give any still-streaming agent bubble (status SENT, null `durationMs`) a
+     * terminal state so its animated "…" dots stop: drop empty bubbles, mark
+     * partial ones [MessageStatus.COMPLETED]. Called on Stop.
+     */
+    private fun finalizeInProgressMessages() {
+        val finalized = _messages.value.mapNotNull { msg ->
+            if (msg.sender == Sender.AGENT && msg.durationMs == null) {
+                if (msg.text.isBlank()) null
+                else msg.copy(status = MessageStatus.COMPLETED, durationMs = 0L)
+            } else {
+                msg
+            }
+        }
+        _messages.value = finalized
+
+        // Mirror the change into the current session's backing list.
+        _currentSessionId.value?.let { sessionId ->
+            _sessions.value.firstOrNull { it.id == sessionId }?.let { session ->
+                session.messages.clear()
+                session.messages.addAll(finalized)
+            }
         }
     }
 
@@ -737,9 +922,12 @@ class ChatViewModel(
         stateUpdateJob?.cancel()
         stateUpdateJob = viewModelScope.launch {
             while (isActive) {
-                delay(100) // Update every 100ms
-                val elapsed = System.currentTimeMillis() - state.startTime
-                _agentState.value = state.copy(elapsedMillis = elapsed)
+                delay(100)
+                val current = _agentState.value
+                if (current !is AgentState.Executing) break
+                _agentState.value = current.copy(
+                    elapsedMillis = System.currentTimeMillis() - current.startTime
+                )
             }
         }
     }

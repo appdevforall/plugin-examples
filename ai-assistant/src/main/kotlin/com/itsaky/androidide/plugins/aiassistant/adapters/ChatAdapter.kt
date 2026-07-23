@@ -10,9 +10,9 @@ import android.widget.Button
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.PopupMenu
+import com.google.android.material.snackbar.Snackbar
 import android.widget.ProgressBar
 import android.widget.TextView
-import android.widget.Toast
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
@@ -55,6 +55,10 @@ class ChatAdapter(
         val generatingDots: TextView = view.findViewById(R.id.generating_dots)
         val messageDuration: TextView = view.findViewById(R.id.message_duration)
         val btnRetry: Button = view.findViewById(R.id.btn_retry)
+
+        /** The "…" animation loop for this holder, so it can be cancelled (not left re-posting forever). */
+        val dotsHandler = android.os.Handler(android.os.Looper.getMainLooper())
+        var dotsRunnable: Runnable? = null
     }
 
     class SystemMessageViewHolder(view: View) : MessageViewHolder(view) {
@@ -119,7 +123,7 @@ class ChatAdapter(
                     MessageStatus.LOADING -> {
                         holder.loadingIndicator.visibility = View.VISIBLE
                         holder.messageContent.visibility = View.GONE
-                        holder.generatingDots.visibility = View.GONE
+                        stopGeneratingDots(holder)
                     }
                     MessageStatus.SENT -> {
                         holder.loadingIndicator.visibility = View.GONE
@@ -130,19 +134,19 @@ class ChatAdapter(
                         if (message.sender == Sender.AGENT && message.durationMs == null) {
                             animateGeneratingDots(holder)
                         } else {
-                            holder.generatingDots.visibility = View.GONE
+                            stopGeneratingDots(holder)
                         }
                     }
                     MessageStatus.COMPLETED -> {
                         holder.loadingIndicator.visibility = View.GONE
                         holder.messageContent.visibility = View.VISIBLE
-                        holder.generatingDots.visibility = View.GONE
+                        stopGeneratingDots(holder)
                         markwon.setMarkdown(holder.messageContent, payload.text)
                     }
                     MessageStatus.ERROR -> {
                         holder.loadingIndicator.visibility = View.GONE
                         holder.messageContent.visibility = View.VISIBLE
-                        holder.generatingDots.visibility = View.GONE
+                        stopGeneratingDots(holder)
                         holder.messageContent.text = payload.text
                     }
                 }
@@ -185,14 +189,14 @@ class ChatAdapter(
                 if (message.sender == Sender.AGENT && message.durationMs == null) {
                     animateGeneratingDots(holder)
                 } else {
-                    holder.generatingDots.visibility = View.GONE
+                    stopGeneratingDots(holder)
                 }
             }
             MessageStatus.COMPLETED -> {
                 holder.loadingIndicator.visibility = View.GONE
                 holder.messageContent.visibility = View.VISIBLE
                 holder.btnRetry.visibility = View.GONE
-                holder.generatingDots.visibility = View.GONE
+                stopGeneratingDots(holder)
                 markwon.setMarkdown(holder.messageContent, message.text)
                 updateMessageMetadata(holder, message)
             }
@@ -200,15 +204,15 @@ class ChatAdapter(
                 holder.loadingIndicator.visibility = View.GONE
                 holder.messageContent.visibility = View.VISIBLE
                 holder.btnRetry.visibility = View.VISIBLE
-                holder.generatingDots.visibility = View.GONE
+                stopGeneratingDots(holder)
                 holder.messageContent.text = message.text
                 if (message.sender == Sender.SYSTEM) {
-                    holder.btnRetry.text = "Open AI Settings"
+                    holder.btnRetry.text = holder.btnRetry.context.getString(R.string.action_open_settings)
                     holder.btnRetry.setOnClickListener {
                         onMessageAction(ACTION_OPEN_SETTINGS, message)
                     }
                 } else {
-                    holder.btnRetry.text = "Retry"
+                    holder.btnRetry.text = holder.btnRetry.context.getString(R.string.action_retry)
                     holder.btnRetry.setOnClickListener {
                         onMessageAction(ACTION_RETRY, message)
                     }
@@ -236,7 +240,7 @@ class ChatAdapter(
     private fun updateSystemMessageExpansion(holder: SystemMessageViewHolder, message: ChatMessage) {
         val isExpanded = expandedMessageIds.contains(message.id)
         if (isExpanded) {
-            holder.messageHeaderTitle.text = "System Log"
+            holder.messageHeaderTitle.text = holder.messageHeaderTitle.context.getString(R.string.system_log)
             holder.messageContent.visibility = View.VISIBLE
             holder.expandIcon.rotation = 180f
         } else {
@@ -247,21 +251,36 @@ class ChatAdapter(
     }
 
     private fun animateGeneratingDots(holder: DefaultMessageViewHolder) {
+        // Already animating: don't restart, or each streaming-token rebind would
+        // reset the loop to "." and churn a new Runnable. Torn down on complete/recycle.
+        if (holder.dotsRunnable != null) return
         holder.generatingDots.visibility = View.VISIBLE
         val dotStates = arrayOf(".", "..", "...")
         var currentIndex = 0
 
-        val handler = android.os.Handler(android.os.Looper.getMainLooper())
         val runnable = object : Runnable {
             override fun run() {
-                if (holder.generatingDots.visibility == View.VISIBLE) {
-                    holder.generatingDots.text = dotStates[currentIndex]
-                    currentIndex = (currentIndex + 1) % dotStates.size
-                    handler.postDelayed(this, 500)
-                }
+                holder.generatingDots.text = dotStates[currentIndex]
+                currentIndex = (currentIndex + 1) % dotStates.size
+                holder.dotsHandler.postDelayed(this, 500)
             }
         }
-        handler.post(runnable)
+        holder.dotsRunnable = runnable
+        holder.dotsHandler.post(runnable)
+    }
+
+    /** Stop and clear this holder's "…" animation. Safe to call repeatedly. */
+    private fun stopGeneratingDots(holder: DefaultMessageViewHolder) {
+        holder.dotsRunnable?.let { holder.dotsHandler.removeCallbacks(it) }
+        holder.dotsRunnable = null
+        holder.generatingDots.apply { visibility = View.GONE }
+    }
+
+    override fun onViewRecycled(holder: RecyclerView.ViewHolder) {
+        super.onViewRecycled(holder)
+        if (holder is DefaultMessageViewHolder) {
+            stopGeneratingDots(holder)
+        }
     }
 
     private fun createPreview(rawText: String): String {
@@ -334,7 +353,7 @@ class ChatAdapter(
                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                     val clip = ClipData.newPlainText("chat_message", message.text)
                     clipboard.setPrimaryClip(clip)
-                    Toast.makeText(context, "Copied", Toast.LENGTH_SHORT).show()
+                    Snackbar.make(view, view.context.getString(R.string.msg_copied), Snackbar.LENGTH_SHORT).show()
                     true
                 }
                 2 -> {

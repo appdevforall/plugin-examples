@@ -54,9 +54,8 @@
     <li><b>AI Core</b> — the inference engine. Provides an
       <code>LlmInferenceService</code> with two backends: a local, on-device
       model (llama.cpp) and Google Gemini. Install this first.</li>
-    <li><b>AI Assistant</b> — the user interface. Contributes the Agent tab, the
-      editor context-menu actions, and the agent tool-loop that drives the
-      model.</li>
+    <li><b>AI Assistant</b> — the user interface. Contributes the Agent tab and
+      the agent tool-loop that drives the model.</li>
   </ul>
   <p>The two plugins are bridged by a shared service registry
   (<code>SharedServices</code>), so the UI plugin discovers the inference
@@ -71,8 +70,10 @@
       and generate code from templates.</li>
     <li><b>Dual inference backends</b> — fully offline on-device inference, or
       Gemini in the cloud, selectable in Settings.</li>
-    <li><b>Editor context actions</b> — <b>Explain Code</b> and
-      <b>Generate Code</b> from the editor selection.</li>
+    <li><b>Direct commands</b> — explicit requests like "open MainActivity.java",
+      "list files", "read &lt;file&gt;" or "search &lt;query&gt;" run the tool
+      directly (resolving a bare filename to its path), so they work reliably on
+      any model.</li>
     <li><b>Safety controls</b> — filesystem tools are confined to the project
       root, and mutating tools require explicit user approval.</li>
   </ul>

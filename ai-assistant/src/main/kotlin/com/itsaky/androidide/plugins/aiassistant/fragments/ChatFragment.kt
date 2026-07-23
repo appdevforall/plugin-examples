@@ -14,6 +14,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.chip.Chip
 import com.itsaky.androidide.plugins.PluginContext
+import com.itsaky.androidide.plugins.aiassistant.R
 import com.itsaky.androidide.plugins.aiassistant.adapters.ChatAdapter
 import com.itsaky.androidide.plugins.aiassistant.databinding.FragmentChatBinding
 import com.itsaky.androidide.plugins.aiassistant.models.AgentState
@@ -287,33 +288,32 @@ class ChatFragment : Fragment() {
                 is AgentState.Idle -> {
                     binding.agentStatusContainer.isVisible = false
                     binding.sendButton.isEnabled = true
-                    binding.sendButton.text = "Send"
+                    binding.sendButton.text = getString(R.string.send)
                 }
                 is AgentState.Executing -> {
                     binding.agentStatusContainer.isVisible = true
                     binding.agentStatusMessage.text = state.formattedProgress
                     binding.agentStatusTimer.text = state.formattedTiming
                     binding.sendButton.isEnabled = true
-                    binding.sendButton.text = "Stop"
-                    viewModel.startStateTimer(state)
+                    binding.sendButton.text = getString(R.string.btn_stop)
                 }
                 is AgentState.Processing -> {
                     binding.agentStatusContainer.isVisible = true
-                    binding.agentStatusMessage.text = "Generating response..."
+                    binding.agentStatusMessage.text = getString(R.string.generating_response)
                     binding.agentStatusTimer.text = ""
                     binding.sendButton.isEnabled = true
-                    binding.sendButton.text = "Stop"
+                    binding.sendButton.text = getString(R.string.btn_stop)
                 }
                 is AgentState.Error -> {
                     binding.agentStatusContainer.isVisible = false
                     binding.sendButton.isEnabled = true
-                    binding.sendButton.text = "Send"
+                    binding.sendButton.text = getString(R.string.send)
                     viewModel.stopStateTimer()
                     showErrorSnackbar(state.message)
                 }
                 else -> {
                     binding.sendButton.isEnabled = false
-                    binding.sendButton.text = "Send"
+                    binding.sendButton.text = getString(R.string.send)
                 }
             }
         }
