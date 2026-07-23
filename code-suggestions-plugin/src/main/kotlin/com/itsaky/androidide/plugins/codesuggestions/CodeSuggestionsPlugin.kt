@@ -201,10 +201,10 @@ class CodeSuggestionsPlugin : IPlugin, DocumentationExtension {
             summary = "Code Suggestions shows inline ghost-text completions after a short pause while typing.",
             detail = """
                 <p><b>Code Suggestions</b> listens to editor changes, debounces
-                typing, and asks the configured AI Core backend for a completion
-                at the cursor.</p>
-                <p>The surrounding file context is sent to the selected backend:
-                on-device for Local, or to Google over HTTPS for Gemini.</p>
+                typing, and asks AI Core for a completion at the cursor.</p>
+                <p>The surrounding file context is sent to the backend selected
+                in AI Core settings: with a <b>Local</b> model it stays on the
+                device; with the <b>Gemini</b> backend it is sent to Google.</p>
             """.trimIndent(),
             buttons = listOf(
                 PluginTooltipButton(

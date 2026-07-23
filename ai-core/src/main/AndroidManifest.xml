@@ -35,11 +35,11 @@
 
         <meta-data
             android:name="plugin.max_ide_version"
-            android:value="26.28" />
+            android:value="26.30" />
 
         <meta-data
             android:name="plugin.permissions"
-            android:value="filesystem.read,project.structure,native.code,network.access" />
+            android:value="filesystem.read,native.code,network.access" />
 
         <meta-data
             android:name="plugin.main_class"

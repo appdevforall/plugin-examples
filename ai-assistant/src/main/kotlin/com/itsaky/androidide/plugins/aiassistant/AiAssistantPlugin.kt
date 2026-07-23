@@ -3,7 +3,6 @@ package com.itsaky.androidide.plugins.aiassistant
 import com.itsaky.androidide.plugins.IPlugin
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.extensions.UIExtension
-import com.itsaky.androidide.plugins.extensions.ContextMenuContext
 import com.itsaky.androidide.plugins.extensions.DocumentationExtension
 import com.itsaky.androidide.plugins.extensions.MenuItem
 import com.itsaky.androidide.plugins.extensions.PluginTooltipButton
@@ -87,30 +86,6 @@ class AiAssistantPlugin : IPlugin, UIExtension, DocumentationExtension {
                 isEnabled = true,
                 isVisible = true,
                 tooltipTag = TOOLTIP_TAG_TAB
-            )
-        )
-    }
-
-    override fun getContextMenuItems(menuContext: ContextMenuContext): List<MenuItem> {
-        val selectedText = menuContext.selectedText
-        if (selectedText.isNullOrBlank()) {
-            return emptyList()
-        }
-
-        return listOf(
-            MenuItem(
-                id = "ai_explain_code",
-                title = "Explain Code",
-                isEnabled = true,
-                isVisible = true,
-                action = { context.logger.info("Explain Code clicked") }
-            ),
-            MenuItem(
-                id = "ai_generate_code",
-                title = "Generate Code",
-                isEnabled = true,
-                isVisible = true,
-                action = { context.logger.info("Generate Code clicked") }
             )
         )
     }

@@ -266,23 +266,19 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
     private fun handleTranscript(transcript: String) {
         Log.i(TAG, "Recognized: $transcript")
         scope.launch {
-            // With AI Core present we try to generate code; a null result means generation
-            // failed (details are logged). Without it, we insert the raw transcript.
-            val output = if (llmService != null) {
-                generateCodeFromVoice(transcript)
-            } else {
-                transcript
-            }
+            // Generate code when AI Core is present; fall back to the raw transcript so speech is never dropped.
+            val generated = if (llmService != null) generateCodeFromVoice(transcript) else null
+            val generationFailed = llmService != null && generated == null
+            val output = generated ?: transcript
             withContext(Dispatchers.Main) {
                 try {
-                    if (output == null) {
-                        toast(str(R.string.stt_generation_failed))
-                        return@withContext
-                    }
                     val inserted = insertCodeAtCursor(output)
                     toast(
-                        if (inserted) str(R.string.stt_inserted)
-                        else str(R.string.stt_recognized_no_file, transcript)
+                        when {
+                            !inserted -> str(R.string.stt_recognized_no_file, transcript)
+                            generationFailed -> str(R.string.stt_generation_failed_inserted_raw)
+                            else -> str(R.string.stt_inserted)
+                        }
                     )
                 } finally {
                     // Back to idle (mic) regardless of how processing ended.
@@ -314,7 +310,8 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
                 Code:
             """.trimIndent()
 
-            val config = LlmInferenceService.LlmConfig("local")
+            // AI Core routes to the user-selected backend; we don't pick one here.
+            val config = LlmInferenceService.LlmConfig(AUTO_BACKEND_ID)
             val response = service.generateCompletion(prompt, config).get()
             if (response.success) {
                 response.text.trim()
@@ -469,5 +466,8 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
     companion object {
         private const val PERMISSION_REQUEST_CODE = 100
         private const val TOOLBAR_ACTION_ID = "stt_voice_to_code"
+
+        /** Sentinel backend id: AI Core resolves the user-selected backend for us. */
+        private const val AUTO_BACKEND_ID = "auto"
     }
 }

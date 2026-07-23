@@ -1,7 +1,9 @@
 package com.itsaky.androidide.plugins.aicore
 
+import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.services.LlmInferenceService
 import com.itsaky.androidide.plugins.services.LlmInferenceService.*
+import com.itsaky.androidide.plugins.services.SharedServices
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
 
@@ -36,14 +38,15 @@ class LlmInferenceServiceImpl : LlmInferenceService {
     }
 
     override fun generateCompletion(prompt: String, config: LlmConfig): CompletableFuture<LlmResponse> {
-        val backend = backends[config.backendId]
+        val effectiveId = effectiveBackendId(config.backendId)
+        val backend = backends[effectiveId]
             ?: return CompletableFuture.completedFuture(
-                LlmResponse.failure("Backend '${config.backendId}' not found")
+                LlmResponse.failure("Backend '$effectiveId' not found")
             )
 
         if (!backend.isAvailable()) {
             return CompletableFuture.completedFuture(
-                LlmResponse.failure("Backend '${config.backendId}' is not available")
+                LlmResponse.failure("Backend '$effectiveId' is not available")
             )
         }
 
@@ -53,14 +56,15 @@ class LlmInferenceServiceImpl : LlmInferenceService {
     }
 
     override fun generateStreaming(prompt: String, config: LlmConfig, callback: StreamCallback) {
-        val backend = backends[config.backendId]
+        val effectiveId = effectiveBackendId(config.backendId)
+        val backend = backends[effectiveId]
         if (backend == null) {
-            callback.onError("Backend '${config.backendId}' not found")
+            callback.onError("Backend '$effectiveId' not found")
             return
         }
 
         if (!backend.isAvailable()) {
-            callback.onError("Backend '${config.backendId}' is not available")
+            callback.onError("Backend '$effectiveId' is not available")
             return
         }
 
@@ -72,14 +76,15 @@ class LlmInferenceServiceImpl : LlmInferenceService {
         prompt: String,
         config: LlmConfig
     ): CompletableFuture<LlmResponse> {
-        val backend = backends[config.backendId]
+        val effectiveId = effectiveBackendId(config.backendId)
+        val backend = backends[effectiveId]
             ?: return CompletableFuture.completedFuture(
-                LlmResponse.failure("Backend '${config.backendId}' not found")
+                LlmResponse.failure("Backend '$effectiveId' not found")
             )
 
         if (!backend.isAvailable()) {
             return CompletableFuture.completedFuture(
-                LlmResponse.failure("Backend '${config.backendId}' is not available")
+                LlmResponse.failure("Backend '$effectiveId' is not available")
             )
         }
 
@@ -95,14 +100,15 @@ class LlmInferenceServiceImpl : LlmInferenceService {
         tools: List<ToolDefinition>,
         callback: ToolStreamCallback
     ) {
-        val backend = backends[config.backendId]
+        val effectiveId = effectiveBackendId(config.backendId)
+        val backend = backends[effectiveId]
         if (backend == null) {
-            callback.onError("Backend '${config.backendId}' not found")
+            callback.onError("Backend '$effectiveId' not found")
             return
         }
 
         if (!backend.isAvailable()) {
-            callback.onError("Backend '${config.backendId}' is not available")
+            callback.onError("Backend '$effectiveId' is not available")
             return
         }
 
@@ -126,6 +132,36 @@ class LlmInferenceServiceImpl : LlmInferenceService {
         // Stub implementation - embeddings not needed for Phase 3
         return CompletableFuture.completedFuture(FloatArray(0))
     }
+
+    /**
+     * Resolves the backend id a request should run on. An explicit id is returned unchanged
+     * (so the caller keeps its "not found"/"not available" errors); [AiBackend.AUTO] is
+     * resolved to the user-selected backend, then to any available backend, so callers can
+     * defer backend choice to AI Core instead of hardcoding one.
+     *
+     * @param requestedId the id from [LlmConfig.backendId]
+     * @return the id to route to; for AUTO with nothing available, the selected backend's id
+     *   so the downstream "not available" error stays meaningful
+     */
+    private fun effectiveBackendId(requestedId: String): String {
+        if (requestedId != AiBackend.AUTO) return requestedId
+        val preferred = AiBackend.fromPreference(readSelectedBackendPreference())
+        return backends[preferred.id]?.takeIf { it.isAvailable() }?.getId()
+            ?: backends.values.firstOrNull { it.isAvailable() }?.getId()
+            ?: preferred.id
+    }
+
+    /**
+     * Reads the backend the user selected in the AI Assistant settings. The preference is
+     * namespaced to the AI Assistant plugin, so it is only reachable through that plugin's
+     * [PluginContext], which it publishes to [SharedServices].
+     *
+     * @return the stored preference value, or null when AI Assistant is absent or unset
+     */
+    private fun readSelectedBackendPreference(): String? =
+        SharedServices.get(PluginContext::class.java)
+            ?.getPluginSharedPreferences(AiBackend.PREFERENCE_FILE)
+            ?.getString(AiBackend.PREFERENCE_KEY, null)
 
     override fun cancelGeneration() {
         currentGeneration?.cancel(true)

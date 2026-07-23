@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Core Plugin</title>
+<style>
+  body {
+    background: #ffffff;
+    color: #000000;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+    margin: 0;
+    padding: 1.25rem;
+    max-width: 820px;
+  }
+  h1 { font-size: 1.6rem; margin: 0 0 0.75rem; }
+  h2 { font-size: 1.2rem; margin: 1.75rem 0 0.5rem; border-bottom: 1px solid #e0e0e0; padding-bottom: 0.2rem; }
+  code {
+    background: #f4f4f4;
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.9em;
+  }
+  ul { padding-left: 1.25rem; }
+  li { margin: 0.3rem 0; }
+  table { border-collapse: collapse; margin: 0.5rem 0; width: 100%; }
+  th, td { border: 1px solid #ddd; padding: 0.4rem 0.6rem; text-align: left; vertical-align: top; }
+  th { background: #f4f4f4; }
+  .note {
+    border-left: 3px solid #999;
+    padding: 0.25rem 0.75rem;
+    margin: 1rem 0;
+    background: #fafafa;
+  }
+</style>
+</head>
+<body>
+  <h1>AI Core Plugin</h1>
+
+  <h2>Executive overview</h2>
+  <p><b>AI Core</b> is the shared large-language-model (LLM) inference backend
+  for CodeOnTheGo's AI plugins. It is a <b>headless</b> plugin — it has no
+  screens of its own. Instead it registers a single inference service that the
+  other AI plugins (<b>AI Assistant</b>, <b>Code Suggestions</b>, <b>Speech to
+  Text</b>, and <b>Vector Search</b>) call at runtime.</p>
+  <p><b>Install AI Core first</b>, then any of the plugins that depend on it.
+  Without AI Core installed and activated, those plugins have no LLM backend and
+  will report that the inference service is unavailable.</p>
+
+  <h2>Core functionality</h2>
+  <ul>
+    <li><b>Registers a shared inference service</b> so every AI plugin talks to
+      one backend instead of bundling its own.</li>
+    <li><b>Local (on-device) backend</b> — runs a <code>.gguf</code> model
+      through a bundled, prebuilt llama.cpp library. Prompts and code never
+      leave the device.</li>
+    <li><b>Gemini (cloud) backend</b> — calls Google's Gemini API over HTTPS
+      using a user-supplied API key. Supports live model listing so retired
+      model names are never offered.</li>
+    <li><b>Model safety checks</b> — inspects a selected <code>.gguf</code>
+      header and refuses embedding-only models for chat, with a clear error
+      instead of a native crash.</li>
+    <li>Text completion, chat with history, streaming, and (Gemini) tool-calling
+      request shapes.</li>
+  </ul>
+
+  <h2>Technical architecture</h2>
+  <table>
+    <tr><th>Component</th><th>Role</th></tr>
+    <tr><td><code>AiCorePlugin</code></td><td>Plugin entry point. Registers the
+      inference service and both backends on activation; unregisters and frees
+      resources on deactivation/dispose.</td></tr>
+    <tr><td><code>LlmInferenceServiceImpl</code></td><td>The service exposed via
+      <code>SharedServices</code>. Routes each request to the selected
+      backend.</td></tr>
+    <tr><td><code>LocalLlmBackend</code></td><td>On-device inference over the
+      prebuilt llama.cpp AAR. Resolves the selected model (including SAF
+      <code>content://</code> URIs) to a real file path and manages loading.</td></tr>
+    <tr><td><code>GeminiBackend</code></td><td>Cloud inference via the Google
+      Generative AI SDK. Sends the API key as an <code>x-goog-api-key</code>
+      header, never in a URL.</td></tr>
+    <tr><td><code>GgufModelInspector</code></td><td>Minimal GGUF header reader
+      that classifies a model as chat- or embedding-only.</td></tr>
+  </table>
+  <p>The native library is committed prebuilt (four ABIs: arm64-v8a,
+  armeabi-v7a, x86, x86_64), so a normal build needs no NDK, CMake, or the
+  llama.cpp submodule.</p>
+
+  <h2>Usage</h2>
+  <ol>
+    <li>Install <b>AI Core</b> via the Plugin Manager, then restart the IDE.</li>
+    <li>Install one or more consumer plugins (e.g. <b>AI Assistant</b>).</li>
+    <li>Open <b>AI Assistant → AI Settings</b> to choose a backend and configure
+      it — select a local <code>.gguf</code> model file, or enter a Gemini API
+      key. AI Core has no settings screen of its own; it reads this configuration
+      at request time.</li>
+  </ol>
+  <div class="note">
+    Embedding-only <code>.gguf</code> files cannot serve chat requests. If one is
+    selected for chat, the request is rejected with a clear message instead of
+    crashing the IDE.
+  </div>
+
+  <h2>Key benefits</h2>
+  <ul>
+    <li><b>One backend, many plugins</b> — a single inference service shared
+      across all AI features, so backend and model choice are configured once.</li>
+    <li><b>On-device privacy option</b> — the local backend keeps prompts and
+      code entirely on the device.</li>
+    <li><b>Cloud power option</b> — the Gemini backend adds a high-capability
+      model when connectivity and an API key are available.</li>
+    <li><b>Crash-resistant</b> — model classification and header bounds-checking
+      turn would-be native crashes into recoverable, user-visible errors.</li>
+    <li><b>Reproducible builds</b> — no NDK required; the native library ships
+      prebuilt.</li>
+  </ul>
+</body>
+</html>

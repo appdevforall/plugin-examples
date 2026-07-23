@@ -2,8 +2,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.itsaky.androidide.plugins.codesuggestions">
 
-    <uses-permission android:name="android.permission.INTERNET" />
-
     <application
         android:label="Code Suggestions Plugin"
         android:theme="@style/PluginTheme">
@@ -35,11 +33,7 @@
 
         <meta-data
             android:name="plugin.max_ide_version"
-            android:value="26.28" />
-
-        <meta-data
-            android:name="plugin.permissions"
-            android:value="ide.settings,network.access" />
+            android:value="26.30" />
 
         <meta-data
             android:name="plugin.main_class"

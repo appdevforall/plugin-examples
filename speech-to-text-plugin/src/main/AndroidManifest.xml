@@ -2,7 +2,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.itsaky.androidide.plugins.stt">
 
-    <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <application
@@ -36,11 +35,11 @@
 
         <meta-data
             android:name="plugin.max_ide_version"
-            android:value="26.28" />
+            android:value="26.30" />
 
         <meta-data
             android:name="plugin.permissions"
-            android:value="filesystem.read,filesystem.write,network.access,native.code" />
+            android:value="filesystem.read,filesystem.write" />
 
         <meta-data
             android:name="plugin.main_class"

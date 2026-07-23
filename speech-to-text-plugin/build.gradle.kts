@@ -45,9 +45,6 @@ kotlin {
 dependencies {
     compileOnly(files("../libs/plugin-api.jar"))
 
-    // ONNX Runtime for offline speech recognition (Moonshine)
-    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.17.0")
-
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 

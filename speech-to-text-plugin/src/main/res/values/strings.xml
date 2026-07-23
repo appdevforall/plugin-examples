@@ -20,7 +20,7 @@
     <string name="stt_recognized_no_file">Heard \"%1$s\", but there\'s no open file to insert it into. Open a file and try again.</string>
 
     <!-- Code generation (AI Core) -->
-    <string name="stt_generation_failed">Couldn\'t turn your voice into code. Please try again, or rephrase your request.</string>
+    <string name="stt_generation_failed_inserted_raw">Couldn\'t turn your voice into code, so the raw transcript was inserted instead.</string>
 
     <!-- Recognizer error messages (shown to the user) -->
     <string name="stt_error_audio">Couldn\'t capture audio from the microphone. Check that no other app is using it, then try again.</string>

@@ -32,17 +32,19 @@ available); code generation is delegated to the companion `ai-core` plugin.
 
 ## Permissions
 
-Android (`uses-permission`): `RECORD_AUDIO`, `INTERNET`.
+Android (`uses-permission`): `RECORD_AUDIO`.
 
-Plugin (`plugin.permissions`): `filesystem.read`, `filesystem.write`,
-`network.access`, `native.code`.
+Plugin (`plugin.permissions`): `filesystem.read`, `filesystem.write`.
 
 | Permission | Why |
 |---|---|
 | `RECORD_AUDIO` | capture microphone audio for recognition |
-| `INTERNET` / `network.access` | network speech fallback and the Gemini backend |
 | `filesystem.write` | insert transcribed/generated text into the open file |
 | `filesystem.read` | read editor/file context |
+
+Speech recognition runs through Android's `SpeechRecognizer` and code
+generation through `ai-core`'s local backend, so the plugin itself makes no
+network calls and bundles no native code.
 
 `RECORD_AUDIO` is a runtime (dangerous) permission: it is requested on first tap
 of the button, not at load. If denied, the plugin degrades gracefully (no voice

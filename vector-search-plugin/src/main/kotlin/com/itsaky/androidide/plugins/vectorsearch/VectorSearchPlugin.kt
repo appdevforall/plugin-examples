@@ -12,16 +12,19 @@ import com.itsaky.androidide.plugins.extensions.ProjectSearchResult
 import com.itsaky.androidide.plugins.extensions.ProjectSearchSection
 import com.itsaky.androidide.plugins.services.LlmInferenceService
 import com.itsaky.androidide.plugins.services.SharedServices
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import java.util.concurrent.CompletableFuture
+import kotlin.coroutines.coroutineContext
 import kotlin.math.sqrt
 
 private const val TAG = "VectorSearchPlugin"
@@ -44,6 +47,8 @@ class VectorSearchPlugin : IPlugin, ProjectSearchExtension, DocumentationExtensi
     private lateinit var indexingService: EmbeddingIndexingService
     @Volatile private var indexedRootsKey: String? = null
     @Volatile private var indexingJob: Job? = null
+    // Roots the in-flight [indexingJob] is building; guards against reusing another project's build.
+    @Volatile private var indexingRootsKey: String? = null
 
     // Background scope for indexing so a large project never stalls a search request.
     private val indexingScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -71,6 +76,10 @@ class VectorSearchPlugin : IPlugin, ProjectSearchExtension, DocumentationExtensi
 
     override fun dispose() {
         indexingScope.cancel()
+        // Release the SQLite connection so it doesn't leak when the plugin unloads.
+        if (::indexingService.isInitialized) {
+            indexingService.close()
+        }
         Log.i(TAG, "VectorSearchPlugin disposed")
     }
 
@@ -192,15 +201,28 @@ class VectorSearchPlugin : IPlugin, ProjectSearchExtension, DocumentationExtensi
             .joinToString("|")
         val running = indexingJob
         if (running != null && running.isActive) {
-            return running
+            // Reuse the in-flight build only for the same roots; another project's build gives wrong results.
+            if (indexingRootsKey == rootsKey) {
+                return running
+            }
         }
-        if (indexedRootsKey == rootsKey && indexingService.getAllEmbeddings().isNotEmpty()) {
+        if (running?.isActive != true &&
+            indexedRootsKey == rootsKey &&
+            indexingService.getAllEmbeddings().isNotEmpty()
+        ) {
             return null
         }
 
+        // Cancel any build for other roots and wait for it to unwind so builds never interleave writes.
+        val previous = running
+        previous?.cancel()
+        indexingRootsKey = rootsKey
         val job = indexingScope.launch {
             try {
+                previous?.join()
                 buildIndex(rootsKey, roots, llmService, backendId)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.e(TAG, "Background indexing failed", e)
             }
@@ -209,7 +231,7 @@ class VectorSearchPlugin : IPlugin, ProjectSearchExtension, DocumentationExtensi
         return job
     }
 
-    private fun buildIndex(
+    private suspend fun buildIndex(
         rootsKey: String,
         roots: List<File>,
         llmService: LlmInferenceService?,
@@ -223,6 +245,8 @@ class VectorSearchPlugin : IPlugin, ProjectSearchExtension, DocumentationExtensi
 
         roots.forEach { root ->
             indexingService.collectFiles(root).forEach { file ->
+                // Bail promptly if this build was superseded by one for different roots.
+                coroutineContext.ensureActive()
                 fileCount++
                 val language = indexingService.languageFor(file)
                 val chunks = try {

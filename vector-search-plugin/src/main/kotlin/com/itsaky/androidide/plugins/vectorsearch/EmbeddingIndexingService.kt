@@ -112,6 +112,15 @@ class EmbeddingIndexingService(private val context: Context) {
     }
 
     /**
+     * Releases the SQLite connection. Call from the plugin's dispose() so the open
+     * database handle doesn't outlive the plugin when it is unloaded/reloaded.
+     */
+    fun close() {
+        dbHelper.close()
+        Log.d(TAG, "Embeddings database closed")
+    }
+
+    /**
      * Clears all embeddings from the database (useful for reindexing).
      */
     fun clearIndex() {

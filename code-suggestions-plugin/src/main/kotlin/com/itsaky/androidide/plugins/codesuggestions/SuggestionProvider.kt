@@ -43,12 +43,6 @@ class SuggestionProvider(private val llmService: LlmInferenceService) {
         prefix: String,
     ): String = withContext(Dispatchers.IO) {
         return@withContext try {
-            val cacheKey = "$prefix|$language"
-            cache[cacheKey]?.let {
-                Log.d(TAG, "Cache hit for: $prefix")
-                return@withContext it
-            }
-
             // Build up-to-cursor context from the file, bounded to the last 500 chars.
             val lines = fileContent.split("\n")
             val contextBefore = buildString {
@@ -61,6 +55,13 @@ class SuggestionProvider(private val llmService: LlmInferenceService) {
                 }
             }.takeLast(500)
 
+            // Key on the language + up-to-cursor context the completion depends on, not just the last word.
+            val cacheKey = "$language|$contextBefore"
+            cache[cacheKey]?.let {
+                Log.d(TAG, "Cache hit for prefix '$prefix'")
+                return@withContext it
+            }
+
             val prompt = """
                 You are a $language code completion assistant.
                 Complete the following code. Return ONLY the completion text, no explanation.
@@ -71,7 +72,8 @@ class SuggestionProvider(private val llmService: LlmInferenceService) {
                 Complete this:
             """.trimIndent()
 
-            val config = LlmInferenceService.LlmConfig("local")
+            // AI Core routes to the user-selected backend; we don't pick one here.
+            val config = LlmInferenceService.LlmConfig(AUTO_BACKEND_ID)
             val response = llmService.generateCompletion(prompt, config).get()
             if (response.success) {
                 val suggestion = response.text.trim()
@@ -102,5 +104,8 @@ class SuggestionProvider(private val llmService: LlmInferenceService) {
 
     companion object {
         private const val MAX_CACHE_SIZE = 100
+
+        /** Sentinel backend id: AI Core resolves the user-selected backend for us. */
+        private const val AUTO_BACKEND_ID = "auto"
     }
 }

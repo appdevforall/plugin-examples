@@ -32,12 +32,10 @@ an LLM for a completion at the cursor, and shows it as dimmed inline text via
 
 ## Permissions
 
-Declared in `plugin.permissions`:
-
-| Permission | Why |
-|---|---|
-| `ide.settings` | read the configured backend/model |
-| `network.access` | reach the Gemini backend when that backend is selected |
+This plugin declares no `plugin.permissions` of its own — it only registers a
+content-change listener and renders ghost text. Reading the configured
+backend/model and any network access happen inside **`ai-core`**'s process,
+which declares those permissions.
 
 The surrounding file content and cursor context are sent to the configured
 backend to generate a completion — on-device for **Local**, or to Google over
