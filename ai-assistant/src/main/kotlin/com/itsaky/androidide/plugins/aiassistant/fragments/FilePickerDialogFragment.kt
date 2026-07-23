@@ -156,6 +156,7 @@ class FilePickerDialogFragment : DialogFragment() {
         }
 
         directory.listFiles()
+            ?.filter { isWithinRoot(it) }
             ?.sortedWith(compareBy<File> { !it.isDirectory }.thenBy { it.name.lowercase() })
             ?.forEach { file -> newRows.add(FileRow(file, file.name, file.isDirectory)) }
 
@@ -194,10 +195,12 @@ class FilePickerDialogFragment : DialogFragment() {
     private fun titleFor(dir: File): String =
         getString(R.string.file_picker_title_current, dir.name)
 
-    private fun isWithinRoot(dir: File): Boolean {
-        val root = canonical(rootDirectory)
-        val path = canonical(dir)
-        return path == root || path.startsWith(root + File.separator)
+    /** True if [file] resolves (symlinks included) to a path at or below [rootDirectory]. */
+    private fun isWithinRoot(file: File): Boolean = try {
+        val root = rootDirectory.canonicalFile.toPath().normalize()
+        file.canonicalFile.toPath().normalize().startsWith(root)
+    } catch (e: Exception) {
+        false
     }
 
     private fun canonical(f: File): String =

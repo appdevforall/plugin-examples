@@ -8,8 +8,11 @@ import androidx.lifecycle.viewModelScope
 import com.itsaky.androidide.plugins.aiassistant.security.SecureApiKeyStore
 import com.itsaky.androidide.plugins.services.LlmInferenceService
 import com.itsaky.androidide.plugins.services.SharedServices
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import com.itsaky.androidide.plugins.PluginContext
 
 /**
  * State for the model file loading.
@@ -49,7 +52,8 @@ enum class AiBackend(val displayName: String) {
 data class GeminiModelOptions(val models: List<String>, val isLive: Boolean)
 
 class AiSettingsViewModel(
-    private val getContext: () -> com.itsaky.androidide.plugins.PluginContext?
+    private val getContext: () -> PluginContext?,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : ViewModel() {
 
     companion object {
@@ -189,33 +193,30 @@ class AiSettingsViewModel(
     }
 
     /**
-     * Persists the Gemini API key in this plugin's private SharedPreferences,
-     * encrypted at rest with a hardware-backed Android Keystore secret (see
-     * [SecureApiKeyStore]). Only ciphertext is written, so the prefs file alone
-     * (root, `adb backup`, forensic dump) does not disclose the key. Use
-     * [clearGeminiApiKey] to remove it.
+     * Encrypts [apiKey] via [SecureApiKeyStore] and persists only the ciphertext to private
+     * prefs, off the main thread (Keystore IPC + AES/GCM). Nothing is written on failure.
      *
-     * Returns false (persisting nothing) if encryption fails — e.g. a hardware Keystore
-     * fault the automatic key-regeneration retry couldn't recover — so the caller can warn
-     * the user instead of the whole IDE crashing on Save.
+     * @param apiKey the plaintext key to store (trimmed before encryption)
+     * @return true if the key was encrypted and persisted, false if encryption failed
      */
-    fun saveGeminiApiKey(apiKey: String): Boolean {
+    suspend fun saveGeminiApiKey(apiKey: String): Boolean = withContext(ioDispatcher) {
         val encrypted = try {
             SecureApiKeyStore.encrypt(apiKey.trim())
         } catch (e: Exception) {
             android.util.Log.e(TAG, "Failed to encrypt Gemini API key", e)
-            return false
+            return@withContext false
         }
         getPluginPrefs()?.edit()?.apply {
             putString("gemini_api_key", encrypted)
             putLong("gemini_api_key_timestamp", System.currentTimeMillis())
             apply()
         }
-        return true
+        true
     }
 
-    fun getGeminiApiKey(): String? {
-        return SecureApiKeyStore.decrypt(getPluginPrefs()?.getString("gemini_api_key", null))
+    /** Decrypt the stored key off the main thread (Keystore IPC + AES/GCM). */
+    suspend fun getGeminiApiKey(): String? = withContext(ioDispatcher) {
+        SecureApiKeyStore.decrypt(getPluginPrefs()?.getString("gemini_api_key", null))
     }
 
     fun getGeminiApiKeySaveTimestamp(): Long {

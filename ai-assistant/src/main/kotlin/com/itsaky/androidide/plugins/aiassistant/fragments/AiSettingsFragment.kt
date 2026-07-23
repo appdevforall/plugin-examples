@@ -14,12 +14,14 @@ import android.widget.*
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.fragment.app.DialogFragment
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.lifecycleScope
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aiassistant.R
 import com.itsaky.androidide.plugins.aiassistant.viewmodel.AiBackend
 import com.itsaky.androidide.plugins.aiassistant.viewmodel.AiSettingsViewModel
 import com.itsaky.androidide.plugins.aiassistant.viewmodel.EngineState
 import com.itsaky.androidide.plugins.aiassistant.viewmodel.ModelLoadingState
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -293,19 +295,14 @@ class AiSettingsFragment : DialogFragment() {
             }
         }
 
-        val savedApiKey = viewModel.getGeminiApiKey()
-        if (savedApiKey.isNullOrBlank()) {
-            updateUiState(isEditing = true)
-            apiKeyInput.setText("")
-        } else {
-            updateUiState(isEditing = false)
-            val timestamp = viewModel.getGeminiApiKeySaveTimestamp()
-            if (timestamp > 0) {
-                val sdf = SimpleDateFormat("MMMM d, yyyy", Locale.getDefault())
-                val savedDate = sdf.format(Date(timestamp))
-                statusTextView.text = getString(R.string.msg_api_key_saved_on, savedDate)
+        viewLifecycleOwner.lifecycleScope.launch {
+            val savedApiKey = viewModel.getGeminiApiKey()
+            val hasKey = !savedApiKey.isNullOrBlank()
+            updateUiState(isEditing = !hasKey)
+            if (hasKey) {
+                statusTextView.text = savedApiKeyStatusText()
             } else {
-                statusTextView.text = getString(R.string.msg_api_key_is_saved)
+                apiKeyInput.setText("")
             }
         }
 
@@ -342,25 +339,44 @@ class AiSettingsFragment : DialogFragment() {
                 Toast.makeText(requireContext(), getString(R.string.msg_api_key_empty), Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
-            if (!viewModel.saveGeminiApiKey(apiKey)) {
-                Toast.makeText(requireContext(), getString(R.string.msg_api_key_save_failed), Toast.LENGTH_LONG).show()
-                return@setOnClickListener
+            saveButton.isEnabled = false
+            viewLifecycleOwner.lifecycleScope.launch {
+                val saved = try {
+                    viewModel.saveGeminiApiKey(apiKey)
+                } finally {
+                    saveButton.isEnabled = true
+                }
+                if (!saved) {
+                    Toast.makeText(requireContext(), getString(R.string.msg_api_key_save_failed), Toast.LENGTH_LONG).show()
+                    return@launch
+                }
+                Toast.makeText(requireContext(), getString(R.string.msg_api_key_saved), Toast.LENGTH_SHORT).show()
+                updateUiState(isEditing = false)
+                statusTextView.text = savedApiKeyStatusText()
             }
-            Toast.makeText(requireContext(), getString(R.string.msg_api_key_saved), Toast.LENGTH_SHORT).show()
-
-            updateUiState(isEditing = false)
-            val timestamp = viewModel.getGeminiApiKeySaveTimestamp()
-            val sdf = SimpleDateFormat("MMMM d, yyyy", Locale.getDefault())
-            val savedDate = sdf.format(Date(timestamp))
-            statusTextView.text = getString(R.string.msg_api_key_saved_on, savedDate)
         }
 
-        editButton.setOnClickListener {
+        // Reveal the (already-fetched) key in an editable, focused field. Kept separate from
+        // the click handler so the listener does one thing: fetch, then hand off.
+        fun revealEditMode(apiKey: String) {
+            apiKeyInput.setText(apiKey)
+            apiKeyInput.setSelection(apiKey.length)
             updateUiState(isEditing = true)
-            apiKeyInput.setText(viewModel.getGeminiApiKey().orEmpty())
             isKeyVisible = false
             applyKeyVisibility()
             apiKeyInput.requestFocus()
+        }
+
+        editButton.setOnClickListener {
+            editButton.isEnabled = false
+            viewLifecycleOwner.lifecycleScope.launch {
+                val apiKey = try {
+                    viewModel.getGeminiApiKey().orEmpty()
+                } finally {
+                    editButton.isEnabled = true
+                }
+                revealEditMode(apiKey)
+            }
         }
 
         clearButton.setOnClickListener {
@@ -372,6 +388,14 @@ class AiSettingsFragment : DialogFragment() {
 
         // Setup model selection
         setupGeminiModelSelection(modelContainer)
+    }
+
+    /** Status line for a stored key: dated when the save time is known, generic otherwise. */
+    private fun savedApiKeyStatusText(): String {
+        val timestamp = viewModel.getGeminiApiKeySaveTimestamp()
+        if (timestamp <= 0) return getString(R.string.msg_api_key_is_saved)
+        val savedDate = SimpleDateFormat("MMMM d, yyyy", Locale.getDefault()).format(Date(timestamp))
+        return getString(R.string.msg_api_key_saved_on, savedDate)
     }
 
     private fun createModelSelectionUi(parent: View): LinearLayout {
