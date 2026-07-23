@@ -12,7 +12,14 @@ import com.itsaky.androidide.plugins.extensions.ProjectSearchResult
 import com.itsaky.androidide.plugins.extensions.ProjectSearchSection
 import com.itsaky.androidide.plugins.services.LlmInferenceService
 import com.itsaky.androidide.plugins.services.SharedServices
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import java.util.concurrent.CompletableFuture
 import kotlin.math.sqrt
@@ -21,6 +28,8 @@ private const val TAG = "VectorSearchPlugin"
 private const val AI_CORE_PLUGIN_ID = "com.itsaky.androidide.plugins.aicore"
 private const val SEMANTIC_RESULTS_TITLE = "Semantic Results"
 private const val FALLBACK_EMBEDDING_DIMENSIONS = 384
+
+private const val INDEXING_WAIT_MS = 20_000L
 
 /**
  * Vector Search Plugin provides semantic code search capabilities.
@@ -34,6 +43,10 @@ class VectorSearchPlugin : IPlugin, ProjectSearchExtension, DocumentationExtensi
     private lateinit var context: PluginContext
     private lateinit var indexingService: EmbeddingIndexingService
     @Volatile private var indexedRootsKey: String? = null
+    @Volatile private var indexingJob: Job? = null
+
+    // Background scope for indexing so a large project never stalls a search request.
+    private val indexingScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun initialize(context: PluginContext): Boolean {
         this.context = context
@@ -57,6 +70,7 @@ class VectorSearchPlugin : IPlugin, ProjectSearchExtension, DocumentationExtensi
     }
 
     override fun dispose() {
+        indexingScope.cancel()
         Log.i(TAG, "VectorSearchPlugin disposed")
     }
 
@@ -124,13 +138,17 @@ class VectorSearchPlugin : IPlugin, ProjectSearchExtension, DocumentationExtensi
                 ?: context.services.get(LlmInferenceService::class.java)
 
             if (roots.isNotEmpty()) {
-                ensureIndexed(roots, llmService, backendId)
+                // Wait for an in-flight build so the first query returns real results, not empty.
+                val job = startIndexingIfNeeded(roots, llmService, backendId)
+                if (job != null && withTimeoutOrNull(INDEXING_WAIT_MS) { job.join() } == null) {
+                    Log.w(TAG, "Indexing still running after ${INDEXING_WAIT_MS}ms; using partial index")
+                }
             }
 
             val queryEmbedding = generateEmbedding(query, llmService, backendId)
             val allEmbeddings = indexingService.getAllEmbeddings()
             if (allEmbeddings.isEmpty()) {
-                Log.w(TAG, "No embeddings indexed yet")
+                Log.w(TAG, "Index not ready yet; returning no semantic results for now")
                 return emptyList()
             }
 
@@ -153,19 +171,52 @@ class VectorSearchPlugin : IPlugin, ProjectSearchExtension, DocumentationExtensi
         Log.i(TAG, "Index cleared")
     }
 
-    private fun ensureIndexed(
+    /**
+     * Starts (or reuses) a background index build for [roots], returning its [Job] so the caller
+     * can await it, or null when the roots are already fully indexed and no build is needed.
+     *
+     * @param roots project root directories to index
+     * @param llmService inference service used to embed chunks, or null to use the lexical fallback
+     * @param backendId LLM backend id to request embeddings from
+     * @return the running index-build job, or null if already indexed
+     */
+    @Synchronized
+    private fun startIndexingIfNeeded(
         roots: List<File>,
         llmService: LlmInferenceService?,
         backendId: String,
-    ) {
+    ): Job? {
         val rootsKey = roots
             .map { it.absolutePath }
             .sorted()
             .joinToString("|")
+        val running = indexingJob
+        if (running != null && running.isActive) {
+            return running
+        }
         if (indexedRootsKey == rootsKey && indexingService.getAllEmbeddings().isNotEmpty()) {
-            return
+            return null
         }
 
+        val job = indexingScope.launch {
+            try {
+                buildIndex(rootsKey, roots, llmService, backendId)
+            } catch (e: Exception) {
+                Log.e(TAG, "Background indexing failed", e)
+            }
+        }
+        indexingJob = job
+        return job
+    }
+
+    private fun buildIndex(
+        rootsKey: String,
+        roots: List<File>,
+        llmService: LlmInferenceService?,
+        backendId: String,
+    ) {
+        // Reset the marker up front so a mid-build failure doesn't leave a stale "indexed" flag.
+        indexedRootsKey = null
         indexingService.clearIndex()
         var fileCount = 0
         var chunkCount = 0

@@ -236,36 +236,23 @@ object CodeChunker {
                 currentEnd++
             }
 
-            if (currentChunk.isNotEmpty()) {
-                chunks.add(
-                    CodeChunk(
-                        content = currentChunk.joinToString("\n"),
-                        startLine = currentStart,
-                        endLine = currentEnd - 1,
-                        isCodeChunk = false,
-                    )
-                )
-
-                // Move to next chunk with overlap
-                val overlapLines = calculateOverlapLines(currentChunk, overlapSize)
-                currentStart = maxOf(currentEnd - overlapLines, currentStart + 1)
-            } else {
-                // If even a single line is too large, include it anyway
-                if (currentEnd < lines.size) {
-                    chunks.add(
-                        CodeChunk(
-                            content = lines[currentEnd],
-                            startLine = currentEnd,
-                            endLine = currentEnd,
-                            isCodeChunk = false,
-                        )
-                    )
-                    currentEnd++
-                    currentStart = currentEnd
-                } else {
-                    break
-                }
+            // Defensive: the inner loop always adds ≥1 line, but break rather than risk a stall.
+            if (currentChunk.isEmpty()) {
+                break
             }
+
+            chunks.add(
+                CodeChunk(
+                    content = currentChunk.joinToString("\n"),
+                    startLine = currentStart,
+                    endLine = currentEnd - 1,
+                    isCodeChunk = false,
+                )
+            )
+
+            // Move to next chunk with overlap
+            val overlapLines = calculateOverlapLines(currentChunk, overlapSize)
+            currentStart = maxOf(currentEnd - overlapLines, currentStart + 1)
         }
 
         return chunks
@@ -532,25 +519,8 @@ object CodeChunker {
      * The last N lines of chunk N should match the first N lines of chunk N+1.
      */
     private fun reconcileOverlaps(chunks: List<CodeChunk>): List<CodeChunk> {
-        if (chunks.size <= 1) {
-            return chunks
-        }
-
-        val reconciled = mutableListOf<CodeChunk>()
-
-        for (i in chunks.indices) {
-            val chunk = chunks[i]
-
-            if (i < chunks.size - 1) {
-                val nextChunk = chunks[i + 1]
-                // The overlap is implicitly handled by the ranges
-                // Just ensure they're properly tracked
-            }
-
-            reconciled.add(chunk)
-        }
-
-        return reconciled
+        // Overlap is already encoded in each chunk's line ranges; nothing to reconcile.
+        return chunks
     }
 
     /**

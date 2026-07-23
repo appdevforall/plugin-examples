@@ -4,6 +4,7 @@ import android.util.Log
 import com.itsaky.androidide.plugins.services.LlmInferenceService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.util.Collections
 import java.util.LinkedHashMap
 
 private const val TAG = "SuggestionProvider"
@@ -14,11 +15,14 @@ private const val TAG = "SuggestionProvider"
  */
 class SuggestionProvider(private val llmService: LlmInferenceService) {
 
-    private val cache = object : LinkedHashMap<String, String>(16, 0.75f, true) {
-        override fun removeEldestEntry(eldest: Map.Entry<String, String>?): Boolean {
-            return size > MAX_CACHE_SIZE
+    // Synchronized: accessOrder=true means even get() mutates, and overlapping IO jobs share this.
+    private val cache: MutableMap<String, String> = Collections.synchronizedMap(
+        object : LinkedHashMap<String, String>(16, 0.75f, true) {
+            override fun removeEldestEntry(eldest: Map.Entry<String, String>?): Boolean {
+                return size > MAX_CACHE_SIZE
+            }
         }
-    }
+    )
 
     /**
      * Generates a code suggestion for the given context.
