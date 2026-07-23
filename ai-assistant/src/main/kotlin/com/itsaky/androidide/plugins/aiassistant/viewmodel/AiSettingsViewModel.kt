@@ -38,9 +38,32 @@ enum class AiBackend(val displayName: String) {
     GEMINI("Gemini API")
 }
 
+/**
+ * Gemini models to offer, plus whether they came from a live catalog fetch (vs the fallback list).
+ * Migrate a saved-but-missing model off the list only when [isLive] is true.
+ *
+ * @param models model ids to display in the picker
+ * @param isLive true if [models] is a confirmed live catalog, false for the offline fallback
+ */
+data class GeminiModelOptions(val models: List<String>, val isLive: Boolean)
+
 class AiSettingsViewModel(
     private val getContext: () -> com.itsaky.androidide.plugins.PluginContext?
 ) : ViewModel() {
+
+    companion object {
+        private const val TAG = "AiSettingsViewModel"
+
+        /** Default selection; kept in sync with GeminiBackend.DEFAULT_MODEL. */
+        private const val DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
+
+        /** Shown only when the live catalog can't be fetched — current models, no retired ones. */
+        private val FALLBACK_MODELS = listOf(
+            "gemini-2.5-flash",
+            "gemini-2.5-pro",
+            "gemini-2.0-flash",
+        )
+    }
 
     private val _savedModelPath = MutableLiveData<String?>(null)
     val savedModelPath: LiveData<String?> get() = _savedModelPath
@@ -57,14 +80,58 @@ class AiSettingsViewModel(
 
     private fun checkInitialState() {
         val prefs = getPluginPrefs()
-        _savedModelPath.value = prefs?.getString("local_llm_model_path", null)
+        val savedPath = prefs?.getString("local_llm_model_path", null)
+        _savedModelPath.value = savedPath
 
         // For plugin, engine is always "ready" since it's managed by ai-core plugin
         _engineState.value = EngineState.Initialized
-        _modelLoadingState.value = ModelLoadingState.Idle
+        // Reflect a previously selected model so it survives closing/reopening settings,
+        // using the display name persisted at load time (no content-provider query here).
+        _modelLoadingState.value = if (savedPath != null) {
+            ModelLoadingState.Loaded(getSavedModelName() ?: fallbackDisplayName(savedPath))
+        } else {
+            ModelLoadingState.Idle
+        }
     }
 
     private fun getPluginPrefs() = getContext()?.getPluginSharedPreferences("AgentSettings")
+
+    /** Human-readable name persisted alongside the model path at load time, if any. */
+    fun getSavedModelName(): String? =
+        getPluginPrefs()?.getString("local_llm_model_name", null)?.takeIf { it.isNotBlank() }
+
+    private fun saveLocalModelName(name: String?) {
+        getPluginPrefs()?.edit()?.putString("local_llm_model_name", name)?.apply()
+    }
+
+    /** Decoded last path segment — a cheap fallback that at least avoids raw %3A escapes. */
+    fun fallbackDisplayName(uriOrPath: String): String =
+        (try { android.net.Uri.decode(uriOrPath) } catch (e: Exception) { uriOrPath }).substringAfterLast('/')
+
+    /**
+     * Resolve the real file name for a selected model. For a `content://` URI this queries the
+     * document provider's [OpenableColumns.DISPLAY_NAME] (e.g. "Llama-3.2-1B.gguf"); otherwise,
+     * and on any failure, it falls back to the decoded last path segment. Do NOT call on the main
+     * thread — the provider query can block.
+     */
+    private fun resolveDisplayName(uriString: String): String {
+        if (uriString.startsWith("content://")) {
+            try {
+                val uri = android.net.Uri.parse(uriString)
+                getContext()?.androidContext?.contentResolver
+                    ?.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)
+                    ?.use { c ->
+                        val idx = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                        if (idx >= 0 && c.moveToFirst() && !c.isNull(idx)) {
+                            c.getString(idx)?.takeIf { it.isNotBlank() }?.let { return it }
+                        }
+                    }
+            } catch (e: Exception) {
+                android.util.Log.w(TAG, "Could not resolve display name for $uriString", e)
+            }
+        }
+        return fallbackDisplayName(uriString)
+    }
 
     fun getAvailableBackends(): List<AiBackend> = AiBackend.entries
 
@@ -120,6 +187,12 @@ class AiSettingsViewModel(
         return getPluginPrefs()?.getBoolean("use_simple_local_prompt", true) ?: true
     }
 
+    /**
+     * Persists the Gemini API key in this plugin's private SharedPreferences.
+     * The store is app-sandboxed (not world-readable) but NOT encrypted at rest;
+     * it is recoverable on a rooted/compromised device. Use [clearGeminiApiKey]
+     * to remove it. See the plugin README "Security" section for the tradeoff.
+     */
     fun saveGeminiApiKey(apiKey: String) {
         getPluginPrefs()?.edit()?.apply {
             putString("gemini_api_key", apiKey)
@@ -152,86 +225,61 @@ class AiSettingsViewModel(
     }
 
     fun getGeminiModel(): String {
-        return getPluginPrefs()?.getString("gemini_model", "gemini-1.5-flash") ?: "gemini-1.5-flash"
+        return getPluginPrefs()?.getString("gemini_model", DEFAULT_GEMINI_MODEL) ?: DEFAULT_GEMINI_MODEL
     }
 
-    private val _geminiModels = MutableLiveData<List<String>>(emptyList())
-    val geminiModels: LiveData<List<String>> get() = _geminiModels
+    private val _geminiModels = MutableLiveData(GeminiModelOptions(emptyList(), isLive = false))
+    val geminiModels: LiveData<GeminiModelOptions> get() = _geminiModels
 
     private val _geminiModelsLoading = MutableLiveData<Boolean>(false)
     val geminiModelsLoading: LiveData<Boolean> get() = _geminiModelsLoading
 
+    /**
+     * Ask ai-core's Gemini backend for the models the current API key can actually
+     * use, and publish them to [geminiModels]. Falls back to [FALLBACK_MODELS] (current
+     * models only — never a retired one) when there is no key, no backend, or the live
+     * lookup fails, so the picker is never populated with a model that would 404.
+     */
     fun fetchGeminiModels() {
         viewModelScope.launch(Dispatchers.IO) {
             _geminiModelsLoading.postValue(true)
 
             try {
-                // Get the LlmInferenceService from SharedServices
+                val apiKey = getGeminiApiKey()?.trim()
+                if (apiKey.isNullOrBlank()) {
+                    android.util.Log.w(TAG, "No Gemini API key saved; showing fallback models")
+                    _geminiModels.postValue(GeminiModelOptions(FALLBACK_MODELS, isLive = false))
+                    return@launch
+                }
+
                 val llmService = SharedServices.get(LlmInferenceService::class.java)
-                if (llmService == null) {
-                    android.util.Log.e("AiSettingsViewModel", "LlmInferenceService not available")
-                    _geminiModels.postValue(listOf(
-                        "gemini-1.5-flash",
-                        "gemini-1.5-pro",
-                        "gemini-2.5-flash",
-                        "gemini-2.5-pro",
-                        "gemini-3-flash",
-                        "gemini-3.5-flash"
-                    ))
-                    _geminiModelsLoading.postValue(false)
-                    return@launch
-                }
-
-                // Get the Gemini backend
-                val geminiBackend = llmService.getBackend("gemini")
+                val geminiBackend = llmService?.getBackend("gemini")
                 if (geminiBackend == null) {
-                    android.util.Log.e("AiSettingsViewModel", "Gemini backend not available")
-                    _geminiModels.postValue(listOf(
-                        "gemini-1.5-flash",
-                        "gemini-1.5-pro",
-                        "gemini-2.5-flash",
-                        "gemini-2.5-pro",
-                        "gemini-3-flash",
-                        "gemini-3.5-flash"
-                    ))
-                    _geminiModelsLoading.postValue(false)
+                    android.util.Log.e(TAG, "Gemini backend not available")
+                    _geminiModels.postValue(GeminiModelOptions(FALLBACK_MODELS, isLive = false))
                     return@launch
                 }
 
-                // Try to get list models method via reflection
-                // (since GeminiBackend is not in the interface)
-                try {
-                    val listModelsMethod = geminiBackend.javaClass.getMethod("listModels")
-                    val futureResult = listModelsMethod.invoke(geminiBackend)
+                // listModels() lives in the ai-core plugin and isn't part of the shared
+                // LlmBackend interface, so reach it reflectively across the plugin
+                // classloader boundary. It reads the saved key itself and returns the live
+                // v1beta catalog (empty when unavailable).
+                val method = geminiBackend.javaClass.getMethod("listModels")
+                val futureResult = method.invoke(geminiBackend)
 
-                    if (futureResult is java.util.concurrent.CompletableFuture<*>) {
-                        @Suppress("UNCHECKED_CAST")
-                        val models = (futureResult as java.util.concurrent.CompletableFuture<List<String>>).get()
-                        android.util.Log.d("AiSettingsViewModel", "Fetched ${models.size} Gemini models")
-                        _geminiModels.postValue(models)
-                    }
-                } catch (e: Exception) {
-                    android.util.Log.e("AiSettingsViewModel", "Error fetching models", e)
-                    // Fallback to default list
-                    _geminiModels.postValue(listOf(
-                        "gemini-1.5-flash",
-                        "gemini-1.5-pro",
-                        "gemini-2.5-flash",
-                        "gemini-2.5-pro",
-                        "gemini-3-flash",
-                        "gemini-3.5-flash"
-                    ))
+                @Suppress("UNCHECKED_CAST")
+                val models: List<String> =
+                    (futureResult as? java.util.concurrent.CompletableFuture<List<String>>)?.get().orEmpty()
+                if (models.isEmpty()) {
+                    android.util.Log.w(TAG, "Live model list empty; showing fallback models")
+                    _geminiModels.postValue(GeminiModelOptions(FALLBACK_MODELS, isLive = false))
+                } else {
+                    android.util.Log.d(TAG, "Fetched ${models.size} Gemini models")
+                    _geminiModels.postValue(GeminiModelOptions(models, isLive = true))
                 }
             } catch (e: Exception) {
-                android.util.Log.e("AiSettingsViewModel", "Error in fetchGeminiModels", e)
-                _geminiModels.postValue(listOf(
-                    "gemini-1.5-flash",
-                    "gemini-1.5-pro",
-                    "gemini-2.5-flash",
-                    "gemini-2.5-pro",
-                    "gemini-3-flash",
-                    "gemini-3.5-flash"
-                ))
+                android.util.Log.e(TAG, "Error fetching Gemini models", e)
+                _geminiModels.postValue(GeminiModelOptions(FALLBACK_MODELS, isLive = false))
             } finally {
                 _geminiModelsLoading.postValue(false)
             }
@@ -248,10 +296,11 @@ class AiSettingsViewModel(
             _modelLoadingState.postValue(ModelLoadingState.Loading)
 
             try {
-                // Extract filename from URI for display
-                val fileName = uriString.substringAfterLast("/")
+                // Resolve the real file name (not the raw content-URI doc id) for display.
+                val fileName = resolveDisplayName(uriString)
 
-                // Save the path
+                // Persist the name before the path so the savedModelPath observer can read it.
+                saveLocalModelName(fileName)
                 saveLocalModelPath(uriString)
 
                 // In plugin context, we don't directly load the model
@@ -260,7 +309,7 @@ class AiSettingsViewModel(
                     ModelLoadingState.Loaded(fileName)
                 )
 
-                android.util.Log.d("AiSettingsViewModel", "Model path saved: $uriString")
+                android.util.Log.d(TAG, "Model path saved: $uriString ($fileName)")
             } catch (e: Exception) {
                 android.util.Log.e("AiSettingsViewModel", "Error saving model path", e)
                 _modelLoadingState.postValue(

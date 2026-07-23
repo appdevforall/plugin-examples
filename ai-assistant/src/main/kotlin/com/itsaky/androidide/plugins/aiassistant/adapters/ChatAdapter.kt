@@ -27,7 +27,6 @@ import java.util.Date
 import java.util.Locale
 
 class ChatAdapter(
-    private val pluginContext: Context,
     private val markwon: Markwon,
     private val onMessageAction: (action: String, message: ChatMessage) -> Unit
 ) : ListAdapter<ChatMessage, RecyclerView.ViewHolder>(DiffCallback) {
@@ -84,8 +83,8 @@ class ChatAdapter(
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
         android.util.Log.d("ChatAdapter", "onCreateViewHolder called, viewType=$viewType")
-        // Use plugin context for inflating layouts to access plugin resources
-        val inflater = LayoutInflater.from(pluginContext)
+        // Inflate from the RecyclerView's Context so item views follow the IDE day/night theme.
+        val inflater = LayoutInflater.from(parent.context)
         return when (viewType) {
             VIEW_TYPE_SYSTEM -> {
                 val view = inflater.inflate(R.layout.list_item_chat_system_message, parent, false)

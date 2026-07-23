@@ -25,6 +25,9 @@ See the official [plugin documentation](https://www.appdevforall.org/codeonthego
 | [`ai-core/`](ai-core/)                             | Shared on-device LLM inference backend (bundled llama.cpp AAR) plus a Gemini API backend, exposed to other plugins as a runtime service. |
 | [`ai-assistant/`](ai-assistant/)                   | In-IDE AI chat assistant with tool calling; talks to `ai-core` for inference over local or Gemini models. |
 | [`flutter-template/`](flutter-template/)           | Adds Flutter starter project templates (Basic, BLoC, Provider, GetX, Riverpod) to the New Project screen. |
+| [`code-suggestions-plugin/`](code-suggestions-plugin/) | Inline ghost-text code completions powered by AI. |
+| [`speech-to-text-plugin/`](speech-to-text-plugin/) | Voice-to-code: converts speech to code with AI generation. |
+| [`vector-search-plugin/`](vector-search-plugin/) | Semantic code search using embeddings and vector similarity. |
 
 ## Building a plugin
 

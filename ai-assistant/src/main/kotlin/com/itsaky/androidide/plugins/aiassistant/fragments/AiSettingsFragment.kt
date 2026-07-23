@@ -24,6 +24,11 @@ import java.util.Locale
 
 class AiSettingsFragment : DialogFragment() {
 
+    companion object {
+        /** FragmentResult key signalling the chat screen that settings were closed. */
+        const val RESULT_SETTINGS_CLOSED = "ai_settings_closed"
+    }
+
     private lateinit var viewModel: AiSettingsViewModel
     private lateinit var settingsToolbar: LinearLayout
     private lateinit var backButton: ImageButton
@@ -54,18 +59,24 @@ class AiSettingsFragment : DialogFragment() {
             }
         }
 
+    /**
+     * Route inflation through the host so the dialog's views resolve against a Context whose
+     * Configuration tracks the IDE's day/night setting (DayNight PluginTheme + values-night/
+     * colors). Replaces the old cloneInContext(pluginContext), which pinned the UI to light mode.
+     */
+    override fun onGetLayoutInflater(savedInstanceState: Bundle?): LayoutInflater {
+        val inflater = super.onGetLayoutInflater(savedInstanceState)
+        return com.itsaky.androidide.plugins.base.PluginFragmentHelper.getPluginInflater(
+            com.itsaky.androidide.plugins.aiassistant.AiAssistantPlugin.PLUGIN_ID, inflater
+        )
+    }
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View? {
-        // Get plugin context to ensure proper resource inflation
-        val pluginContext = getPluginContext()?.androidContext ?: requireContext()
-
-        // Create inflater with plugin context
-        val pluginInflater = inflater.cloneInContext(pluginContext)
-
-        return pluginInflater.inflate(R.layout.fragment_ai_settings, container, false)
+        return inflater.inflate(R.layout.fragment_ai_settings, container, false)
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -75,6 +86,15 @@ class AiSettingsFragment : DialogFragment() {
         initializeViews(view)
         setupToolbar()
         setupBackendSelector()
+    }
+
+    override fun onDismiss(dialog: android.content.DialogInterface) {
+        super.onDismiss(dialog)
+        // This is a dialog, so the chat screen behind it never gets onResume when we close.
+        // Signal it to re-resolve the selected backend (routing + availability + label).
+        if (isAdded) {
+            parentFragmentManager.setFragmentResult(RESULT_SETTINGS_CLOSED, Bundle.EMPTY)
+        }
     }
 
     private fun initializeViewModel() {
@@ -131,18 +151,17 @@ class AiSettingsFragment : DialogFragment() {
     private fun updateBackendSpecificUi(backend: AiBackend) {
         backendSpecificContainer.removeAllViews()
 
-        // Use plugin context for inflating layouts
-        val pluginContext = getPluginContext()?.androidContext ?: requireContext()
-
+        // Reuse the fragment's theme-aware inflater (routed through getPluginInflater) so these
+        // sub-layouts follow the IDE day/night theme like the rest of the dialog.
         when (backend) {
             AiBackend.LOCAL_LLM -> {
-                val localLlmView = LayoutInflater.from(pluginContext)
+                val localLlmView = layoutInflater
                     .inflate(R.layout.layout_settings_local_llm, backendSpecificContainer, false)
                 backendSpecificContainer.addView(localLlmView)
                 setupLocalLlmUi(localLlmView)
             }
             AiBackend.GEMINI -> {
-                val geminiApiView = LayoutInflater.from(pluginContext)
+                val geminiApiView = layoutInflater
                     .inflate(R.layout.layout_settings_gemini_api, backendSpecificContainer, false)
                 backendSpecificContainer.addView(geminiApiView)
                 setupGeminiApiUi(geminiApiView)
@@ -213,7 +232,7 @@ class AiSettingsFragment : DialogFragment() {
 
             if (path != null) {
                 modelPathTextView.visibility = View.VISIBLE
-                val fileName = path.substringAfterLast("/")
+                val fileName = viewModel.getSavedModelName() ?: viewModel.fallbackDisplayName(path)
                 modelPathTextView.text = "Saved: $fileName"
             } else {
                 modelPathTextView.visibility = View.GONE
@@ -370,6 +389,7 @@ class AiSettingsFragment : DialogFragment() {
         return container
     }
 
+    @SuppressLint("ClickableViewAccessibility")
     private fun setupGeminiModelSelection(container: View) {
         val currentModelText = container.findViewWithTag<TextView>("current_model_text")
         val modelSpinner = container.findViewWithTag<Spinner>("model_spinner")
@@ -377,8 +397,11 @@ class AiSettingsFragment : DialogFragment() {
 
         if (modelSpinner == null || refreshButton == null) return
 
+        // Track real user taps so programmatic selection changes never persist a model.
+        var userTouchedSpinner = false
+
         // Setup spinner
-        fun updateModelSpinner(models: List<String>) {
+        fun updateModelSpinner(models: List<String>, isLive: Boolean) {
             val adapter = ArrayAdapter(
                 requireContext(),
                 android.R.layout.simple_spinner_item,
@@ -387,18 +410,24 @@ class AiSettingsFragment : DialogFragment() {
             adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
             modelSpinner.adapter = adapter
 
-            // Set current selection
+            // Migrate off a retired saved model only for a live catalog, never for the fallback.
             val currentModel = viewModel.getGeminiModel()
             val currentIndex = models.indexOf(currentModel)
-            if (currentIndex >= 0) {
-                modelSpinner.setSelection(currentIndex)
+            when {
+                currentIndex >= 0 -> modelSpinner.setSelection(currentIndex)
+                isLive && models.isNotEmpty() -> {
+                    modelSpinner.setSelection(0)
+                    val migrated = models[0]
+                    viewModel.saveGeminiModel(migrated)
+                    currentModelText?.text = "Current: $migrated"
+                }
             }
         }
 
         // Observe models
-        viewModel.geminiModels.observe(viewLifecycleOwner) { models ->
-            if (models.isNotEmpty()) {
-                updateModelSpinner(models)
+        viewModel.geminiModels.observe(viewLifecycleOwner) { options ->
+            if (options.models.isNotEmpty()) {
+                updateModelSpinner(options.models, options.isLive)
             }
         }
 
@@ -408,9 +437,16 @@ class AiSettingsFragment : DialogFragment() {
             refreshButton.text = if (isLoading) "Loading..." else "Refresh Models"
         }
 
+        modelSpinner.setOnTouchListener { _, _ ->
+            userTouchedSpinner = true
+            false
+        }
+
         // Handle model selection
         modelSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                // Ignore programmatic selections; only a real user pick persists the model.
+                if (!userTouchedSpinner) return
                 val selectedModel = parent?.getItemAtPosition(position) as? String
                 if (selectedModel != null && selectedModel != viewModel.getGeminiModel()) {
                     viewModel.saveGeminiModel(selectedModel)
@@ -428,7 +464,7 @@ class AiSettingsFragment : DialogFragment() {
         }
 
         // Initial fetch
-        if (viewModel.geminiModels.value.isNullOrEmpty()) {
+        if (viewModel.geminiModels.value?.models.isNullOrEmpty()) {
             viewModel.fetchGeminiModels()
         }
     }

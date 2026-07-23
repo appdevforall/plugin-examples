@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.itsaky.androidide.plugins.stt">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <application
+        android:label="Speech-to-Text Plugin"
+        android:theme="@style/PluginTheme">
+
+        <!-- Plugin metadata -->
+        <meta-data
+            android:name="plugin.id"
+            android:value="com.itsaky.androidide.plugins.stt" />
+
+        <meta-data
+            android:name="plugin.name"
+            android:value="Speech to Text" />
+
+        <meta-data
+            android:name="plugin.version"
+            android:value="${pluginVersion}" />
+
+        <meta-data
+            android:name="plugin.description"
+            android:value="Voice-to-code: Convert speech to code with AI generation" />
+
+        <meta-data
+            android:name="plugin.author"
+            android:value="AndroidIDE" />
+
+        <meta-data
+            android:name="plugin.min_ide_version"
+            android:value="26.17" />
+
+        <meta-data
+            android:name="plugin.max_ide_version"
+            android:value="26.28" />
+
+        <meta-data
+            android:name="plugin.permissions"
+            android:value="filesystem.read,filesystem.write,network.access,native.code" />
+
+        <meta-data
+            android:name="plugin.main_class"
+            android:value="com.itsaky.androidide.plugins.stt.SpeechToTextPlugin" />
+
+        <meta-data
+            android:name="plugin.icon_day"
+            android:value="assets/icon_day.png" />
+
+        <meta-data
+            android:name="plugin.icon_night"
+            android:value="assets/icon_night.png" />
+
+    </application>
+
+</manifest>

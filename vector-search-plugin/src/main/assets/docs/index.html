@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vector Search — Guide</title>
+<style>
+  body {
+    background: #ffffff;
+    color: #000000;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+    margin: 0;
+    padding: 1.25rem;
+    max-width: 760px;
+  }
+  h1 { font-size: 1.5rem; margin: 0 0 0.75rem; }
+  h2 { font-size: 1.15rem; margin: 1.5rem 0 0.5rem; }
+  code {
+    background: #f4f4f4;
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.9em;
+  }
+  ul { padding-left: 1.25rem; }
+  li { margin: 0.25rem 0; }
+  .note {
+    border-left: 3px solid #999;
+    padding: 0.25rem 0.75rem;
+    margin: 1rem 0;
+    background: #fafafa;
+  }
+</style>
+</head>
+<body>
+  <h1>Vector Search — Semantic Code Search</h1>
+
+  <p><b>Vector Search</b> adds meaning-based search to the project. Instead of
+  matching exact text, it ranks code by <b>semantic similarity</b> to your
+  query and contributes a <b>"Semantic Results"</b> section to the project
+  search screen.</p>
+
+  <h2>How it works</h2>
+  <ul>
+    <li>Project files are split into chunks and turned into embedding vectors.</li>
+    <li>Your query is embedded the same way and compared by cosine similarity;
+      the closest chunks are returned.</li>
+    <li>Embeddings come from <b>AI Core</b> when it's installed. Without it, the
+      plugin falls back to a lightweight lexical embedding so search still works
+      (with lower quality).</li>
+  </ul>
+
+  <h2>Using it</h2>
+  <p>Open the project search screen and run a query as usual. When Vector Search
+  is active, results include a <b>Semantic Results</b> section alongside the
+  normal text matches. Indexing happens on demand for the searched roots.</p>
+
+  <h2>Privacy</h2>
+  <div class="note">
+    Indexing reads files in the current project only. Embeddings are stored in a
+    local database on the device. If AI Core's <b>Gemini</b> backend is selected
+    for embeddings, chunk text is sent to Google over HTTPS; the <b>Local</b>
+    backend and the lexical fallback keep everything on-device.
+  </div>
+
+  <h2>Troubleshooting</h2>
+  <ul>
+    <li><b>Results look weak</b> — install/activate AI Core so real model
+      embeddings are used instead of the lexical fallback.</li>
+    <li><b>No semantic results</b> — the roots may not be indexed yet; run the
+      search again after indexing completes.</li>
+  </ul>
+</body>
+</html>
