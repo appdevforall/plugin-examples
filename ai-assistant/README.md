@@ -58,19 +58,40 @@ The build resolves `plugin-api.jar` from the repo-root `../libs/`.
 
 ## Security
 
-- **Gemini API key at rest.** When you use the Gemini backend, the API key is
-  stored in this plugin's private `SharedPreferences` (`AgentSettings`). That
-  store is **app-sandboxed** — other apps cannot read it — but it is **not
-  encrypted at rest**, so it is recoverable on a rooted or otherwise compromised
-  device. Remove it any time from **AI Settings** (or `clearGeminiApiKey()`).
-  Encryption is deliberately not layered on here: the key is shared at runtime
-  with the sibling `ai-core` plugin (which performs the Gemini calls), and
-  `EncryptedSharedPreferences` would force both independent plugins to agree on a
-  master-key alias and crypto library version — a fragile cross-plugin coupling.
-  A host-provided secure-storage service is the correct long-term fix.
+- **Gemini API key at rest.** The key is encrypted with AES/GCM under a
+  hardware-backed Android Keystore secret and only the ciphertext is written to
+  this plugin's private `SharedPreferences` (`AgentSettings`), as
+  `enc:v1:` + base64(iv‖ciphertext). A copied prefs file — root, `adb backup`,
+  forensic dump — is useless without this device's Keystore. Remove the key any
+  time from **AI Settings** (or `clearGeminiApiKey()`).
+  - A key stored before this plugin encrypted them is still plaintext on disk;
+    it is re-encrypted in place the first time it's read
+    (`SecureApiKeyStore.readAndMigrate`), so no user action is needed.
+  - The key is **not** bound to user authentication
+    (`setUserAuthenticationRequired` is not set), so it stays usable for
+    background inference and a lock-screen credential change does not invalidate
+    it. If the Keystore entry is lost anyway — the app's data is cleared, or an
+    OEM Keystore drops the alias — the stored key can no longer be decrypted and
+    must be re-entered; **Edit** says so instead of presenting an empty field.
+    Saving surfaces a failure message rather than silently storing nothing.
+  - Encryption at rest defends against *offline* recovery of the prefs file. It
+    does not defend against code already running as the host IDE's UID, which can
+    simply call `decrypt` — that would need a host-provided secure-storage
+    service with per-plugin isolation.
+- **Shared crypto across two plugins.** `ai-core` performs the Gemini calls and
+  therefore has to read the same key. Both plugins run in the host IDE's process
+  (same UID) and so share one Android Keystore; each ships an identical copy of
+  `SecureApiKeyStore` pinned to the alias `cotg_ai_gemini_key_v1`. The two copies
+  must stay byte-identical apart from their package line — if `ALIAS`,
+  `TRANSFORM`, `IV_LEN` or `ENC_PREFIX` drift, `ai-core` silently fails to
+  decrypt and Gemini reports "backend not available". A host-provided
+  secure-storage service would remove the duplication.
 - **Gemini API key in transit.** The key is sent to Google as an `x-goog-api-key`
   request header (and via the SDK on the chat path), never in a URL query string.
 - **File tools are confined to the project root** — see the in-IDE help page.
+- **The context-file picker is confined to the open project** and fails closed:
+  with no project open it refuses to open rather than falling back to a broader
+  root.
 
 ## License
 

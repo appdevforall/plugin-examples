@@ -10,10 +10,12 @@ import android.text.method.PasswordTransformationMethod
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.widget.*
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.fragment.app.DialogFragment
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.lifecycleScope
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aiassistant.AiAssistantPlugin
 import com.itsaky.androidide.plugins.aiassistant.R
@@ -23,6 +25,7 @@ import com.itsaky.androidide.plugins.aiassistant.viewmodel.AiBackend
 import com.itsaky.androidide.plugins.aiassistant.viewmodel.AiSettingsViewModel
 import com.itsaky.androidide.plugins.aiassistant.viewmodel.EngineState
 import com.itsaky.androidide.plugins.aiassistant.viewmodel.ModelLoadingState
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -54,6 +57,8 @@ class AiSettingsFragment : DialogFragment() {
                 ?.get(IdeTooltipService::class.java)
         } catch (e: Exception) {
             // Tooltip help is optional; long-press simply shows nothing when it's unavailable.
+            AiAssistantPlugin.getContext()?.logger
+                ?.warn("AiSettingsFragment: tooltip service unavailable", e)
         }
     }
 
@@ -143,6 +148,7 @@ class AiSettingsFragment : DialogFragment() {
             // Close the dialog
             dismiss()
         }
+        wireTooltip(backButton, AiAssistantPlugin.TOOLTIP_TAG_SETTINGS_BACK)
     }
 
     private fun setupBackendSelector() {
@@ -214,6 +220,8 @@ class AiSettingsFragment : DialogFragment() {
                 viewModel.loadModelFromUri(savedPath, requireContext())
             }
         }
+        // Same concept as Browse — choosing which local model to run.
+        wireTooltip(loadSavedButton, AiAssistantPlugin.TOOLTIP_TAG_SETTINGS_LOCAL_MODEL)
 
         shaInput?.apply {
             setText(viewModel.getLocalModelSha256().orEmpty())
@@ -223,12 +231,16 @@ class AiSettingsFragment : DialogFragment() {
                 }
             }
         }
+        // On the labelled wrapper, not the field: long-press there is the paste menu.
+        view.findViewById<View>(R.id.local_model_sha_layout)
+            ?.let { wireTooltip(it, AiAssistantPlugin.TOOLTIP_TAG_SETTINGS_LOCAL_SHA) }
 
         simplePromptCheckbox?.apply {
             isChecked = viewModel.isUseSimpleLocalPromptEnabled()
             setOnCheckedChangeListener { _, isChecked ->
                 viewModel.setUseSimpleLocalPrompt(isChecked)
             }
+            wireTooltip(this, AiAssistantPlugin.TOOLTIP_TAG_SETTINGS_SIMPLE_PROMPT)
         }
 
         // Observe engine state
@@ -298,9 +310,9 @@ class AiSettingsFragment : DialogFragment() {
         val clearButton = view.findViewById<Button>(R.id.btn_clear_api_key)
         val statusTextView = view.findViewById<TextView>(R.id.gemini_api_key_status_text)
 
-        // Offer help on the API-key controls in both the editing and saved states.
-        wireTooltip(apiKeyInput, AiAssistantPlugin.TOOLTIP_TAG_SETTINGS_GEMINI_KEY)
-        wireTooltip(editButton, AiAssistantPlugin.TOOLTIP_TAG_SETTINGS_GEMINI_KEY)
+        // Not on apiKeyInput: long-press there is the paste menu, and a key is pasted.
+        listOf(toggleVisibilityButton, saveButton, editButton, clearButton, statusTextView)
+            .forEach { wireTooltip(it, AiAssistantPlugin.TOOLTIP_TAG_SETTINGS_GEMINI_KEY) }
 
         // Create model selection container
         val modelContainer = createModelSelectionUi(view)
@@ -321,19 +333,14 @@ class AiSettingsFragment : DialogFragment() {
             }
         }
 
-        val savedApiKey = viewModel.getGeminiApiKey()
-        if (savedApiKey.isNullOrBlank()) {
-            updateUiState(isEditing = true)
-            apiKeyInput.setText("")
-        } else {
-            updateUiState(isEditing = false)
-            val timestamp = viewModel.getGeminiApiKeySaveTimestamp()
-            if (timestamp > 0) {
-                val sdf = SimpleDateFormat("MMMM d, yyyy", Locale.getDefault())
-                val savedDate = sdf.format(Date(timestamp))
-                statusTextView.text = getString(R.string.msg_api_key_saved_on, savedDate)
+        viewLifecycleOwner.lifecycleScope.launch {
+            val savedApiKey = viewModel.getGeminiApiKey()
+            val hasKey = !savedApiKey.isNullOrBlank()
+            updateUiState(isEditing = !hasKey)
+            if (hasKey) {
+                statusTextView.text = savedApiKeyStatusText()
             } else {
-                statusTextView.text = getString(R.string.msg_api_key_is_saved)
+                apiKeyInput.setText("")
             }
         }
 
@@ -355,6 +362,7 @@ class AiSettingsFragment : DialogFragment() {
             )
             toggleVisibilityButton.setColorFilter(apiKeyInput.currentHintTextColor)
             apiKeyInput.setSelection(apiKeyInput.text?.length ?: 0)
+            setSecureWindow(isKeyVisible)
         }
 
         applyKeyVisibility()
@@ -370,25 +378,52 @@ class AiSettingsFragment : DialogFragment() {
                 Toast.makeText(requireContext(), getString(R.string.msg_api_key_empty), Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
-            if (!viewModel.saveGeminiApiKey(apiKey)) {
-                Toast.makeText(requireContext(), getString(R.string.msg_api_key_save_failed), Toast.LENGTH_LONG).show()
-                return@setOnClickListener
+            saveButton.isEnabled = false
+            viewLifecycleOwner.lifecycleScope.launch {
+                val saved = try {
+                    viewModel.saveGeminiApiKey(apiKey)
+                } finally {
+                    saveButton.isEnabled = true
+                }
+                if (!saved) {
+                    Toast.makeText(requireContext(), getString(R.string.msg_api_key_save_failed), Toast.LENGTH_LONG).show()
+                    return@launch
+                }
+                Toast.makeText(requireContext(), getString(R.string.msg_api_key_saved), Toast.LENGTH_SHORT).show()
+                updateUiState(isEditing = false)
+                statusTextView.text = savedApiKeyStatusText()
             }
-            Toast.makeText(requireContext(), getString(R.string.msg_api_key_saved), Toast.LENGTH_SHORT).show()
-
-            updateUiState(isEditing = false)
-            val timestamp = viewModel.getGeminiApiKeySaveTimestamp()
-            val sdf = SimpleDateFormat("MMMM d, yyyy", Locale.getDefault())
-            val savedDate = sdf.format(Date(timestamp))
-            statusTextView.text = getString(R.string.msg_api_key_saved_on, savedDate)
         }
 
-        editButton.setOnClickListener {
+        // Reveal the (already-fetched) key in an editable, focused field. Kept separate from
+        // the click handler so the listener does one thing: fetch, then hand off.
+        fun revealEditMode(apiKey: String) {
+            apiKeyInput.setText(apiKey)
+            apiKeyInput.setSelection(apiKey.length)
             updateUiState(isEditing = true)
-            apiKeyInput.setText(viewModel.getGeminiApiKey().orEmpty())
             isKeyVisible = false
             applyKeyVisibility()
             apiKeyInput.requestFocus()
+        }
+
+        editButton.setOnClickListener {
+            editButton.isEnabled = false
+            viewLifecycleOwner.lifecycleScope.launch {
+                val apiKey = try {
+                    viewModel.getGeminiApiKey()
+                } finally {
+                    editButton.isEnabled = true
+                }
+                // null = a key IS stored but won't decrypt; an empty box alone looks like data loss.
+                if (apiKey == null) {
+                    Toast.makeText(
+                        requireContext(),
+                        getString(R.string.msg_api_key_unreadable),
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+                revealEditMode(apiKey.orEmpty())
+            }
         }
 
         clearButton.setOnClickListener {
@@ -400,6 +435,37 @@ class AiSettingsFragment : DialogFragment() {
 
         // Setup model selection
         setupGeminiModelSelection(modelContainer)
+    }
+
+    /**
+     * Add or clear [WindowManager.LayoutParams.FLAG_SECURE] on this dialog's window.
+     *
+     * Set while the API key is displayed in clear text: without it the key is captured by
+     * screenshots, screen recordings and the recents-screen thumbnail, which would undo the
+     * point of encrypting it at rest. The window may not exist yet on the first call (this runs
+     * from view setup, before onStart), which is safe — the initial state is masked, so there is
+     * no flag to apply until the user actually reveals the key.
+     *
+     * @param secure true to block capture, false to allow it again
+     */
+    private fun setSecureWindow(secure: Boolean) {
+        val window = dialog?.window ?: return
+        if (secure) {
+            window.setFlags(
+                WindowManager.LayoutParams.FLAG_SECURE,
+                WindowManager.LayoutParams.FLAG_SECURE
+            )
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        }
+    }
+
+    /** Status line for a stored key: dated when the save time is known, generic otherwise. */
+    private fun savedApiKeyStatusText(): String {
+        val timestamp = viewModel.getGeminiApiKeySaveTimestamp()
+        if (timestamp <= 0) return getString(R.string.msg_api_key_is_saved)
+        val savedDate = SimpleDateFormat("MMMM d, yyyy", Locale.getDefault()).format(Date(timestamp))
+        return getString(R.string.msg_api_key_saved_on, savedDate)
     }
 
     private fun createModelSelectionUi(parent: View): LinearLayout {
@@ -459,6 +525,9 @@ class AiSettingsFragment : DialogFragment() {
         val refreshButton = container.findViewWithTag<Button>("refresh_button")
 
         if (modelSpinner == null || refreshButton == null) return
+
+        wireTooltip(modelSpinner, AiAssistantPlugin.TOOLTIP_TAG_SETTINGS_GEMINI_MODEL)
+        wireTooltip(refreshButton, AiAssistantPlugin.TOOLTIP_TAG_SETTINGS_GEMINI_MODEL)
 
         // Track real user taps so programmatic selection changes never persist a model.
         var userTouchedSpinner = false

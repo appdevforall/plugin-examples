@@ -16,6 +16,7 @@ import android.widget.Toast
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
+import com.itsaky.androidide.plugins.aiassistant.AiAssistantPlugin
 import com.itsaky.androidide.plugins.aiassistant.R
 import com.itsaky.androidide.plugins.aiassistant.models.ChatMessage
 import com.itsaky.androidide.plugins.aiassistant.models.MessageStatus
@@ -26,8 +27,14 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+/**
+ * @param wireTooltip attaches this plugin's long-press help for a tag to a view. Supplied by
+ *   ChatFragment, which owns the [com.itsaky.androidide.plugins.services.IdeTooltipService]
+ *   lookup, so the adapter stays free of service plumbing. Defaults to a no-op for tests.
+ */
 class ChatAdapter(
     private val markwon: Markwon,
+    private val wireTooltip: (View, String) -> Unit = { _, _ -> },
     private val onMessageAction: (action: String, message: ChatMessage) -> Unit
 ) : ListAdapter<ChatMessage, RecyclerView.ViewHolder>(DiffCallback) {
 
@@ -207,11 +214,15 @@ class ChatAdapter(
                     holder.btnRetry.setOnClickListener {
                         onMessageAction(ACTION_OPEN_SETTINGS, message)
                     }
+                    // Re-wired per bind: the same recycled button plays both roles, so the
+                    // tag has to follow the role it currently has.
+                    wireTooltip(holder.btnRetry, AiAssistantPlugin.TOOLTIP_TAG_MESSAGE_OPEN_SETTINGS)
                 } else {
                     holder.btnRetry.text = "Retry"
                     holder.btnRetry.setOnClickListener {
                         onMessageAction(ACTION_RETRY, message)
                     }
+                    wireTooltip(holder.btnRetry, AiAssistantPlugin.TOOLTIP_TAG_MESSAGE_RETRY)
                 }
                 updateMessageMetadata(holder, message)
             }
@@ -231,6 +242,7 @@ class ChatAdapter(
                 notifyItemChanged(pos)
             }
         }
+        wireTooltip(holder.messageHeader, AiAssistantPlugin.TOOLTIP_TAG_SYSTEM_LOG)
     }
 
     private fun updateSystemMessageExpansion(holder: SystemMessageViewHolder, message: ChatMessage) {

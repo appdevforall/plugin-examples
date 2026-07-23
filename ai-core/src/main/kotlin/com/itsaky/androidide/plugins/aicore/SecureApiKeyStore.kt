@@ -1,5 +1,6 @@
 package com.itsaky.androidide.plugins.aicore
 
+import android.content.SharedPreferences
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyPermanentlyInvalidatedException
 import android.security.keystore.KeyProperties
@@ -72,11 +73,12 @@ object SecureApiKeyStore {
     /**
      * Encrypt [plain] into a self-describing string: [ENC_PREFIX] + base64(iv | ciphertext).
      *
-     * If the Keystore key has been permanently invalidated (e.g. the lock-screen credentials
-     * changed, or the entry is corrupt) the stale alias is dropped and a fresh key generated
-     * once before retrying. Any other Keystore/cipher failure is surfaced as a
-     * [GeneralSecurityException] so the caller can inform the user instead of crashing — the
-     * previous version let these propagate uncaught and take the IDE down on Save.
+     * The key is not auth-bound, so a credential change does not invalidate it; an alias an
+     * OEM Keystore drops anyway is regenerated once before retrying.
+     *
+     * @param plain the value to encrypt
+     * @throws GeneralSecurityException on any other Keystore/cipher failure, so the caller can
+     *   inform the user instead of crashing the IDE on Save
      */
     @Throws(GeneralSecurityException::class)
     fun encrypt(plain: String): String {
@@ -92,7 +94,7 @@ object SecureApiKeyStore {
     /**
      * Return the plaintext for a stored value, handling both formats transparently:
      * an [ENC_PREFIX] value is decrypted; anything else is returned unchanged as
-     * legacy plaintext (it gets migrated to ciphertext on the next save). Returns
+     * legacy plaintext (use [readAndMigrate] to upgrade it in place). Returns
      * null if a ciphertext value can't be decrypted — e.g. the Keystore key was
      * lost or invalidated — in which case the user must re-enter the key.
      */
@@ -110,5 +112,30 @@ object SecureApiKeyStore {
             Log.w(TAG, "Failed to decrypt stored API key", e)
             null
         }
+    }
+
+    /**
+     * Read [key] from [prefs], upgrading a legacy plaintext value to ciphertext in place.
+     *
+     * Keys written before this store existed are still plaintext on disk, and [decrypt] alone
+     * hands them back unchanged forever — so an install that configured its key earlier would
+     * never actually gain encryption. Re-encrypting on the first read closes that gap without
+     * making the user re-enter the key.
+     *
+     * Keystore IPC + AES/GCM, so call this off the main thread.
+     *
+     * @return the plaintext value, or null when nothing is stored or decryption failed.
+     */
+    fun readAndMigrate(prefs: SharedPreferences?, key: String): String? {
+        val stored = prefs?.getString(key, null) ?: return null
+        if (stored.startsWith(ENC_PREFIX)) return decrypt(stored)
+        if (stored.isBlank()) return stored
+        try {
+            prefs.edit().putString(key, encrypt(stored)).apply()
+            Log.i(TAG, "Upgraded legacy plaintext value for '$key' to ciphertext")
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not upgrade legacy plaintext value for '$key' to ciphertext", e)
+        }
+        return stored
     }
 }

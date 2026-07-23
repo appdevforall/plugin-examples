@@ -8,8 +8,11 @@ import androidx.lifecycle.viewModelScope
 import com.itsaky.androidide.plugins.aiassistant.security.SecureApiKeyStore
 import com.itsaky.androidide.plugins.services.LlmInferenceService
 import com.itsaky.androidide.plugins.services.SharedServices
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import com.itsaky.androidide.plugins.PluginContext
 
 /**
  * State for the model file loading.
@@ -49,7 +52,8 @@ enum class AiBackend(val displayName: String) {
 data class GeminiModelOptions(val models: List<String>, val isLive: Boolean)
 
 class AiSettingsViewModel(
-    private val getContext: () -> com.itsaky.androidide.plugins.PluginContext?
+    private val getContext: () -> PluginContext?,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : ViewModel() {
 
     companion object {
@@ -189,33 +193,39 @@ class AiSettingsViewModel(
     }
 
     /**
-     * Persists the Gemini API key in this plugin's private SharedPreferences,
-     * encrypted at rest with a hardware-backed Android Keystore secret (see
-     * [SecureApiKeyStore]). Only ciphertext is written, so the prefs file alone
-     * (root, `adb backup`, forensic dump) does not disclose the key. Use
-     * [clearGeminiApiKey] to remove it.
+     * Encrypts [apiKey] via [SecureApiKeyStore] and persists only the ciphertext to private
+     * prefs, off the main thread (Keystore IPC + AES/GCM). Nothing is written on failure.
      *
-     * Returns false (persisting nothing) if encryption fails — e.g. a hardware Keystore
-     * fault the automatic key-regeneration retry couldn't recover — so the caller can warn
-     * the user instead of the whole IDE crashing on Save.
+     * @param apiKey the plaintext key to store (trimmed before encryption)
+     * @return true only if the key was both encrypted and persisted
      */
-    fun saveGeminiApiKey(apiKey: String): Boolean {
+    suspend fun saveGeminiApiKey(apiKey: String): Boolean = withContext(ioDispatcher) {
+        // Checked first: returning true here would have the UI claim an unwritten key was saved.
+        val prefs = getPluginPrefs()
+        if (prefs == null) {
+            android.util.Log.e(TAG, "Cannot save Gemini API key: plugin preferences unavailable")
+            return@withContext false
+        }
         val encrypted = try {
             SecureApiKeyStore.encrypt(apiKey.trim())
         } catch (e: Exception) {
             android.util.Log.e(TAG, "Failed to encrypt Gemini API key", e)
-            return false
+            return@withContext false
         }
-        getPluginPrefs()?.edit()?.apply {
-            putString("gemini_api_key", encrypted)
-            putLong("gemini_api_key_timestamp", System.currentTimeMillis())
-            apply()
-        }
-        return true
+        prefs.edit()
+            .putString("gemini_api_key", encrypted)
+            .putLong("gemini_api_key_timestamp", System.currentTimeMillis())
+            .apply()
+        true
     }
 
-    fun getGeminiApiKey(): String? {
-        return SecureApiKeyStore.decrypt(getPluginPrefs()?.getString("gemini_api_key", null))
+    /**
+     * Decrypt the stored key off the main thread (Keystore IPC + AES/GCM), upgrading a
+     * pre-encryption plaintext key to ciphertext in passing so existing installs actually
+     * end up encrypted rather than waiting for the user to re-enter the key.
+     */
+    suspend fun getGeminiApiKey(): String? = withContext(ioDispatcher) {
+        SecureApiKeyStore.readAndMigrate(getPluginPrefs(), "gemini_api_key")
     }
 
     fun getGeminiApiKeySaveTimestamp(): Long {
@@ -273,16 +283,7 @@ class AiSettingsViewModel(
                     return@launch
                 }
 
-                // listModels() lives in the ai-core plugin and isn't part of the shared
-                // LlmBackend interface, so reach it reflectively across the plugin
-                // classloader boundary. It reads the saved key itself and returns the live
-                // v1beta catalog (empty when unavailable).
-                val method = geminiBackend.javaClass.getMethod("listModels")
-                val futureResult = method.invoke(geminiBackend)
-
-                @Suppress("UNCHECKED_CAST")
-                val models: List<String> =
-                    (futureResult as? java.util.concurrent.CompletableFuture<List<String>>)?.get().orEmpty()
+                val models = listModelsViaBackend(geminiBackend)
                 if (models.isEmpty()) {
                     android.util.Log.w(TAG, "Live model list empty; showing fallback models")
                     _geminiModels.postValue(GeminiModelOptions(FALLBACK_MODELS, isLive = false))
@@ -297,6 +298,42 @@ class AiSettingsViewModel(
                 _geminiModelsLoading.postValue(false)
             }
         }
+    }
+
+    /**
+     * Ask ai-core's Gemini backend for its live model catalog.
+     *
+     * `listModels()` isn't on the shared [LlmInferenceService.LlmBackend] interface, so reflection
+     * is the only way across the plugin classloader boundary — an unchecked contract, hence the
+     * loud log when it breaks rather than a silent fall back to [FALLBACK_MODELS].
+     *
+     * @param backend the resolved "gemini" backend instance from [SharedServices]
+     * @return the live catalog, or an empty list when unavailable
+     */
+    private fun listModelsViaBackend(backend: Any): List<String> {
+        val method = try {
+            backend.javaClass.getMethod("listModels")
+        } catch (e: NoSuchMethodException) {
+            android.util.Log.e(
+                TAG,
+                "ai-core's ${backend.javaClass.name} has no listModels(): the cross-plugin " +
+                    "contract changed. Expected `fun listModels(): CompletableFuture<List<String>>`.",
+                e
+            )
+            return emptyList()
+        }
+        val result = method.invoke(backend)
+
+        @Suppress("UNCHECKED_CAST")
+        val future = result as? java.util.concurrent.CompletableFuture<List<String>>
+        if (future == null) {
+            android.util.Log.e(
+                TAG,
+                "listModels() returned ${result?.javaClass?.name}, expected CompletableFuture"
+            )
+            return emptyList()
+        }
+        return future.get().orEmpty()
     }
 
     /**

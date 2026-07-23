@@ -16,8 +16,10 @@ import androidx.core.view.isVisible
 import androidx.fragment.app.DialogFragment
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.itsaky.androidide.plugins.aiassistant.AiAssistantPlugin
 import com.itsaky.androidide.plugins.aiassistant.R
-import com.itsaky.androidide.plugins.aiassistant.tool.handlers.PathGuard
+import com.itsaky.androidide.plugins.base.PluginFragmentHelper
+import com.itsaky.androidide.plugins.services.IdeTooltipService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -32,9 +34,11 @@ import java.io.File
  * `requireContext()` throws `IllegalStateException: not attached to a context`
  * (previously crashed on the second "Toggle All").
  *
- * Navigation is confined to the start path supplied by the caller (the open
- * project root), so the picker can't be used to reach arbitrary files on the
- * device. All disk I/O runs off the main thread; see [computeListing].
+ * Navigation is confined to [startPath] — the open project root, which the
+ * caller must supply — so the picker can't be used to reach arbitrary files on
+ * the device. There is deliberately no fallback root: an unresolvable path
+ * shows the not-found message rather than defaulting to somewhere broader.
+ * All disk I/O runs off the main thread; see [computeListing].
  */
 class FilePickerDialogFragment : DialogFragment() {
 
@@ -43,29 +47,56 @@ class FilePickerDialogFragment : DialogFragment() {
 
     /** Root the picker is confined to; navigation can never go above this. */
     private lateinit var rootDirectory: File
-    private lateinit var currentDirectory: File
 
     // Reused across in-place refreshes so we never rebuild the Dialog/Fragment.
     private val rows = mutableListOf<FileRow>()
     private lateinit var listAdapter: FileRowAdapter
     private var alertDialog: AlertDialog? = null
+    private var tooltipService: IdeTooltipService? = null
 
     companion object {
         private const val ARG_START_PATH = "start_path"
         private const val PARENT_NAME = ".."
 
+        /**
+         * @param startPath the project root to browse; navigation is confined to it.
+         */
         fun newInstance(
-            startPath: String? = null,
+            startPath: String,
             onSelected: (List<File>) -> Unit
         ): FilePickerDialogFragment {
             return FilePickerDialogFragment().apply {
-                // Default to the current project root when no path is given.
-                arguments = Bundle().apply {
-                    putString(ARG_START_PATH, startPath ?: PathGuard.projectRoot())
-                }
+                arguments = Bundle().apply { putString(ARG_START_PATH, startPath) }
                 onFilesSelected = onSelected
             }
         }
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        try {
+            tooltipService = PluginFragmentHelper.getServiceRegistry(AiAssistantPlugin.PLUGIN_ID)
+                ?.get(IdeTooltipService::class.java)
+        } catch (e: Exception) {
+            // Tooltip help is optional; long-press simply shows nothing when it's unavailable.
+            AiAssistantPlugin.getContext()?.logger
+                ?.warn("FilePickerDialogFragment: tooltip service unavailable", e)
+        }
+    }
+
+    /** Shows this plugin's context-files tooltip when [view] is long-pressed (Tier 1/2 + guide). */
+    private fun wireTooltip(view: View) {
+        view.setOnLongClickListener { anchor -> showTooltip(anchor) }
+    }
+
+    private fun showTooltip(anchor: View): Boolean {
+        val service = tooltipService ?: return false
+        service.showTooltip(
+            anchor,
+            AiAssistantPlugin.TOOLTIP_CATEGORY,
+            AiAssistantPlugin.TOOLTIP_TAG_CONTEXT_FILES
+        )
+        return true
     }
 
     /** One navigable entry: a directory to descend into or a selectable file. */
@@ -84,6 +115,7 @@ class FilePickerDialogFragment : DialogFragment() {
         val listView = ListView(context).apply {
             adapter = listAdapter
             setOnItemClickListener { _, _, position, _ -> onItemClicked(position) }
+            setOnItemLongClickListener { _, itemView, _, _ -> showTooltip(itemView) }
         }
 
         val dialog = MaterialAlertDialogBuilder(context)
@@ -101,6 +133,11 @@ class FilePickerDialogFragment : DialogFragment() {
             dialog.getButton(AlertDialog.BUTTON_NEUTRAL)?.setOnClickListener {
                 toggleAllInCurrentDirectory()
             }
+            listOf(
+                AlertDialog.BUTTON_POSITIVE,
+                AlertDialog.BUTTON_NEGATIVE,
+                AlertDialog.BUTTON_NEUTRAL
+            ).mapNotNull { dialog.getButton(it) }.forEach(::wireTooltip)
         }
         alertDialog = dialog
         loadInitial()
@@ -111,18 +148,20 @@ class FilePickerDialogFragment : DialogFragment() {
      * Resolve the confined root from the start path and load its listing.
      * The start path passed by the caller IS the confinement root — the picker
      * confines navigation to the open project and starts there.
+     *
+     * Fails closed: a missing, blank, or non-directory path leaves [rootDirectory]
+     * unset and shows the not-found message, so the picker can never silently widen
+     * to a broader root (`/` in particular) when the project can't be resolved.
      */
     private fun loadInitial() {
-        val rootPath = arguments?.getString(ARG_START_PATH) ?: PathGuard.projectRoot()
+        val rootPath = arguments?.getString(ARG_START_PATH)
         lifecycleScope.launch {
             val listing = withContext(Dispatchers.IO) {
-                rootDirectory = File(rootPath).canonicalOrAbsolute()
-                if (!rootDirectory.exists()) {
-                    null
-                } else {
-                    currentDirectory = rootDirectory
-                    computeListing(rootDirectory)
-                }
+                if (rootPath.isNullOrBlank()) return@withContext null
+                val root = File(rootPath).canonicalOrAbsolute()
+                if (!root.isDirectory) return@withContext null
+                rootDirectory = root
+                computeListing(root)
             }
             if (listing == null) {
                 alertDialog?.setTitle(getString(R.string.file_picker_error_not_found))
@@ -135,10 +174,7 @@ class FilePickerDialogFragment : DialogFragment() {
     /** Recompute the listing for [directory] off-thread and apply it in place. */
     private fun populate(directory: File) {
         lifecycleScope.launch {
-            val listing = withContext(Dispatchers.IO) {
-                currentDirectory = directory
-                computeListing(directory)
-            }
+            val listing = withContext(Dispatchers.IO) { computeListing(directory) }
             applyListing(listing)
         }
     }
@@ -156,6 +192,7 @@ class FilePickerDialogFragment : DialogFragment() {
         }
 
         directory.listFiles()
+            ?.filter { isWithinRoot(it) }
             ?.sortedWith(compareBy<File> { !it.isDirectory }.thenBy { it.name.lowercase() })
             ?.forEach { file -> newRows.add(FileRow(file, file.name, file.isDirectory)) }
 
@@ -194,10 +231,12 @@ class FilePickerDialogFragment : DialogFragment() {
     private fun titleFor(dir: File): String =
         getString(R.string.file_picker_title_current, dir.name)
 
-    private fun isWithinRoot(dir: File): Boolean {
-        val root = canonical(rootDirectory)
-        val path = canonical(dir)
-        return path == root || path.startsWith(root + File.separator)
+    /** True if [file] resolves (symlinks included) to a path at or below [rootDirectory]. */
+    private fun isWithinRoot(file: File): Boolean = try {
+        val root = rootDirectory.canonicalFile.toPath().normalize()
+        file.canonicalFile.toPath().normalize().startsWith(root)
+    } catch (e: Exception) {
+        false
     }
 
     private fun canonical(f: File): String =

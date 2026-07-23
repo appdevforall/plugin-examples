@@ -8,8 +8,11 @@ import com.itsaky.androidide.plugins.services.SharedServices
 import com.itsaky.androidide.plugins.PluginContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import java.io.FileOutputStream
 import java.util.concurrent.CompletableFuture
@@ -31,6 +34,15 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend {
 
     private val llama by lazy { LLamaAndroid.instance() }
     private val scope = CoroutineScope(Dispatchers.IO)
+
+    /**
+     * Separate from [scope] because [close] cancels [scope] and then has to run the unload —
+     * work submitted to a cancelled scope never starts.
+     */
+    private val teardownScope = CoroutineScope(Dispatchers.IO)
+
+    /** The [close] teardown, retained so [awaitClose] can join it. */
+    @Volatile private var teardownJob: Job? = null
 
     @Volatile private var modelLoaded = false
     @Volatile private var currentModelPath: String? = null
@@ -392,10 +404,15 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend {
      * can block while inference is in flight, so it must never run via runBlocking
      * on Main. Cancel generation, then unload on a background thread, then stop
      * the Llm-RunLoop thread so it doesn't outlive the plugin.
+     *
+     * Teardown runs on [teardownScope] rather than a throwaway `CoroutineScope(...)` so the
+     * work has an owner: the returned [Job] is retained in [teardownJob], letting a caller
+     * observe or await it via [awaitClose] instead of dispose() returning while native work is
+     * still in flight with no handle to it.
      */
     fun close() {
         scope.cancel()
-        CoroutineScope(Dispatchers.IO).launch {
+        teardownJob = teardownScope.launch {
             try {
                 unloadModelInternal()
             } catch (e: Exception) {
@@ -406,6 +423,23 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend {
                 // classloader can be collected after unload.
                 llama.shutdown()
             }
+        }
+    }
+
+    /**
+     * Block until the [close] teardown finishes, at most [timeoutMs].
+     *
+     * Intended for tests and for a host that wants unload to have completed before it drops the
+     * plugin's classloader. Never call from the main thread — that is the deadlock [close] exists
+     * to avoid.
+     *
+     * @param timeoutMs how long to wait before giving up
+     * @return true if teardown finished (or never started), false if it was still running
+     */
+    fun awaitClose(timeoutMs: Long = 10_000): Boolean {
+        val job = teardownJob ?: return true
+        return runBlocking {
+            withTimeoutOrNull(timeoutMs) { job.join() } != null
         }
     }
 }
