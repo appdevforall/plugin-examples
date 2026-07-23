@@ -152,11 +152,12 @@ class EmbeddingIndexingService(private val context: Context) {
 
             try {
                 dir.listFiles()?.forEach { file ->
+                    // Cap additions here (return@forEach is continue, not break), not just descent.
+                    if (files.size >= maxCount) return@forEach
                     when {
                         file.isDirectory -> walk(file)
                         file.isFile && isCodeFile(file) -> files.add(file)
                     }
-                    if (files.size >= maxCount) return@forEach
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "Error walking directory ${dir.absolutePath}", e)

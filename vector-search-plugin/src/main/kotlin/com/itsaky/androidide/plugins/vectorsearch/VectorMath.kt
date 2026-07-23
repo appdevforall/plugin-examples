@@ -29,6 +29,11 @@ object VectorMath {
      *         - -1.0 indicates opposite direction (inverse similarity)
      */
     fun cosineSimilarity(a: FloatArray, b: FloatArray): Float {
+        // Different-dimension vectors are incomparable; guard so a shorter b can't throw AIOOBE.
+        if (a.size != b.size) {
+            return 0.0f
+        }
+
         var dotProduct = 0.0f
         var normASquared = 0.0f
         var normBSquared = 0.0f

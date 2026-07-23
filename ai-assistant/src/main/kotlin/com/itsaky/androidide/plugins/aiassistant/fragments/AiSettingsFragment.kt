@@ -389,6 +389,7 @@ class AiSettingsFragment : DialogFragment() {
         return container
     }
 
+    @SuppressLint("ClickableViewAccessibility")
     private fun setupGeminiModelSelection(container: View) {
         val currentModelText = container.findViewWithTag<TextView>("current_model_text")
         val modelSpinner = container.findViewWithTag<Spinner>("model_spinner")
@@ -396,8 +397,11 @@ class AiSettingsFragment : DialogFragment() {
 
         if (modelSpinner == null || refreshButton == null) return
 
+        // Track real user taps so programmatic selection changes never persist a model.
+        var userTouchedSpinner = false
+
         // Setup spinner
-        fun updateModelSpinner(models: List<String>) {
+        fun updateModelSpinner(models: List<String>, isLive: Boolean) {
             val adapter = ArrayAdapter(
                 requireContext(),
                 android.R.layout.simple_spinner_item,
@@ -406,25 +410,24 @@ class AiSettingsFragment : DialogFragment() {
             adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
             modelSpinner.adapter = adapter
 
-            // Set current selection. If the saved model is no longer offered
-            // migrate to the first available one so the next chat request
-            // doesn't 404 on a dead model name.
+            // Migrate off a retired saved model only for a live catalog, never for the fallback.
             val currentModel = viewModel.getGeminiModel()
             val currentIndex = models.indexOf(currentModel)
-            if (currentIndex >= 0) {
-                modelSpinner.setSelection(currentIndex)
-            } else if (models.isNotEmpty()) {
-                modelSpinner.setSelection(0)
-                val migrated = models[0]
-                viewModel.saveGeminiModel(migrated)
-                currentModelText?.text = "Current: $migrated"
+            when {
+                currentIndex >= 0 -> modelSpinner.setSelection(currentIndex)
+                isLive && models.isNotEmpty() -> {
+                    modelSpinner.setSelection(0)
+                    val migrated = models[0]
+                    viewModel.saveGeminiModel(migrated)
+                    currentModelText?.text = "Current: $migrated"
+                }
             }
         }
 
         // Observe models
-        viewModel.geminiModels.observe(viewLifecycleOwner) { models ->
-            if (models.isNotEmpty()) {
-                updateModelSpinner(models)
+        viewModel.geminiModels.observe(viewLifecycleOwner) { options ->
+            if (options.models.isNotEmpty()) {
+                updateModelSpinner(options.models, options.isLive)
             }
         }
 
@@ -434,9 +437,16 @@ class AiSettingsFragment : DialogFragment() {
             refreshButton.text = if (isLoading) "Loading..." else "Refresh Models"
         }
 
+        modelSpinner.setOnTouchListener { _, _ ->
+            userTouchedSpinner = true
+            false
+        }
+
         // Handle model selection
         modelSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                // Ignore programmatic selections; only a real user pick persists the model.
+                if (!userTouchedSpinner) return
                 val selectedModel = parent?.getItemAtPosition(position) as? String
                 if (selectedModel != null && selectedModel != viewModel.getGeminiModel()) {
                     viewModel.saveGeminiModel(selectedModel)
@@ -454,7 +464,7 @@ class AiSettingsFragment : DialogFragment() {
         }
 
         // Initial fetch
-        if (viewModel.geminiModels.value.isNullOrEmpty()) {
+        if (viewModel.geminiModels.value?.models.isNullOrEmpty()) {
             viewModel.fetchGeminiModels()
         }
     }

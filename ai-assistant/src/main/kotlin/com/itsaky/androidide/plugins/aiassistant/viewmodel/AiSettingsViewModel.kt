@@ -38,6 +38,15 @@ enum class AiBackend(val displayName: String) {
     GEMINI("Gemini API")
 }
 
+/**
+ * Gemini models to offer, plus whether they came from a live catalog fetch (vs the fallback list).
+ * Migrate a saved-but-missing model off the list only when [isLive] is true.
+ *
+ * @param models model ids to display in the picker
+ * @param isLive true if [models] is a confirmed live catalog, false for the offline fallback
+ */
+data class GeminiModelOptions(val models: List<String>, val isLive: Boolean)
+
 class AiSettingsViewModel(
     private val getContext: () -> com.itsaky.androidide.plugins.PluginContext?
 ) : ViewModel() {
@@ -219,8 +228,8 @@ class AiSettingsViewModel(
         return getPluginPrefs()?.getString("gemini_model", DEFAULT_GEMINI_MODEL) ?: DEFAULT_GEMINI_MODEL
     }
 
-    private val _geminiModels = MutableLiveData<List<String>>(emptyList())
-    val geminiModels: LiveData<List<String>> get() = _geminiModels
+    private val _geminiModels = MutableLiveData(GeminiModelOptions(emptyList(), isLive = false))
+    val geminiModels: LiveData<GeminiModelOptions> get() = _geminiModels
 
     private val _geminiModelsLoading = MutableLiveData<Boolean>(false)
     val geminiModelsLoading: LiveData<Boolean> get() = _geminiModelsLoading
@@ -239,7 +248,7 @@ class AiSettingsViewModel(
                 val apiKey = getGeminiApiKey()?.trim()
                 if (apiKey.isNullOrBlank()) {
                     android.util.Log.w(TAG, "No Gemini API key saved; showing fallback models")
-                    _geminiModels.postValue(FALLBACK_MODELS)
+                    _geminiModels.postValue(GeminiModelOptions(FALLBACK_MODELS, isLive = false))
                     return@launch
                 }
 
@@ -247,7 +256,7 @@ class AiSettingsViewModel(
                 val geminiBackend = llmService?.getBackend("gemini")
                 if (geminiBackend == null) {
                     android.util.Log.e(TAG, "Gemini backend not available")
-                    _geminiModels.postValue(FALLBACK_MODELS)
+                    _geminiModels.postValue(GeminiModelOptions(FALLBACK_MODELS, isLive = false))
                     return@launch
                 }
 
@@ -263,14 +272,14 @@ class AiSettingsViewModel(
                     (futureResult as? java.util.concurrent.CompletableFuture<List<String>>)?.get().orEmpty()
                 if (models.isEmpty()) {
                     android.util.Log.w(TAG, "Live model list empty; showing fallback models")
-                    _geminiModels.postValue(FALLBACK_MODELS)
+                    _geminiModels.postValue(GeminiModelOptions(FALLBACK_MODELS, isLive = false))
                 } else {
                     android.util.Log.d(TAG, "Fetched ${models.size} Gemini models")
-                    _geminiModels.postValue(models)
+                    _geminiModels.postValue(GeminiModelOptions(models, isLive = true))
                 }
             } catch (e: Exception) {
                 android.util.Log.e(TAG, "Error fetching Gemini models", e)
-                _geminiModels.postValue(FALLBACK_MODELS)
+                _geminiModels.postValue(GeminiModelOptions(FALLBACK_MODELS, isLive = false))
             } finally {
                 _geminiModelsLoading.postValue(false)
             }

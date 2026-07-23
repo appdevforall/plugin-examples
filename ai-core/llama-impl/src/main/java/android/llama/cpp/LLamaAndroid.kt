@@ -60,7 +60,7 @@ class LLamaAndroid : ILlamaController {
 
     private external fun tokenize(context: Long, text: String, add_bos: Boolean): IntArray
     suspend fun getContextSize(): Int {
-        return withContext(runLoop) {
+        return withContext(runLoop()) {
             when (val state = threadLocalState.get()) {
                 is State.Loaded -> model_n_ctx(state.context)
                 else -> throw IllegalStateException("Model not loaded")
@@ -69,7 +69,7 @@ class LLamaAndroid : ILlamaController {
     }
 
     override suspend fun clearKvCache() {
-        withContext(runLoop) {
+        withContext(runLoop()) {
             when (val state = threadLocalState.get()) {
                 is State.Loaded -> kv_cache_clear(state.context)
                 else -> {}
@@ -82,7 +82,7 @@ class LLamaAndroid : ILlamaController {
     }
 
     suspend fun tokenize(text: String): IntArray {
-        return withContext(runLoop) {
+        return withContext(runLoop()) {
             when (val state = threadLocalState.get()) {
                 is State.Loaded -> tokenize(state.context, text, true)
                 else -> throw IllegalStateException("Model not loaded")
@@ -94,7 +94,13 @@ class LLamaAndroid : ILlamaController {
 
     private val isStopped = AtomicBoolean(false)
 
-    private val runLoop: ExecutorCoroutineDispatcher = Executors.newSingleThreadExecutor {
+    @Volatile
+    private var runLoopDispatcher: ExecutorCoroutineDispatcher = createRunLoop()
+
+    @Volatile
+    private var runLoopClosed = false
+
+    private fun createRunLoop(): ExecutorCoroutineDispatcher = Executors.newSingleThreadExecutor {
         thread(start = false, name = "Llm-RunLoop") {
             log.debug("Dedicated thread for native code: {}", Thread.currentThread().name)
 
@@ -111,6 +117,23 @@ class LLamaAndroid : ILlamaController {
             }
         }
     }.asCoroutineDispatcher()
+
+    /**
+     * Returns the live run-loop dispatcher, lazily recreating it if a prior [shutdown] closed it.
+     * [instance] is process-global but [shutdown] runs per-plugin dispose(), so without recreation
+     * a re-enable would dispatch onto a dead executor and brick inference.
+     *
+     * @return the active single-thread dispatcher for native calls, created fresh if needed
+     */
+    @Synchronized
+    private fun runLoop(): ExecutorCoroutineDispatcher {
+        if (runLoopClosed) {
+            log.info("Recreating Llm-RunLoop dispatcher after a prior shutdown")
+            runLoopDispatcher = createRunLoop()
+            runLoopClosed = false
+        }
+        return runLoopDispatcher
+    }
 
     private var nlen: Int = 256
 
@@ -167,18 +190,22 @@ class LLamaAndroid : ILlamaController {
     }
 
     /**
-     * Permanently stops the dedicated Llm-RunLoop thread by shutting down the
-     * underlying single-thread executor. Call only at plugin disposal, after
-     * unload() has completed — the instance cannot dispatch native work
-     * afterwards (any further withContext(runLoop) is rejected).
+     * Stops the Llm-RunLoop thread by closing its single-thread executor; call only at plugin
+     * disposal, after unload() completes. Not permanent — [instance] is process-global, so the
+     * executor is lazily recreated on the next [runLoop] use, letting a re-enable run native work.
      */
+    @Synchronized
     fun shutdown() {
+        if (runLoopClosed) {
+            return
+        }
         log.info("Shutting down Llm-RunLoop dispatcher")
-        runLoop.close()
+        runLoopDispatcher.close()
+        runLoopClosed = true
     }
 
     suspend fun bench(pp: Int, tg: Int, pl: Int, nr: Int = 1): String {
-        return withContext(runLoop) {
+        return withContext(runLoop()) {
             when (val state = threadLocalState.get()) {
                 is State.Loaded -> {
                     log.debug("bench(): {}", state)
@@ -191,7 +218,7 @@ class LLamaAndroid : ILlamaController {
     }
 
     override suspend fun load(pathToModel: String) {
-        withContext(runLoop) {
+        withContext(runLoop()) {
             when (threadLocalState.get()) {
                 is State.Idle -> {
                     val model = load_model(pathToModel)
@@ -263,10 +290,10 @@ class LLamaAndroid : ILlamaController {
 
             else -> {}
         }
-    }.flowOn(runLoop)
+    }.flowOn(runLoop())
 
     override suspend fun unload() {
-        withContext(runLoop) {
+        withContext(runLoop()) {
             when (val state = threadLocalState.get()) {
                 is State.Loaded -> {
                     free_context(state.context)
