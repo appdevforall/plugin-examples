@@ -38,21 +38,27 @@ class CgtFileAdapter(
 
         fun bind(item: CgtFileItem) {
             val primary = item.primaryTemplate
-            binding.tvTemplateName.text = primary.name.ifBlank { item.displayName }
+            // The card represents the .cgt FILE, so its title is the file's own name — not the
+            // first bundled template's name. Tapping a multi-template card reveals every template.
+            binding.tvTemplateName.text = item.displayName
             val versionText = versionLabel(primary.version)
             binding.tvTemplateVersion.text = versionText
             binding.tvTemplateVersion.visibility = if (versionText.isBlank()) View.GONE else View.VISIBLE
-            binding.tvTemplateDesc.text = primary.description
-            binding.tvFileName.text = item.displayName
+            // The old separate filename line is now redundant with the title.
+            binding.tvFileName.visibility = View.GONE
 
             // Long-press any card to show the plugin's help tooltip (COGO convention).
             binding.root.setOnLongClickListener { anchor -> onLongPress(anchor); true }
 
             if (item.hasMultipleTemplates) {
+                // A single template's description would misrepresent a multi-template file.
+                binding.tvTemplateDesc.visibility = View.GONE
                 binding.tvMultiTemplate.visibility = View.VISIBLE
                 binding.tvMultiTemplate.text = "Contains ${item.templates.size} templates"
                 binding.root.setOnClickListener { onViewTemplates(item) }
             } else {
+                binding.tvTemplateDesc.visibility = View.VISIBLE
+                binding.tvTemplateDesc.text = primary.description
                 binding.tvMultiTemplate.visibility = View.GONE
                 binding.root.setOnClickListener(null)
                 binding.root.isClickable = false

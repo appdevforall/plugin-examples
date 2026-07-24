@@ -17,6 +17,13 @@ import androidx.fragment.app.Fragment
 
 class TemplateManagerPlugin : IPlugin, UIExtension, EditorTabExtension, DocumentationExtension {
 
+    private companion object {
+        const val PLUGIN_ID = "org.appdevforall.templatemanagerplugin"
+        // Shared by the sidebar item, the editor tab, and the registered tooltip entry so a
+        // long-press / hover anywhere resolves to the same help entry (see getTooltipEntries).
+        const val TOOLTIP_TAG = "templatemanager.overview"
+    }
+
     private lateinit var context: PluginContext
 
     override fun initialize(context: PluginContext): Boolean {
@@ -52,7 +59,8 @@ class TemplateManagerPlugin : IPlugin, UIExtension, EditorTabExtension, Document
                 fragmentFactory = { TemplateManagerPluginFragment() },
                 isEnabled = true,
                 isVisible = true,
-                order = 0
+                order = 0,
+                tooltipTag = TOOLTIP_TAG
             )
         )
     }
@@ -71,6 +79,7 @@ class TemplateManagerPlugin : IPlugin, UIExtension, EditorTabExtension, Document
                 isVisible = true,
                 group = "plugins",
                 order = 0,
+                tooltipTag = TOOLTIP_TAG,
                 action = {
                     openPluginTab()
                 }
@@ -124,20 +133,21 @@ class TemplateManagerPlugin : IPlugin, UIExtension, EditorTabExtension, Document
 
     override fun canCloseEditorTab(tabId: String): Boolean = true
 
-    // Required by DocumentationExtension, but the host ignores this value: it derives the
-    // tooltip category as "plugin_<pluginId>" for both registration and lookup (see
-    // IdeTooltipServiceImpl / PluginDocumentationManager). Only the entry `tag` is matched.
-    override fun getTooltipCategory(): String = "org_appdevforall_templatemanagerplugin"
+    // Must be exactly "plugin_<pluginId>": the host registers this plugin's tooltip entries
+    // under this category, and the 2-arg IdeTooltipService.showTooltip(view, tag) call in the
+    // fragment derives the same "plugin_<pluginId>" category when looking them up. Any other
+    // value makes the lookup miss and the tooltip renders "n/a" (caught in on-device testing).
+    override fun getTooltipCategory(): String = "plugin_$PLUGIN_ID"
 
     override fun getTooltipEntries(): List<PluginTooltipEntry> {
         return listOf(
             PluginTooltipEntry(
-                tag = "org_appdevforall_templatemanagerplugin.overview",
-                summary = "<b>Template Manager</b><br>Install, uninstall, and manage Code On the Go " +
+                tag = TOOLTIP_TAG,
+                summary = "<b>Template Manager</b><br>Install, uninstall, and manage Code On The Go " +
                     "project templates (.cgt files).",
                 detail = """
                     <h3>Template Manager</h3>
-                    <p>Manage the <code>.cgt</code> project/file templates available to Code On the Go's
+                    <p>Manage the <code>.cgt</code> project/file templates available to Code On The Go's
                     New Project / New File wizard, all from one screen.</p>
 
                     <h4>What you see</h4>
@@ -160,10 +170,20 @@ class TemplateManagerPlugin : IPlugin, UIExtension, EditorTabExtension, Document
                         wizard parameters.</li>
                     </ol>
                 """.trimIndent(),
-                buttons = emptyList()
+                buttons = listOf(
+                    PluginTooltipButton(
+                        description = "Template Manager guide",
+                        uri = "index.html",
+                        order = 0
+                    )
+                )
             )
         )
     }
+
+    // Tier 3 offline help: the host serves everything under src/main/assets/docs/ locally,
+    // entry point docs/index.html, reachable from the tooltip button above.
+    override fun getTier3DocsAssetPath(): String = "docs"
 
     override fun onDocumentationInstall(): Boolean {
         context.logger.info("Installing TemplateManagerPlugin documentation")

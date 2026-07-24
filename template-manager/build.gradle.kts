@@ -56,7 +56,7 @@ android {
 }
 
 dependencies {
-    compileOnly(files("libs/plugin-api.jar"))
+    compileOnly(files("../libs/plugin-api.jar"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)

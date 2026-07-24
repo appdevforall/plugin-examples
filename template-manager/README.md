@@ -1,13 +1,13 @@
-# TemplateManagerPlugin
+# Template Manager
 
-A [Code On the Go (COGO)](https://github.com/appdevforall/CodeOnTheGo) IDE plugin for
+A [Code On The Go](https://github.com/appdevforall/CodeOnTheGo) IDE plugin for
 managing `.cgt` project/file templates directly on-device — browse installed
 templates, install new ones from your Downloads folder, and uninstall or delete them,
 all from a single screen inside the IDE.
 
 ## What it does
 
-The plugin adds a **TemplateManagerPlugin** entry to the IDE's left sidebar (and a
+The plugin adds a **Template Manager** entry to the IDE's left sidebar (and a
 matching editor tab) that shows a card list of every `.cgt` template it can find:
 
 - **Installed templates** — every `.cgt` registered in the IDE's template store
@@ -16,11 +16,12 @@ matching editor tab) that shows a card list of every `.cgt` template it can find
 - **Available templates** — every `.cgt` sitting in `/sdcard/Download`, shown with a
   red **Not installed** status, ready to be installed.
 
-Each card shows the template's name, version, description, and source filename. A
-`.cgt` file can bundle more than one template (the IDE's own `core.cgt` bundles nine);
-when it does, the card shows a **"Contains N templates"** indicator, and tapping the
-card (or its **View templates** menu entry) opens a sub-screen with one card per
-bundled template — each with its own **Details** action.
+Each card is titled with the `.cgt` file's own name and shows its version and status; a
+single-template file also shows its description. A `.cgt` file can bundle more than one
+template (the IDE's own `core.cgt` bundles nine); when it does, the card shows a
+**"Contains N templates"** indicator instead of a description, and tapping the card (or
+its **View templates** menu entry) opens a sub-screen with one card per bundled
+template — each with its own **Details** action.
 
 ## Per-card actions
 
@@ -75,34 +76,26 @@ unit the IDE registers.
 
 ## Building
 
-Requires the COGO `plugin-api` (vendored at `libs/plugin-api.jar`) and the
-`com.itsaky.androidide.plugins.build` Gradle plugin.
+Requires the shared Code On The Go jars at the repo root (`../libs/plugin-api.jar`,
+`../libs/gradle-plugin.jar`) and the `com.itsaky.androidide.plugins.build` Gradle
+plugin. Build from this folder with the repo-root Gradle wrapper.
 
 ```bash
 ./gradlew assemblePluginDebug     # build/plugin/templatemanagerplugin-debug.cgp
 ./gradlew assemblePlugin          # build/plugin/templatemanagerplugin.cgp  (release)
 ```
 
-## Prebuilt plugin
-
-A prebuilt release `.cgp` is checked into the repo at
-[`prebuilt/templatemanagerplugin.cgp`](prebuilt/templatemanagerplugin.cgp)
-so you can install it without running a local Gradle build — just copy that file to the
-device and follow the steps below. (Rebuild from source with the commands above if you
-need the latest changes.)
-
 ## Installing
 
-1. Copy a `.cgp` to the device (e.g. into `Download/`) — either the
-   [prebuilt one](prebuilt/templatemanagerplugin.cgp) or your own build from
+1. Build the `.cgp` (see above) and copy it to the device (e.g. into `Download/`) from
    `build/plugin/`.
-2. In Code On the Go, open **Settings → Plugin Manager**.
+2. In Code On The Go, open **Settings → Plugin Manager**.
 3. Tap the **+** button, pick the `.cgp` file, and confirm.
 4. Restart the IDE when prompted.
 
 The plugin then appears in the left sidebar.
 
-> **Upgrading an already-installed copy?** Code On the Go compares the `.cgp`'s
+> **Upgrading an already-installed copy?** Code On The Go compares the `.cgp`'s
 > signing certificate against the installed one and refuses the install if they
 > differ, showing *"…was installed from a different build variant. Uninstall it
 > before installing this version."* Despite the wording, this is a **signature
@@ -118,13 +111,14 @@ The plugin then appears in the left sidebar.
 |---|---|
 | `plugin.id` | `org.appdevforall.templatemanagerplugin` |
 | `plugin.main_class` | `org.appdevforall.templatemanagerplugin.TemplateManagerPlugin` |
-| `plugin.permissions` | `filesystem.write` |
-| `plugin.min_ide_version` | `1.0.0` |
+| `plugin.permissions` | `filesystem.read,filesystem.write` |
+| `plugin.min_ide_version` | `26.29` |
+| `plugin.max_ide_version` | `26.30` |
 
-`filesystem.write` is the only permission requested — it's what
-`IdeTemplateService.registerTemplate()` / `unregisterTemplate()` require. Reading the
-`.cgt` files themselves and moving them in/out of Downloads uses direct file access
-(the host app already holds `MANAGE_EXTERNAL_STORAGE`).
+Two permissions are requested, both used on live code paths: `filesystem.read` to list and
+parse `.cgt` files in Downloads and the template store, and `filesystem.write` to register /
+unregister templates (via `IdeTemplateService`) and move / delete `.cgt` files. No network,
+system-command, or native-code access is requested.
 
 ## Project layout
 

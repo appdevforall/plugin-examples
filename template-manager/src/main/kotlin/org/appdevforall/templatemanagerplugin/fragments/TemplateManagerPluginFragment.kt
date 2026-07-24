@@ -37,7 +37,10 @@ class TemplateManagerPluginFragment : Fragment() {
         private const val TAG = "TemplateManagerPlugin"
         private const val PLUGIN_ID = "org.appdevforall.templatemanagerplugin"
         private const val TEMPLATES_SUBDIR = "templates"
-        private const val TOOLTIP_TAG = "org_appdevforall_templatemanagerplugin.overview"
+        // Must match the PluginTooltipEntry.tag and getTooltipCategory() registered in
+        // TemplateManagerPlugin. The category is "plugin_<pluginId>".
+        private const val TOOLTIP_CATEGORY = "plugin_$PLUGIN_ID"
+        private const val TOOLTIP_TAG = "templatemanager.overview"
         // Hardcoded on purpose: the host app holds MANAGE_EXTERNAL_STORAGE, and /sdcard is a
         // near-universal compatibility symlink to the primary shared storage on Android. This
         // deliberately avoids Environment/MediaStore rather than being an oversight.
@@ -231,7 +234,10 @@ class TemplateManagerPluginFragment : Fragment() {
             Toast.makeText(context, "Help is not available", Toast.LENGTH_SHORT).show()
             return
         }
-        service.showTooltip(anchor, TOOLTIP_TAG)
+        // Use the explicit-category overload. The 2-arg showTooltip(view, tag) resolves under a
+        // different default category and renders "n/a" even though the entry is registered
+        // (confirmed by inspecting the on-device documentation.db).
+        service.showTooltip(anchor, TOOLTIP_CATEGORY, TOOLTIP_TAG)
     }
 
     private fun confirmDeleteDownloadFile(item: CgtFileItem) {

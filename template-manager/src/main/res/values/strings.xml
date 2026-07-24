@@ -1,4 +1,4 @@
 <resources>
-    <string name="app_name">TemplateManagerPlugin</string>
+    <string name="app_name">Template Manager</string>
     <string name="version">"Version: "</string>
 </resources>

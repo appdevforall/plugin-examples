@@ -11,7 +11,7 @@
 
     <meta-data
         android:name="plugin.name"
-        android:value="TemplateManagerPlugin" />
+        android:value="Template Manager" />
 
     <meta-data
         android:name="plugin.version"
@@ -19,7 +19,7 @@
 
     <meta-data
         android:name="plugin.description"
-        android:value="Browse, install, uninstall, and delete Code On the Go project templates (.cgt files) from your Downloads folder." />
+        android:value="Browse, install, uninstall, and delete Code On The Go project templates (.cgt files) from your Downloads folder." />
 
     <meta-data
         android:name="plugin.author"
@@ -27,20 +27,32 @@
 
     <meta-data
         android:name="plugin.min_ide_version"
-        android:value="1.0.0" />
+        android:value="26.29" />
+
+    <meta-data
+        android:name="plugin.max_ide_version"
+        android:value="26.30" />
 
     <!--
-        Available permissions (comma-separated):
-          - filesystem.read    : Read files from the filesystem
-          - filesystem.write   : Write files to the filesystem
-          - network.access     : Access the network
-          - system.commands    : Execute system commands
-          - ide.settings       : Access IDE settings
-          - project.structure  : Access project structure
+        Declare ONLY the permissions the plugin actually exercises — request the least
+        privilege the feature needs (see PluginPermission in plugin-api.jar for the full set):
+          - filesystem.read      : Read files from the filesystem
+          - filesystem.write     : Write files to the filesystem
+          - network.access       : Access the network
+          - system.commands      : Execute system commands
+          - ide.settings         : Read/modify IDE settings
+          - ide.environment.write: Modify the IDE environment (SDK/NDK/tmp/plugin dirs)
+          - project.structure    : Access the open project's structure
+          - native.code          : Ship/execute bundled native (.so) libraries
+
+        This plugin requests exactly two, both used on live code paths:
+          - filesystem.read  : list and parse .cgt files in Downloads and the template store
+          - filesystem.write : register/unregister templates and move/delete .cgt files
+        No network, system-command, IDE-settings, or native-code access is requested.
     -->
     <meta-data
         android:name="plugin.permissions"
-        android:value="filesystem.write" />
+        android:value="filesystem.read,filesystem.write" />
 
     <meta-data
         android:name="plugin.icon_day"
@@ -56,6 +68,10 @@
 
     <meta-data
         android:name="plugin.sidebar_items"
+        android:value="1" />
+
+    <meta-data
+        android:name="plugin.editor_tabs"
         android:value="1" />
 
 </application>
