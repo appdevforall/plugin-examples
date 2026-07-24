@@ -1,5 +1,7 @@
 package com.itsaky.androidide.plugins.aicore
 
+import android.app.ActivityManager
+import android.content.Context
 import android.llama.cpp.LLamaAndroid
 import android.net.Uri
 import android.provider.OpenableColumns
@@ -60,6 +62,9 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend, Cancella
 
     @Volatile private var currentStreamingJob: Job? = null
     @Volatile private var currentGenerateJob: Job? = null
+
+    /** Renders load diagnoses as user-facing text; keeps R.string lookups out of this engine. */
+    private val loadMessages by lazy { ModelLoadMessages(context.androidContext) }
 
     @Volatile private var modelLoaded = false
     @Volatile private var currentModelPath: String? = null
@@ -212,6 +217,13 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend, Cancella
         }
     }
 
+    /**
+     * Loads [modelPath] unless it is already resident, diagnosing any native failure into a
+     * [ModelLoadException]. Cancellation is rethrown first because [CancellationException] extends
+     * [IllegalStateException] and would otherwise be diagnosed as a corrupt model.
+     *
+     * @param modelPath the configured model path or content URI
+     */
     private suspend fun ensureModelLoaded(modelPath: String) {
         // Resolve content URI to actual file path
         val resolvedPath = resolveContentUriToPath(modelPath)
@@ -242,12 +254,34 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend, Cancella
             currentModelPath = null
         }
 
-        // Load new model with resolved path
         context.logger.info("Loading model: $resolvedPath")
-        llama.load(resolvedPath)
+        try {
+            llama.load(resolvedPath)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            if (e is UserActionableLlmException) throw e
+            // Native load_model() signals failure only with a null handle, so diagnose the likely cause.
+            context.logger.error("Native model load failed for $resolvedPath", e)
+            val diagnosis = ModelLoadDiagnostics.diagnose(resolvedPath, availableMemoryBytes(), e.message)
+            throw ModelLoadException(loadMessages.describe(diagnosis), diagnosis)
+        }
         modelLoaded = true
         currentModelPath = resolvedPath
         context.logger.info("Model loaded successfully")
+    }
+
+    /**
+     * @return free RAM the OS reports, or -1 if unreadable (diagnosis then skips the low-memory case)
+     */
+    private fun availableMemoryBytes(): Long = try {
+        val am = context.androidContext.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        val info = ActivityManager.MemoryInfo()
+        am.getMemoryInfo(info)
+        info.availMem
+    } catch (e: Exception) {
+        context.logger.warn("Could not read available memory: ${e.message}")
+        -1L
     }
 
     /**
@@ -369,7 +403,7 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend, Cancella
                 throw ce
             } catch (e: Exception) {
                 context.logger.error("Error during generation", e)
-                if (e is ModelNotConfiguredException || e is IncompatibleModelException) {
+                if (e is UserActionableLlmException) {
                     UserFeedback.notify(context.androidContext, e.message ?: "Local LLM is not configured.")
                 }
                 future.complete(LlmResponse.failure("Error: ${e.message}"))
@@ -474,7 +508,7 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend, Cancella
                 throw ce
             } catch (e: Exception) {
                 context.logger.error("Error during streaming generation", e)
-                if (e is ModelNotConfiguredException || e is IncompatibleModelException) {
+                if (e is UserActionableLlmException) {
                     UserFeedback.notify(context.androidContext, e.message ?: "Local LLM is not configured.")
                 }
                 callback.onError("Error: ${e.message}")
