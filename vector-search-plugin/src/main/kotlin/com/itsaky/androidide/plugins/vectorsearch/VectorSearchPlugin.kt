@@ -345,7 +345,7 @@ class VectorSearchPlugin : IPlugin, ProjectSearchExtension, DocumentationExtensi
         )
     }
 
-    override fun getTooltipCategory(): String = "plugin_vector_search"
+    override fun getTooltipCategory(): String = "plugin_com.itsaky.androidide.plugins.vectorsearch"
 
     override fun getTooltipEntries(): List<PluginTooltipEntry> = listOf(
         PluginTooltipEntry(

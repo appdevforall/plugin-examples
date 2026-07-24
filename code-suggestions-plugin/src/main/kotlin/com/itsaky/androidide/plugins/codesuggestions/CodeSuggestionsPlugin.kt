@@ -193,7 +193,8 @@ class CodeSuggestionsPlugin : IPlugin, DocumentationExtension {
         }
     }
 
-    override fun getTooltipCategory(): String = "plugin_code_suggestions"
+    // Strict convention: category is "plugin_<pluginId>" so host-derived tooltip lookups resolve.
+    override fun getTooltipCategory(): String = "plugin_com.itsaky.androidide.plugins.codesuggestions"
 
     override fun getTooltipEntries(): List<PluginTooltipEntry> = listOf(
         PluginTooltipEntry(

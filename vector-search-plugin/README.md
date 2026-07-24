@@ -40,9 +40,9 @@ Declared in `plugin.permissions`:
 | `project.structure` | enumerate the project's source roots |
 
 Indexing reads files in the current project only. Embeddings are stored in a
-local database on the device. If `ai-core`'s **Gemini** backend is selected for
-embeddings, chunk text is sent to Google over HTTPS; the **Local** backend and
-the lexical fallback keep everything on-device.
+local database on the device. Semantic embeddings always use `ai-core`'s
+**Local** on-device backend, and fall back to a lexical embedding when it is
+unavailable, so chunk text never leaves the device.
 
 ## Building
 

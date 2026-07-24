@@ -50,6 +50,8 @@ class LlmInferenceServiceImpl : LlmInferenceService {
             )
         }
 
+        config.backendId = effectiveId
+
         val future = backend.generate(prompt, config)
         currentGeneration = future
         return future

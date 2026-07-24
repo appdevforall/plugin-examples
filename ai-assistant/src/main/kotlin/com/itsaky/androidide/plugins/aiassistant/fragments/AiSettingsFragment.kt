@@ -13,7 +13,10 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.fragment.app.DialogFragment
 import androidx.lifecycle.ViewModelProvider
 import com.itsaky.androidide.plugins.PluginContext
+import com.itsaky.androidide.plugins.aiassistant.AiAssistantPlugin
 import com.itsaky.androidide.plugins.aiassistant.R
+import com.itsaky.androidide.plugins.base.PluginFragmentHelper
+import com.itsaky.androidide.plugins.services.IdeTooltipService
 import com.itsaky.androidide.plugins.aiassistant.viewmodel.AiBackend
 import com.itsaky.androidide.plugins.aiassistant.viewmodel.AiSettingsViewModel
 import com.itsaky.androidide.plugins.aiassistant.viewmodel.EngineState
@@ -34,6 +37,7 @@ class AiSettingsFragment : DialogFragment() {
     private lateinit var backButton: ImageButton
     private lateinit var backendSpinner: Spinner
     private lateinit var backendSpecificContainer: FrameLayout
+    private var tooltipService: IdeTooltipService? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -41,6 +45,23 @@ class AiSettingsFragment : DialogFragment() {
         // Plugin uses compileOnly dependencies, so Material transition resources aren't bundled
         enterTransition = null
         exitTransition = null
+
+        // Resolve the IDE tooltip service so the settings controls can offer in-app help.
+        try {
+            tooltipService = PluginFragmentHelper.getServiceRegistry(AiAssistantPlugin.PLUGIN_ID)
+                ?.get(IdeTooltipService::class.java)
+        } catch (e: Exception) {
+            // Tooltip help is optional; long-press simply shows nothing when it's unavailable.
+        }
+    }
+
+    /** Shows this plugin's tooltip for [tag] when [view] is long-pressed (Tier 1/2 + guide button). */
+    private fun wireTooltip(view: View, tag: String) {
+        view.setOnLongClickListener { anchor ->
+            val service = tooltipService ?: return@setOnLongClickListener false
+            service.showTooltip(anchor, AiAssistantPlugin.TOOLTIP_CATEGORY, tag)
+            true
+        }
     }
 
     private val filePickerLauncher =
@@ -133,6 +154,8 @@ class AiSettingsFragment : DialogFragment() {
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         backendSpinner.adapter = adapter
 
+        wireTooltip(backendSpinner, AiAssistantPlugin.TOOLTIP_TAG_SETTINGS_BACKEND)
+
         val currentBackend = viewModel.getCurrentBackend()
         backendSpinner.setSelection(backends.indexOf(currentBackend))
         updateBackendSpecificUi(currentBackend)
@@ -181,6 +204,7 @@ class AiSettingsFragment : DialogFragment() {
         browseButton.setOnClickListener {
             filePickerLauncher.launch(arrayOf("*/*"))
         }
+        wireTooltip(browseButton, AiAssistantPlugin.TOOLTIP_TAG_SETTINGS_LOCAL_MODEL)
 
         loadSavedButton.setOnClickListener {
             val savedPath = viewModel.savedModelPath.value
@@ -270,6 +294,10 @@ class AiSettingsFragment : DialogFragment() {
         val editButton = view.findViewById<Button>(R.id.btn_edit_api_key)
         val clearButton = view.findViewById<Button>(R.id.btn_clear_api_key)
         val statusTextView = view.findViewById<TextView>(R.id.gemini_api_key_status_text)
+
+        // Offer help on the API-key controls in both the editing and saved states.
+        wireTooltip(apiKeyInput, AiAssistantPlugin.TOOLTIP_TAG_SETTINGS_GEMINI_KEY)
+        wireTooltip(editButton, AiAssistantPlugin.TOOLTIP_TAG_SETTINGS_GEMINI_KEY)
 
         // Create model selection container
         val modelContainer = createModelSelectionUi(view)

@@ -20,7 +20,7 @@ import java.util.concurrent.CompletableFuture
  */
 class LocalLlmBackend(private val context: PluginContext) : LlmBackend {
 
-    private val llama = LLamaAndroid.instance()
+    private val llama by lazy { LLamaAndroid.instance() }
     private val scope = CoroutineScope(Dispatchers.IO)
 
     @Volatile private var modelLoaded = false

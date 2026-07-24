@@ -106,7 +106,7 @@ class AiCorePlugin : IPlugin, DocumentationExtension {
         }
     }
 
-    override fun getTooltipCategory(): String = "plugin_ai_core"
+    override fun getTooltipCategory(): String = "plugin_$PLUGIN_ID"
 
     override fun getTooltipEntries(): List<PluginTooltipEntry> = listOf(
         PluginTooltipEntry(

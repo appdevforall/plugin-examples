@@ -148,7 +148,7 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
     } catch (e: Exception) {
         false
     }
-    override fun getTooltipCategory(): String = "plugin_speech_to_text"
+    override fun getTooltipCategory(): String = "plugin_$PLUGIN_ID"
 
     override fun getTooltipEntries(): List<PluginTooltipEntry> = listOf(
         PluginTooltipEntry(
@@ -340,23 +340,6 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
     }
 
     /**
-     * Recognizes voice commands (REFACTOR, CREATE_CLASS, etc.).
-     * Returns the intent type or null if no match.
-     */
-    fun recognizeIntent(voiceText: String): String? {
-        val text = voiceText.lowercase()
-        return when {
-            text.contains("refactor") -> "REFACTOR"
-            text.contains("create") && (text.contains("class") || text.contains("function")) -> "CREATE_CLASS"
-            text.contains("undo") -> "UNDO"
-            text.contains("redo") -> "REDO"
-            text.contains("format") -> "FORMAT"
-            text.contains("delete") || text.contains("remove") -> "DELETE"
-            else -> null
-        }
-    }
-
-    /**
      * Checks if microphone permission is granted.
      * @return true if RECORD_AUDIO permission is granted, false otherwise
      */
@@ -464,6 +447,8 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
     }
 
     companion object {
+        // Must match plugin.id in AndroidManifest.xml; used for the tooltip category.
+        private const val PLUGIN_ID = "com.itsaky.androidide.plugins.stt"
         private const val PERMISSION_REQUEST_CODE = 100
         private const val TOOLBAR_ACTION_ID = "stt_voice_to_code"
 

@@ -59,9 +59,9 @@
   <h2>Privacy</h2>
   <div class="note">
     Indexing reads files in the current project only. Embeddings are stored in a
-    local database on the device. If AI Core's <b>Gemini</b> backend is selected
-    for embeddings, chunk text is sent to Google over HTTPS; the <b>Local</b>
-    backend and the lexical fallback keep everything on-device.
+    local database on the device. Semantic embeddings always use AI Core's
+    <b>Local</b> on-device backend, and fall back to a lexical embedding when it
+    is unavailable, so chunk text never leaves the device.
   </div>
 
   <h2>Troubleshooting</h2>

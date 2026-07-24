@@ -6,7 +6,8 @@ inference service (via SharedServices) that other plugins — e.g. the sibling
 
 - **Local (on-device)** — runs GGUF models through a bundled, prebuilt
   **llama.cpp** AAR.
-- **Gemini** — calls the Gemini API through the Google Generative AI SDK.
+- **Gemini** — calls the Gemini REST API directly over `HttpURLConnection`
+  (no third-party SDK), so it is unaffected by the host IDE's OkHttp version.
 
 ## Building
 

@@ -23,7 +23,15 @@ class AiAssistantPlugin : IPlugin, UIExtension, DocumentationExtension {
          *  used by [com.itsaky.androidide.plugins.base.PluginFragmentHelper.getPluginInflater]. */
         const val PLUGIN_ID = "com.itsaky.androidide.plugins.aiassistant"
 
+        /** Tooltip category for this plugin (strict `plugin_<pluginId>` convention); shared by the tab and the AI Settings screen. */
+        const val TOOLTIP_CATEGORY = "plugin_$PLUGIN_ID"
+
         const val TOOLTIP_TAG_TAB = "agent_chat_tab"
+
+        // Tags for the interactive controls on the AI Settings dialog (see AiSettingsFragment).
+        const val TOOLTIP_TAG_SETTINGS_BACKEND = "ai_settings_backend"
+        const val TOOLTIP_TAG_SETTINGS_LOCAL_MODEL = "ai_settings_local_model"
+        const val TOOLTIP_TAG_SETTINGS_GEMINI_KEY = "ai_settings_gemini_key"
 
         @Volatile
         private var pluginContext: PluginContext? = null
@@ -99,7 +107,7 @@ class AiAssistantPlugin : IPlugin, UIExtension, DocumentationExtension {
     //   Tier 3 = `buttons[].uri`  (offline HTML page served from
     //                              src/main/assets/docs/ at localhost)
 
-    override fun getTooltipCategory(): String = "plugin_ai_assistant"
+    override fun getTooltipCategory(): String = TOOLTIP_CATEGORY
 
     override fun getTooltipEntries(): List<PluginTooltipEntry> = listOf(
         PluginTooltipEntry(
@@ -125,6 +133,50 @@ class AiAssistantPlugin : IPlugin, UIExtension, DocumentationExtension {
                     uri = "index.html",  // resolves to plugin/<id>/index.html
                     order = 0
                 )
+            )
+        ),
+        PluginTooltipEntry(
+            tag = TOOLTIP_TAG_SETTINGS_BACKEND,
+            summary = "Choose which model powers the Agent: on-device Local (llama.cpp) or cloud Gemini.",
+            detail = """
+                <p>Selects the active inference backend:</p>
+                <ul>
+                  <li><b>Local</b> — runs a <code>.gguf</code> model entirely on
+                      the device; nothing leaves the phone.</li>
+                  <li><b>Gemini</b> — calls Google's cloud API over HTTPS; needs
+                      an API key.</li>
+                </ul>
+                <p>The choice below changes which settings appear.</p>
+            """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(description = "AI Assistant guide", uri = "index.html", order = 0)
+            )
+        ),
+        PluginTooltipEntry(
+            tag = TOOLTIP_TAG_SETTINGS_LOCAL_MODEL,
+            summary = "Pick a local .gguf chat model to run on-device.",
+            detail = """
+                <p>Browse for a <code>.gguf</code> model file to load with
+                llama.cpp. Use a <b>chat/instruct</b> model — embedding-only
+                models can't generate replies. Larger models are slower and use
+                more memory; the file is copied into the app's private storage on
+                first use.</p>
+            """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(description = "AI Assistant guide", uri = "index.html", order = 0)
+            )
+        ),
+        PluginTooltipEntry(
+            tag = TOOLTIP_TAG_SETTINGS_GEMINI_KEY,
+            summary = "Enter your Google Gemini API key. It is stored only on this device.",
+            detail = """
+                <p>Paste a Gemini API key to enable the cloud backend. The key is
+                kept in this plugin's private preferences on-device and is sent
+                only to Google's API over HTTPS. Requests (your prompts and
+                project context) leave the device when Gemini is selected.</p>
+            """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(description = "AI Assistant guide", uri = "index.html", order = 0)
             )
         )
     )

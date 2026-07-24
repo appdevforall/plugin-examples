@@ -62,8 +62,9 @@
     <li><b>Model safety checks</b> — inspects a selected <code>.gguf</code>
       header and refuses embedding-only models for chat, with a clear error
       instead of a native crash.</li>
-    <li>Text completion, chat with history, streaming, and (Gemini) tool-calling
-      request shapes.</li>
+    <li>Text completion, chat with history, and streaming responses. (Native
+      Gemini function calling is not yet wired up; tool-enabled requests fall
+      back to plain streaming.)</li>
   </ul>
 
   <h2>Technical architecture</h2>
@@ -78,9 +79,10 @@
     <tr><td><code>LocalLlmBackend</code></td><td>On-device inference over the
       prebuilt llama.cpp AAR. Resolves the selected model (including SAF
       <code>content://</code> URIs) to a real file path and manages loading.</td></tr>
-    <tr><td><code>GeminiBackend</code></td><td>Cloud inference via the Google
-      Generative AI SDK. Sends the API key as an <code>x-goog-api-key</code>
-      header, never in a URL.</td></tr>
+    <tr><td><code>GeminiBackend</code></td><td>Cloud inference via direct calls
+      to the Gemini REST API over <code>HttpURLConnection</code> (no third-party
+      SDK). Sends the API key as an <code>x-goog-api-key</code> header, never in
+      a URL.</td></tr>
     <tr><td><code>GgufModelInspector</code></td><td>Minimal GGUF header reader
       that classifies a model as chat- or embedding-only.</td></tr>
   </table>

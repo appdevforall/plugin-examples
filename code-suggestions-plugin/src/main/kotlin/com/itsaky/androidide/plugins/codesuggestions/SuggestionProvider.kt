@@ -2,10 +2,15 @@ package com.itsaky.androidide.plugins.codesuggestions
 
 import android.util.Log
 import com.itsaky.androidide.plugins.services.LlmInferenceService
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import java.util.Collections
 import java.util.LinkedHashMap
+import java.util.concurrent.CompletableFuture
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 private const val TAG = "SuggestionProvider"
 
@@ -74,7 +79,8 @@ class SuggestionProvider(private val llmService: LlmInferenceService) {
 
             // AI Core routes to the user-selected backend; we don't pick one here.
             val config = LlmInferenceService.LlmConfig(AUTO_BACKEND_ID)
-            val response = llmService.generateCompletion(prompt, config).get()
+            // Cancellation-aware await so a superseding keystroke cancels the in-flight LLM call.
+            val response = llmService.generateCompletion(prompt, config).await()
             if (response.success) {
                 val suggestion = response.text.trim()
                     .takeWhile { !it.isWhitespace() || it == ' ' } // Take tokens until newline
@@ -91,6 +97,8 @@ class SuggestionProvider(private val llmService: LlmInferenceService) {
                 Log.w(TAG, "LLM error: ${response.error}")
                 ""
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e(TAG, "Error generating suggestion", e)
             ""
@@ -109,3 +117,16 @@ class SuggestionProvider(private val llmService: LlmInferenceService) {
         private const val AUTO_BACKEND_ID = "auto"
     }
 }
+
+/**
+ * Suspends until this future completes, cancelling it if the coroutine is cancelled.
+ * @receiver the future to await
+ * @return the future's completed value
+ */
+private suspend fun <T> CompletableFuture<T>.await(): T =
+    suspendCancellableCoroutine { cont ->
+        whenComplete { value, error ->
+            if (error == null) cont.resume(value) else cont.resumeWithException(error)
+        }
+        cont.invokeOnCancellation { cancel(true) }
+    }

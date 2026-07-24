@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- ai-core makes live HTTPS calls via the Gemini SDK (GeminiBackend) -->
+    <!-- ai-core makes live HTTPS calls to the Gemini REST API (GeminiBackend, raw HttpURLConnection) -->
     <uses-permission android:name="android.permission.INTERNET" />
 
     <application
@@ -39,7 +39,7 @@
 
         <meta-data
             android:name="plugin.permissions"
-            android:value="filesystem.read,native.code,network.access" />
+            android:value="filesystem.read,filesystem.write,native.code,network.access" />
 
         <meta-data
             android:name="plugin.main_class"
