@@ -97,7 +97,7 @@ Search the source tree:
 - May have other sections. If other sections are present, ensure they are relevant and correct
 - Must have a white background and body text must be black.
 - Must be written in English
-- Must be at the top-level of the plugin. Must have the same name as the plugin with the .html extension
+- Must be at the top-level of the plugin folder, named after the **plugin folder** (kebab-case) with a `.html` extension: `template-manager/` → `template-manager.html`. The short folder-name form is preferred; a `-documentation` suffix (`random-xkcd-documentation.html`) is also acceptable. Do **not** name it after the lowercase `pluginBuilder { pluginName }` when that differs from the folder (i.e. not `templatemanagerplugin.html`).
 
 #### 6.7 Tooltips and in-app help
 Code On The Go has a three-tier in-IDE help model: Tier 1 (brief) and Tier 2 (more detail) are tooltips; Tier 3 is a full offline web page reached from a button on the tooltip. Plugins participate through `DocumentationExtension` (all symbols verifiable in `plugin-api.jar`). This is separate from the 6.6 install-decision page — grade them independently.

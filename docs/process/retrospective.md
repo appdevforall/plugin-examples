@@ -119,3 +119,43 @@
 | Agent waited to be asked before running plugin-review | CLAUDE.md | Added "Proactively offer `/plugin-review`" paragraph to the "Plugin review skill" section, listing the triggering changes (new plugin import, dep change, API touch, new asset, libs/ update) |
 | Agent marked builds "verified" without device-level proof | CLAUDE.md | Added new "Verification" section before "Adding a new plugin", stating build success is necessary but never sufficient and device install is the terminal verification step |
 | Same as above, reinforcement | Memory | `feedback_plugin_verify_on_device.md` created mid-session — per-project memory layer reinforcing the CLAUDE.md rule |
+
+## 2026-07-24 - Template Manager plugin: review → fix blockers → device verify → icons/naming → PR
+
+### Time Breakdown
+| Started | Phase | 👤 Hands-On | 🤖 Agent | Problems |
+|---------|-------|-------------|----------|----------|
+| 3:28pm | Initial review (research subagent, build via symlink, security audit, rubric scorecard) | ██ 8m | ██ 11m | |
+| 3:39pm | Fix blockers + first device install (`../libs`, manifest, Tier 3, HTML docs; build; emulator install; sidebar + list verified) | ██ 10m | ████ 39m | ⚠ tooltip showed `n/a` |
+| 4:18pm | Root-cause tooltip + icons + card + permissions (`documentation.db` → 3-arg `showTooltip`; icons v1→v2 CGT; card title; reinstall; Tier 1/2/3 verified) | ██ 8m | ██ 22m | ⚠ 1 wrong hypothesis; icons redone once |
+| 4:40pm | Naming normalization + "Template Manager" rename (reinstall + verify) | █ 3m | █ 12m | |
+| 4:52pm | Commit + push + PR #51 | █ 1m | █ 5m | |
+
+### Metrics
+| Metric | Duration |
+|--------|----------|
+| Total wall-clock | ~1h 32m |
+| Hands-on | ~30m (33%) |
+| Automated agent time | ~62m (67%) |
+| Idle/testing/away | minimal |
+| Retro analysis time | ~2 min |
+
+_Note: the transcript script reported 108 min "hands-on" but over-counted — it billed two skill injections (plugin-review SKILL text; commit-push-pr context) as user typing (~54 min phantom). Real hands-on ≈ 30 min, mostly reading review reports._
+
+### Key Observations
+- **Device verification, not the build, found the defect.** Build green + manifest correct, yet the tooltip rendered `n/a` — a bug the original code also had. Only a device long-press exposed it. Strongest evidence yet for "build success ≠ verification."
+- **First tooltip fix hypothesis was wrong.** Changing `getTooltipCategory` alone didn't work; the fix came from inspecting `documentation.db` (entry was registered; the 2-arg `showTooltip` lookup was at fault). Lesson: go to ground truth sooner instead of reasoning from sibling-plugin comparison.
+- **Icons rendered twice** (stacked-cards → "meh" → CGT-file). Partly driven by the later CGT requirement; a quick direction sketch before a full render could have saved a pass.
+- **~20 turns of autonomous device driving** (install/uninstall/reinstall/DB queries/tooltip tests) with no input needed. High productive-to-rework ratio.
+- **Platform reinstall cost is inherent** (release signature mismatch forces uninstall→restart→clear-cache→reinstall→restart); batching changes to minimize cycles was correct.
+
+### Feedback
+**What worked:** (from user) The tooltip issue should never recur — asked to codify the foundational wiring so it's right the first time.
+**What didn't:** Getting the tooltip wiring right required a device round-trip and one wrong hypothesis; it's deterministic tech that shouldn't have been ambiguous.
+
+### Actions Taken
+| Issue | Action Type | Change |
+|---|---|---|
+| Tooltip wiring got `n/a` and cost a device round-trip; it's foundational and deterministic | CLAUDE.md | Added "### In-app help wiring (tooltips + Tier 3, `DocumentationExtension`)" under Architecture — the exact recipe: category = `plugin_<pluginId>`, always 3-arg `showTooltip(anchorView, category, tag)`, tooltipTag rules, Tier 3 setup, and the `documentation.db` debug query |
+| `/plugin-review` couldn't statically catch the 2-arg `showTooltip` / wrong-category trap | Skill (RUBRIC.md 6.7) | Added two Fail-level checks: category must be exactly `plugin_<pluginId>`, and manual `showTooltip` must use the 3-arg category overload (bare 2-arg → `n/a`) |
+| Tooltip + icon-cache gotchas would otherwise be re-learned | Docs (learnings.md) | Added the tooltip `n/a` root-cause + debug query and the Glide icon-cache invalidation note to "Plugin build & install gotchas" |
