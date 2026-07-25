@@ -38,7 +38,8 @@ Help must be available *inside* the running IDE, not only in the standalone 6.6 
 
 Requirements:
 
-- The plugin implements `DocumentationExtension` and returns its `plugin_<pluginId>` category from `getTooltipCategory()`.
+- The plugin implements `DocumentationExtension` and returns **exactly** `"plugin_<pluginId>"` (the full `plugin.id`) from `getTooltipCategory()`. Any other value (short slug, dotless/underscore form) registers entries under a category the lookup never queries, so tooltips render the literal `n/a` at runtime — **Fail**.
+- **Manual `showTooltip` calls must pass the category.** If the plugin shows a tooltip on a custom view via `IdeTooltipService`, it must use the 3-arg `showTooltip(anchorView, category, tag)` with `category = "plugin_<pluginId>"`. A bare 2-arg `showTooltip(view, tag)` resolves under the wrong default category and renders `n/a` even though the entry is registered correctly — **Fail** (the entry exists but never displays; only device long-press reveals it). See the CLAUDE.md "In-app help wiring" recipe.
 - **Every UI element the plugin contributes has a tooltip.** Each `NavigationItem`, `MenuItem`, `TabItem`, FAB/toolbar action, and `EditorTabItem` carries a `tooltipTag` (or `tooltip` for `EditorTabItem`); any custom `View` the plugin shows is wired to the tooltip system. No contributed element may be left without help.
 - Every `tooltipTag` resolves to a `PluginTooltipEntry` returned from `getTooltipEntries()` — no dangling tags. Each entry provides a Tier 1 `summary` and a Tier 2 `detail`.
 - **Complete help is available within the app.** The plugin ships a Tier 3 bundle via `getTier3DocsAssetPath()` that comprehensively covers its functionality, and tooltips link to it through `PluginTooltipButton`s. Tier 3 must work offline (served locally); it is not a link out to the public internet.

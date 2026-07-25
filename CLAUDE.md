@@ -57,6 +57,19 @@ A plugin is an Android *application* module (despite installing as a library) wi
 
 Available permission strings (declared comma-separated in `plugin.permissions`): `filesystem.read`, `filesystem.write`, `network.access`, `system.commands`, `ide.settings`, `project.structure`.
 
+### In-app help wiring (tooltips + Tier 3, `DocumentationExtension`)
+
+Every plugin with UI implements `com.itsaky.androidide.plugins.extensions.DocumentationExtension`. This wiring is fixed and foundational — get **all** of it right or the tooltip renders the literal string **`n/a`** at runtime. The build stays green and the manifest looks fine, so **only device long-press testing catches a mistake** (this bit us once). All symbols are in `plugin-api.jar`.
+
+1. **Category is `"plugin_<pluginId>"` — exactly.** `getTooltipCategory()` MUST return `"plugin_"` + the full `plugin.id` (e.g. `"plugin_org.appdevforall.templatemanagerplugin"`). The host registers your entries under this string **and** derives the same string when resolving a lookup. Any other value — a short slug, a dotless/underscore form — silently mismatches → `n/a`.
+2. **Entries.** `getTooltipEntries()` returns `PluginTooltipEntry(tag, summary, detail, buttons)`: `summary` = Tier 1 (one line shown on long-press), `detail` = Tier 2 (HTML behind "See more"). Keep the `tag` in one shared `const val` used by steps 3–4.
+3. **Look tooltips up with the 3-arg overload.** Call `IdeTooltipService.showTooltip(anchorView, category, tag)` and pass `category = "plugin_<pluginId>"` explicitly. **Never use the 2-arg `showTooltip(view, tag)`** — it resolves under a different default category and renders `n/a` even when the entry is registered correctly. Param order is `(anchorView, category, tag)`.
+4. **Attach tags to UI.** Set `tooltipTag = <that same tag>` on every contributed `NavigationItem` / `TabItem` / menu item / FAB; `EditorTabItem` instead takes a literal `tooltip = "..."` string. A contributed element with no tooltip fails review clause 6.7.
+5. **Tier 3 (offline page).** Override `getTier3DocsAssetPath()` to return an assets subdir name (convention: `"docs"`), ship real HTML at `src/main/assets/<dir>/index.html` (white background, black text, English), and link it from an entry via `PluginTooltipButton(description, uri = "index.html", order = 0)` — leave `directPath` false (`true` targets the host's shared docs tree, not your bundle).
+
+Debug a mismatch against the on-device store (`adb root` first):
+`sqlite3 /data/data/com.itsaky.androidide/databases/documentation.db "SELECT c.category, t.tag, substr(t.summary,1,40) FROM Tooltips t JOIN TooltipCategories c ON c.id=t.categoryId WHERE c.category LIKE 'plugin_%'"`. If the row is present but the tooltip still shows `n/a`, the bug is the **lookup** (step 1 or 3), not registration. (The unused `ide_tooltip_table` is a red herring — plugin entries live in `Tooltips` + `TooltipCategories`.)
+
 ### Convention: AAR metadata checks are disabled
 
 Most plugins end with:
