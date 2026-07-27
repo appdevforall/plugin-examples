@@ -199,10 +199,13 @@ class CodeSuggestionsPlugin : IPlugin, DocumentationExtension {
     override fun getTooltipEntries(): List<PluginTooltipEntry> = listOf(
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_PLUGIN,
-            summary = "Code Suggestions shows inline ghost-text completions after a short pause while typing.",
+            summary = "Code Suggestions shows inline ghost-text completions while typing - tab accepts one.",
             detail = """
                 <p><b>Code Suggestions</b> listens to editor changes, debounces
                 typing, and asks AI Core for a completion at the cursor.</p>
+                <p>Accept a suggestion with the <b>&#8633;</b> key in the symbol
+                row above the keyboard (or <b>Tab</b> on a hardware keyboard);
+                typing on or moving the cursor dismisses it.</p>
                 <p>The surrounding file context is sent to the backend selected
                 in AI Core settings: with a <b>Local</b> model it stays on the
                 device; with the <b>Gemini</b> backend it is sent to Google.</p>

@@ -25,7 +25,7 @@
 
         <meta-data
             android:name="plugin.author"
-            android:value="AndroidIDE" />
+            android:value="App Dev for All" />
 
         <meta-data
             android:name="plugin.min_ide_version"
