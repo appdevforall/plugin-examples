@@ -20,6 +20,15 @@ import java.util.concurrent.CompletableFuture
  */
 class LocalLlmBackend(private val context: PluginContext) : LlmBackend {
 
+    companion object {
+        /**
+         * Belt-and-braces guard: `<|im_end|>` is an EOG control token, so the native loop
+         * normally stops on it by itself. This only matters if a model emits it as plain
+         * text, in which case the native stop truncates before the match.
+         */
+        private val CHAT_STOP = listOf("<|im_end|>")
+    }
+
     private val llama by lazy { LLamaAndroid.instance() }
     private val scope = CoroutineScope(Dispatchers.IO)
 
@@ -182,9 +191,58 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend {
         context.logger.info("Model loaded successfully")
     }
 
+    /**
+     * Wraps a turn in ChatML — the prompt format Qwen and most other on-device instruct GGUFs
+     * were fine-tuned on.
+     *
+     * IMPORTANT: this must stay in sync with `formatChat = true` at the [LLamaAndroid.send] call
+     * sites, which is what makes the native tokenizer parse `<|im_start|>`/`<|im_end|>` as control
+     * tokens rather than literal text. Handed the bare `User:`/`Assistant:` scaffold this replaced,
+     * a strictly-templated instruct model answers with `<|im_end|>` as its *first* token: the
+     * native loop sees EOG immediately, generation ends before it starts, and the caller gets a
+     * successful-but-empty response with no error to explain it.
+     *
+     * @param systemPrompt the system message, or null to omit the system turn
+     * @param prompt the user message
+     * @param history earlier turns, rendered as their own ChatML turns before [prompt]
+     * @return the full ChatML prompt, ending in an open assistant turn for the model to continue
+     */
+    private fun buildPrompt(
+        systemPrompt: String?,
+        prompt: String,
+        history: List<ChatMessage> = emptyList()
+    ): String = buildString {
+        if (systemPrompt != null) {
+            append("<|im_start|>system\n").append(systemPrompt).append("<|im_end|>\n")
+        }
+        for (msg in history) {
+            val role = when (msg.role) {
+                ChatMessage.Role.USER -> "user"
+                ChatMessage.Role.ASSISTANT -> "assistant"
+                ChatMessage.Role.SYSTEM -> "system"
+            }
+            append("<|im_start|>").append(role).append("\n").append(msg.content).append("<|im_end|>\n")
+        }
+        append("<|im_start|>user\n").append(prompt).append("<|im_end|>\n")
+        append("<|im_start|>assistant\n")
+    }
+
     override fun generate(prompt: String, config: LlmConfig): CompletableFuture<LlmResponse> {
         context.logger.info("LocalLlmBackend.generate() called with prompt: ${prompt.take(50)}...")
+        return runGeneration(buildPrompt(config.systemPrompt, prompt), config)
+    }
 
+    /**
+     * Runs a non-streaming generation over an already-formatted prompt.
+     *
+     * Takes the finished prompt rather than a bare message so [generate] and
+     * [generateWithHistory] share one path and the system turn is emitted exactly once.
+     *
+     * @param fullPrompt the complete prompt, as built by [buildPrompt]
+     * @param config sampling settings for this request
+     * @return a future completed with the response, or with a failure result on error
+     */
+    private fun runGeneration(fullPrompt: String, config: LlmConfig): CompletableFuture<LlmResponse> {
         // Check if model is configured
         val prefs = try {
             val aiAssistantContext = SharedServices.get(PluginContext::class.java)
@@ -217,13 +275,6 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend {
                 // Ensure model is loaded
                 ensureModelLoaded(configuredPath)
 
-                // Build full prompt with system message
-                val fullPrompt = if (config.systemPrompt != null) {
-                    "${config.systemPrompt}\n\nUser: $prompt\nAssistant:"
-                } else {
-                    "User: $prompt\nAssistant:"
-                }
-
                 val startTime = System.currentTimeMillis()
 
                 // Collect all tokens
@@ -232,8 +283,8 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend {
 
                 llama.send(
                     message = fullPrompt,
-                    formatChat = false,
-                    stop = emptyList(),
+                    formatChat = true,
+                    stop = CHAT_STOP,
                     clearCache = false
                 ).collect { token ->
                     responseBuilder.append(token)
@@ -288,11 +339,7 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend {
                 ensureModelLoaded(configuredPath)
 
                 // Build full prompt with system message
-                val fullPrompt = if (config.systemPrompt != null) {
-                    "${config.systemPrompt}\n\nUser: $prompt\nAssistant:"
-                } else {
-                    "User: $prompt\nAssistant:"
-                }
+                val fullPrompt = buildPrompt(config.systemPrompt, prompt)
 
                 val startTime = System.currentTimeMillis()
                 var tokenCount = 0
@@ -300,8 +347,8 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend {
 
                 llama.send(
                     message = fullPrompt,
-                    formatChat = false,
-                    stop = emptyList(),
+                    formatChat = true,
+                    stop = CHAT_STOP,
                     clearCache = false
                 ).collect { token ->
                     callback.onToken(token)
@@ -326,29 +373,7 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend {
         config: LlmConfig
     ): CompletableFuture<LlmResponse> {
         context.logger.info("LocalLlmBackend.generateWithHistory() called with ${history.size} messages")
-
-        // Build conversation prompt
-        val conversationBuilder = StringBuilder()
-
-        if (config.systemPrompt != null) {
-            conversationBuilder.append(config.systemPrompt).append("\n\n")
-        }
-
-        // Add history
-        for (msg in history) {
-            val role = when (msg.role) {
-                ChatMessage.Role.USER -> "User"
-                ChatMessage.Role.ASSISTANT -> "Assistant"
-                ChatMessage.Role.SYSTEM -> "System"
-            }
-            conversationBuilder.append("$role: ${msg.content}\n")
-        }
-
-        // Add current prompt
-        conversationBuilder.append("User: $prompt\nAssistant:")
-
-        // Use regular generate with the full conversation
-        return generate(conversationBuilder.toString(), config)
+        return runGeneration(buildPrompt(config.systemPrompt, prompt, history), config)
     }
 
     /** Suspending model unload — safe to call from any coroutine. */
