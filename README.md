@@ -28,6 +28,7 @@ See the official [plugin documentation](https://www.appdevforall.org/codeonthego
 | [`code-suggestions-plugin/`](code-suggestions-plugin/) | Inline ghost-text code completions powered by AI. |
 | [`speech-to-text-plugin/`](speech-to-text-plugin/) | Voice-to-code: converts speech to code with AI generation. |
 | [`vector-search-plugin/`](vector-search-plugin/) | Semantic code search using embeddings and vector similarity. |
+| [`get-ai-models/`](get-ai-models/)                 | Bottom-drawer catalog of curated, fully-open GGUF model files; downloads one to `/sdcard/Download` and verifies its SHA-256. |
 
 ## Building a plugin
 
