@@ -25,7 +25,7 @@
 
         <meta-data
             android:name="plugin.author"
-            android:value="AndroidIDE" />
+            android:value="App Dev for All" />
 
         <meta-data
             android:name="plugin.min_ide_version"
@@ -33,7 +33,7 @@
 
         <meta-data
             android:name="plugin.max_ide_version"
-            android:value="26.28" />
+            android:value="26.30" />
 
         <!-- Number of editor tabs contributed via getEditorTabs() (the "Agent" tab) -->
         <meta-data

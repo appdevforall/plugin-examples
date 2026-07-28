@@ -2,6 +2,7 @@ package com.itsaky.androidide.plugins.aicore
 
 import com.itsaky.androidide.plugins.services.LlmInferenceService
 import com.itsaky.androidide.plugins.services.LlmInferenceService.*
+import com.itsaky.androidide.plugins.services.SharedServices
 import io.mockk.every
 import io.mockk.mockk
 import org.junit.Test
@@ -15,7 +16,23 @@ class LlmInferenceServiceImplTest {
 
     @Before
     fun setup() {
+        // No AI Assistant PluginContext registered → no stored preference, so AUTO resolves
+        // via the LOCAL default + availability fallback rather than a value left by another test.
+        SharedServices.clear()
         service = LlmInferenceServiceImpl()
+    }
+
+    private fun mockBackend(
+        backendId: String,
+        available: Boolean = true,
+        text: String = "generated",
+    ) = mockk<LlmBackend> {
+        every { getId() } returns backendId
+        every { getName() } returns backendId
+        every { isAvailable() } returns available
+        every { generate(any(), any()) } returns CompletableFuture.completedFuture(
+            LlmResponse.success(text, 1, 1)
+        )
     }
 
     @Test
@@ -94,5 +111,39 @@ class LlmInferenceServiceImplTest {
 
         assertTrue(response.success)
         assertEquals("Generated text", response.text)
+    }
+
+    @Test
+    fun testAutoPrefersLocalWhenAvailable() {
+        service.registerBackend(mockBackend("local", text = "from local"))
+        service.registerBackend(mockBackend("gemini", text = "from gemini"))
+
+        val config = LlmConfig(AiBackend.AUTO)
+        val response = service.generateCompletion("prompt", config).get()
+
+        assertTrue(response.success)
+        assertEquals("from local", response.text)
+        assertEquals("local", config.backendId) // sentinel normalized to the resolved id
+    }
+
+    @Test
+    fun testAutoFallsBackToAvailableBackendWhenSelectedMissing() {
+        // Selection defaults to LOCAL, but only Gemini is registered/available.
+        service.registerBackend(mockBackend("gemini", text = "from gemini"))
+
+        val config = LlmConfig(AiBackend.AUTO)
+        val response = service.generateCompletion("prompt", config).get()
+
+        assertTrue(response.success)
+        assertEquals("from gemini", response.text)
+        assertEquals("gemini", config.backendId)
+    }
+
+    @Test
+    fun testAutoFailsWhenNoBackendAvailable() {
+        val config = LlmConfig(AiBackend.AUTO)
+        val response = service.generateCompletion("prompt", config).get()
+
+        assertFalse(response.success)
     }
 }

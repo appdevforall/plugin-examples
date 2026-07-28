@@ -2,26 +2,39 @@ package com.itsaky.androidide.plugins.aicore
 
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.PluginLogger
-import com.itsaky.androidide.plugins.ServiceRegistry
 import com.itsaky.androidide.plugins.services.LlmInferenceService
-import com.itsaky.androidide.plugins.manager.context.ServiceRegistryImpl
+import com.itsaky.androidide.plugins.services.SharedServices
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import org.junit.After
+import org.junit.Before
 import org.junit.Test
 import org.junit.Assert.*
 
 class AiCorePluginTest {
 
+    private lateinit var mockLogger: PluginLogger
+    private lateinit var mockContext: PluginContext
+
+    @Before
+    fun setup() {
+        // AiCorePlugin publishes its service into the process-global SharedServices,
+        // so start from a clean slate to avoid leakage between tests.
+        SharedServices.clear()
+        mockLogger = mockk(relaxed = true)
+        mockContext = mockk(relaxed = true) {
+            every { logger } returns mockLogger
+        }
+    }
+
+    @After
+    fun tearDown() {
+        SharedServices.clear()
+    }
+
     @Test
     fun testPluginInitialization() {
-        val mockLogger = mockk<PluginLogger>(relaxed = true)
-        val mockServiceRegistry = mockk<ServiceRegistry>(relaxed = true)
-        val mockContext = mockk<PluginContext> {
-            every { logger } returns mockLogger
-            every { services } returns mockServiceRegistry
-        }
-
         val plugin = AiCorePlugin()
         val result = plugin.initialize(mockContext)
 
@@ -31,13 +44,6 @@ class AiCorePluginTest {
 
     @Test
     fun testPluginActivation() {
-        val mockLogger = mockk<PluginLogger>(relaxed = true)
-        val mockServiceRegistry = mockk<ServiceRegistry>(relaxed = true)
-        val mockContext = mockk<PluginContext> {
-            every { logger } returns mockLogger
-            every { services } returns mockServiceRegistry
-        }
-
         val plugin = AiCorePlugin()
         plugin.initialize(mockContext)
         val result = plugin.activate()
@@ -48,39 +54,22 @@ class AiCorePluginTest {
 
     @Test
     fun testServiceRegistration() {
-        val mockLogger = mockk<PluginLogger>(relaxed = true)
-        val mockServiceRegistry = mockk<ServiceRegistry>(relaxed = true)
-        val mockContext = mockk<PluginContext> {
-            every { logger } returns mockLogger
-            every { services } returns mockServiceRegistry
-        }
-
         val plugin = AiCorePlugin()
         plugin.initialize(mockContext)
         plugin.activate()
 
-        verify {
-            mockServiceRegistry.register(
-                LlmInferenceService::class.java,
-                any<LlmInferenceService>()
-            )
-        }
+        // activate() registers the LlmInferenceService into SharedServices for other plugins.
+        val service = SharedServices.get(LlmInferenceService::class.java)
+        assertNotNull(service)
     }
 
     @Test
     fun testLocalBackendRegistration() {
-        val mockLogger = mockk<PluginLogger>(relaxed = true)
-        val serviceRegistryImpl = ServiceRegistryImpl()
-        val mockContext = mockk<PluginContext> {
-            every { logger } returns mockLogger
-            every { services } returns serviceRegistryImpl
-        }
-
         val plugin = AiCorePlugin()
         plugin.initialize(mockContext)
         plugin.activate()
 
-        val service = serviceRegistryImpl.get(LlmInferenceService::class.java)
+        val service = SharedServices.get(LlmInferenceService::class.java)
         assertNotNull(service)
 
         val backend = service!!.getBackend("local")

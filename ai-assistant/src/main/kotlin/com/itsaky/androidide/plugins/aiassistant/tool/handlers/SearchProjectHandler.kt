@@ -30,7 +30,8 @@ class SearchProjectHandler(
         // explicit project_dir that resolves outside it, so a prompt-injected
         // model can't read/exfiltrate arbitrary files on external storage.
         val searchRoot = if (projectDir.isNullOrBlank()) {
-            File(PathGuard.projectRoot())
+            PathGuard.projectRoot()?.let { File(it) }
+                ?: return ToolResult.failure("Search directory must be within the project directory")
         } else {
             PathGuard.resolveWithin(projectDir)
                 ?: return ToolResult.failure("Search directory must be within the project directory")

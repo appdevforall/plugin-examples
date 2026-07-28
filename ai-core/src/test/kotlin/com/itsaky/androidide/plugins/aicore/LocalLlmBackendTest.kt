@@ -1,6 +1,8 @@
 package com.itsaky.androidide.plugins.aicore
 
+import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.services.LlmInferenceService.*
+import io.mockk.mockk
 import org.junit.Test
 import org.junit.Assert.*
 import org.junit.Before
@@ -11,7 +13,7 @@ class LocalLlmBackendTest {
 
     @Before
     fun setup() {
-        backend = LocalLlmBackend()
+        backend = LocalLlmBackend(mockk(relaxed = true))
     }
 
     @Test
@@ -38,6 +40,7 @@ class LocalLlmBackendTest {
 
         assertFalse(response.success)
         assertNotNull(response.error)
-        assertTrue(response.error!!.contains("not available"))
+        // With no model configured, generate() fails fast before any native work.
+        assertTrue(response.error!!.contains("No model configured"))
     }
 }

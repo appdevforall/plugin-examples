@@ -85,6 +85,29 @@ class ChatViewModel(
 
     private var currentBackendId: String = "local" // Default to local backend
 
+    /**
+     * Human-readable label for the backend the user has *selected* in settings, shown under the
+     * chat input. This tracks the selection (the `ai_backend_preference`), NOT the
+     * availability-resolved backend — selecting Gemini must read "Gemini API" even before its
+     * API key check runs, otherwise it would always fall back to "Local LLM".
+     */
+    private val _activeBackendLabel = MutableStateFlow(selectedBackendLabel())
+    val activeBackendLabel: StateFlow<String> = _activeBackendLabel.asStateFlow()
+
+    private fun selectedBackendLabel(): String {
+        val pref = getContext()?.getPluginSharedPreferences("AgentSettings")
+            ?.getString("ai_backend_preference", "LOCAL_LLM")
+        return when (pref) {
+            "GEMINI" -> "Gemini API"
+            else -> "Local LLM"
+        }
+    }
+
+    /** Re-read the selected backend and update [activeBackendLabel]; call when returning to chat. */
+    fun refreshBackendLabel() {
+        _activeBackendLabel.value = selectedBackendLabel()
+    }
+
     // Tool execution infrastructure
     private val approvalManager = ToolApprovalManager()
     private val toolRouter: ToolRouter
@@ -201,6 +224,24 @@ class ChatViewModel(
                 _messages.value = session.messages.toList()
             }
         }
+    }
+
+    /**
+     * Surface a configuration/setup problem to the user both ways: a persistent SYSTEM error
+     * bubble in the transcript, and [AgentState.Error] so the fragment can show a transient,
+     * actionable Snackbar. Used by the [sendMessage] pre-flight guards, which reject the request
+     * before any backend runs — so the downstream `onError`/UserFeedback feedback never fires.
+     */
+    private fun emitSystemError(text: String) {
+        val errorMessage = ChatMessage(
+            id = UUID.randomUUID().toString(),
+            text = text,
+            sender = Sender.SYSTEM,
+            status = MessageStatus.ERROR
+        )
+        _messages.value = _messages.value + errorMessage
+        syncMessageToSession(errorMessage)
+        _agentState.value = AgentState.Error(text)
     }
 
     /**
@@ -450,13 +491,16 @@ class ChatViewModel(
         val llmService = getLlmService()
         if (llmService == null) {
             android.util.Log.d("ChatViewModel", "sendMessage: LLM service not available")
-            _agentState.value = AgentState.Error("LLM service not available. Install AI Core plugin.")
+            emitSystemError("LLM service not available. Install the AI Core plugin.")
             return
         }
 
         if (!_isBackendAvailable.value) {
             android.util.Log.d("ChatViewModel", "sendMessage: Backend not available")
-            _agentState.value = AgentState.Error("No LLM backend available. Please configure one in AI Core plugin.")
+            emitSystemError(
+                "No LLM backend is set up yet. Open Settings to select a local .gguf model, " +
+                    "or add a Gemini API key."
+            )
             return
         }
 
