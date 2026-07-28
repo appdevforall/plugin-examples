@@ -12,12 +12,12 @@ pluginBuilder {
 
 android {
     namespace = "com.codeonthego.markdownpreviewer"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.codeonthego.markdownpreviewer"
         minSdk = 26
-        targetSdk = 34
+        targetSdk = 36
         versionCode = 1
         versionName = "1.0.0"
     }

@@ -10,12 +10,12 @@ pluginBuilder {
 
 android {
     namespace = "com.itsaky.androidide.plugins.aiassistant"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.itsaky.androidide.plugins.aiassistant"
         minSdk = 33
-        targetSdk = 34
+        targetSdk = 36
         versionCode = 1
         versionName = "1.0.0"
     }

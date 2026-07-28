@@ -12,12 +12,12 @@ pluginBuilder {
 
 android {
     namespace = "com.cotg.cotgndk"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.cotg.cotgndk"
         minSdk = 26
-        targetSdk = 34
+        targetSdk = 36
         versionCode = 6
         versionName = "6.0.0"
     }

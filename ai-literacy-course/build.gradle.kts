@@ -19,12 +19,12 @@ pluginBuilder {
 
 android {
     namespace = "org.appdevforall.ailiteracycourse"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "org.appdevforall.ailiteracycourse"
         minSdk = 26
-        targetSdk = 34
+        targetSdk = 36
         versionCode = 1
         versionName = "1.0.0"
     }
