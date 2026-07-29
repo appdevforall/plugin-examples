@@ -53,14 +53,20 @@ is therefore blocked on ADFA-4911 + ADFA-4913 landing in a CoGo build.**
   ```kotlin
   compileOnly("com.itsaky.androidide:plugin-api:<plugin-api-version>")
   ```
-- The two plugins that also reference `common` / `eventbus-events` / `idetooltips`
-  (`client-time-tracker`, `layout-editor`) switch those to their coordinates too.
+- **No separate add-on coordinates (Option A).** `plugin-api` is the single plugin SDK —
+  it absorbs the public **event classes** (`com.itsaky.androidide.eventbus.events.*`) and
+  the handful of shared **utils** the two plugins use, so `client-time-tracker` and
+  `layout-editor` depend on `plugin-api` alone. This requires the CoGo-side `plugin-api`
+  aggregation change (see Dependencies). Cleanups: drop the `idetooltips.jar` reference
+  (verified **unused**); the event + util imports resolve from the aggregated `plugin-api`.
+  Note the third-party `org.greenrobot:eventbus` library those two use is a normal Maven
+  coordinate (resolves from `localMvnRepository`/mavenCentral), not a CoGo jar.
 
 ### 2. Provide the same coordinates in the monorepo via ONE committed Maven repo
 
-- Add a single repo-root **`maven-repo/`** in Maven layout containing one copy of each
-  needed artifact + POMs (+ the builder's plugin marker): `plugin-api`, the builder,
-  `common`, `eventbus-events`, `idetooltips`. ~<1 MB total, **one copy for all plugins**.
+- Add a single repo-root **`maven-repo/`** in Maven layout containing one copy of just
+  **`plugin-api`** (the aggregated SDK) and **the builder**, + their POMs + the builder's
+  plugin marker. ~<0.5 MB total, **one copy for all plugins** (no add-on jars under Option A).
 - Each plugin's `settings.gradle.kts` declares it in both repository handlers, path
   overridable by property so it's inert on-device:
   ```kotlin
@@ -95,20 +101,26 @@ reality above) so it isn't "fixed" back to `../libs/`.
 
 ## Coordinates & versions
 
+Only **two** coordinates (Option A):
+
 | Artifact | Coordinate | Version | Notes |
 |---|---|---|---|
 | builder (Gradle plugin) | `com.itsaky.androidide.plugins.build` (id) | `1.0.0` | from the `plugin-builder` module; applied via plugins DSL |
-| plugin-api | `com.itsaky.androidide:plugin-api` | `<TBD>` | plugin-api has **no** coordinate today; version assigned by ADFA-4911 |
-| common / eventbus-events / idetooltips | `<TBD>` | `<TBD>` | referenced by 2 plugins — **ADFA-4911's injection scope must include these**, not just plugin-api + builder |
+| plugin-api (SDK) | `com.itsaky.androidide:plugin-api` | `<TBD>` | no coordinate today; version assigned alongside ADFA-4911. Must be the **aggregated** SDK — the plugins API **plus** the public event classes + curated utils (CoGo `plugin-api` aggregation change) |
 
-Use a single version constant (e.g. in `gradle.properties`) so all plugins agree.
+`common` / `eventbus-events` / `idetooltips` get **no** coordinates — CoGo doesn't ship them;
+they are folded into `plugin-api` (events + needed utils) or dropped (`idetooltips`, unused)
+per Option A. Use a single version constant (e.g. in `gradle.properties`) so all plugins agree.
 
 ## Dependencies & sequencing
 
 - **Blocked on ADFA-4911 + ADFA-4913** landing in a CoGo build we can test against.
-- **Widen ADFA-4911**: its injection set must cover the full union of jars plugins
-  reference (`plugin-api`, `gradle-plugin`, `common`, `eventbus-events`, `idetooltips`),
-  not just the first two.
+- **Depends on the CoGo `plugin-api` aggregation change** (Option A): `createPluginApiJar`
+  must produce a *complete* SDK — the plugins API **plus** the public event classes
+  (from `eventbus-events`) and the curated utils the plugins use — so injecting `plugin-api`
+  alone (ADFA-4911) satisfies every plugin. CoGo ships only `plugin-api.jar` +
+  `gradle-plugin.jar` today (verified); the add-on jars are **not** shipped, so widening
+  4911 to inject five is not viable — the fix is aggregation, not more artifacts.
 - Until CoGo ships the injection + detection, **keep `../libs/` working** — do not remove
   it. The flip to coordinates happens only once a CoGo build with 4911+4913 is available.
 
@@ -132,3 +144,6 @@ Use a single version constant (e.g. in `gradle.properties`) so all plugins agree
 - `scripts/update-libs.sh` (+ `.github/workflows/update-libs.yml`, `build-plugins.yml`).
 - `CLAUDE.md` (convention reversal, with rationale).
 - Remove root `libs/`, `ai-core/libs/`, `pebble-custom-function-template-installer/libs/`.
+- `client-time-tracker` / `layout-editor`: drop the `common`/`eventbus-events`/`idetooltips`
+  `../libs/*.jar` references (idetooltips unused; the rest resolve from the aggregated
+  `plugin-api`); keep `org.greenrobot:eventbus` as a normal third-party coordinate.
