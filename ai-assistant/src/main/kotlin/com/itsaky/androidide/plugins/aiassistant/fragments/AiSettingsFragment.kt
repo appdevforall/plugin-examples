@@ -341,6 +341,14 @@ class AiSettingsFragment : DialogFragment() {
                 statusTextView.text = savedApiKeyStatusText()
             } else {
                 apiKeyInput.setText("")
+                // A stored-but-undecryptable key also reads as null; warn as the Edit path does.
+                if (viewModel.hasStoredGeminiApiKey()) {
+                    Toast.makeText(
+                        requireContext(),
+                        getString(R.string.msg_api_key_unreadable),
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
             }
         }
 

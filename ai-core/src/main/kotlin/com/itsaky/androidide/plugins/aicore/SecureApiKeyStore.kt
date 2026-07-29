@@ -25,6 +25,7 @@ import javax.crypto.spec.GCMParameterSpec
  * Android Keystore. Keep the two copies in sync.
  */
 object SecureApiKeyStore {
+    // Drift in the constants below fails ai-core's verifySecureApiKeyStoreParity build task.
     private const val TAG = "SecureApiKeyStore"
     private const val KEYSTORE = "AndroidKeyStore"
     private const val ALIAS = "cotg_ai_gemini_key_v1"
@@ -122,20 +123,23 @@ object SecureApiKeyStore {
      * never actually gain encryption. Re-encrypting on the first read closes that gap without
      * making the user re-enter the key.
      *
+     * The value is trimmed on migration, so the stored, displayed and sent forms all agree.
+     *
      * Keystore IPC + AES/GCM, so call this off the main thread.
      *
-     * @return the plaintext value, or null when nothing is stored or decryption failed.
+     * @return the trimmed plaintext value, or null when nothing is stored or decryption failed.
      */
     fun readAndMigrate(prefs: SharedPreferences?, key: String): String? {
         val stored = prefs?.getString(key, null) ?: return null
         if (stored.startsWith(ENC_PREFIX)) return decrypt(stored)
-        if (stored.isBlank()) return stored
+        val plain = stored.trim()
+        if (plain.isEmpty()) return plain
         try {
-            prefs.edit().putString(key, encrypt(stored)).apply()
+            prefs.edit().putString(key, encrypt(plain)).apply()
             Log.i(TAG, "Upgraded legacy plaintext value for '$key' to ciphertext")
         } catch (e: Exception) {
             Log.w(TAG, "Could not upgrade legacy plaintext value for '$key' to ciphertext", e)
         }
-        return stored
+        return plain
     }
 }

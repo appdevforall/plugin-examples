@@ -86,7 +86,7 @@ class GeminiBackend(private val context: PluginContext) : LlmBackend {
      * today reaches this from [Dispatchers.IO], but [LlmBackend.isAvailable] is a synchronous
      * interface method a future caller could invoke from the UI thread — so instead of relying
      * on that, a main-thread call answers from the cache and kicks off a background refresh
-     * rather than blocking. Worst case it reports "no key" once and is correct thereafter.
+     * rather than blocking; [warmKeyCache] fills the cache first so that never reports "no key".
      */
     private fun readGeminiApiKey(): String? {
         val stored = agentPrefs()?.getString(KEY_API_KEY, null)
@@ -119,6 +119,25 @@ class GeminiBackend(private val context: PluginContext) : LlmBackend {
         val raw = prefs?.getString(KEY_API_KEY, null)
         keyCache = raw?.let { it to plain }
         return plain
+    }
+
+    /**
+     * Warm [keyCache] off-thread, so the synchronous [isAvailable] never reports "no key" for a
+     * stored, decryptable key just because it was first called from the main thread. Invoked from
+     * AiCorePlugin.activate().
+     */
+    fun warmKeyCache() {
+        if (!scope.isActive) return
+        scope.launch {
+            try {
+                val warmed = refreshKeyCache() != null
+                context.logger.debug("GeminiBackend: key cache warmed (key present: $warmed)")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                context.logger.warn("GeminiBackend: could not warm key cache: ${e.message}")
+            }
+        }
     }
 
     override fun getId(): String = "gemini"

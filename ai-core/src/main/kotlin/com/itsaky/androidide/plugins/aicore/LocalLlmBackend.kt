@@ -10,6 +10,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
@@ -37,9 +38,10 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend {
 
     /**
      * Separate from [scope] because [close] cancels [scope] and then has to run the unload —
-     * work submitted to a cancelled scope never starts.
+     * work submitted to a cancelled scope never starts. Cancelled once its teardown job finishes;
+     * a `var` because that is terminal and a second [close] must re-create it to do any work.
      */
-    private val teardownScope = CoroutineScope(Dispatchers.IO)
+    @Volatile private var teardownScope = CoroutineScope(Dispatchers.IO)
 
     /** The [close] teardown, retained so [awaitClose] can join it. */
     @Volatile private var teardownJob: Job? = null
@@ -408,11 +410,14 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend {
      * Teardown runs on [teardownScope] rather than a throwaway `CoroutineScope(...)` so the
      * work has an owner: the returned [Job] is retained in [teardownJob], letting a caller
      * observe or await it via [awaitClose] instead of dispose() returning while native work is
-     * still in flight with no handle to it.
+     * still in flight with no handle to it, and is cancelled once that job completes.
      */
     fun close() {
         scope.cancel()
-        teardownJob = teardownScope.launch {
+        // A prior close() cancelled the scope on completion, and a dead scope never starts work.
+        val teardown = teardownScope.takeIf { it.isActive }
+            ?: CoroutineScope(Dispatchers.IO).also { teardownScope = it }
+        teardownJob = teardown.launch {
             try {
                 unloadModelInternal()
             } catch (e: Exception) {
@@ -424,6 +429,8 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend {
                 llama.shutdown()
             }
         }
+        // Cancel the captured scope, not the field: a later close() may have replaced it.
+        teardownJob?.invokeOnCompletion { teardown.cancel() }
     }
 
     /**

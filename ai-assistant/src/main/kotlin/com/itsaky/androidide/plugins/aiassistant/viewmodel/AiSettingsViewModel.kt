@@ -13,6 +13,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.itsaky.androidide.plugins.PluginContext
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 
 /**
  * State for the model file loading.
@@ -61,6 +64,13 @@ class AiSettingsViewModel(
 
         /** Default selection; kept in sync with GeminiBackend.DEFAULT_MODEL. */
         private const val DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
+
+        /**
+         * Failsafe cap on the cross-plugin model listing, above ai-core's own per-request budget
+         * (15 s connect + 15 s read, paginated) so a slow-but-live fetch is never truncated.
+         * Bounds a future that may never complete; it is not a network timeout.
+         */
+        private const val LIST_MODELS_TIMEOUT_SECONDS = 60L
 
         /** Shown only when the live catalog can't be fetched — current models, no retired ones. */
         private val FALLBACK_MODELS = listOf(
@@ -228,6 +238,14 @@ class AiSettingsViewModel(
         SecureApiKeyStore.readAndMigrate(getPluginPrefs(), "gemini_api_key")
     }
 
+    /**
+     * True when a Gemini key is present on disk, whether or not it can still be decrypted. Lets
+     * the UI tell "nothing was saved" from "the Keystore entry is gone" — [getGeminiApiKey] is
+     * null for both. Raw pref only, so no Keystore IPC and safe on the main thread.
+     */
+    fun hasStoredGeminiApiKey(): Boolean =
+        !getPluginPrefs()?.getString("gemini_api_key", null).isNullOrBlank()
+
     fun getGeminiApiKeySaveTimestamp(): Long {
         return getPluginPrefs()?.getLong("gemini_api_key_timestamp", 0L) ?: 0L
     }
@@ -325,7 +343,7 @@ class AiSettingsViewModel(
         val result = method.invoke(backend)
 
         @Suppress("UNCHECKED_CAST")
-        val future = result as? java.util.concurrent.CompletableFuture<List<String>>
+        val future = result as? CompletableFuture<List<String>>
         if (future == null) {
             android.util.Log.e(
                 TAG,
@@ -333,7 +351,19 @@ class AiSettingsViewModel(
             )
             return emptyList()
         }
-        return future.get().orEmpty()
+        // Bounded: a future from ai-core's already-cancelled scope would never complete.
+        return try {
+            future.get(LIST_MODELS_TIMEOUT_SECONDS, TimeUnit.SECONDS).orEmpty()
+        } catch (e: TimeoutException) {
+            future.cancel(true)
+            android.util.Log.e(
+                TAG,
+                "listModels() did not complete within ${LIST_MODELS_TIMEOUT_SECONDS}s; " +
+                    "is ai-core still active?",
+                e
+            )
+            emptyList()
+        }
     }
 
     /**
