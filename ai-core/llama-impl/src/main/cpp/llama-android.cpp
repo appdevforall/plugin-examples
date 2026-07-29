@@ -8,9 +8,8 @@
 #include <unordered_map>
 #include <mutex>
 #include <unistd.h>
+#include <cstdint>
 #include "llama.h"
-#include <codecvt>
-#include <locale>
 #include "common.h"
 
 #define TAG "llama-android.cpp"
@@ -87,24 +86,76 @@ static std::atomic<int> g_n_ctx(4096);
 static std::atomic<bool> g_kv_cache_reuse(true);
 static std::vector<llama_token> g_cached_tokens;
 
+// Converts standard UTF-8 to UTF-16. NewStringUTF() is unusable here because it
+// expects modified UTF-8 (CESU-8), so 4-byte sequences such as emoji would mangle.
+// Invalid bytes become '?' so a truncated sequence cannot corrupt the remainder.
+// @param text NUL-terminated UTF-8, may be null
+// @return a new local reference to the converted string
 static jstring new_jstring_utf8(JNIEnv *env, const char *text) {
     if (!text) {
         return env->NewStringUTF("");
     }
 
-    try {
-        std::wstring_convert<std::codecvt_utf8_utf16<char16_t>, char16_t> converter;
-        std::u16string u16 = converter.from_bytes(text);
-        return env->NewString(reinterpret_cast<const jchar *>(u16.data()),
-                              static_cast<jsize>(u16.size()));
-    } catch (const std::range_error &) {
-        std::string sanitized;
-        sanitized.reserve(strlen(text));
-        for (const unsigned char ch: std::string(text)) {
-            sanitized.push_back(ch < 0x80 ? static_cast<char>(ch) : '?');
+    const auto *bytes = reinterpret_cast<const unsigned char *>(text);
+    std::u16string u16;
+    u16.reserve(strlen(text));
+
+    while (*bytes != 0x00) {
+        uint32_t cp;
+        int num;
+
+        if ((bytes[0] & 0x80) == 0x00) {
+            // U+0000 to U+007F
+            cp = bytes[0];
+            num = 1;
+        } else if ((bytes[0] & 0xE0) == 0xC0) {
+            // U+0080 to U+07FF
+            cp = bytes[0] & 0x1Fu;
+            num = 2;
+        } else if ((bytes[0] & 0xF0) == 0xE0) {
+            // U+0800 to U+FFFF
+            cp = bytes[0] & 0x0Fu;
+            num = 3;
+        } else if ((bytes[0] & 0xF8) == 0xF0) {
+            // U+10000 to U+10FFFF
+            cp = bytes[0] & 0x07u;
+            num = 4;
+        } else {
+            u16.push_back(u'?');
+            bytes += 1;
+            continue;
         }
-        return env->NewStringUTF(sanitized.c_str());
+
+        bool ok = true;
+        for (int i = 1; i < num; ++i) {
+            if ((bytes[i] & 0xC0) != 0x80) {
+                // Resync here; this also covers the terminator, so we never overrun.
+                ok = false;
+                num = i;
+                break;
+            }
+            cp = (cp << 6) | (bytes[i] & 0x3Fu);
+        }
+
+        if (!ok || cp > 0x10FFFF || (cp >= 0xD800 && cp <= 0xDFFF)) {
+            u16.push_back(u'?');
+            bytes += num;
+            continue;
+        }
+
+        if (cp <= 0xFFFF) {
+            u16.push_back(static_cast<char16_t>(cp));
+        } else {
+            // Split an astral code point into a UTF-16 surrogate pair.
+            cp -= 0x10000;
+            u16.push_back(static_cast<char16_t>(0xD800 + (cp >> 10)));
+            u16.push_back(static_cast<char16_t>(0xDC00 + (cp & 0x3FFu)));
+        }
+        bytes += num;
     }
+
+    return env->NewString(reinterpret_cast<const jchar *>(u16.data()),
+                          static_cast<jsize>(u16.size()));
 }
 
 extern "C"
