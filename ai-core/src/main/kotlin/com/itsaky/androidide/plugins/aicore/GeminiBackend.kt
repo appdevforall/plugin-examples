@@ -1,5 +1,7 @@
 package com.itsaky.androidide.plugins.aicore
 
+import android.content.SharedPreferences
+import android.os.Looper
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.services.LlmInferenceService
 import com.itsaky.androidide.plugins.services.LlmInferenceService.*
@@ -10,6 +12,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.coroutines.coroutineContext
 import org.json.JSONArray
@@ -35,9 +38,20 @@ class GeminiBackend(private val context: PluginContext) : LlmBackend {
     @Volatile
     private var currentJob: Job? = null
 
+    /**
+     * Last decryption, as (value on disk -> plaintext). Decrypting costs a Keystore IPC round
+     * trip and [isAvailable] runs on every generate, so caching against the raw stored value
+     * pays that cost once and re-decrypts only when the stored key actually changes.
+     */
+    @Volatile
+    private var keyCache: Pair<String, String?>? = null
+
     companion object {
         /** Current default model. gemini-1.5-* is retired on v1beta and now 404s. */
         const val DEFAULT_MODEL = "gemini-2.5-flash"
+
+        /** Pref key holding the (encrypted) Gemini API key, written by ai-assistant. */
+        private const val KEY_API_KEY = "gemini_api_key"
 
         /** Base URL for the v1beta models API (ListModels, generateContent, streaming). */
         private const val MODELS_BASE_URL =
@@ -50,30 +64,80 @@ class GeminiBackend(private val context: PluginContext) : LlmBackend {
         private const val METHOD_STREAM_GENERATE_CONTENT = "streamGenerateContent"
     }
 
+    /** ai-assistant's shared prefs, where the Gemini settings live, or null if unreachable. */
+    private fun agentPrefs(): SharedPreferences? = try {
+        SharedServices.get(PluginContext::class.java)
+            ?.getPluginSharedPreferences("AgentSettings")
+    } catch (e: Exception) {
+        context.logger.error("GeminiBackend: Error getting preferences", e)
+        null
+    }
+
     /**
      * Get the model name from preferences, or use the current default.
      */
-    private fun getModelName(): String {
-        val prefs = try {
-            val aiAssistantContext = SharedServices.get(PluginContext::class.java)
-            aiAssistantContext?.getPluginSharedPreferences("AgentSettings")
-        } catch (e: Exception) {
-            context.logger.error("GeminiBackend: Error getting preferences", e)
-            null
+    private fun getModelName(): String =
+        agentPrefs()?.getString("gemini_model", DEFAULT_MODEL) ?: DEFAULT_MODEL
+
+    /**
+     * Read the saved Gemini API key from ai-assistant's shared prefs, or null.
+     *
+     * Decryption is Keystore IPC + AES/GCM and must not run on the main thread. Every caller
+     * today reaches this from [Dispatchers.IO], but [LlmBackend.isAvailable] is a synchronous
+     * interface method a future caller could invoke from the UI thread — so instead of relying
+     * on that, a main-thread call answers from the cache and kicks off a background refresh
+     * rather than blocking; [warmKeyCache] fills the cache first so that never reports "no key".
+     */
+    private fun readGeminiApiKey(): String? {
+        val stored = agentPrefs()?.getString(KEY_API_KEY, null)
+        if (stored.isNullOrBlank()) {
+            keyCache = null
+            return null
         }
-        return prefs?.getString("gemini_model", DEFAULT_MODEL) ?: DEFAULT_MODEL
+        keyCache?.let { (raw, plain) -> if (raw == stored) return plain }
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            context.logger.warn("GeminiBackend: API key read on the main thread; refreshing off-thread")
+            // close() cancels scope, so without this guard the launch is a silent no-op.
+            if (scope.isActive) {
+                scope.launch { refreshKeyCache() }
+            } else {
+                context.logger.warn("GeminiBackend: backend already closed; not refreshing key cache")
+            }
+            return null
+        }
+        return refreshKeyCache()
     }
 
-    /** Read the saved Gemini API key from ai-assistant's shared prefs, or null. */
-    private fun readGeminiApiKey(): String? {
-        val prefs = try {
-            SharedServices.get(PluginContext::class.java)
-                ?.getPluginSharedPreferences("AgentSettings")
-        } catch (e: Exception) {
-            context.logger.error("GeminiBackend: Error getting preferences", e)
-            null
+    /**
+     * Decrypt the stored key — upgrading a pre-encryption plaintext value in passing — and
+     * cache the result. Off-main-thread only; see [readGeminiApiKey].
+     */
+    private fun refreshKeyCache(): String? {
+        val prefs = agentPrefs()
+        val plain = SecureApiKeyStore.readAndMigrate(prefs, KEY_API_KEY)
+            ?.trim()?.takeIf { it.isNotBlank() }
+        val raw = prefs?.getString(KEY_API_KEY, null)
+        keyCache = raw?.let { it to plain }
+        return plain
+    }
+
+    /**
+     * Warm [keyCache] off-thread, so the synchronous [isAvailable] never reports "no key" for a
+     * stored, decryptable key just because it was first called from the main thread. Invoked from
+     * AiCorePlugin.activate().
+     */
+    fun warmKeyCache() {
+        if (!scope.isActive) return
+        scope.launch {
+            try {
+                val warmed = refreshKeyCache() != null
+                context.logger.debug("GeminiBackend: key cache warmed (key present: $warmed)")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                context.logger.warn("GeminiBackend: could not warm key cache: ${e.message}")
+            }
         }
-        return prefs?.getString("gemini_api_key", null)?.trim()?.takeIf { it.isNotBlank() }
     }
 
     override fun getId(): String = "gemini"
@@ -81,7 +145,7 @@ class GeminiBackend(private val context: PluginContext) : LlmBackend {
     override fun getName(): String = "Gemini API"
 
     override fun isAvailable(): Boolean {
-        // Available once an API key is configured.
+        // Available once a (decryptable) API key is configured.
         val apiKey = readGeminiApiKey()
         context.logger.debug("GeminiBackend.isAvailable() - API key configured: ${!apiKey.isNullOrBlank()}")
         return !apiKey.isNullOrBlank()
@@ -393,10 +457,16 @@ User: $userPrompt"""
     /**
      * Release all resources: cancel the backend scope and any in-flight
      * request. Called from AiCorePlugin.dispose().
+     *
+     * [keyCache] holds the *decrypted* API key, so it is dropped here too — otherwise the
+     * plaintext stays reachable on the host process heap for as long as the IDE runs, long
+     * after the plugin was unloaded, which is exactly what encrypting at rest is meant to
+     * prevent.
      */
     fun close() {
         currentJob?.cancel()
         scope.cancel()
+        keyCache = null
     }
 
     /**

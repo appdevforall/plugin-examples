@@ -16,6 +16,7 @@ import android.widget.Toast
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
+import com.itsaky.androidide.plugins.aiassistant.AiAssistantPlugin
 import com.itsaky.androidide.plugins.aiassistant.R
 import com.itsaky.androidide.plugins.aiassistant.models.ChatMessage
 import com.itsaky.androidide.plugins.aiassistant.models.MessageStatus
@@ -26,8 +27,14 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+/**
+ * @param wireTooltip attaches this plugin's long-press help for a tag to a view. Supplied by
+ *   ChatFragment, which owns the [com.itsaky.androidide.plugins.services.IdeTooltipService]
+ *   lookup, so the adapter stays free of service plumbing. Defaults to a no-op for tests.
+ */
 class ChatAdapter(
     private val markwon: Markwon,
+    private val wireTooltip: (View, String) -> Unit = { _, _ -> },
     private val onMessageAction: (action: String, message: ChatMessage) -> Unit
 ) : ListAdapter<ChatMessage, RecyclerView.ViewHolder>(DiffCallback) {
 
@@ -55,6 +62,13 @@ class ChatAdapter(
         val generatingDots: TextView = view.findViewById(R.id.generating_dots)
         val messageDuration: TextView = view.findViewById(R.id.message_duration)
         val btnRetry: Button = view.findViewById(R.id.btn_retry)
+
+        /**
+         * Queued next step of the "..." animation, or null when it isn't running. Retained so
+         * [ChatAdapter.hideGeneratingDots] can cancel it: a Runnable left on the main looper
+         * would keep this holder, its views and their Context reachable after the row is gone.
+         */
+        var generatingDotsStep: Runnable? = null
     }
 
     class SystemMessageViewHolder(view: View) : MessageViewHolder(view) {
@@ -119,7 +133,7 @@ class ChatAdapter(
                     MessageStatus.LOADING -> {
                         holder.loadingIndicator.visibility = View.VISIBLE
                         holder.messageContent.visibility = View.GONE
-                        holder.generatingDots.visibility = View.GONE
+                        hideGeneratingDots(holder)
                     }
                     MessageStatus.SENT -> {
                         holder.loadingIndicator.visibility = View.GONE
@@ -130,19 +144,19 @@ class ChatAdapter(
                         if (message.sender == Sender.AGENT && message.durationMs == null) {
                             animateGeneratingDots(holder)
                         } else {
-                            holder.generatingDots.visibility = View.GONE
+                            hideGeneratingDots(holder)
                         }
                     }
                     MessageStatus.COMPLETED -> {
                         holder.loadingIndicator.visibility = View.GONE
                         holder.messageContent.visibility = View.VISIBLE
-                        holder.generatingDots.visibility = View.GONE
+                        hideGeneratingDots(holder)
                         markwon.setMarkdown(holder.messageContent, payload.text)
                     }
                     MessageStatus.ERROR -> {
                         holder.loadingIndicator.visibility = View.GONE
                         holder.messageContent.visibility = View.VISIBLE
-                        holder.generatingDots.visibility = View.GONE
+                        hideGeneratingDots(holder)
                         holder.messageContent.text = payload.text
                     }
                 }
@@ -173,6 +187,8 @@ class ChatAdapter(
                 holder.messageContent.visibility = View.GONE
                 holder.btnRetry.visibility = View.GONE
                 holder.messageMetadataContainer.visibility = View.GONE
+                // A row that goes back to LOADING after SENT still had a live dots loop.
+                hideGeneratingDots(holder)
             }
             MessageStatus.SENT -> {
                 holder.loadingIndicator.visibility = View.GONE
@@ -185,14 +201,14 @@ class ChatAdapter(
                 if (message.sender == Sender.AGENT && message.durationMs == null) {
                     animateGeneratingDots(holder)
                 } else {
-                    holder.generatingDots.visibility = View.GONE
+                    hideGeneratingDots(holder)
                 }
             }
             MessageStatus.COMPLETED -> {
                 holder.loadingIndicator.visibility = View.GONE
                 holder.messageContent.visibility = View.VISIBLE
                 holder.btnRetry.visibility = View.GONE
-                holder.generatingDots.visibility = View.GONE
+                hideGeneratingDots(holder)
                 markwon.setMarkdown(holder.messageContent, message.text)
                 updateMessageMetadata(holder, message)
             }
@@ -200,18 +216,22 @@ class ChatAdapter(
                 holder.loadingIndicator.visibility = View.GONE
                 holder.messageContent.visibility = View.VISIBLE
                 holder.btnRetry.visibility = View.VISIBLE
-                holder.generatingDots.visibility = View.GONE
+                hideGeneratingDots(holder)
                 holder.messageContent.text = message.text
                 if (message.sender == Sender.SYSTEM) {
                     holder.btnRetry.text = "Open AI Settings"
                     holder.btnRetry.setOnClickListener {
                         onMessageAction(ACTION_OPEN_SETTINGS, message)
                     }
+                    // Re-wired per bind: the same recycled button plays both roles, so the
+                    // tag has to follow the role it currently has.
+                    wireTooltip(holder.btnRetry, AiAssistantPlugin.TOOLTIP_TAG_MESSAGE_OPEN_SETTINGS)
                 } else {
                     holder.btnRetry.text = "Retry"
                     holder.btnRetry.setOnClickListener {
                         onMessageAction(ACTION_RETRY, message)
                     }
+                    wireTooltip(holder.btnRetry, AiAssistantPlugin.TOOLTIP_TAG_MESSAGE_RETRY)
                 }
                 updateMessageMetadata(holder, message)
             }
@@ -231,6 +251,7 @@ class ChatAdapter(
                 notifyItemChanged(pos)
             }
         }
+        wireTooltip(holder.messageHeader, AiAssistantPlugin.TOOLTIP_TAG_SYSTEM_LOG)
     }
 
     private fun updateSystemMessageExpansion(holder: SystemMessageViewHolder, message: ChatMessage) {
@@ -246,22 +267,50 @@ class ChatAdapter(
         }
     }
 
+    /**
+     * Starts — or restarts — the "..." animation, cancelling any step already queued for [holder]
+     * so repeated binds of one recycled row cannot stack loops. The step is posted on the dots
+     * view, not a bare main-looper Handler, so [hideGeneratingDots] can cancel it.
+     *
+     * @param holder the row whose dots should animate
+     */
     private fun animateGeneratingDots(holder: DefaultMessageViewHolder) {
+        hideGeneratingDots(holder)
         holder.generatingDots.visibility = View.VISIBLE
         val dotStates = arrayOf(".", "..", "...")
         var currentIndex = 0
 
-        val handler = android.os.Handler(android.os.Looper.getMainLooper())
-        val runnable = object : Runnable {
+        val step = object : Runnable {
             override fun run() {
-                if (holder.generatingDots.visibility == View.VISIBLE) {
-                    holder.generatingDots.text = dotStates[currentIndex]
-                    currentIndex = (currentIndex + 1) % dotStates.size
-                    handler.postDelayed(this, 500)
+                if (holder.generatingDots.visibility != View.VISIBLE) {
+                    holder.generatingDotsStep = null
+                    return
                 }
+                holder.generatingDots.text = dotStates[currentIndex]
+                currentIndex = (currentIndex + 1) % dotStates.size
+                holder.generatingDots.postDelayed(this, 500)
             }
         }
-        handler.post(runnable)
+        holder.generatingDotsStep = step
+        holder.generatingDots.post(step)
+    }
+
+    /**
+     * Hides the dots and cancels the animation. Visibility alone is not enough: the running step
+     * only notices it on its next tick, and never at all once the view is detached.
+     *
+     * @param holder the row whose dots should stop
+     */
+    private fun hideGeneratingDots(holder: DefaultMessageViewHolder) {
+        holder.generatingDotsStep?.let { holder.generatingDots.removeCallbacks(it) }
+        holder.generatingDotsStep = null
+        holder.generatingDots.visibility = View.GONE
+    }
+
+    /** Stops the dots animation of a row leaving the screen, so its step can't outlive the view. */
+    override fun onViewRecycled(holder: RecyclerView.ViewHolder) {
+        super.onViewRecycled(holder)
+        if (holder is DefaultMessageViewHolder) hideGeneratingDots(holder)
     }
 
     private fun createPreview(rawText: String): String {

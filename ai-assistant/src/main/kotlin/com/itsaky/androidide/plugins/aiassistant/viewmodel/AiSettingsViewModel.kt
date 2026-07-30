@@ -5,10 +5,17 @@ import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.itsaky.androidide.plugins.aiassistant.security.SecureApiKeyStore
 import com.itsaky.androidide.plugins.services.LlmInferenceService
 import com.itsaky.androidide.plugins.services.SharedServices
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import com.itsaky.androidide.plugins.PluginContext
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 
 /**
  * State for the model file loading.
@@ -48,7 +55,8 @@ enum class AiBackend(val displayName: String) {
 data class GeminiModelOptions(val models: List<String>, val isLive: Boolean)
 
 class AiSettingsViewModel(
-    private val getContext: () -> com.itsaky.androidide.plugins.PluginContext?
+    private val getContext: () -> PluginContext?,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : ViewModel() {
 
     companion object {
@@ -56,6 +64,13 @@ class AiSettingsViewModel(
 
         /** Default selection; kept in sync with GeminiBackend.DEFAULT_MODEL. */
         private const val DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
+
+        /**
+         * Failsafe cap on the cross-plugin model listing, above ai-core's own per-request budget
+         * (15 s connect + 15 s read, paginated) so a slow-but-live fetch is never truncated.
+         * Bounds a future that may never complete; it is not a network timeout.
+         */
+        private const val LIST_MODELS_TIMEOUT_SECONDS = 60L
 
         /** Shown only when the live catalog can't be fetched — current models, no retired ones. */
         private val FALLBACK_MODELS = listOf(
@@ -188,22 +203,48 @@ class AiSettingsViewModel(
     }
 
     /**
-     * Persists the Gemini API key in this plugin's private SharedPreferences.
-     * The store is app-sandboxed (not world-readable) but NOT encrypted at rest;
-     * it is recoverable on a rooted/compromised device. Use [clearGeminiApiKey]
-     * to remove it. See the plugin README "Security" section for the tradeoff.
+     * Encrypts [apiKey] via [SecureApiKeyStore] and persists only the ciphertext to private
+     * prefs, off the main thread (Keystore IPC + AES/GCM). Nothing is written on failure.
+     *
+     * @param apiKey the plaintext key to store (trimmed before encryption)
+     * @return true only if the key was both encrypted and persisted
      */
-    fun saveGeminiApiKey(apiKey: String) {
-        getPluginPrefs()?.edit()?.apply {
-            putString("gemini_api_key", apiKey)
-            putLong("gemini_api_key_timestamp", System.currentTimeMillis())
-            apply()
+    suspend fun saveGeminiApiKey(apiKey: String): Boolean = withContext(ioDispatcher) {
+        // Checked first: returning true here would have the UI claim an unwritten key was saved.
+        val prefs = getPluginPrefs()
+        if (prefs == null) {
+            android.util.Log.e(TAG, "Cannot save Gemini API key: plugin preferences unavailable")
+            return@withContext false
         }
+        val encrypted = try {
+            SecureApiKeyStore.encrypt(apiKey.trim())
+        } catch (e: Exception) {
+            android.util.Log.e(TAG, "Failed to encrypt Gemini API key", e)
+            return@withContext false
+        }
+        prefs.edit()
+            .putString("gemini_api_key", encrypted)
+            .putLong("gemini_api_key_timestamp", System.currentTimeMillis())
+            .apply()
+        true
     }
 
-    fun getGeminiApiKey(): String? {
-        return getPluginPrefs()?.getString("gemini_api_key", null)
+    /**
+     * Decrypt the stored key off the main thread (Keystore IPC + AES/GCM), upgrading a
+     * pre-encryption plaintext key to ciphertext in passing so existing installs actually
+     * end up encrypted rather than waiting for the user to re-enter the key.
+     */
+    suspend fun getGeminiApiKey(): String? = withContext(ioDispatcher) {
+        SecureApiKeyStore.readAndMigrate(getPluginPrefs(), "gemini_api_key")
     }
+
+    /**
+     * True when a Gemini key is present on disk, whether or not it can still be decrypted. Lets
+     * the UI tell "nothing was saved" from "the Keystore entry is gone" — [getGeminiApiKey] is
+     * null for both. Raw pref only, so no Keystore IPC and safe on the main thread.
+     */
+    fun hasStoredGeminiApiKey(): Boolean =
+        !getPluginPrefs()?.getString("gemini_api_key", null).isNullOrBlank()
 
     fun getGeminiApiKeySaveTimestamp(): Long {
         return getPluginPrefs()?.getLong("gemini_api_key_timestamp", 0L) ?: 0L
@@ -260,16 +301,7 @@ class AiSettingsViewModel(
                     return@launch
                 }
 
-                // listModels() lives in the ai-core plugin and isn't part of the shared
-                // LlmBackend interface, so reach it reflectively across the plugin
-                // classloader boundary. It reads the saved key itself and returns the live
-                // v1beta catalog (empty when unavailable).
-                val method = geminiBackend.javaClass.getMethod("listModels")
-                val futureResult = method.invoke(geminiBackend)
-
-                @Suppress("UNCHECKED_CAST")
-                val models: List<String> =
-                    (futureResult as? java.util.concurrent.CompletableFuture<List<String>>)?.get().orEmpty()
+                val models = listModelsViaBackend(geminiBackend)
                 if (models.isEmpty()) {
                     android.util.Log.w(TAG, "Live model list empty; showing fallback models")
                     _geminiModels.postValue(GeminiModelOptions(FALLBACK_MODELS, isLive = false))
@@ -283,6 +315,54 @@ class AiSettingsViewModel(
             } finally {
                 _geminiModelsLoading.postValue(false)
             }
+        }
+    }
+
+    /**
+     * Ask ai-core's Gemini backend for its live model catalog.
+     *
+     * `listModels()` isn't on the shared [LlmInferenceService.LlmBackend] interface, so reflection
+     * is the only way across the plugin classloader boundary — an unchecked contract, hence the
+     * loud log when it breaks rather than a silent fall back to [FALLBACK_MODELS].
+     *
+     * @param backend the resolved "gemini" backend instance from [SharedServices]
+     * @return the live catalog, or an empty list when unavailable
+     */
+    private fun listModelsViaBackend(backend: Any): List<String> {
+        val method = try {
+            backend.javaClass.getMethod("listModels")
+        } catch (e: NoSuchMethodException) {
+            android.util.Log.e(
+                TAG,
+                "ai-core's ${backend.javaClass.name} has no listModels(): the cross-plugin " +
+                    "contract changed. Expected `fun listModels(): CompletableFuture<List<String>>`.",
+                e
+            )
+            return emptyList()
+        }
+        val result = method.invoke(backend)
+
+        @Suppress("UNCHECKED_CAST")
+        val future = result as? CompletableFuture<List<String>>
+        if (future == null) {
+            android.util.Log.e(
+                TAG,
+                "listModels() returned ${result?.javaClass?.name}, expected CompletableFuture"
+            )
+            return emptyList()
+        }
+        // Bounded: a future from ai-core's already-cancelled scope would never complete.
+        return try {
+            future.get(LIST_MODELS_TIMEOUT_SECONDS, TimeUnit.SECONDS).orEmpty()
+        } catch (e: TimeoutException) {
+            future.cancel(true)
+            android.util.Log.e(
+                TAG,
+                "listModels() did not complete within ${LIST_MODELS_TIMEOUT_SECONDS}s; " +
+                    "is ai-core still active?",
+                e
+            )
+            emptyList()
         }
     }
 

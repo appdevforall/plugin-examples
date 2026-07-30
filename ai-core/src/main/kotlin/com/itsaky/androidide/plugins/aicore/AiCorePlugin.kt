@@ -54,6 +54,8 @@ class AiCorePlugin : IPlugin, DocumentationExtension {
             // Create and register Gemini API backend
             geminiBackend = GeminiBackend(context)
             llmService.registerBackend(geminiBackend)
+            // Decrypt the key off-thread now, so a main-thread isAvailable() can't say "no key".
+            geminiBackend.warmKeyCache()
             context.logger.info("AiCorePlugin: Registered Gemini API backend")
 
             return true

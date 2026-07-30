@@ -13,11 +13,17 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.chip.Chip
+import com.google.android.material.snackbar.Snackbar
 import com.itsaky.androidide.plugins.PluginContext
+import com.itsaky.androidide.plugins.aiassistant.AiAssistantPlugin
+import com.itsaky.androidide.plugins.aiassistant.R
 import com.itsaky.androidide.plugins.aiassistant.adapters.ChatAdapter
 import com.itsaky.androidide.plugins.aiassistant.databinding.FragmentChatBinding
 import com.itsaky.androidide.plugins.aiassistant.models.AgentState
 import com.itsaky.androidide.plugins.aiassistant.viewmodel.ChatViewModel
+import com.itsaky.androidide.plugins.base.PluginFragmentHelper
+import com.itsaky.androidide.plugins.services.IdeProjectService
+import com.itsaky.androidide.plugins.services.IdeTooltipService
 import io.noties.markwon.Markwon
 import kotlinx.coroutines.launch
 import java.io.File
@@ -34,6 +40,26 @@ class ChatFragment : Fragment() {
     private lateinit var chatAdapter: ChatAdapter
     private lateinit var markwon: Markwon
     private val contextFiles = mutableListOf<File>()
+
+    private val tooltipService: IdeTooltipService? by lazy {
+        try {
+            PluginFragmentHelper.getServiceRegistry(AiAssistantPlugin.PLUGIN_ID)
+                ?.get(IdeTooltipService::class.java)
+        } catch (e: Exception) {
+            AiAssistantPlugin.getContext()?.logger
+                ?.warn("ChatFragment: tooltip service unavailable; long-press help disabled", e)
+            null
+        }
+    }
+
+    /** Shows this plugin's tooltip for [tag] when [view] is long-pressed (Tier 1/2 + guide). */
+    private fun wireTooltip(view: View, tag: String) {
+        view.setOnLongClickListener { anchor ->
+            val service = tooltipService ?: return@setOnLongClickListener false
+            service.showTooltip(anchor, AiAssistantPlugin.TOOLTIP_CATEGORY, tag)
+            true
+        }
+    }
 
     companion object {
         // Test prompt injection (for E2E testing via broadcast receiver)
@@ -177,7 +203,7 @@ class ChatFragment : Fragment() {
     private fun setupRecyclerView() {
         // The adapter inflates item views from parent.context (the RecyclerView's theme-aware
         // Context), so it no longer needs a Context passed in.
-        chatAdapter = ChatAdapter(markwon) { action, message ->
+        chatAdapter = ChatAdapter(markwon, ::wireTooltip) { action, message ->
             onMessageAction(action, message)
         }
         binding.chatRecyclerView.apply {
@@ -210,6 +236,7 @@ class ChatFragment : Fragment() {
             }
             popup.show()
         }
+        wireTooltip(binding.btnOverflowMenu, AiAssistantPlugin.TOOLTIP_TAG_CHAT_MENU)
     }
 
     private fun setupInputArea() {
@@ -237,6 +264,12 @@ class ChatFragment : Fragment() {
         binding.btnAddContext.setOnClickListener {
             showFilePicker()
         }
+
+        // Anchored on the bar, not promptInputEdittext: long-press there is the paste menu.
+        wireTooltip(binding.btnAddContext, AiAssistantPlugin.TOOLTIP_TAG_CONTEXT_FILES)
+        wireTooltip(binding.inputBarCard, AiAssistantPlugin.TOOLTIP_TAG_CHAT_INPUT)
+        wireTooltip(binding.sendButton, AiAssistantPlugin.TOOLTIP_TAG_CHAT_SEND)
+        wireTooltip(binding.backendStatusText, AiAssistantPlugin.TOOLTIP_TAG_SETTINGS_BACKEND)
     }
 
     private fun setupStatusBar() {
@@ -334,9 +367,20 @@ class ChatFragment : Fragment() {
         dialog.show(parentFragmentManager, "approval_dialog")
     }
 
+    /**
+     * Opens the file picker rooted at the open project. The host's [IdeProjectService] is the
+     * only source of truth for that root — PathGuard's `System.getProperty` fallback resolves
+     * to "/" in the IDE process, which would root the picker at the device filesystem instead
+     * of the project. With no project open there is nothing to confine the picker to, so this
+     * fails closed and says so rather than opening an unconfined browser.
+     */
     private fun showFilePicker() {
-        // Start from AndroidIDE projects directory by default
-        val startPath = "/storage/emulated/0/AndroidIDEProjects"
+        val projectService = getPluginContext()?.services?.get(IdeProjectService::class.java)
+        val startPath = projectService?.getCurrentProject()?.rootDir?.absolutePath
+        if (startPath.isNullOrBlank()) {
+            showInfoSnackbar(getString(R.string.file_picker_error_no_project))
+            return
+        }
 
         val dialog = FilePickerDialogFragment.newInstance(startPath) { files ->
             addContextFiles(files)
@@ -404,10 +448,15 @@ class ChatFragment : Fragment() {
      */
     private fun showErrorSnackbar(message: String) {
         val binding = _binding ?: return
-        com.google.android.material.snackbar.Snackbar
-            .make(binding.root, message, com.google.android.material.snackbar.Snackbar.LENGTH_LONG)
+        Snackbar
+            .make(binding.root, message, Snackbar.LENGTH_LONG)
             .setAction("Settings") { openSettingsFragment() }
             .show()
+    }
+
+    private fun showInfoSnackbar(message: String) {
+        val binding = _binding ?: return
+        Snackbar.make(binding.root, message, Snackbar.LENGTH_LONG).show()
     }
 
 }

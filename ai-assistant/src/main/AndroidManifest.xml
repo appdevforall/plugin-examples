@@ -33,13 +33,14 @@
 
         <meta-data
             android:name="plugin.max_ide_version"
-            android:value="26.30" />
+            android:value="26.31" />
 
         <!-- Number of editor tabs contributed via getEditorTabs() (the "Agent" tab) -->
         <meta-data
             android:name="plugin.editor_tabs"
             android:value="1" />
 
+        <!-- No network.access: ai-core makes the Gemini calls. No ide.settings: prefs reads aren't gated on it and nothing here modifies IDE settings. -->
         <meta-data
             android:name="plugin.permissions"
             android:value="filesystem.read,filesystem.write,system.commands,project.structure" />
