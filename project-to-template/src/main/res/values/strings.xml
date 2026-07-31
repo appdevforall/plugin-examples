@@ -1,3 +1,18 @@
 <resources>
     <string name="app_name">Project to Template</string>
+
+    <!-- Main screen -->
+    <string name="project_label">Project</string>
+    <string name="no_project_open">No project open</string>
+    <string name="template_name_hint">Template name (written into template.json)</string>
+    <string name="dry_run_label">Dry run (preview only, writes nothing)</string>
+    <string name="skip_cleanup_label">Skip build/ and keystore cleanup</string>
+    <string name="convert_button">Convert to Template</string>
+    <string name="log_label">Log</string>
+    <string name="install_button">Install Template</string>
+
+    <!-- Status messages -->
+    <string name="no_project_currently_open">No project is currently open.</string>
+    <string name="enter_template_name">Enter a template name to write into template.json.</string>
+    <string name="conversion_failed">Conversion failed: %1$s</string>
 </resources>

@@ -15,7 +15,7 @@
             android:id="@+id/currentProjectLabel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Project"
+            android:text="@string/project_label"
             android:textSize="12sp"
             android:textColor="?android:attr/textColorSecondary" />
 
@@ -24,7 +24,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="2dp"
-            android:text="No project open"
+            android:text="@string/no_project_open"
             android:textSize="16sp"
             android:textStyle="bold" />
 
@@ -38,7 +38,7 @@
                 android:id="@+id/templateNameInput"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:hint="Template name (written into template.json)"
+                android:hint="@string/template_name_hint"
                 android:singleLine="true" />
         </com.google.android.material.textfield.TextInputLayout>
 
@@ -47,13 +47,13 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="Dry run (preview only, writes nothing)" />
+            android:text="@string/dry_run_label" />
 
         <com.google.android.material.checkbox.MaterialCheckBox
             android:id="@+id/skipCleanupCheckbox"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Skip build/ and keystore cleanup" />
+            android:text="@string/skip_cleanup_label" />
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -67,7 +67,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:enabled="false"
-                android:text="Convert to Template" />
+                android:text="@string/convert_button" />
 
             <ProgressBar
                 android:id="@+id/progressBar"
@@ -89,7 +89,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            android:text="Log"
+            android:text="@string/log_label"
             android:textStyle="bold" />
 
         <TextView
@@ -106,7 +106,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            android:text="Install Template"
+            android:text="@string/install_button"
             android:visibility="gone" />
 
     </LinearLayout>

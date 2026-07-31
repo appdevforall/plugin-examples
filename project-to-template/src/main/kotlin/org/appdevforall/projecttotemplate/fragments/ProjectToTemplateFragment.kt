@@ -1,6 +1,5 @@
 package org.appdevforall.projecttotemplate.fragments
 
-import android.graphics.Color
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
@@ -10,6 +9,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ProgressBar
 import android.widget.TextView
+import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButton
@@ -96,7 +96,7 @@ class ProjectToTemplateFragment : Fragment() {
 
     private fun refreshCurrentProject() {
         val project = currentProject()
-        currentProjectText?.text = project?.name ?: "No project open"
+        currentProjectText?.text = project?.name ?: getString(R.string.no_project_open)
         updateConvertButtonState()
     }
 
@@ -108,12 +108,12 @@ class ProjectToTemplateFragment : Fragment() {
     private fun onConvertClicked() {
         val project = currentProject()
         if (project == null) {
-            showStatus("No project is currently open.", isError = true)
+            showStatus(getString(R.string.no_project_currently_open), isError = true)
             return
         }
         val templateName = templateNameInput?.text?.toString()?.trim().orEmpty()
         if (templateName.isEmpty()) {
-            showStatus("Enter a template name to write into template.json.", isError = true)
+            showStatus(getString(R.string.enter_template_name), isError = true)
             return
         }
         val dryRun = dryRunCheckbox?.isChecked ?: false
@@ -159,7 +159,7 @@ class ProjectToTemplateFragment : Fragment() {
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Conversion failed", e)
-                showStatus("Conversion failed: ${e.message}", isError = true)
+                showStatus(getString(R.string.conversion_failed, e.message ?: ""), isError = true)
             } finally {
                 setRunning(false)
             }
@@ -183,13 +183,17 @@ class ProjectToTemplateFragment : Fragment() {
                 if (installed) "[OK]      Installed template: $cgtFile"
                 else "[SKIP]    Could not install template: $cgtFile"
             )
+            // Leave the button enabled after a failed install so the user can
+            // retry without re-running the whole conversion.
+            if (!installed) installButton?.isEnabled = true
         }
     }
 
     private fun appendLogLine(line: String) {
+        // append() upgrades the buffer to EDITABLE and adds in place - O(1) per
+        // line - instead of rebuilding the whole log string on every line.
         activity?.runOnUiThread {
-            val current = logText?.text
-            logText?.text = if (current.isNullOrEmpty()) line else "$current\n$line"
+            logText?.append("$line\n")
         }
     }
 
@@ -197,7 +201,10 @@ class ProjectToTemplateFragment : Fragment() {
         statusText?.apply {
             text = message
             setTextColor(
-                if (isError) Color.parseColor("#B3261E") else Color.parseColor("#0D6B42")
+                ContextCompat.getColor(
+                    requireContext(),
+                    if (isError) R.color.status_error_text else R.color.status_success_text,
+                )
             )
             visibility = View.VISIBLE
         }

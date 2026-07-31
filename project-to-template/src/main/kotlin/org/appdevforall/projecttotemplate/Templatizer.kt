@@ -1,8 +1,8 @@
 package org.appdevforall.projecttotemplate
 
-import android.util.Base64
 import org.json.JSONObject
 import java.io.File
+import java.util.Base64
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
@@ -11,13 +11,15 @@ import java.util.zip.ZipOutputStream
  * bundle by substituting concrete values (versions, package name, app name,
  * SDK levels, Java compatibility levels) with Pebble tokens (${{ TOKEN }}),
  * then writing templates.json and template/template.json alongside a
- * thumbnail. Pure file-I/O logic with no dependency on the plugin API, so it
- * can be unit-tested and called directly from the plugin's UI layer.
+ * thumbnail. No dependency on the plugin API, and the substitution/sanitize
+ * logic uses only the JDK (java.util.Base64, not android.util.Base64), so it
+ * is unit-testable on the JVM and callable directly from the plugin's UI layer.
  */
 
 /** Directory/file names skipped when copying the source project into the bundle. */
 private val COPY_IGNORE = setOf(
-    ".git", ".gradle", ".cg", ".idea", ".claude", ".androidide", "release.properties"
+    ".git", ".gradle", ".cg", ".idea", ".claude", ".androidide",
+    "release.properties", "local.properties",
 )
 
 fun token(name: String): String = "\${{$name}}"
@@ -191,7 +193,6 @@ private fun processRootBuildGradle(projectDir: File, report: Report, dryRun: Boo
         report.skip("$path: no 'apply false version' plugin lines found, no changes made")
         return
     }
-    report.ok("$path: replaced $n AGP version occurrence(s)")
     writePeb(path, newText, report, dryRun)
 }
 
@@ -333,7 +334,6 @@ private fun processAppBuildGradle(
         report.skip("$path: no recognized patterns found, no changes made")
         return basePackage
     }
-    report.ok("$path: made $total substitution(s)")
     writePeb(path, text, report, dryRun)
     return basePackage
 }
@@ -416,7 +416,6 @@ private fun processJavaKtSources(
             report.skip("$path: no substitutions made")
             continue
         }
-        report.ok("$path: made $total substitution(s)")
         writePeb(path, text, report, dryRun)
     }
 }
@@ -480,13 +479,26 @@ private fun cleanupBuildDirs(projectDir: File, report: Report, dryRun: Boolean) 
     }
 }
 
+private val KEYSTORE_EXTENSIONS = setOf("jks", "keystore", "p12")
+
 private fun cleanupKeystores(projectDir: File, report: Report, dryRun: Boolean) {
-    val patterns = listOf("jks", "keystore", "p12")
     projectDir.walkTopDown()
-        .filter { it.isFile && it.extension in patterns }
+        .filter { it.isFile && it.extension in KEYSTORE_EXTENSIONS }
         .forEach {
             report.remove("$it")
             if (!dryRun) it.delete()
+        }
+}
+
+/**
+ * When keystore cleanup is skipped, keystores are still copied into the bundle,
+ * so flag every one loudly instead of silently shipping signing material.
+ */
+private fun flagKeystores(projectDir: File, report: Report) {
+    projectDir.walkTopDown()
+        .filter { it.isFile && it.extension in KEYSTORE_EXTENSIONS }
+        .forEach {
+            report.flag("$it is a signing keystore; remove it before distributing this template")
         }
 }
 
@@ -530,25 +542,23 @@ private fun runPipeline(
     if (!skipCleanup) {
         cleanupBuildDirs(projectDir, report, dryRun)
         cleanupKeystores(projectDir, report, dryRun)
-        flagPersonalInfoFiles(projectDir, report)
+    } else {
+        // Cleanup is skipped, so keystores are shipped as-is: flag them so the
+        // warning is loudest in exactly the run where it matters most.
+        flagKeystores(projectDir, report)
     }
+    // Always warn about machine-specific / personal files, cleanup or not.
+    flagPersonalInfoFiles(projectDir, report)
 
     return languages
 }
 
-private fun isIgnoredUnderRoot(file: File, root: File): Boolean {
-    var f: File? = file
-    while (f != null && f != root) {
-        if (f.name in COPY_IGNORE) return true
-        f = f.parentFile
-    }
-    return false
-}
-
-private fun copyProject(source: File, dest: File) {
+private fun copyProject(source: File, dest: File, ignore: Set<String>) {
+    // onEnter prunes descent into any ignored directory (so its whole subtree is
+    // skipped and never copied); the name filter drops ignored files at any depth.
     source.walkTopDown()
-        .onEnter { it == source || it.name !in COPY_IGNORE }
-        .filter { it != source && !isIgnoredUnderRoot(it, source) }
+        .onEnter { it == source || it.name !in ignore }
+        .filter { it != source && it.name !in ignore }
         .forEach { src ->
             val relative = src.relativeTo(source)
             val target = File(dest, relative.path)
@@ -688,12 +698,17 @@ fun createTemplateBundle(
     val outputDir = File(projectDir.parentFile, "${projectDir.name}-cgt")
     val dest = File(outputDir, safeName)
 
+    // build/ is regenerated on the consuming side and cleanupBuildDirs would
+    // only delete it again, so skip copying it entirely unless the user opts to
+    // keep it (skipCleanup) - saving hundreds of MB of file I/O on a phone.
+    val copyIgnore = if (skipCleanup) COPY_IGNORE else COPY_IGNORE + "build"
+
     if (dryRun) {
         // Preview against a disposable copy so a dry run never touches the real output path.
         val tmpRoot = File.createTempFile("cgt-dryrun", "").apply { delete(); mkdirs() }
         val tmpDest = File(tmpRoot, safeName)
         try {
-            copyProject(projectDir, tmpDest)
+            copyProject(projectDir, tmpDest, copyIgnore)
             val languages = runPipeline(tmpDest, module, dryRun, skipCleanup, report)
             report.ok("would write ${File(outputDir, "templates.json")}")
             report.ok("would write ${File(dest, "template/template.json")}")
@@ -704,12 +719,15 @@ fun createTemplateBundle(
         }
     }
 
-    if (dest.exists()) {
-        report.remove("$dest")
-        dest.deleteRecursively()
+    // Wipe the whole output dir, not just dest/: it is reused across runs and
+    // then zipped wholesale, so a leftover subtree from a previous template name
+    // would otherwise be bundled into this run's .cgt.
+    if (outputDir.exists()) {
+        report.remove("$outputDir")
+        outputDir.deleteRecursively()
     }
     outputDir.mkdirs()
-    copyProject(projectDir, dest)
+    copyProject(projectDir, dest, copyIgnore)
     report.ok("$projectDir -> $dest")
 
     val languages = runPipeline(dest, module, dryRun, skipCleanup, report)
@@ -731,7 +749,7 @@ fun createTemplateBundle(
     report.ok("$templateJsonFile")
 
     val thumbPng = File(templateDir, "thumb.png")
-    thumbPng.writeBytes(Base64.decode(THUMB_PNG_B64, Base64.DEFAULT))
+    thumbPng.writeBytes(Base64.getDecoder().decode(THUMB_PNG_B64))
     report.ok("$thumbPng (generic thumbnail, replace with an app-specific one if desired)")
 
     val cgtFile = File(outputDir.parentFile, "$safeName.cgt")
