@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Project to Template — Guide</title>
+    <style>
+        html { background: #ffffff; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            color: #000000;
+            background: #ffffff;
+            line-height: 1.6;
+            max-width: 46rem;
+            margin: 0 auto;
+            padding: 1.5rem 1.25rem 3rem;
+        }
+        h1 { font-size: 1.7rem; margin: 0 0 0.4rem; }
+        h2 { font-size: 1.25rem; margin: 1.8rem 0 0.6rem; border-bottom: 1px solid #ccc; padding-bottom: 0.25rem; }
+        h3 { font-size: 1.05rem; margin: 1.2rem 0 0.4rem; }
+        p, li { margin: 0.4rem 0; }
+        ul, ol { padding-left: 1.4rem; }
+        code {
+            font-family: "SFMono-Regular", Consolas, Menlo, monospace;
+            background: #f0f0f0;
+            padding: 0.1em 0.35em;
+            border-radius: 3px;
+            font-size: 0.9em;
+        }
+        pre {
+            background: #f0f0f0;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            padding: 0.8rem 1rem;
+            overflow-x: auto;
+            font-size: 0.85rem;
+        }
+        pre code { background: none; padding: 0; }
+        table { width: 100%; border-collapse: collapse; margin: 0.8rem 0; font-size: 0.92rem; }
+        th, td { text-align: left; padding: 0.45rem 0.7rem; border: 1px solid #ccc; }
+        th { background: #f0f0f0; }
+        .lede { font-size: 1.05rem; }
+        .note { border-left: 4px solid #888; background: #f7f7f7; padding: 0.6rem 0.9rem; border-radius: 0 5px 5px 0; margin: 1rem 0; }
+    </style>
+</head>
+<body>
+
+<h1>Project to Template</h1>
+<p class="lede">Turn the Android project you have open in Code On The Go into a
+reusable project template (a <code>.cgt</code> bundle) — and install it straight
+into the New Project template picker, all without leaving the IDE.</p>
+
+<div class="note">
+    <b>Your project is never modified.</b> The plugin copies your project into a
+    new folder next to it (<code>&lt;project&gt;-cgt</code>) and templatizes the
+    <em>copy</em>. The original stays exactly as it is.
+</div>
+
+<h2>What it does</h2>
+<p>A template is a project with the machine-specific and app-specific details
+replaced by fill-in-the-blanks tokens. When someone later creates a new project
+from your template, Code On The Go asks for values (app name, package name, SDK
+levels…) and substitutes them back in. This plugin produces such a template from
+a working project automatically, so you don't have to hand-edit anything.</p>
+
+<h2>How to use it</h2>
+<ol>
+    <li>Open the project you want to turn into a template in Code On The Go.</li>
+    <li>Tap <b>Project to Template</b> in the sidebar (under <em>tools</em>). A
+        tab opens.</li>
+    <li>The <b>Project</b> field shows the currently open project (read-only).</li>
+    <li>Type a <b>Template name</b> — this becomes the template's display name.</li>
+    <li>Tap <b>Convert to Template</b>. A live log streams each action; a summary
+        with the output paths appears when it finishes.</li>
+    <li>Tap <b>Install Template</b> (it appears below the log after a real
+        conversion) to register the template with the IDE. It then shows up in
+        the New Project template picker immediately.</li>
+</ol>
+
+<h3>Options</h3>
+<table>
+    <tr><th>Option</th><th>Effect</th></tr>
+    <tr><td><b>Dry run</b></td><td>Preview every substitution against a throwaway copy. Nothing is written or deleted — useful for checking what <em>would</em> happen first.</td></tr>
+    <tr><td><b>Skip cleanup</b></td><td>Leave <code>build/</code> directories and keystore files in place instead of removing them.</td></tr>
+</table>
+
+<h2>Reading the log</h2>
+<table>
+    <tr><th>Marker</th><th>Meaning</th></tr>
+    <tr><td><code>[OK]</code></td><td>A file was templatized (saved with a <code>.peb</code> suffix) or written.</td></tr>
+    <tr><td><code>[SKIP]</code></td><td>A file or pattern wasn't found; nothing to do. Normal for projects that don't use every feature.</td></tr>
+    <tr><td><code>[REMOVED]</code></td><td>A <code>build/</code> directory or keystore was deleted from the copy.</td></tr>
+    <tr><td><code>[REVIEW]</code></td><td>A file that may hold machine-specific or personal data (<code>local.properties</code>, <code>google-services.json</code>, <code>key.properties</code>, <code>GoogleService-Info.plist</code>) — check it by hand before sharing the template.</td></tr>
+</table>
+
+<h2>What gets replaced with tokens</h2>
+<p>Values are swapped for Pebble tokens of the form <code>${{ TOKEN }}</code>:</p>
+<ul>
+    <li>Gradle version, Android Gradle Plugin version, Kotlin plugin version</li>
+    <li>Package name (<code>namespace</code> / <code>applicationId</code>), across
+        build files, <code>package</code>/<code>import</code> statements, and the
+        source directory tree</li>
+    <li>App name (<code>rootProject.name</code> and <code>strings.xml</code>'s
+        <code>app_name</code>)</li>
+    <li><code>compileSdk</code>, <code>minSdk</code>, <code>targetSdk</code>, and
+        Java source/target compatibility levels</li>
+</ul>
+<p>Both Kotlin DSL (<code>build.gradle.kts</code>) and Groovy DSL
+(<code>build.gradle</code>) projects are supported. The plugin assumes the app
+module is named <code>app</code>, falling back to the first module it finds.</p>
+
+<h2>What the bundle contains</h2>
+<pre><code>&lt;project&gt;-cgt/
+├── templates.json          list of templates in this bundle
+└── &lt;template name&gt;/
+    ├── … your templatized project (.peb files) …
+    └── template/
+        ├── template.json   parameter &amp; metadata schema
+        └── thumb.png        placeholder thumbnail</code></pre>
+<p>The whole bundle is also zipped into <code>&lt;template name&gt;.cgt</code>
+next to the folder — that single file is what <b>Install Template</b> registers.</p>
+
+<div class="note">
+    <b>Before sharing a template:</b> open the generated <code>.peb</code> files
+    to confirm the substitutions look right, and replace the placeholder
+    <code>thumb.png</code> with a real screenshot if you want a custom thumbnail
+    in the picker.
+</div>
+
+<h2>Permissions</h2>
+<p>The plugin declares <code>filesystem.read</code>,
+<code>filesystem.write</code>, and <code>project.structure</code> — it reads your
+open project, walks its module structure, and writes the template bundle beside
+it. It does not access the network.</p>
+
+</body>
+</html>
