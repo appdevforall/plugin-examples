@@ -87,6 +87,51 @@ object PathGuard {
     private val SKIP_DIRS = setOf("build", ".git", ".gradle", ".idea", "node_modules", ".cxx")
 
     /**
+     * Directory names no tool may write into. [SKIP_DIRS] only constrains the basename
+     * *search*; containment alone happily resolves ".git/config" or "build/output.txt",
+     * and corrupting the git database is unrecoverable for a user with no other checkout.
+     */
+    private val WRITE_DENY_DIRS = SKIP_DIRS
+
+    /** Exact filenames no tool may write to — build/signing configuration and secrets. */
+    private val WRITE_DENY_NAMES = setOf(
+        "local.properties",
+        "gradle-wrapper.jar",
+        "gradle-wrapper.properties",
+    )
+
+    /** Extensions no tool may write to — keystores and other credential material. */
+    private val WRITE_DENY_EXTENSIONS = setOf("jks", "keystore", "p12", "pfx", "pem")
+
+    /**
+     * Explains why [file] is off-limits to writes, for a path already known to be in-root.
+     * Containment is necessary but not sufficient: generated trees, the git database, and
+     * signing material are all inside the project yet must never be machine-edited.
+     * @param file an in-root file (as returned by [resolveWithin]).
+     * @return a human/model-readable reason, or null when the file is a legal write target.
+     */
+    fun writeDenialReason(file: File): String? {
+        val root = File(projectRoot())
+        val relative = try {
+            file.canonicalFile.relativeToOrNull(root.canonicalFile)?.path
+        } catch (e: Exception) {
+            null
+        } ?: file.name
+
+        val segments = relative.split(File.separatorChar).filter { it.isNotEmpty() }
+        segments.dropLast(1).firstOrNull { it in WRITE_DENY_DIRS }?.let { dir ->
+            return "'$relative' is inside '$dir/', which is generated or internal and must not be edited"
+        }
+        if (file.name in WRITE_DENY_NAMES) {
+            return "'${file.name}' is build configuration and must not be edited by a tool"
+        }
+        if (file.extension.lowercase() in WRITE_DENY_EXTENSIONS) {
+            return "'${file.name}' looks like signing/credential material and must not be edited"
+        }
+        return null
+    }
+
+    /**
      * Finds in-root files whose name equals [fileName] (case-insensitive), skipping
      * generated/hidden dirs and symlinks, so a bare name resolves to a real path.
      * @param fileName the name to match (its basename is used).
@@ -96,18 +141,49 @@ object PathGuard {
     fun findByName(fileName: String, limit: Int = 20): List<File> {
         val target = baseNameOf(fileName).trim()
         if (target.isEmpty()) return emptyList()
+        return walkProject(limit) { it.name.equals(target, ignoreCase = true) }
+    }
 
+    /**
+     * Suggests real project files for a path that doesn't exist, so a wrong guess is corrected in
+     * one turn. Matches the basename first, then the name without its extension: the common error is
+     * the right class with the wrong language, which an exact-name search never finds.
+     * @param path the path the model asked for.
+     * @param limit maximum suggestions.
+     * @return root-relative paths of plausible matches, closest first (possibly empty).
+     */
+    fun suggestPathsFor(path: String, limit: Int = 3): List<String> {
+        val target = baseNameOf(path).trim()
+        if (target.isEmpty()) return emptyList()
+        val stem = target.substringBeforeLast('.').lowercase()
+        if (stem.isEmpty()) return emptyList()
+
+        val root = File(projectRoot())
+        val exact = findByName(target, limit)
+        val byStem = if (exact.size >= limit) emptyList() else {
+            walkProject(limit) { it.nameWithoutExtension.lowercase() == stem && it !in exact }
+        }
+        return (exact + byStem).take(limit).map { it.relativeToOrSelf(root).path }
+    }
+
+    /**
+     * Walks the project for files matching [predicate], skipping generated/hidden trees and
+     * refusing to descend symlinks (which could otherwise walk outside the root).
+     * @param limit maximum results.
+     * @param predicate the file test.
+     * @return matching in-root files.
+     */
+    private fun walkProject(limit: Int, predicate: (File) -> Boolean): List<File> {
         val root = File(projectRoot())
         if (!isValidRoot(root)) return emptyList()
         val rootWithSep = root.canonicalPath.let { if (it.endsWith(File.separator)) it else it + File.separator }
 
         return root.walkTopDown()
-            // Don't descend symlinked dirs; walkTopDown matches by name and could escape the root.
             .onEnter { dir ->
                 (dir == root || (dir.name !in SKIP_DIRS && !dir.name.startsWith("."))) &&
                     (dir == root || !Files.isSymbolicLink(dir.toPath()))
             }
-            .filter { it.isFile && it.name.equals(target, ignoreCase = true) }
+            .filter { it.isFile && predicate(it) }
             // Re-verify containment so a symlinked file resolving outside the root is dropped.
             .filter { it.canonicalPath.startsWith(rootWithSep) }
             .take(limit)

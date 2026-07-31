@@ -1,6 +1,7 @@
 package com.itsaky.androidide.plugins.aiassistant.tool
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -62,5 +63,43 @@ class ToolCallExtractorTest {
             "Let me list the files in src and then read MainActivity.kt for you."
         )
         assertTrue("narration must not produce tool calls, got $calls", calls.isEmpty())
+    }
+
+    @Test
+    fun givenProseBesideATaggedCall_whenReadingTheProse_thenOnlyTheProseComesBack() {
+        val prose = ToolCallExtractor.proseOutsideToolCalls(
+            "I renamed count to itemCount.\n<tool_call>{\"tool\":\"respond\",\"args\":{}}</tool_call>"
+        )
+        assertEquals("I renamed count to itemCount.", prose)
+    }
+
+    @Test
+    fun givenProseBetweenTwoTaggedCalls_whenReadingTheProse_thenBothEnvelopesAreRemoved() {
+        val prose = ToolCallExtractor.proseOutsideToolCalls(
+            "<tool_call>{\"tool\":\"a\"}</tool_call>Working on it.<tool_call>{\"tool\":\"b\"}</tool_call>"
+        )
+        assertEquals("Working on it.", prose)
+    }
+
+    @Test
+    fun givenNothingButATaggedCall_whenReadingTheProse_thenThereIsNone() {
+        assertNull(
+            ToolCallExtractor.proseOutsideToolCalls(
+                "<tool_call>{\"tool\":\"respond\",\"args\":{\"message\":\"hi\"}}</tool_call>"
+            )
+        )
+    }
+
+    @Test
+    fun givenAnUntaggedCallLeftOver_whenReadingTheProse_thenRawJsonIsNotTreatedAsProse() {
+        // Showing the user an untagged tool call is worse than showing nothing.
+        assertNull(
+            ToolCallExtractor.proseOutsideToolCalls("{\"tool\":\"read_file\",\"args\":{\"file_path\":\"A.kt\"}}")
+        )
+    }
+
+    @Test
+    fun givenPlainProse_whenReadingTheProse_thenItComesBackUnchanged() {
+        assertEquals("Hello, how can I help?", ToolCallExtractor.proseOutsideToolCalls("Hello, how can I help?"))
     }
 }

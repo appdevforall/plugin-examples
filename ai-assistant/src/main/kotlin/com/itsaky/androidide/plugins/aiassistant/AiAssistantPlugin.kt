@@ -25,7 +25,10 @@ class AiAssistantPlugin : IPlugin, UIExtension, DocumentationExtension {
          *  used by [com.itsaky.androidide.plugins.base.PluginFragmentHelper.getPluginInflater]. */
         const val PLUGIN_ID = "com.itsaky.androidide.plugins.aiassistant"
 
-        /** Tooltip category for this plugin (strict `plugin_<pluginId>` convention); shared by the tab and the AI Settings screen. */
+        /**
+         * Tooltip category for this plugin, in the strict `plugin_<pluginId>` form the host both
+         * registers and resolves under; shared by the tab and the AI Settings screen.
+         */
         const val TOOLTIP_CATEGORY = "plugin_$PLUGIN_ID"
 
         const val TOOLTIP_TAG_TAB = "agent_chat_tab"
@@ -35,6 +38,14 @@ class AiAssistantPlugin : IPlugin, UIExtension, DocumentationExtension {
         const val TOOLTIP_TAG_CHAT_INPUT = "agent_chat_input"
         const val TOOLTIP_TAG_CHAT_SEND = "agent_chat_send"
         const val TOOLTIP_TAG_CHAT_MENU = "agent_chat_menu"
+
+        // Tags for the approval dialog: the consent gate, so every button carries its own help.
+        const val TOOLTIP_TAG_APPROVAL_ACCEPT = "agent_approval_accept"
+        const val TOOLTIP_TAG_APPROVAL_CORRECT = "agent_approval_correct"
+        const val TOOLTIP_TAG_APPROVAL_DECLINE = "agent_approval_decline"
+        const val TOOLTIP_TAG_APPROVAL_CORRECTION_INPUT = "agent_approval_correction_input"
+        const val TOOLTIP_TAG_APPROVAL_RUN_NOW = "agent_approval_run_now"
+        const val TOOLTIP_TAG_APPROVAL_ALWAYS_ALLOW = "agent_approval_always_allow"
 
         // Tags for the controls rendered inside chat messages (see ChatAdapter).
         const val TOOLTIP_TAG_MESSAGE_RETRY = "agent_message_retry"
@@ -103,9 +114,7 @@ class AiAssistantPlugin : IPlugin, UIExtension, DocumentationExtension {
     override fun dispose() {
         context.logger.info("AI Assistant Plugin disposing...")
 
-        // Release the shared references set up in initialize() so the plugin's
-        // PluginContext (and everything it holds) can be garbage-collected when
-        // the plugin is unloaded.
+        // Releases initialize()'s shared references so the PluginContext can be collected.
         SharedServices.unregister(PluginContext::class.java)
         PathGuard.setProjectRootProvider(null)
         pluginContext = null
@@ -129,13 +138,11 @@ class AiAssistantPlugin : IPlugin, UIExtension, DocumentationExtension {
 
     override fun getMainMenuItems(): List<MenuItem> = emptyList()
 
-    // --- DocumentationExtension: three-tier tooltip help for the Agent tab ---
-    //
-    //   Tier 1 = `summary`        (one-liner shown on long-press)
-    //   Tier 2 = `detail`         (HTML paragraph behind "See More")
-    //   Tier 3 = `buttons[].uri`  (offline HTML page served from
-    //                              src/main/assets/docs/ at localhost)
-
+    /**
+     * Three-tier in-IDE help: `summary` is Tier 1 (long-press one-liner), `detail` is Tier 2 (HTML
+     * behind "See More") and `buttons[].uri` is Tier 3 (the offline page under assets/docs/).
+     * @return the strict `plugin_<pluginId>` category the host registers and resolves under.
+     */
     override fun getTooltipCategory(): String = TOOLTIP_CATEGORY
 
     override fun getTooltipEntries(): List<PluginTooltipEntry> = listOf(
@@ -223,6 +230,104 @@ class AiAssistantPlugin : IPlugin, UIExtension, DocumentationExtension {
                   <li><b>Clear chat</b> — starts a fresh session. The previous
                       conversation stays on disk in the plugin's own storage.</li>
                 </ul>
+            """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(description = "AI Assistant guide", uri = "index.html", order = 0)
+            )
+        ),
+        PluginTooltipEntry(
+            tag = TOOLTIP_TAG_APPROVAL_ACCEPT,
+            summary = "Apply the change shown above to the file, exactly as written.",
+            detail = """
+                <p>Applies the proposed edit. The block above shows the change:
+                lines marked <code>-</code> are removed and lines marked
+                <code>+</code> are put in their place — read them before
+                accepting, because the agent proposed them, not you.</p>
+                <p>A very long snippet is cut so the dialog stays readable. When
+                that happens the block says so and how much is hidden — and the
+                hidden part is still written. <b>Decline</b> any edit whose whole
+                change you cannot see.</p>
+                <p>If the file is open in the editor the change goes into that
+                buffer, so <b>Ctrl+Z undoes it</b> and any unsaved work you had is
+                preserved. If it isn't open, the file is rewritten on disk.</p>
+                <p>Approval is asked for <b>every single edit</b> — there is no
+                "always allow" for editing, so one tap never grants access to the
+                rest of your project.</p>
+            """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(description = "AI Assistant guide", uri = "index.html", order = 0)
+            )
+        ),
+        PluginTooltipEntry(
+            tag = TOOLTIP_TAG_APPROVAL_CORRECT,
+            summary = "Reject this attempt but tell the agent what to do instead, so it retries.",
+            detail = """
+                <p>Use this when the edit is close but not right — the correct
+                change in the wrong place, or the right idea with a name you don't
+                want. It opens a box for a one-line instruction such as
+                <i>"keep the original method name, only change the return type"</i>.</p>
+                <p>Nothing is written. Your instruction goes back to the agent as
+                the reason this call failed, so it can try again with that
+                guidance — which is cheaper than declining and re-typing your whole
+                request.</p>
+            """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(description = "AI Assistant guide", uri = "index.html", order = 0)
+            )
+        ),
+        PluginTooltipEntry(
+            tag = TOOLTIP_TAG_APPROVAL_CORRECTION_INPUT,
+            summary = "Describe what to change about the proposed edit; the agent retries with this.",
+            detail = """
+                <p>Write a short instruction in plain language — one sentence is
+                usually enough. It is handed to the agent verbatim as the reason
+                this edit was rejected.</p>
+                <p><b>Send</b> returns the instruction and closes the approval
+                prompt; <b>Back</b> leaves the proposed change on screen so you can
+                still accept or decline it. Sending an empty box simply tells the
+                agent to revise the edit without saying how.</p>
+            """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(description = "AI Assistant guide", uri = "index.html", order = 0)
+            )
+        ),
+        PluginTooltipEntry(
+            tag = TOOLTIP_TAG_APPROVAL_DECLINE,
+            summary = "Refuse this action; nothing is written and the agent is told you said no.",
+            detail = """
+                <p>Rejects the action outright. No file is touched.</p>
+                <p>The agent is told the user denied the call, so it will normally
+                stop rather than retry the same thing. Prefer <b>Correct</b> if you
+                want it to keep working on the task with different details.</p>
+            """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(description = "AI Assistant guide", uri = "index.html", order = 0)
+            )
+        ),
+        PluginTooltipEntry(
+            tag = TOOLTIP_TAG_APPROVAL_RUN_NOW,
+            summary = "Allow this one tool call to run now.",
+            detail = """
+                <p>Runs the tool once, with the arguments shown above. Values are
+                shortened for readability, so a long path or snippet may be cut —
+                the full value is what actually runs.</p>
+                <p>You'll be asked again the next time this tool is used, unless
+                you choose <b>Always Allow</b>.</p>
+            """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(description = "AI Assistant guide", uri = "index.html", order = 0)
+            )
+        ),
+        PluginTooltipEntry(
+            tag = TOOLTIP_TAG_APPROVAL_ALWAYS_ALLOW,
+            summary = "Stop asking about this tool for the rest of this session.",
+            detail = """
+                <p>Approves this tool for the current session, so the agent can use
+                it again without prompting. The grant is by <b>tool name only</b> —
+                it does not depend on the arguments — and it is forgotten when the
+                session ends.</p>
+                <p>It is deliberately unavailable for file edits: those are
+                re-confirmed every time, with the change on screen.</p>
             """.trimIndent(),
             buttons = listOf(
                 PluginTooltipButton(description = "AI Assistant guide", uri = "index.html", order = 0)

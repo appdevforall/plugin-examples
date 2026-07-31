@@ -20,6 +20,8 @@ import com.itsaky.androidide.plugins.aiassistant.tool.ApprovalRequest
 import com.itsaky.androidide.plugins.aiassistant.tool.ApprovalResult
 import com.itsaky.androidide.plugins.aiassistant.tool.handlers.AddDependencyHandler
 import com.itsaky.androidide.plugins.aiassistant.tool.handlers.CreateFileHandler
+import com.itsaky.androidide.plugins.aiassistant.tool.handlers.EditFileHandler
+import com.itsaky.androidide.plugins.aiassistant.tool.handlers.PathGuard
 import com.itsaky.androidide.plugins.aiassistant.tool.handlers.GenerateFromTemplateHandler
 import com.itsaky.androidide.plugins.aiassistant.tool.handlers.GradleSyncHandler
 import com.itsaky.androidide.plugins.aiassistant.tool.handlers.ListFilesHandler
@@ -29,6 +31,8 @@ import com.itsaky.androidide.plugins.aiassistant.tool.handlers.ReadFileHandler
 import com.itsaky.androidide.plugins.aiassistant.tool.handlers.SearchProjectHandler
 import com.itsaky.androidide.plugins.aiassistant.tool.handlers.UpdateFileHandler
 import com.itsaky.androidide.plugins.aiassistant.data.ChatStorageManager
+import com.itsaky.androidide.plugins.aiassistant.utils.AgentTrace
+import com.itsaky.androidide.plugins.services.IdeEditorService
 import com.itsaky.androidide.plugins.aiassistant.utils.ToolExecutionTracker
 import com.itsaky.androidide.plugins.services.LlmInferenceService
 import com.itsaky.androidide.plugins.services.SharedServices
@@ -61,8 +65,20 @@ class ChatViewModel(
         /** Terminal tool: shared by [agentLoop] (stops on it) and [runModelTurn] (renders its message). */
         const val RESPOND_TOOL = "respond"
 
-        /** [LlmConfig.extraParams] key for the local-backend GBNF; must match ai-core's `LocalLlmBackend.EXTRA_PARAM_GRAMMAR`. */
+        /**
+         * [LlmConfig.extraParams] key for the local-backend GBNF; must match ai-core's
+         * `LocalLlmBackend.EXTRA_PARAM_GRAMMAR`.
+         */
         private const val EXTRA_PARAM_GRAMMAR = "grammar"
+
+        /** Per-argument cap in the tool badge shown in the transcript. */
+        private const val TOOL_BADGE_ARG_LIMIT = 80
+
+        /** Near-greedy sampling for local models, whose tool arguments must be copied, not invented. */
+        private const val LOCAL_TEMPERATURE = 0.15f
+
+        /** Max open files named in the prompt's IDE-context block. */
+        private const val MAX_CONTEXT_OPEN_FILES = 8
     }
 
     /**
@@ -123,10 +139,9 @@ class ChatViewModel(
     private var currentBackendId: String = "local" // Default to local backend
 
     /**
-     * Human-readable label for the backend the user has *selected* in settings, shown under the
-     * chat input. This tracks the selection (the `ai_backend_preference`), NOT the
-     * availability-resolved backend — selecting Gemini must read "Gemini API" even before its
-     * API key check runs, otherwise it would always fall back to "Local LLM".
+     * Label for the backend the user *selected* in settings, shown under the chat input. Tracks the
+     * selection, not the availability-resolved backend: picking Gemini must read "Gemini API" before
+     * its key check runs, or it would always show "Local LLM".
      */
     private val _activeBackendLabel = MutableStateFlow(selectedBackendLabel())
     val activeBackendLabel: StateFlow<String> = _activeBackendLabel.asStateFlow()
@@ -192,6 +207,7 @@ class ChatViewModel(
                 // Write tools
                 CreateFileHandler(context),
                 UpdateFileHandler(context),
+                EditFileHandler(context),
                 AddDependencyHandler(context),
                 // Build tools
                 com.itsaky.androidide.plugins.aiassistant.tool.handlers.RunAppHandler(context),
@@ -236,8 +252,8 @@ class ChatViewModel(
     /**
      * Submit user's approval decision.
      */
-    fun submitApproval(result: ApprovalResult) {
-        approvalManager.submitApproval(result)
+    fun submitApproval(result: ApprovalResult, correction: String? = null) {
+        approvalManager.submitApproval(result, correction)
     }
 
     /**
@@ -268,10 +284,10 @@ class ChatViewModel(
     }
 
     /**
-     * Surface a configuration/setup problem to the user both ways: a persistent SYSTEM error
-     * bubble in the transcript, and [AgentState.Error] so the fragment can show a transient,
-     * actionable Snackbar. Used by the [sendMessage] pre-flight guards, which reject the request
-     * before any backend runs — so the downstream `onError`/UserFeedback feedback never fires.
+     * Surfaces a setup problem both ways: a persistent SYSTEM bubble and [AgentState.Error] for the
+     * fragment's Snackbar. Used by [sendMessage]'s pre-flight guards, which reject before any backend
+     * runs, so the downstream `onError`/UserFeedback path never fires.
+     * @param text the error text to show.
      */
     private fun emitSystemError(text: String) {
         val errorMessage = ChatMessage(
@@ -313,11 +329,51 @@ class ChatViewModel(
     /**
      * Build appropriate system prompt based on LLM backend.
      */
-    private fun buildSystemPrompt(): String {
-        return if (currentBackendId == "gemini") {
+    private suspend fun buildSystemPrompt(): String {
+        val base = if (currentBackendId == "gemini") {
             buildSystemPromptGemini()
         } else {
             buildSystemPromptLocal()
+        }
+        return base + buildIdeContext()
+    }
+
+    /**
+     * Describes what the user is looking at: the focused file and other open tabs, project-relative.
+     * Most requests are about the file on screen and the IDE knows that path exactly; without it the
+     * model reconstructs one, which is where invented `.java` paths for Kotlin files came from.
+     * @return a prompt block, or empty when no editor/project is available.
+     */
+    private suspend fun buildIdeContext(): String {
+        val editor = getContext()?.services?.get(IdeEditorService::class.java) ?: return ""
+        val root = File(PathGuard.projectRoot())
+
+        // Editor state is read on the main thread, like every other editor-service call here.
+        val (current, open) = withContext(Dispatchers.Main) {
+            runCatching { editor.getCurrentFile() to editor.getOpenFiles() }
+                .getOrDefault(null to emptyList())
+        }
+
+        fun relative(file: File): String = runCatching { file.relativeToOrSelf(root).path }
+            .getOrDefault(file.name)
+
+        val others = open.orEmpty()
+            .filter { it != current }
+            .take(MAX_CONTEXT_OPEN_FILES)
+            .map(::relative)
+
+        if (current == null && others.isEmpty()) return ""
+
+        return buildString {
+            append("\n\nIDE CONTEXT (real paths — use these verbatim, do not rewrite them):\n")
+            current?.let { append("- File the user is viewing: ").append(relative(it)).append("\n") }
+            if (others.isNotEmpty()) {
+                append("- Other open files: ").append(others.joinToString(", ")).append("\n")
+            }
+            append(
+                "If the user names a file that appears above, use that exact path and do not " +
+                    "guess a different folder or extension."
+            )
         }
     }
 
@@ -334,6 +390,8 @@ class ChatViewModel(
 
         AVAILABLE TOOLS:
         $toolDescriptions
+        - respond: Send the user your reply or final answer. It MUST carry a "message" holding the
+          text itself — a respond call with no "message" shows the user nothing.
 
         BEHAVIOR:
         - Create complete, production-ready code
@@ -343,10 +401,16 @@ class ChatViewModel(
         - Generate apps that actually run and work as described
 
         RULES:
+        - Emit ONE tool call per reply, then stop and wait. Do NOT plan a batch: a tool whose arguments depend on another tool's result (editing a file you just searched for) cannot use a result you have not received yet.
+        - To locate a file, call search_project ONCE with its name — it searches the whole project. Never walk the tree with repeated list_files calls; you have a limited number of turns and each level wastes one.
+        - Renaming a symbol everywhere in a file is ONE edit_file with replace_all set to true and old_string set to just the symbol — not one edit per line.
+        - To change an existing file, use edit_file (find/replace an exact snippet), not update_file — a whole-file rewrite gets truncated before it reaches disk.
+        - Before edit_file, read the exact file you are about to edit with read_file, and copy old_string byte-for-byte from that output, including indentation. Never edit a path you have not confirmed exists.
+        - old_string must be the text currently in the file and new_string what it should become. If they are identical the edit is rejected.
         - Never fabricate tool output. Emit a tool call, then wait for the real result before continuing.
-        - Never write "User:", "Assistant:", or a <tool_response> block — the system supplies those.
+        - Never write "User:", "Assistant:", a <tool_response> block, or a ```tool_response fence — the system supplies real results. Any tool output you write yourself is a hallucination and will be ignored.
         - Paths are relative to the project root and must be complete. If you don't know a file's exact path, find it with search_project or list_files first, then act on the real path — don't guess.
-        - For plain chat (e.g. "Hi"), just reply briefly with no tool call. When the task is done, give a short summary with no tool call.
+        - For plain chat (e.g. "Hi"), just reply briefly with no tool call. When the task is done, either give a short summary with no tool call, or end with a single respond call carrying that summary in its "message" — never an empty respond.
 
         TOOL CALL FORMAT — to run a tool, emit a single line in EXACTLY this format and nothing after it:
         <tool_call>{"tool":"TOOL_NAME","args":{"arg":"value"}}</tool_call>
@@ -354,12 +418,16 @@ class ChatViewModel(
         The tool only runs when you emit the <tool_call> line itself.
 
         FORMAT EXAMPLES (the tool call is the entire reply):
+        Report the finished task (the summary goes in "message"):
+        <tool_call>{"tool":"respond","args":{"message":"Renamed count to itemCount in MainActivity.java."}}</tool_call>
         Open a file once you know its path:
         <tool_call>{"tool":"open_file","args":{"file_path":"app/src/main/java/com/example/app/MainActivity.java"}}</tool_call>
         Find a file by name:
         <tool_call>{"tool":"search_project","args":{"query":"MainActivity"}}</tool_call>
         List a directory:
         <tool_call>{"tool":"list_files","args":{"directory":"app/src/main"}}</tool_call>
+        Change part of a file (line breaks inside a value MUST be written as \n):
+        <tool_call>{"tool":"edit_file","args":{"file_path":"app/src/main/java/com/example/app/MainActivity.java","old_string":"int count = 0;","new_string":"int count = 1;"}}</tool_call>
 
         WORKFLOW:
         1. Understand the user's request
@@ -392,6 +460,11 @@ class ChatViewModel(
         - Never invent tool output or claim an action you didn't perform via a tool. After a tool call, stop; the real result returns next turn.
         - "respond" must carry a "message" — your reply or final answer.
         - File arguments accept a bare name (e.g. "MainActivity.java"); the project is searched. Don't invent deep paths.
+        - To change a file, use edit_file, not update_file. Call read_file FIRST, then copy the text to replace into "old_string" EXACTLY as it appears in that output (same spelling, same indentation). It must appear only once — include the line above or below if it doesn't.
+        - "old_string" is the text that is in the file NOW; "new_string" is what it should become. They must differ. To rename x to y: old_string has x, new_string has y.
+        - Never put a real line break inside an argument value: write it as \n. Keep old_string/new_string to a few lines; make several small edits rather than one big one.
+        - edit_file needs a real path, not a bare name, and never a path you invented. If you don't know it, call search_project with the file name FIRST and use the path it returns — don't guess the folders, and don't guess the extension (.kt vs .java).
+        - To rename something everywhere in a file, make ONE edit_file call with old_string set to just the old name and "replace_all":"true".
 
         Tools:
         $toolDescriptions
@@ -402,6 +475,14 @@ class ChatViewModel(
         <tool_call>{"tool":"respond","args":{"message":"Hi! What would you like to build?"}}</tool_call>
         Open a file -> open_file:
         <tool_call>{"tool":"open_file","args":{"file_path":"MainActivity.java"}}</tool_call>
+        Change one line of a file -> edit_file:
+        <tool_call>{"tool":"edit_file","args":{"file_path":"app/src/main/java/com/example/MainActivity.java","old_string":"setTitle(\"Old\");","new_string":"setTitle(\"New\");"}}</tool_call>
+        Change two lines (note the \n, never a real line break) -> edit_file:
+        <tool_call>{"tool":"edit_file","args":{"file_path":"app/src/main/java/com/example/MainActivity.java","old_string":"int a = 1;\nint b = 2;","new_string":"int a = 10;\nint b = 20;"}}</tool_call>
+        Rename every use of one name in a file -> ONE edit_file with replace_all:
+        <tool_call>{"tool":"edit_file","args":{"file_path":"app/src/main/java/com/example/MainActivity.java","old_string":"oldName","new_string":"newName","replace_all":"true"}}</tool_call>
+        Find where a file actually lives before editing it -> search_project:
+        <tool_call>{"tool":"search_project","args":{"query":"MainActivity"}}</tool_call>
         """.trimIndent()
 
         android.util.Log.d("ChatViewModel", "Using Local LLM system prompt (guided mode) with ${toolRouter.getAllHandlers().size} tools")
@@ -533,7 +614,7 @@ class ChatViewModel(
      * Send a user message and get agent response.
      */
     fun sendMessage(userMessage: String) {
-        android.util.Log.d("ChatViewModel", "sendMessage called with: '$userMessage'")
+        android.util.Log.d("ChatViewModel", "sendMessage called")
         val llmService = getLlmService()
         if (llmService == null) {
             android.util.Log.d("ChatViewModel", "sendMessage: LLM service not available")
@@ -561,7 +642,7 @@ class ChatViewModel(
             return
         }
 
-        android.util.Log.d("ChatViewModel", "sendMessage: Starting message processing")
+        AgentTrace.beginRun(currentBackendId, userMessage, contextFiles.size)
         // Reset per-run tool tracking.
         lastToolFailedThisRun = false
         lastSucceededCalls = null
@@ -582,7 +663,8 @@ class ChatViewModel(
                 }
 
                 val config = LlmInferenceService.LlmConfig(currentBackendId).apply {
-                    temperature = 0.7f
+                    // The grammar shapes a local tool call but not its values, so paths get sampled.
+                    temperature = if (currentBackendId == "gemini") 0.7f else LOCAL_TEMPERATURE
                     maxTokens = 4096  // headroom for complete tool calls
                     systemPrompt = buildSystemPrompt()
                     // Local backend constrains generation to this grammar; cloud ignores it.
@@ -602,7 +684,7 @@ class ChatViewModel(
                 )
 
                 try {
-                    agentLoop.run(
+                    val loopResult = agentLoop.run(
                         history = history,
                         generate = { turns ->
                             withContext(Dispatchers.Main) {
@@ -612,7 +694,31 @@ class ChatViewModel(
                         },
                         executeTools = { calls -> executeToolCalls(calls) },
                         events = object : AgentLoop.Events {
+                            override suspend fun onToolResults(
+                                turn: Int,
+                                calls: List<ToolCall>,
+                                results: List<ToolResult>,
+                            ) {
+                                calls.forEachIndexed { index, call ->
+                                    val result = results.getOrNull(index)
+                                    AgentTrace.stage(
+                                        "RESULT",
+                                        "turn=$turn ${call.name} success=${result?.success}",
+                                        AgentTrace.preview(result?.message),
+                                    )
+                                }
+                            }
+
+                            override suspend fun onFinalAnswer(turn: Int, message: String) {
+                                AgentTrace.stage(
+                                    "ANSWER",
+                                    "turn=$turn chars=${message.length}",
+                                    AgentTrace.preview(message),
+                                )
+                            }
+
                             override suspend fun onMaxIterationsReached(turns: Int) {
+                                AgentTrace.refusal("LOOP", "turns=$turns", "iteration cap reached")
                                 addSystemMessage(
                                     str(R.string.agent_max_steps_reached, turns),
                                     MessageStatus.SENT
@@ -620,6 +726,7 @@ class ChatViewModel(
                             }
 
                             override suspend fun onRepeatedToolCalls(turns: Int) {
+                                AgentTrace.refusal("LOOP", "turns=$turns", "identical tool calls repeated")
                                 addSystemMessage(
                                     str(R.string.agent_repeated_calls),
                                     MessageStatus.SENT
@@ -627,6 +734,7 @@ class ChatViewModel(
                             }
                         }
                     )
+                    AgentTrace.endRun(loopResult.reason.name, loopResult.turns)
                 } finally {
                     // Persist history only if this run wasn't superseded (epoch bumped).
                     if (generationEpoch.get() == epoch) {
@@ -637,10 +745,12 @@ class ChatViewModel(
 
                 withContext(Dispatchers.Main) { _agentState.value = AgentState.Idle }
             } catch (ce: CancellationException) {
+                AgentTrace.endRun("cancelled")
                 stopStateTimer()
                 throw ce
             } catch (e: Exception) {
                 android.util.Log.e("ChatViewModel", "sendMessage failed", e)
+                AgentTrace.endRun("error: ${e.message}")
                 stopStateTimer()
                 _agentState.value = AgentState.Error(str(R.string.state_error, e.message))
                 addSystemMessage(str(R.string.state_error, e.message), MessageStatus.ERROR)
@@ -652,12 +762,9 @@ class ChatViewModel(
     }
 
     /**
-     * Runs one streaming model turn: creates an agent bubble, streams tokens into it,
-     * and suspends until completion. Throws on backend error.
-     *
-     * Sends [turns] structurally to the local backend, which renders one chat turn per message.
-     * Gemini's transport carries a single string, so it keeps the flattened transcript.
-     *
+     * Runs one streaming model turn: creates an agent bubble, streams tokens into it and suspends
+     * until completion, throwing on backend error. Sends [turns] structurally to the local backend;
+     * Gemini's transport carries one string, so it keeps the flattened transcript.
      * @param llmService the inference service.
      * @param turns the conversation so far; the last entry is the current user turn.
      * @param config the generation config.
@@ -715,10 +822,23 @@ class ChatViewModel(
                         return
                     }
                     val durationMs = System.currentTimeMillis() - startTime
+                    // Not from onModelTurn, which fires later and would order the trace wrongly.
+                    AgentTrace.stage(
+                        "LLM",
+                        "chars=${response.text.length} generateMs=$durationMs",
+                        AgentTrace.preview(response.text),
+                    )
                     val toolCalls = ToolCallExtractor.extractToolCalls(response.text)
-                    val respondCall = toolCalls.firstOrNull { it.name == RESPOND_TOOL }
-                    val respondMessage = respondCall?.args?.get("message")?.toString()
-
+                    // Where a mis-escaped generation quietly becomes "the model said nothing".
+                    if (toolCalls.isEmpty()) {
+                        AgentTrace.detail("PARSE", "calls=0 generateMs=$durationMs (plain reply or unparsable)")
+                    } else {
+                        AgentTrace.stage(
+                            "PARSE",
+                            "calls=${toolCalls.size} generateMs=$durationMs",
+                            toolCalls.joinToString("; ") { "${it.name}(${AgentTrace.previewArgs(it.args)})" },
+                        )
+                    }
                     // Per-run flag (set by executeToolCalls), not a session-wide scan.
                     val lastToolFailed = lastToolFailedThisRun
 
@@ -731,18 +851,16 @@ class ChatViewModel(
                         return
                     }
 
-                    val displayText = when {
-                        respondCall != null && lastToolFailed ->
-                            str(R.string.agent_action_failed)
-                        // Render the "respond" message to the user, not a tool badge.
-                        respondCall != null ->
-                            respondMessage?.takeIf { it.isNotBlank() } ?: str(R.string.agent_no_response)
-                        toolCalls.isNotEmpty() -> toolCalls.joinToString("\n") { c ->
-                            "🔧 ${c.name}(${c.args.entries.joinToString(", ") { "${it.key}=${it.value}" }})"
-                        }
-                        else -> response.text.ifBlank {
-                            str(R.string.agent_no_response)
-                        }
+                    val displayText = AgentReplyRenderer.render(
+                        rawText = response.text,
+                        toolCalls = toolCalls,
+                        terminalTool = RESPOND_TOOL,
+                        lastToolFailed = lastToolFailed,
+                        actionFailedText = str(R.string.agent_action_failed),
+                        noResponseText = str(R.string.agent_no_response),
+                    ) { c ->
+                        // Capped: edit_file snippets would turn the badge into a wall of source.
+                        "🔧 ${c.name}(${c.args.entries.joinToString(", ") { "${it.key}=${abbreviate(it.value)}" }})"
                     }
                     viewModelScope.launch(Dispatchers.Main) {
                         if (isStale()) return@launch
@@ -831,6 +949,18 @@ class ChatViewModel(
         getContext()?.androidContext?.getString(resId, *args).orEmpty()
 
     /**
+     * Renders a tool argument for the one-line tool badge: line breaks flattened and the
+     * value capped, so a code-carrying argument stays a badge instead of a source dump.
+     * @param value the raw argument value.
+     * @return a single-line, length-capped rendering.
+     */
+    private fun abbreviate(value: Any?): String {
+        val text = value?.toString().orEmpty().replace("\n", "⏎")
+        return if (text.length <= TOOL_BADGE_ARG_LIMIT) text
+        else text.take(TOOL_BADGE_ARG_LIMIT) + "…"
+    }
+
+    /**
      * Appends a SYSTEM message to the chat (on the main thread).
      * @param text the message text.
      * @param status the message status.
@@ -854,6 +984,7 @@ class ChatViewModel(
     fun clearMessages() {
         // Clear Chat must also stop any in-flight run, not just wipe the list.
         generationEpoch.incrementAndGet()
+        approvalManager.cancelPendingApproval()
         generationJob?.cancel()
         generationJob = null
         getLlmService()?.cancelGeneration()
@@ -907,6 +1038,8 @@ class ChatViewModel(
     fun stopProcessing() {
         generationEpoch.incrementAndGet()
         _agentState.value = AgentState.Cancelling
+        // Cancelling the job alone would strand an open approval dialog with nothing awaiting it.
+        approvalManager.cancelPendingApproval()
         generationJob?.cancel()
         generationJob = null
         getLlmService()?.cancelGeneration()

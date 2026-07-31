@@ -19,8 +19,12 @@ class AgentLoop(
 ) {
 
     companion object {
-        /** Max model turns per user message; a backstop against a model that never stops calling tools. */
-        const val DEFAULT_MAX_ITERATIONS = 8
+        /**
+         * Max model turns per user message, as a backstop against a model that never stops calling
+         * tools. At 8 a two-line rename ran out mid-way and left the file half-edited; the
+         * repeated-call guard and per-write approval are the tighter limits.
+         */
+        const val DEFAULT_MAX_ITERATIONS = 16
 
         /** Per-tool-result cap fed back into the prompt, so big outputs don't blow a local model's context. */
         const val DEFAULT_TOOL_OUTPUT_CHAR_LIMIT = 4000
@@ -118,7 +122,7 @@ class AgentLoop(
             terminalTool?.let { tt ->
                 val terminal = calls.firstOrNull { it.name == tt }
                 if (terminal != null && realCalls.isEmpty()) {
-                    events.onFinalAnswer(turn, terminal.args["message"]?.toString().orEmpty())
+                    events.onFinalAnswer(turn, respondMessageOf(terminal.args).orEmpty())
                     return Result(turn, StopReason.COMPLETED)
                 }
             }
@@ -159,14 +163,9 @@ class AgentLoop(
         }
 
     /**
-     * Flattens the transcript into one prompt string, with no trailing "Assistant:" cue
-     * (the backend appends its own; a doubled cue makes local models repeat).
-     *
-     * For backends whose transport carries only a single string. A backend that renders real
-     * conversation turns must be given the [ChatMessage] list instead — flattening a multi-turn
-     * run into one string leaves the assistant's tool calls and the tool results sitting inside
-     * whatever single turn the backend wraps this in.
-     *
+     * Flattens the transcript into one prompt string, with no trailing "Assistant:" cue, which the
+     * backend appends itself. Only for backends whose transport carries a single string; one that
+     * renders real conversation turns must be handed the [ChatMessage] list instead.
      * @param history the conversation so far.
      * @return the rendered prompt.
      */
@@ -183,14 +182,9 @@ class AgentLoop(
     }
 
     /**
-     * Renders tool results for feeding back into the next prompt, capping each body.
-     *
-     * Each result is wrapped in `<tool_response>` tags. Chat-tuned models are trained to read
-     * tool output inside that delimiter, and it reads as a single token once the backend
-     * tokenizes with special tokens enabled. Handed the same content as bare prose, a small
-     * model tends not to register that the call already ran and re-issues it, which the
-     * [maxConsecutiveRepeats] guard then has to abort.
-     *
+     * Renders tool results for the next prompt, capping each body and wrapping it in
+     * `<tool_response>` tags that chat-tuned models are trained to read. Handed the same content as
+     * bare prose, a small model tends to re-issue the call it already ran.
      * @param calls the tool calls that ran.
      * @param results their results, positionally aligned with [calls].
      * @return the formatted results block.

@@ -82,6 +82,28 @@ class AgentLoopTest {
     }
 
     @Test
+    fun givenATerminalCallUnderAnAlternateKey_whenTheLoopRuns_thenTheAnswerStillReachesOnFinalAnswer() = runTest {
+        // Models substitute "text" for "message", which dropped the finished answer entirely.
+        val model = ScriptedModel(
+            listOf("""<tool_call>{"tool":"respond","args":{"text":"All set!"}}</tool_call>""")
+        )
+        val history = mutableListOf(ChatMessage(Role.USER, "hi"))
+        var finalMessage: String? = null
+
+        val result = AgentLoop(terminalTool = "respond").run(
+            history = history,
+            generate = model::generate,
+            executeTools = { emptyList() },
+            events = object : AgentLoop.Events {
+                override suspend fun onFinalAnswer(turn: Int, message: String) { finalMessage = message }
+            }
+        )
+
+        assertTrue(result.completed)
+        assertEquals("All set!", finalMessage)
+    }
+
+    @Test
     fun givenAModelThatCallsAToolThenAnswers_whenTheLoopRuns_thenItChainsTheToolAndFinishes() = runTest {
         // Turn 1: model calls a tool. Turn 2: sees results, gives final answer.
         val model = ScriptedModel(
@@ -108,8 +130,7 @@ class AgentLoopTest {
         assertEquals(1, executed.size)
         assertEquals("open_file", executed[0][0].name)
 
-        // The 2nd turn must receive the fed-back tool results (the whole point), and receive
-        // them as their own USER turn rather than folded into the preceding one.
+        // Turn 2 must get the fed-back results as their own USER turn, not folded into turn 1.
         val secondTurnInput = model.turns[1]
         assertEquals(3, secondTurnInput.size)
         assertEquals(Role.ASSISTANT, secondTurnInput[1].role)
