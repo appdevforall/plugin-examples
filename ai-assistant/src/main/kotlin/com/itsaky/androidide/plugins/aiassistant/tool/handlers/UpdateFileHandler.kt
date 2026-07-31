@@ -32,11 +32,14 @@ class UpdateFileHandler(
             } else if (!file.isFile) {
                 ToolResult.failure("Path is not a file: $filePath")
             } else {
-                // Backup existing content
-                val backup = file.readText()
-
-                // Write new content
-                file.writeText(content)
+                val previous = file.readText()
+                try {
+                    file.writeText(content)
+                } catch (e: Exception) {
+                    runCatching { file.writeText(previous) }
+                        .onFailure { Log.e("UpdateFileHandler", "Could not restore $filePath after a failed write", it) }
+                    throw e
+                }
 
                 ToolResult.success(
                     message = "Updated file: $filePath (${content.length} characters)",

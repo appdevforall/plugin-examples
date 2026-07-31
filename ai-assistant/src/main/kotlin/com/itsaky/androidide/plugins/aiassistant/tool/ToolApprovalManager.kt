@@ -2,6 +2,9 @@ package com.itsaky.androidide.plugins.aiassistant.tool
 
 import android.util.Log
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withTimeoutOrNull
 
 /**
@@ -31,8 +34,16 @@ class ToolApprovalManager {
 
     // Pending approval request
     private var pendingApproval: CompletableDeferred<ApprovalResult>? = null
-    private var currentApprovalRequest: ApprovalRequest? = null
-    
+
+    private val _currentApprovalRequest = MutableStateFlow<ApprovalRequest?>(null)
+
+    /**
+     * The pending approval request, or null when none is outstanding. A flow rather than a
+     * plain field so the UI is woken when a request appears, instead of polling for one.
+     */
+    val currentApprovalRequest: StateFlow<ApprovalRequest?> = _currentApprovalRequest.asStateFlow()
+
+
     /**
      * Check if a tool needs approval and request it if needed.
      * @return ApprovalResponse with approved status and optional denial message
@@ -59,7 +70,7 @@ class ToolApprovalManager {
             description = handler.description
         )
 
-        currentApprovalRequest = request
+        _currentApprovalRequest.value = request
         pendingApproval = CompletableDeferred()
 
         Log.d(TAG, "Requesting approval for $toolName (timeout: ${APPROVAL_TIMEOUT_MS}ms)")
@@ -69,7 +80,7 @@ class ToolApprovalManager {
             pendingApproval!!.await()
         }
 
-        currentApprovalRequest = null
+        _currentApprovalRequest.value = null
         pendingApproval = null
 
         // Handle timeout or decision
@@ -102,18 +113,14 @@ class ToolApprovalManager {
     }
     
     /**
-     * Get the current pending approval request, if any.
-     */
-    fun getCurrentApprovalRequest(): ApprovalRequest? {
-        return currentApprovalRequest
-    }
-    
-    /**
      * Submit user's approval decision.
      */
     fun submitApproval(result: ApprovalResult) {
         if (pendingApproval?.isActive == true) {
             pendingApproval?.complete(result)
+            // Clear here as well as in ensureApproved(): completing the deferred only resumes
+            // that coroutine on the next dispatch, and the dialog must dismiss immediately.
+            _currentApprovalRequest.value = null
             Log.d(TAG, "Approval decision submitted: $result")
         }
     }
@@ -133,7 +140,7 @@ class ToolApprovalManager {
      * Check if there's a pending approval request.
      */
     fun hasPendingApproval(): Boolean {
-        return currentApprovalRequest != null && pendingApproval?.isActive == true
+        return _currentApprovalRequest.value != null && pendingApproval?.isActive == true
     }
 
     /**

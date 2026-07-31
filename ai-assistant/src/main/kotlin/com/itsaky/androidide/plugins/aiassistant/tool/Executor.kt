@@ -33,6 +33,7 @@ class Executor(
         fun requiredArgsForTool(toolName: String): List<String> {
             return when (toolName) {
                 "read_file" -> listOf("file_path")
+                "open_file" -> listOf("file_path")
                 "list_files" -> emptyList()  // directory is optional, defaults to "."
                 "search_project" -> listOf("query")
                 "create_file" -> listOf("file_path", "content")
@@ -87,12 +88,14 @@ class Executor(
             return ToolResult.failure("Unknown function '$toolName'")
         }
 
-        // Normalize arg keys for read_file: if "path" is present but "file_path" is missing, remap
+        // Alias "path" → "file_path" for any tool that requires "file_path".
         val normalizedArgs = args.toMutableMap()
-        if (toolName == "read_file" && normalizedArgs.containsKey("path") && !normalizedArgs.containsKey("file_path")) {
+        if ("file_path" in requiredArgsForTool(toolName) &&
+            normalizedArgs.containsKey("path") && !normalizedArgs.containsKey("file_path")
+        ) {
             normalizedArgs["path"]?.let { normalizedArgs["file_path"] = it }
             if (normalizedArgs.containsKey("file_path")) {
-                Log.d(TAG, "($executionMode): Remapped 'path' → 'file_path' for read_file tool")
+                Log.d(TAG, "($executionMode): Remapped 'path' → 'file_path' for $toolName tool")
             }
         }
 
@@ -107,13 +110,7 @@ class Executor(
             return ToolResult.failure(message)
         }
 
-        for (key in handler.pathArgs) {
-            val raw = normalizedArgs[key]?.toString()?.trim()
-            if (!raw.isNullOrEmpty() && PathGuard.resolveWithin(raw) == null) {
-                Log.w(TAG, "($executionMode): '$toolName' arg '$key' escapes project root: $raw")
-                return ToolResult.failure("Path '$raw' is outside the project directory")
-            }
-        }
+        pathContainmentFailure(toolName, handler, normalizedArgs, executionMode)?.let { return it }
 
         // Check approval
         val approvalResponse = approvalManager.ensureApproved(toolName, handler, normalizedArgs)
@@ -136,6 +133,32 @@ class Executor(
 
         Log.i(TAG, "($executionMode): Result: ${result.toResultMap()}")
         return result
+    }
+
+    /**
+     * Confines model-supplied path args to the project root; handlers that resolve
+     * paths themselves opt out via [ToolHandler.resolvesPathsInternally].
+     * @param toolName the tool being dispatched (for logging).
+     * @param handler the tool's handler, source of [ToolHandler.pathArgs].
+     * @param args the normalized call arguments.
+     * @param executionMode "Parallel"/"Sequential", for logging.
+     * @return a failure [ToolResult] for the first escaping arg, or null if all are safe.
+     */
+    private fun pathContainmentFailure(
+        toolName: String,
+        handler: ToolHandler,
+        args: Map<String, Any?>,
+        executionMode: String,
+    ): ToolResult? {
+        if (handler.resolvesPathsInternally) return null
+        for (key in handler.pathArgs) {
+            val raw = args[key]?.toString()?.trim()
+            if (raw.isNullOrEmpty()) continue
+            if (PathGuard.resolveWithin(raw) != null) continue
+            Log.w(TAG, "($executionMode): '$toolName' arg '$key' escapes project root: $raw")
+            return ToolResult.failure("Path '$raw' is outside the project directory")
+        }
+        return null
     }
 }
 
