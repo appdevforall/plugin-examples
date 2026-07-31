@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Progress fill drawn inside the Cancel button. A <clip> is used rather than resizing a View so the
+    adapter can update progress with a single setLevel(0..10000) call, with no dependency on a layout
+    pass having measured the button first.
+
+    The gradient runs along the fill so the leading edge reads as the "front" of the progress instead
+    of a flat block ending in a hard vertical line.
+-->
+<clip xmlns:android="http://schemas.android.com/apk/res/android"
+    android:clipOrientation="horizontal"
+    android:gravity="left">
+    <shape android:shape="rectangle">
+        <gradient
+            android:angle="0"
+            android:endColor="@color/progress_fill_end"
+            android:startColor="@color/progress_fill_start"
+            android:type="linear" />
+    </shape>
+</clip>

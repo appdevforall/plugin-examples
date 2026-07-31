@@ -16,6 +16,8 @@ class AddDependencyHandler(
     override val description = "Add a Maven dependency to the project build file"
     override val requiresApproval = true
 
+    override val pathArgs = listOf("build_file")
+
     override suspend fun execute(args: Map<String, Any?>): ToolResult {
         val dependency = args["dependency"]?.toString()?.trim()
         if (dependency.isNullOrBlank()) {

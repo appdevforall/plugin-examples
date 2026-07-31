@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application
+        android:label="@string/app_name"
+        android:theme="@style/PluginTheme">
+
+        <meta-data
+            android:name="plugin.id"
+            android:value="org.appdevforall.getaimodels" />
+
+        <meta-data
+            android:name="plugin.name"
+            android:value="Get AI Models" />
+
+        <meta-data
+            android:name="plugin.version"
+            android:value="${pluginVersion}" />
+
+        <meta-data
+            android:name="plugin.description"
+            android:value="Browse a curated catalog of small GGUF language-model files and download them to /sdcard/Download, checksum-verified. Most are fully open; per-entry licences are shown. Download only - running the models is a separate plugin." />
+
+        <meta-data
+            android:name="plugin.author"
+            android:value="App Dev For All" />
+
+        <!-- Supported IDE range: current stable release plus the preceding one. -->
+        <meta-data
+            android:name="plugin.min_ide_version"
+            android:value="26.29" />
+
+        <meta-data
+            android:name="plugin.max_ide_version"
+            android:value="26.31" />
+
+        <!--
+            Declare ONLY the permissions the plugin actually exercises (see PluginPermission in
+            plugin-api.jar for the full set). This plugin requests exactly three, all on live
+            code paths:
+              - network.access   : DownloadManager fetches the .gguf over HTTPS
+              - filesystem.read  : re-read the finished download to compute its SHA-256
+              - filesystem.write : delete a download whose checksum does not match
+            No system-command, IDE-settings, project-structure, or native-code access is
+            requested. The host's PluginSecurityManager maps any java.io.File use onto
+            filesystem.read/write, which is why both are declared for a read-then-delete flow.
+        -->
+        <meta-data
+            android:name="plugin.permissions"
+            android:value="network.access,filesystem.read,filesystem.write" />
+
+        <meta-data
+            android:name="plugin.icon_day"
+            android:value="assets/icon_day.png" />
+
+        <meta-data
+            android:name="plugin.icon_night"
+            android:value="assets/icon_night.png" />
+
+        <meta-data
+            android:name="plugin.main_class"
+            android:value="org.appdevforall.getaimodels.GetAiModelsPlugin" />
+
+        <!-- One editor bottom-sheet tab, contributed from UIExtension.getEditorTabs(). -->
+        <meta-data
+            android:name="plugin.editor_tabs"
+            android:value="1" />
+
+    </application>
+
+</manifest>

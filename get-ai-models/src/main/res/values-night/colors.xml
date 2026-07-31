@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="plugin_primary">#88D6B8</color>
+    <color name="plugin_on_primary">#00382A</color>
+    <color name="plugin_primary_container">#00513D</color>
+    <color name="plugin_on_primary_container">#A4F2D3</color>
+    <color name="plugin_secondary">#B3CCBF</color>
+    <color name="plugin_on_secondary">#1F352C</color>
+    <color name="plugin_surface">#191C1A</color>
+    <color name="plugin_on_surface">#E1E3DF</color>
+    <color name="plugin_on_surface_variant">#BFC9C1</color>
+    <color name="plugin_outline">#89938C</color>
+    <color name="plugin_outline_variant">#404943</color>
+    <color name="status_neutral_text">@color/plugin_on_surface_variant</color>
+    <color name="status_success_text">@color/plugin_primary</color>
+    <color name="status_error_text">#FFB4AB</color>
+
+    <!--
+        Night mirror of the progress palette. The gradient end is capped at #007658 rather than a
+        brighter teal so the label keeps >= 4.5:1 across the whole fill, not only at the dark end
+        (label/fill-start 8.3:1, label/fill-end 4.8:1, label/track 14.6:1).
+    -->
+    <color name="progress_track">#20241F</color>
+    <color name="progress_track_outline">#5A645D</color>
+    <color name="progress_fill_start">#004E3B</color>
+    <color name="progress_fill_end">#007658</color>
+    <color name="progress_label">#C6F7E2</color>
+
+    <!--
+        No verify_button_* overrides on purpose - that button is a fixed white-on-blue pair defined
+        only in values/colors.xml precisely so it cannot pick up one mode's text with the other
+        mode's background. Do not add night variants for it.
+    -->
+</resources>

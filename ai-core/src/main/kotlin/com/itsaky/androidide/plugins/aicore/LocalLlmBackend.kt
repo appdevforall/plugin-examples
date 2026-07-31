@@ -6,25 +6,35 @@ import android.provider.OpenableColumns
 import com.itsaky.androidide.plugins.services.LlmInferenceService.*
 import com.itsaky.androidide.plugins.services.SharedServices
 import com.itsaky.androidide.plugins.PluginContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.isActive
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.io.File
 import java.io.FileOutputStream
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Local LLM backend using llama-impl for on-device inference.
  * Wraps llama-impl APIs and implements LlmBackend interface.
  */
-class LocalLlmBackend(private val context: PluginContext) : LlmBackend {
+class LocalLlmBackend(private val context: PluginContext) : LlmBackend, CancellableBackend {
 
     companion object {
+        /**
+         * [LlmConfig.extraParams] key for an optional GBNF grammar. The caller
+         * owns it (keeping this backend free of any tool vocabulary); absent →
+         * unconstrained sampling.
+         */
+        const val EXTRA_PARAM_GRAMMAR = "grammar"
+
         /**
          * Belt-and-braces guard: `<|im_end|>` is an EOG control token, so the native loop
          * normally stops on it by itself. This only matters if a model emits it as plain
@@ -33,21 +43,29 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend {
         private val CHAT_STOP = listOf("<|im_end|>")
     }
 
-    private val llama by lazy { LLamaAndroid.instance() }
+    private val llamaLazy = lazy { LLamaAndroid.instance() }
+    private val llama by llamaLazy
     private val scope = CoroutineScope(Dispatchers.IO)
 
     /**
-     * Separate from [scope] because [close] cancels [scope] and then has to run the unload —
-     * work submitted to a cancelled scope never starts. Cancelled once its teardown job finishes;
-     * a `var` because that is terminal and a second [close] must re-create it to do any work.
+     * Owns the teardown coroutine in [close]. Separate from [scope] because that one is cancelled
+     * first (to stop in-flight generation) and so could not run the unload itself; a
+     * [SupervisorJob] keeps the two teardown steps independent. [close] cancels this scope once
+     * the work completes, so nothing outlives the plugin.
      */
-    @Volatile private var teardownScope = CoroutineScope(Dispatchers.IO)
+    private val cleanupScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    /** The [close] teardown, retained so [awaitClose] can join it. */
-    @Volatile private var teardownJob: Job? = null
+    /** Single-flight guard serializing whole generations on the shared native context. */
+    private val generationMutex = Mutex()
+
+    @Volatile private var currentStreamingJob: Job? = null
+    @Volatile private var currentGenerateJob: Job? = null
 
     @Volatile private var modelLoaded = false
     @Volatile private var currentModelPath: String? = null
+
+    /** Ensures the background warm-up load is launched at most once. */
+    private val warmUpStarted = AtomicBoolean(false)
 
     override fun getId(): String = "local"
 
@@ -67,8 +85,35 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend {
 
         context.logger.debug("LocalLlmBackend.isAvailable() - configured path: $configuredPath, modelLoaded: $modelLoaded")
 
+        // Chat-open hits this; start loading now so the first message isn't gated on a cold load.
+        maybeWarmUp(configuredPath, prefs?.getString("ai_backend_preference", "LOCAL_LLM"))
+
         // Available if model is loaded OR if a path is configured
         return modelLoaded || !configuredPath.isNullOrBlank()
+    }
+
+    /**
+     * Preloads the configured model in the background, once, so the first generation
+     * doesn't pay the cold-load cost. No-op unless the local backend is the selected one.
+     * @param configuredPath the configured model path/URI, or null/blank if unset.
+     * @param backendPreference the `ai_backend_preference` value ("LOCAL_LLM"/"GEMINI").
+     */
+    private fun maybeWarmUp(configuredPath: String?, backendPreference: String?) {
+        if (configuredPath.isNullOrBlank() || modelLoaded) return
+        if (backendPreference == "GEMINI") return // user isn't using the local backend
+        if (!warmUpStarted.compareAndSet(false, true)) return
+
+        scope.launch {
+            try {
+                // Serialize with real generations so a mid-warm-up send just waits for this load.
+                generationMutex.withLock { ensureModelLoaded(configuredPath) }
+                context.logger.info("Local model warm-up complete")
+            } catch (e: Exception) {
+                // Stay silent (the real send surfaces config errors); allow a later retry.
+                context.logger.warn("Local model warm-up failed: ${e.message}")
+                warmUpStarted.set(false)
+            }
+        }
     }
 
     /**
@@ -276,39 +321,52 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend {
 
         val future = CompletableFuture<LlmResponse>()
 
-        scope.launch {
+        currentGenerateJob = scope.launch {
             try {
-                // Configure sampling (use defaults for topP and topK)
-                LLamaAndroid.configureSampling(
-                    config.temperature,
-                    0.9f,  // topP default
-                    40     // topK default
-                )
-                LLamaAndroid.configureMaxTokens(config.maxTokens)
+                // Serialize against other generations on the shared native context.
+                generationMutex.withLock {
+                    // Configure sampling (use defaults for topP and topK)
+                    LLamaAndroid.configureSampling(
+                        config.temperature,
+                        0.9f,  // topP default
+                        40     // topK default
+                    )
+                    LLamaAndroid.configureMaxTokens(config.maxTokens)
 
-                // Ensure model is loaded
-                ensureModelLoaded(configuredPath)
+                    // Ensure model is loaded
+                    ensureModelLoaded(configuredPath)
 
-                val startTime = System.currentTimeMillis()
+                    val startTime = System.currentTimeMillis()
 
-                // Collect all tokens
-                val responseBuilder = StringBuilder()
-                var tokenCount = 0
+                    // Collect all tokens
+                    val responseBuilder = StringBuilder()
+                    var tokenCount = 0
 
-                llama.send(
-                    message = fullPrompt,
-                    formatChat = true,
-                    stop = CHAT_STOP,
-                    clearCache = false
-                ).collect { token ->
-                    responseBuilder.append(token)
-                    tokenCount++
+                    // Unconstrained path: clear any grammar left by a concurrent
+                    // streaming call so completions never inherit a tool-call grammar.
+                    llama.setGrammar(null)
+
+                    llama.send(
+                        message = fullPrompt,
+                        formatChat = true,
+                        stop = CHAT_STOP,
+                        clearCache = false
+                    ).collect { token ->
+                        // Honor cancellation so Stop frees the run loop early.
+                        ensureActive()
+                        responseBuilder.append(token)
+                        tokenCount++
+                    }
+
+                    val responseText = responseBuilder.toString()
+                    context.logger.info("Generated response: ${responseText.take(50)}... ($tokenCount tokens)")
+
+                    future.complete(LlmResponse.success(responseText, tokenCount, System.currentTimeMillis() - startTime))
                 }
-
-                val responseText = responseBuilder.toString()
-                context.logger.info("Generated response: ${responseText.take(50)}... ($tokenCount tokens)")
-
-                future.complete(LlmResponse.success(responseText, tokenCount, System.currentTimeMillis() - startTime))
+            } catch (ce: CancellationException) {
+                context.logger.info("Generation cancelled")
+                future.completeExceptionally(ce)
+                throw ce
             } catch (e: Exception) {
                 context.logger.error("Error during generation", e)
                 if (e is ModelNotConfiguredException || e is IncompatibleModelException) {
@@ -323,7 +381,37 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend {
 
     override fun generateStreaming(prompt: String, config: LlmConfig, callback: StreamCallback) {
         context.logger.info("LocalLlmBackend.generateStreaming() called")
+        streamGeneration(buildPrompt(config.systemPrompt, prompt), config, callback)
+    }
 
+    /**
+     * Streams a reply for a multi-turn conversation, rendering each earlier turn as its own
+     * ChatML turn.
+     *
+     * @param history earlier turns, oldest first, excluding [prompt]
+     * @param prompt the current user turn
+     * @param config sampling settings; [LlmConfig.systemPrompt] becomes the leading system turn
+     * @param callback receives tokens, completion, and errors
+     */
+    fun generateStreamingWithHistory(
+        history: List<ChatMessage>,
+        prompt: String,
+        config: LlmConfig,
+        callback: StreamCallback
+    ) {
+        context.logger.info("LocalLlmBackend.generateStreamingWithHistory() called with ${history.size} messages")
+        streamGeneration(buildPrompt(config.systemPrompt, prompt, history), config, callback)
+    }
+
+    /**
+     * Streams a generation over an already-formatted prompt, serialized against every other
+     * generation on the shared native context.
+     *
+     * @param fullPrompt the complete prompt, as built by [buildPrompt]
+     * @param config sampling settings for this request
+     * @param callback receives tokens, completion, and errors
+     */
+    private fun streamGeneration(fullPrompt: String, config: LlmConfig, callback: StreamCallback) {
         // Check if model is configured
         val prefs = try {
             val aiAssistantContext = SharedServices.get(PluginContext::class.java)
@@ -339,38 +427,51 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend {
             return
         }
 
-        scope.launch {
+        currentStreamingJob = scope.launch {
             try {
-                // Configure sampling (use defaults for topP and topK)
-                LLamaAndroid.configureSampling(
-                    config.temperature,
-                    0.9f,  // topP default
-                    40     // topK default
-                )
-                LLamaAndroid.configureMaxTokens(config.maxTokens)
+                // Hold the single-flight lock for the whole streaming generation.
+                generationMutex.withLock {
+                    try {
+                        // Configure sampling (use defaults for topP and topK)
+                        LLamaAndroid.configureSampling(
+                            config.temperature,
+                            0.9f,  // topP default
+                            40     // topK default
+                        )
+                        LLamaAndroid.configureMaxTokens(config.maxTokens)
 
-                // Ensure model is loaded
-                ensureModelLoaded(configuredPath)
+                        // Ensure model is loaded
+                        ensureModelLoaded(configuredPath)
 
-                // Build full prompt with system message
-                val fullPrompt = buildPrompt(config.systemPrompt, prompt)
+                        val startTime = System.currentTimeMillis()
+                        var tokenCount = 0
+                        val responseBuilder = StringBuilder()
 
-                val startTime = System.currentTimeMillis()
-                var tokenCount = 0
-                val responseBuilder = StringBuilder()
+                        // Apply the caller's grammar for this send() only; reset in the finally.
+                        val grammar = config.extraParams?.get(EXTRA_PARAM_GRAMMAR) as? String
+                        llama.setGrammar(grammar?.takeIf { it.isNotBlank() })
 
-                llama.send(
-                    message = fullPrompt,
-                    formatChat = true,
-                    stop = CHAT_STOP,
-                    clearCache = false
-                ).collect { token ->
-                    callback.onToken(token)
-                    responseBuilder.append(token)
-                    tokenCount++
+                        llama.send(
+                            message = fullPrompt,
+                            formatChat = true,
+                            stop = CHAT_STOP,
+                            // Keep the KV cache so the native layer reuses the common prefix (system prompt).
+                            clearCache = false
+                        ).collect { token ->
+                            ensureActive()
+                            callback.onToken(token)
+                            responseBuilder.append(token)
+                            tokenCount++
+                        }
+
+                        callback.onComplete(LlmResponse.success(responseBuilder.toString(), tokenCount, System.currentTimeMillis() - startTime))
+                    } finally {
+                        llama.setGrammar(null)
+                    }
                 }
-
-                callback.onComplete(LlmResponse.success(responseBuilder.toString(), tokenCount, System.currentTimeMillis() - startTime))
+            } catch (ce: CancellationException) {
+                context.logger.info("Streaming generation cancelled")
+                throw ce
             } catch (e: Exception) {
                 context.logger.error("Error during streaming generation", e)
                 if (e is ModelNotConfiguredException || e is IncompatibleModelException) {
@@ -379,6 +480,17 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend {
                 callback.onError("Error: ${e.message}")
             }
         }
+    }
+
+    /**
+     * Cancels any in-flight streaming or non-streaming generation (user pressed Stop),
+     * cancelling the coroutine Job so the single-threaded run loop is freed early.
+     */
+    override fun cancelStreaming() {
+        currentStreamingJob?.cancel()
+        currentStreamingJob = null
+        currentGenerateJob?.cancel()
+        currentGenerateJob = null
     }
 
     override fun generateWithHistory(
@@ -407,46 +519,29 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend {
      * on Main. Cancel generation, then unload on a background thread, then stop
      * the Llm-RunLoop thread so it doesn't outlive the plugin.
      *
-     * Teardown runs on [teardownScope] rather than a throwaway `CoroutineScope(...)` so the
-     * work has an owner: the returned [Job] is retained in [teardownJob], letting a caller
-     * observe or await it via [awaitClose] instead of dispose() returning while native work is
-     * still in flight with no handle to it, and is cancelled once that job completes.
+     * The teardown runs in [cleanupScope] rather than a floating `CoroutineScope(...)`: the scope
+     * is owned by this object and cancelled as soon as the work finishes, so there is no orphan
+     * job left behind. It cannot be joined — dispose() may be on the main thread and unload()
+     * blocks on the native run loop — so deterministic teardown is the strongest guarantee here.
      */
     fun close() {
         scope.cancel()
-        // A prior close() cancelled the scope on completion, and a dead scope never starts work.
-        val teardown = teardownScope.takeIf { it.isActive }
-            ?: CoroutineScope(Dispatchers.IO).also { teardownScope = it }
-        teardownJob = teardown.launch {
+        val cleanup = cleanupScope.launch {
+            if (!llamaLazy.isInitialized()) {
+                return@launch
+            }
             try {
                 unloadModelInternal()
-            } catch (e: Exception) {
-                context.logger.error("Error unloading model during close()", e)
+            } catch (t: Throwable) {
+                context.logger.error("Error unloading model during close()", t)
             } finally {
-                // The Llm-RunLoop executor thread exists even if no model was
-                // ever loaded; shut it down unconditionally so the plugin's
-                // classloader can be collected after unload.
-                llama.shutdown()
+                try {
+                    llama.shutdown()
+                } catch (t: Throwable) {
+                    context.logger.error("Error shutting down Llm-RunLoop during close()", t)
+                }
             }
         }
-        // Cancel the captured scope, not the field: a later close() may have replaced it.
-        teardownJob?.invokeOnCompletion { teardown.cancel() }
-    }
-
-    /**
-     * Block until the [close] teardown finishes, at most [timeoutMs].
-     *
-     * Intended for tests and for a host that wants unload to have completed before it drops the
-     * plugin's classloader. Never call from the main thread — that is the deadlock [close] exists
-     * to avoid.
-     *
-     * @param timeoutMs how long to wait before giving up
-     * @return true if teardown finished (or never started), false if it was still running
-     */
-    fun awaitClose(timeoutMs: Long = 10_000): Boolean {
-        val job = teardownJob ?: return true
-        return runBlocking {
-            withTimeoutOrNull(timeoutMs) { job.join() } != null
-        }
+        cleanup.invokeOnCompletion { cleanupScope.cancel() }
     }
 }

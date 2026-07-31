@@ -31,7 +31,7 @@ import java.util.concurrent.CompletableFuture
  * OkHttp (no such overload) — that mismatch crashed generation with a NoSuchMethodError.
  * HttpURLConnection has no third-party dependency, so it works regardless of the host's OkHttp.
  */
-class GeminiBackend(private val context: PluginContext) : LlmBackend {
+class GeminiBackend(private val context: PluginContext) : LlmBackend, CancellableBackend {
 
     private val scope = CoroutineScope(Dispatchers.IO)
 
@@ -452,6 +452,12 @@ User: $userPrompt"""
                 callback.onError(formatErrorMessage(e))
             }
         }
+    }
+
+    /** Cancel any in-flight generation (user pressed Stop). */
+    override fun cancelStreaming() {
+        currentJob?.cancel()
+        currentJob = null
     }
 
     /**

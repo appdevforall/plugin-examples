@@ -80,9 +80,9 @@ class AiSettingsFragment : DialogFragment() {
 
                     val uriString = it.toString()
                     viewModel.loadModelFromUri(uriString, requireContext())
-                    Toast.makeText(requireContext(), "Loading model...", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(requireContext(), getString(R.string.model_loading_toast), Toast.LENGTH_SHORT).show()
                 } catch (e: Exception) {
-                    Toast.makeText(requireContext(), "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                    Toast.makeText(requireContext(), getString(R.string.state_error, e.message), Toast.LENGTH_LONG).show()
                 }
             }
         }
@@ -247,12 +247,12 @@ class AiSettingsFragment : DialogFragment() {
         viewModel.engineState.observe(viewLifecycleOwner) { state ->
             when (state) {
                 is EngineState.Initializing, EngineState.Uninitialized -> {
-                    engineStatusTextView.text = "Initializing engine..."
+                    engineStatusTextView.text = getString(R.string.engine_initializing)
                     browseButton.isEnabled = false
                     loadSavedButton.isEnabled = false
                 }
                 is EngineState.Initialized -> {
-                    engineStatusTextView.text = "Engine ready"
+                    engineStatusTextView.text = getString(R.string.engine_ready)
                     browseButton.isEnabled = true
                     loadSavedButton.isEnabled = viewModel.savedModelPath.value != null
                 }
@@ -271,7 +271,7 @@ class AiSettingsFragment : DialogFragment() {
             if (path != null) {
                 modelPathTextView.visibility = View.VISIBLE
                 val fileName = viewModel.getSavedModelName() ?: viewModel.fallbackDisplayName(path)
-                modelPathTextView.text = "Saved: $fileName"
+                modelPathTextView.text = getString(R.string.model_saved_path, fileName)
             } else {
                 modelPathTextView.visibility = View.GONE
             }
@@ -282,19 +282,19 @@ class AiSettingsFragment : DialogFragment() {
             when (state) {
                 is ModelLoadingState.Idle -> {
                     modelStatusTextView.visibility = View.VISIBLE
-                    modelStatusTextView.text = "No model is currently loaded"
+                    modelStatusTextView.text = getString(R.string.model_none_loaded)
                 }
                 is ModelLoadingState.Loading -> {
                     modelStatusTextView.visibility = View.VISIBLE
-                    modelStatusTextView.text = "Loading model, please wait..."
+                    modelStatusTextView.text = getString(R.string.model_loading_wait)
                 }
                 is ModelLoadingState.Loaded -> {
                     modelStatusTextView.visibility = View.VISIBLE
-                    modelStatusTextView.text = "✅ Model loaded: ${state.modelName}"
+                    modelStatusTextView.text = getString(R.string.model_loaded, state.modelName)
                 }
                 is ModelLoadingState.Error -> {
                     modelStatusTextView.visibility = View.VISIBLE
-                    modelStatusTextView.text = "❌ Error: ${state.message}"
+                    modelStatusTextView.text = getString(R.string.model_load_error, state.message)
                 }
             }
         }
@@ -574,7 +574,7 @@ class AiSettingsFragment : DialogFragment() {
         // Observe loading state
         viewModel.geminiModelsLoading.observe(viewLifecycleOwner) { isLoading ->
             refreshButton.isEnabled = !isLoading
-            refreshButton.text = if (isLoading) "Loading..." else "Refresh Models"
+            refreshButton.text = if (isLoading) getString(R.string.loading) else getString(R.string.refresh_models)
         }
 
         modelSpinner.setOnTouchListener { _, _ ->
@@ -590,8 +590,8 @@ class AiSettingsFragment : DialogFragment() {
                 val selectedModel = parent?.getItemAtPosition(position) as? String
                 if (selectedModel != null && selectedModel != viewModel.getGeminiModel()) {
                     viewModel.saveGeminiModel(selectedModel)
-                    currentModelText?.text = "Current: $selectedModel"
-                    Toast.makeText(requireContext(), "Model changed to $selectedModel", Toast.LENGTH_SHORT).show()
+                    currentModelText?.text = getString(R.string.current_model, selectedModel)
+                    Toast.makeText(requireContext(), getString(R.string.model_changed, selectedModel), Toast.LENGTH_SHORT).show()
                 }
             }
 

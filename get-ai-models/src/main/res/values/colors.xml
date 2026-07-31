@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="plugin_primary">#006C4C</color>
+    <color name="plugin_on_primary">#FFFFFF</color>
+    <color name="plugin_primary_container">#89F8C7</color>
+    <color name="plugin_on_primary_container">#002114</color>
+    <color name="plugin_secondary">#4D6357</color>
+    <color name="plugin_on_secondary">#FFFFFF</color>
+    <color name="plugin_surface">#FBFDF9</color>
+    <color name="plugin_on_surface">#191C1A</color>
+    <color name="plugin_on_surface_variant">#404943</color>
+    <color name="plugin_outline">#707973</color>
+    <color name="plugin_outline_variant">#BFC9C1</color>
+    <color name="status_neutral_text">@color/plugin_on_surface_variant</color>
+    <color name="status_success_text">@color/plugin_primary</color>
+    <color name="status_error_text">#BA1A1A</color>
+
+    <!--
+        Download-progress control. The label sits over BOTH the filled and unfilled parts of the
+        track, so progress_label has to contrast with the gradient *and* with progress_track. Ratios
+        against this palette: label/fill-start 12.3:1, label/fill-end 14.2:1, label/track 16.7:1.
+    -->
+    <color name="progress_track">#EDF2EE</color>
+    <color name="progress_track_outline">#9BA8A0</color>
+    <color name="progress_fill_start">#4FE3AE</color>
+    <color name="progress_fill_end">#B6F8DD</color>
+    <color name="progress_label">#002114</color>
+
+    <!--
+        Verify button: one fixed pair, white on blue, 5.75:1.
+
+        These are intentionally declared ONLY here and have NO values-night counterpart, so they
+        cannot flip. Earlier attempts let the Material style resolve the background through theme
+        attributes while android:textColor resolved as a colour resource; the two ended up in
+        different configurations, producing dark-on-dark in day mode and light-on-light at night.
+        A theme-independent pair is immune to that whichever context the button is inflated in.
+    -->
+    <color name="verify_button_background">#1565C0</color>
+    <color name="verify_button_background_pressed">#0D47A1</color>
+    <color name="verify_button_text">#FFFFFF</color>
+
+    <!--
+        Delete button: the destructive counterpart, white on red, 6.54:1. Same rule as the verify
+        pair - declared only here, with NO values-night counterpart, so the text and the background
+        can never end up resolved under different configurations. A danger colour also has to read as
+        danger in both themes, which a theme-derived error colour would not guarantee.
+    -->
+    <color name="danger_button_background">#B3261E</color>
+    <color name="danger_button_background_pressed">#8C1D18</color>
+    <color name="danger_button_text">#FFFFFF</color>
+</resources>
