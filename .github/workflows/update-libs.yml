@@ -76,6 +76,7 @@ jobs:
             ["ai-literacy-course"]="ai-literacy-course.cgp"
             ["flutter-template"]="flutter-template.cgp"
             ["get-ai-models"]="get-ai-models.cgp"
+            ["project-to-template"]="project-to-template.cgp"
           )
           for module in "${!MAP[@]}"; do
             src=$(ls "${module}/build/plugin/"*.cgp 2>/dev/null | head -n1)
