@@ -147,4 +147,7 @@
     <string name="loading">Loading…</string>
     <string name="refresh_models">Refresh Models</string>
     <string name="model_changed">Model changed to %s</string>
+
+    <!-- Local model selection -->
+    <string name="error_model_not_gguf">\"%1$s\" isn\'t a valid .gguf model (it may be the wrong file or a corrupt or partial download). Select a .gguf chat model.</string>
 </resources>

@@ -130,8 +130,8 @@ class LlmInferenceServiceImpl : LlmInferenceService {
             return
         }
 
-        // Delegate to Gemini backend with tool support
-        (backend as GeminiBackend).generateStreamingWithTools(prompt, history, config, tools, callback)
+        // Delegate to Gemini backend with tool support (smart-cast by the guard above)
+        backend.generateStreamingWithTools(prompt, history, config, tools, callback)
     }
 
     override fun getEmbeddings(text: String, backendId: String): CompletableFuture<FloatArray> {

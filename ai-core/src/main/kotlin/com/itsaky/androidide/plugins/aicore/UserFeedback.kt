@@ -46,17 +46,37 @@ object UserFeedback {
 }
 
 /**
- * Thrown when generation can't proceed because the local LLM isn't set up (no model selected, or
- * the configured model path can't be resolved). Distinct from a runtime generation failure so the
- * backend can surface it to the user instead of failing silently. The [message] is written to be
- * shown directly to the user.
+ * Base type for LLM failures the user can act on; backends catch this one type to route it to
+ * [UserFeedback], so a new actionable subtype surfaces without touching the catch sites.
+ * @param message user-facing, display-ready text
  */
-class ModelNotConfiguredException(message: String) : IllegalStateException(message)
+sealed class UserActionableLlmException(message: String) : IllegalStateException(message)
 
 /**
- * Thrown when the selected local model is the wrong *kind* for the requested operation — most
- * commonly an embedding (encoder-only) model selected for chat, which would abort native
- * inference. Like [ModelNotConfiguredException] the [message] is written for direct display, and
- * the backend surfaces it to the user instead of attempting generation. See ADFA-4388.
+ * Thrown when the local LLM isn't set up (no model selected, or the path can't be resolved), so the
+ * backend can surface it to the user instead of failing silently.
+ * @param message user-facing, display-ready text
  */
-class IncompatibleModelException(message: String) : IllegalStateException(message)
+class ModelNotConfiguredException(message: String) : UserActionableLlmException(message)
+
+/**
+ * Thrown when the selected model is the wrong kind for the request (e.g. an embedding model for
+ * chat, which would abort native inference). See ADFA-4388.
+ * @param message user-facing, display-ready text
+ */
+class IncompatibleModelException(message: String) : UserActionableLlmException(message)
+
+/**
+ * Thrown when the native loader rejects the selected .gguf.
+ *
+ * [message] is display-ready text because the exception crosses the plugin boundary, where
+ * consumers cannot see [ModelLoadDiagnostics.Diagnosis]; [diagnosis] carries the structured cause
+ * so callers inside this plugin can branch on it or render it their own way instead of parsing
+ * the text.
+ * @param message user-facing, display-ready text (see [ModelLoadMessages])
+ * @param diagnosis the classified cause, or null if the failure wasn't classified
+ */
+class ModelLoadException(
+    message: String,
+    val diagnosis: ModelLoadDiagnostics.Diagnosis? = null,
+) : UserActionableLlmException(message)

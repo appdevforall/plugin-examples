@@ -6,6 +6,8 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.itsaky.androidide.plugins.aiassistant.security.SecureApiKeyStore
+import com.itsaky.androidide.plugins.aiassistant.R
+import com.itsaky.androidide.plugins.aiassistant.util.GgufFileInspector
 import com.itsaky.androidide.plugins.services.LlmInferenceService
 import com.itsaky.androidide.plugins.services.SharedServices
 import kotlinx.coroutines.CoroutineDispatcher
@@ -378,6 +380,14 @@ class AiSettingsViewModel(
             try {
                 // Resolve the real file name (not the raw content-URI doc id) for display.
                 val fileName = resolveDisplayName(uriString)
+
+                // Reject a non-GGUF pick up front, so no bad path is persisted or shown as "Loaded".
+                if (!GgufFileInspector.looksLikeGguf(context.contentResolver, uriString)) {
+                    _modelLoadingState.postValue(
+                        ModelLoadingState.Error(context.getString(R.string.error_model_not_gguf, fileName))
+                    )
+                    return@launch
+                }
 
                 // Persist the name before the path so the savedModelPath observer can read it.
                 saveLocalModelName(fileName)
