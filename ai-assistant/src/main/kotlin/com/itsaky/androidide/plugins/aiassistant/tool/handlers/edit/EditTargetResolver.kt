@@ -48,22 +48,23 @@ object EditTargetResolver {
         var correctedFrom: String? = null
         val file = if (requested.exists()) requested else {
             val suggestions = PathGuard.suggestPathsFor(filePath)
-            when (suggestions.size) {
-                1 -> {
-                    val corrected = PathGuard.resolveWithin(suggestions[0])
+            val candidate = suggestions.unambiguous
+            when {
+                candidate != null -> {
+                    val corrected = PathGuard.resolveWithin(candidate)
                         ?: return Target.Rejected("File does not exist: $filePath")
-                    Log.i(TAG, "Resolved guessed path '$filePath' to '${suggestions[0]}'")
+                    Log.i(TAG, "Resolved guessed path '$filePath' to '$candidate'")
                     correctedFrom = filePath
-                    displayPath = suggestions[0]
+                    displayPath = candidate
                     corrected
                 }
-                0 -> return Target.Rejected(
+                suggestions.all.isEmpty() -> return Target.Rejected(
                     "File does not exist: $filePath — locate the real path with " +
                         "search_project first, or use create_file to make a new file"
                 )
                 else -> return Target.Rejected(
                     "File does not exist: $filePath — did you mean " +
-                        suggestions.joinToString(" or ") { "\"$it\"" } +
+                        suggestions.all.joinToString(" or ") { "\"$it\"" } +
                         "? Retry with that exact path."
                 )
             }

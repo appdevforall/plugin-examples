@@ -145,25 +145,49 @@ object PathGuard {
     }
 
     /**
-     * Suggests real project files for a path that doesn't exist, so a wrong guess is corrected in
-     * one turn. Matches the basename first, then the name without its extension: the common error is
-     * the right class with the wrong language, which an exact-name search never finds.
-     * @param path the path the model asked for.
-     * @param limit maximum suggestions.
-     * @return root-relative paths of plausible matches, closest first (possibly empty).
+     * Candidates for a path that doesn't exist, in two tiers because they are not equally
+     * trustworthy. Callers may act on a lone [exact] match; anything else is a guess only the model
+     * or the user can settle.
+     * @property exact files whose name is exactly the one asked for, in a different folder.
+     * @property byStem files with the same name but a different extension — the "right class, wrong
+     *   language" miss, which an exact-name search never finds.
      */
-    fun suggestPathsFor(path: String, limit: Int = 3): List<String> {
+    data class PathSuggestions(val exact: List<String>, val byStem: List<String>) {
+        /** Every candidate, exact matches first. */
+        val all: List<String> get() = exact + byStem
+
+        /**
+         * The one candidate worth correcting to without asking: a single exact-name match (even when
+         * same-stem files also exist — the extension the model asked for settles it), or a single
+         * same-stem match when nothing carries that name. Null when there is a choice to make;
+         * within a tier the order is filesystem-walk order, so picking the first of several would
+         * silently edit an arbitrary file.
+         */
+        val unambiguous: String?
+            get() = exact.singleOrNull() ?: byStem.singleOrNull()?.takeIf { exact.isEmpty() }
+    }
+
+    /**
+     * Suggests real project files for a path that doesn't exist, so a wrong guess is corrected in
+     * one turn.
+     * @param path the path the model asked for.
+     * @param limit maximum suggestions across both tiers.
+     * @return the candidates, possibly empty.
+     */
+    fun suggestPathsFor(path: String, limit: Int = 3): PathSuggestions {
+        val empty = PathSuggestions(emptyList(), emptyList())
         val target = baseNameOf(path).trim()
-        if (target.isEmpty()) return emptyList()
+        if (target.isEmpty()) return empty
         val stem = target.substringBeforeLast('.').lowercase()
-        if (stem.isEmpty()) return emptyList()
+        if (stem.isEmpty()) return empty
 
         val root = File(projectRoot())
         val exact = findByName(target, limit)
         val byStem = if (exact.size >= limit) emptyList() else {
-            walkProject(limit) { it.nameWithoutExtension.lowercase() == stem && it !in exact }
+            walkProject(limit - exact.size) { it.nameWithoutExtension.lowercase() == stem && it !in exact }
         }
-        return (exact + byStem).take(limit).map { it.relativeToOrSelf(root).path }
+        fun relative(files: List<File>) = files.map { it.relativeToOrSelf(root).path }
+        return PathSuggestions(relative(exact), relative(byStem))
     }
 
     /**

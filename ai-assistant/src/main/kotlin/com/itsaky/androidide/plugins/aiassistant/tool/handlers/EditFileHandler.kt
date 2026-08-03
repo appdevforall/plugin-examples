@@ -1,6 +1,5 @@
 package com.itsaky.androidide.plugins.aiassistant.tool.handlers
 
-import android.util.Log
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aiassistant.models.ToolResult
 import com.itsaky.androidide.plugins.aiassistant.tool.ToolHandler
@@ -82,7 +81,17 @@ class EditFileHandler(
         /** Bytes sampled when deciding whether a file is binary. */
         private const val BINARY_SNIFF_BYTES = 8 * 1024
 
-        private const val TAG = "EditFileHandler"
+        /** Longest [ARG_OLD] still treated as a bare name rather than a code region. */
+        private const val MAX_IDENTIFIER_CHARS = 64
+
+        /**
+         * A request phrased as an instruction ("_bind with _binding", "foo -> bar"), which small
+         * models paste into [ARG_OLD] *and* [ARG_NEW] unchanged. Recognising it turns a rejection the
+         * model just repeats verbatim — three times, then the agent loop gives up — into one that
+         * hands it the two values it should have sent.
+         */
+        private val INSTRUCTION_PAIR =
+            Regex("""^(\S+)\s+(?:with|to|into|by|for|->|=>)\s+(\S+)$""", RegexOption.IGNORE_CASE)
     }
 
     /**
@@ -120,7 +129,7 @@ class EditFileHandler(
         } catch (ce: CancellationException) {
             throw ce
         } catch (e: Exception) {
-            Log.e(TAG, "Error reading file for edit", e)
+            pluginContext.logger.error("edit_file: failed to read ${args[ARG_PATH]} for editing", e)
             return ToolResult.failure("Error editing file: ${e.message}", e.stackTraceToString())
         }
 
@@ -162,7 +171,7 @@ class EditFileHandler(
             // Before catch(Exception): it is an Exception on the JVM, so a broad catch eats Stop.
             throw ce
         } catch (e: Exception) {
-            Log.e(TAG, "Error editing file", e)
+            pluginContext.logger.error("edit_file: failed to apply the edit to ${ready.filePath}", e)
             ToolResult.failure("Error editing file: ${e.message}", e.stackTraceToString())
         }
     }
@@ -222,10 +231,7 @@ class EditFileHandler(
             )
         }
         if (oldString == newString) {
-            return reject(
-                "$ARG_NEW is identical to $ARG_OLD — nothing to change. Put the text as it " +
-                    "appears in the file in $ARG_OLD, and what it should become in $ARG_NEW."
-            )
+            return reject(identicalArgsRejection(oldString))
         }
 
         val target = when (val resolution = EditTargetResolver.resolve(filePath)) {
@@ -293,10 +299,7 @@ class EditFileHandler(
                     "ambiguous old_string — ${AgentTrace.preview(oldString, 80)}",
                 )
             }
-            return reject(
-                "$ARG_OLD matched ${found.occurrences} times in $resolvedPath — add surrounding lines to " +
-                    "make it unique, or set $ARG_REPLACE_ALL to true to change all of them"
-            )
+            return reject(ambiguousRejection(oldString, found.occurrences, resolvedPath))
         }
         if (tracing) {
             AgentTrace.detail(
@@ -319,6 +322,45 @@ class EditFileHandler(
     }
 
     private fun reject(message: String): Analysis = Analysis.Rejected(ToolResult.failure(message))
+
+    /**
+     * Rejection for an edit whose old and new text are the same, naming the corrected pair when the
+     * model pasted the user's instruction instead of the file's text.
+     * @param text the value sent as both [ARG_OLD] and [ARG_NEW].
+     * @return the message to return to the model.
+     */
+    private fun identicalArgsRejection(text: String): String {
+        val base = "$ARG_NEW is identical to $ARG_OLD — nothing to change. Put the text as it " +
+            "appears in the file in $ARG_OLD, and what it should become in $ARG_NEW."
+        val (from, to) = INSTRUCTION_PAIR.find(text.trim())?.destructured ?: return base
+        if (from == to) return base
+        return "$base You sent the request itself, not the file's text: retry with " +
+            "$ARG_OLD=\"$from\" and $ARG_NEW=\"$to\"."
+    }
+
+    /**
+     * Rejection for an [ARG_OLD] matching more than once. Which fix leads matters: for a bare name
+     * the user almost always meant every occurrence, and a model told to "add surrounding lines"
+     * first answers with one call per line instead of a single [ARG_REPLACE_ALL] edit.
+     * @param oldString the snippet that matched.
+     * @param occurrences how many times it matched.
+     * @param path the resolved file path, for the message.
+     * @return the message to return to the model.
+     */
+    private fun ambiguousRejection(oldString: String, occurrences: Int, path: String): String {
+        val head = "$ARG_OLD matched $occurrences times in $path — "
+        val looksLikeAName =
+            oldString.length <= MAX_IDENTIFIER_CHARS && oldString.none { it.isWhitespace() }
+        return if (looksLikeAName) {
+            head + "it looks like a name used throughout the file. Retry the SAME call with " +
+                "\"$ARG_REPLACE_ALL\":\"true\" to change all $occurrences in ONE edit — do not make " +
+                "one call per occurrence. Only if you meant a single one, add the surrounding lines " +
+                "to $ARG_OLD instead."
+        } else {
+            head + "add surrounding lines to make it unique, or set $ARG_REPLACE_ALL to true to " +
+                "change all of them"
+        }
+    }
 
     /** Outcome of reading the on-disk copy: either usable text or the failure to report. */
     private sealed interface DiskRead {
@@ -404,7 +446,6 @@ class EditFileHandler(
         return when (val outcome = AtomicFileWriter.replace(ready.file, ready.filePath, bytes)) {
             is AtomicFileWriter.Outcome.Failed -> ToolResult.failure(outcome.reason)
             AtomicFileWriter.Outcome.Written -> {
-                Log.d(TAG, "Edited ${ready.filePath} on disk ($summary)")
                 AgentTrace.stage(
                     "EDIT",
                     "apply=disk ok bytes=${bytes.size} path=${ready.file.name} | $summary",

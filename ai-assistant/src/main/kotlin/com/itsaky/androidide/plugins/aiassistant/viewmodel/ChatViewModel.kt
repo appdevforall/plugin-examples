@@ -79,6 +79,15 @@ class ChatViewModel(
 
         /** Max open files named in the prompt's IDE-context block. */
         private const val MAX_CONTEXT_OPEN_FILES = 8
+
+        /**
+         * Path used in the tool-call examples when the IDE has nothing open, so there is no real one
+         * to show. A concrete path is what a small model needs to copy the *shape* from — a
+         * placeholder like "path/to/File.ext" measurably degrades its calls — so this is the
+         * dominant CoGo project layout rather than a language-neutral token. Whenever a file *is*
+         * open, [IdeSnapshot.exampleFilePath] uses that instead and this is never seen.
+         */
+        private const val FALLBACK_EXAMPLE_PATH = "app/src/main/java/com/example/MainActivity.kt"
     }
 
     /**
@@ -330,22 +339,31 @@ class ChatViewModel(
      * Build appropriate system prompt based on LLM backend.
      */
     private suspend fun buildSystemPrompt(): String {
+        // One editor read serves both the IDE CONTEXT block and the paths in the examples.
+        val ide = readIdeSnapshot()
+        val examplePath = ide.exampleFilePath()
         val base = if (currentBackendId == "gemini") {
-            buildSystemPromptGemini()
+            buildSystemPromptGemini(examplePath)
         } else {
-            buildSystemPromptLocal()
+            buildSystemPromptLocal(examplePath)
         }
-        return base + buildIdeContext()
+        return base + ide.contextBlock()
     }
 
     /**
-     * Describes what the user is looking at: the focused file and other open tabs, project-relative.
-     * Most requests are about the file on screen and the IDE knows that path exactly; without it the
-     * model reconstructs one, which is where invented `.java` paths for Kotlin files came from.
-     * @return a prompt block, or empty when no editor/project is available.
+     * What the IDE has open, project-relative, read once per prompt.
+     * @property currentFile the focused file, or null when nothing is open.
+     * @property otherFiles other open tabs, capped at [MAX_CONTEXT_OPEN_FILES].
      */
-    private suspend fun buildIdeContext(): String {
-        val editor = getContext()?.services?.get(IdeEditorService::class.java) ?: return ""
+    private data class IdeSnapshot(val currentFile: String?, val otherFiles: List<String>)
+
+    /**
+     * Reads the open-file state from the editor service.
+     * @return the snapshot; empty when there is no editor service or the call fails.
+     */
+    private suspend fun readIdeSnapshot(): IdeSnapshot {
+        val editor = getContext()?.services?.get(IdeEditorService::class.java)
+            ?: return IdeSnapshot(null, emptyList())
         val root = File(PathGuard.projectRoot())
 
         // Editor state is read on the main thread, like every other editor-service call here.
@@ -357,18 +375,38 @@ class ChatViewModel(
         fun relative(file: File): String = runCatching { file.relativeToOrSelf(root).path }
             .getOrDefault(file.name)
 
-        val others = open.orEmpty()
-            .filter { it != current }
-            .take(MAX_CONTEXT_OPEN_FILES)
-            .map(::relative)
+        return IdeSnapshot(
+            currentFile = current?.let(::relative),
+            otherFiles = open.orEmpty()
+                .filter { it != current }
+                .take(MAX_CONTEXT_OPEN_FILES)
+                .map(::relative),
+        )
+    }
 
-        if (current == null && others.isEmpty()) return ""
+    /**
+     * The path the tool-call examples should use: a file the IDE really has open, so the examples
+     * carry this project's own language and layout instead of teaching an Android/Java one. Falls
+     * back to [FALLBACK_EXAMPLE_PATH] only when nothing is open.
+     * @return a project-relative path.
+     */
+    private fun IdeSnapshot.exampleFilePath(): String =
+        currentFile ?: otherFiles.firstOrNull() ?: FALLBACK_EXAMPLE_PATH
+
+    /**
+     * Describes what the user is looking at: the focused file and other open tabs, project-relative.
+     * Most requests are about the file on screen and the IDE knows that path exactly; without it the
+     * model reconstructs one, which is where invented `.java` paths for Kotlin files came from.
+     * @return a prompt block, or empty when nothing is open.
+     */
+    private fun IdeSnapshot.contextBlock(): String {
+        if (currentFile == null && otherFiles.isEmpty()) return ""
 
         return buildString {
             append("\n\nIDE CONTEXT (real paths — use these verbatim, do not rewrite them):\n")
-            current?.let { append("- File the user is viewing: ").append(relative(it)).append("\n") }
-            if (others.isNotEmpty()) {
-                append("- Other open files: ").append(others.joinToString(", ")).append("\n")
+            currentFile?.let { append("- File the user is viewing: ").append(it).append("\n") }
+            if (otherFiles.isNotEmpty()) {
+                append("- Other open files: ").append(otherFiles.joinToString(", ")).append("\n")
             }
             append(
                 "If the user names a file that appears above, use that exact path and do not " +
@@ -379,8 +417,10 @@ class ChatViewModel(
 
     /**
      * System prompt for Gemini (high autonomy, structured tool calling via native functions).
+     * @param examplePath path shown in the tool-call examples — this project's own open file when
+     *   there is one, so the examples never imply a language or layout the project doesn't have.
      */
-    private fun buildSystemPromptGemini(): String {
+    private fun buildSystemPromptGemini(examplePath: String): String {
         val toolDescriptions = toolRouter.getAllHandlers().joinToString("\n") { handler ->
             "- ${handler.toolName}: ${handler.description}"
         }
@@ -417,17 +457,18 @@ class ChatViewModel(
         Do NOT describe the action in prose (e.g. "Okay, I'll open the file…") — narrating does nothing.
         The tool only runs when you emit the <tool_call> line itself.
 
-        FORMAT EXAMPLES (the tool call is the entire reply):
+        FORMAT EXAMPLES (the tool call is the entire reply; the paths are this project's — reuse a path
+        only when it is the file you actually mean):
         Report the finished task (the summary goes in "message"):
-        <tool_call>{"tool":"respond","args":{"message":"Renamed count to itemCount in MainActivity.java."}}</tool_call>
+        <tool_call>{"tool":"respond","args":{"message":"Renamed count to itemCount."}}</tool_call>
         Open a file once you know its path:
-        <tool_call>{"tool":"open_file","args":{"file_path":"app/src/main/java/com/example/app/MainActivity.java"}}</tool_call>
+        <tool_call>{"tool":"open_file","args":{"file_path":"$examplePath"}}</tool_call>
         Find a file by name:
-        <tool_call>{"tool":"search_project","args":{"query":"MainActivity"}}</tool_call>
-        List a directory:
-        <tool_call>{"tool":"list_files","args":{"directory":"app/src/main"}}</tool_call>
+        <tool_call>{"tool":"search_project","args":{"query":"${exampleFileStem(examplePath)}"}}</tool_call>
+        List the project's top-level files (an empty directory means the project root):
+        <tool_call>{"tool":"list_files","args":{"directory":""}}</tool_call>
         Change part of a file (line breaks inside a value MUST be written as \n):
-        <tool_call>{"tool":"edit_file","args":{"file_path":"app/src/main/java/com/example/app/MainActivity.java","old_string":"int count = 0;","new_string":"int count = 1;"}}</tool_call>
+        <tool_call>{"tool":"edit_file","args":{"file_path":"$examplePath","old_string":"count = 0","new_string":"count = 1"}}</tool_call>
 
         WORKFLOW:
         1. Understand the user's request
@@ -444,9 +485,19 @@ class ChatViewModel(
     }
 
     /**
-     * System prompt for local LLMs (guided step-by-step with text-based tool calling).
+     * File name without its extension, for a `search_project` example that matches [examplePath].
+     * @param examplePath the example path.
+     * @return the bare stem (e.g. "MainActivity").
      */
-    private fun buildSystemPromptLocal(): String {
+    private fun exampleFileStem(examplePath: String): String =
+        examplePath.substringAfterLast('/').substringBeforeLast('.')
+
+    /**
+     * System prompt for local LLMs (guided step-by-step with text-based tool calling).
+     * @param examplePath path shown in the tool-call examples — this project's own open file when
+     *   there is one, so the examples never imply a language or layout the project doesn't have.
+     */
+    private fun buildSystemPromptLocal(examplePath: String): String {
         val toolDescriptions = toolRouter.getAllHandlers().joinToString("\n") { handler ->
             "- ${handler.toolName}: ${handler.description}"
         }
@@ -459,7 +510,7 @@ class ChatViewModel(
         - Use a file/project tool only when the user asks about files, code, or the project; for a greeting, small talk, or a question you can answer, use "respond".
         - Never invent tool output or claim an action you didn't perform via a tool. After a tool call, stop; the real result returns next turn.
         - "respond" must carry a "message" — your reply or final answer.
-        - File arguments accept a bare name (e.g. "MainActivity.java"); the project is searched. Don't invent deep paths.
+        - read_file and open_file accept a bare file name (the project is searched for it). Never invent deep paths.
         - To change a file, use edit_file, not update_file. Call read_file FIRST, then copy the text to replace into "old_string" EXACTLY as it appears in that output (same spelling, same indentation). It must appear only once — include the line above or below if it doesn't.
         - "old_string" is the text that is in the file NOW; "new_string" is what it should become. They must differ. To rename x to y: old_string has x, new_string has y.
         - Never put a real line break inside an argument value: write it as \n. Keep old_string/new_string to a few lines; make several small edits rather than one big one.
@@ -470,19 +521,19 @@ class ChatViewModel(
         $toolDescriptions
         - respond: Send the user a message or your final answer.
 
-        Examples (pick the tool that matches; don't copy verbatim):
+        Examples (pick the tool that matches; copy the FORMAT, not the values):
         Greeting / question you can answer -> respond:
         <tool_call>{"tool":"respond","args":{"message":"Hi! What would you like to build?"}}</tool_call>
-        Open a file -> open_file:
-        <tool_call>{"tool":"open_file","args":{"file_path":"MainActivity.java"}}</tool_call>
+        Open a file (a bare name is fine here) -> open_file:
+        <tool_call>{"tool":"open_file","args":{"file_path":"${examplePath.substringAfterLast('/')}"}}</tool_call>
         Change one line of a file -> edit_file:
-        <tool_call>{"tool":"edit_file","args":{"file_path":"app/src/main/java/com/example/MainActivity.java","old_string":"setTitle(\"Old\");","new_string":"setTitle(\"New\");"}}</tool_call>
+        <tool_call>{"tool":"edit_file","args":{"file_path":"$examplePath","old_string":"setTitle(\"Old\")","new_string":"setTitle(\"New\")"}}</tool_call>
         Change two lines (note the \n, never a real line break) -> edit_file:
-        <tool_call>{"tool":"edit_file","args":{"file_path":"app/src/main/java/com/example/MainActivity.java","old_string":"int a = 1;\nint b = 2;","new_string":"int a = 10;\nint b = 20;"}}</tool_call>
-        Rename every use of one name in a file -> ONE edit_file with replace_all:
-        <tool_call>{"tool":"edit_file","args":{"file_path":"app/src/main/java/com/example/MainActivity.java","old_string":"oldName","new_string":"newName","replace_all":"true"}}</tool_call>
+        <tool_call>{"tool":"edit_file","args":{"file_path":"$examplePath","old_string":"a = 1\nb = 2","new_string":"a = 10\nb = 20"}}</tool_call>
+        Rename every use of one name in a file -> ONE edit_file with replace_all (NOT one call per line):
+        <tool_call>{"tool":"edit_file","args":{"file_path":"$examplePath","old_string":"oldName","new_string":"newName","replace_all":"true"}}</tool_call>
         Find where a file actually lives before editing it -> search_project:
-        <tool_call>{"tool":"search_project","args":{"query":"MainActivity"}}</tool_call>
+        <tool_call>{"tool":"search_project","args":{"query":"${exampleFileStem(examplePath)}"}}</tool_call>
         """.trimIndent()
 
         android.util.Log.d("ChatViewModel", "Using Local LLM system prompt (guided mode) with ${toolRouter.getAllHandlers().size} tools")

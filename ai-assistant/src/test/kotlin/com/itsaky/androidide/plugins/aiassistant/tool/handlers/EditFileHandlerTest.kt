@@ -46,6 +46,7 @@ class EditFileHandlerTest {
         services = mockk()
         context = mockk()
         every { context.services } returns services
+        every { context.logger } returns mockk(relaxed = true)
         every { services.get(IdeEditorService::class.java) } returns editorService
 
         handler = EditFileHandler(context, Dispatchers.Unconfined)
@@ -169,6 +170,43 @@ class EditFileHandlerTest {
     }
 
     @Test
+    fun givenAnAmbiguousBareName_whenEditedWithoutReplaceAll_thenReplaceAllIsWhatItIsToldToDo() {
+        createFile("Main.kt", "count\ncount\n")
+
+        val result = edit("file_path" to "Main.kt", "old_string" to "count", "new_string" to "total")
+
+        assertFalse(result.success)
+        // The model must be steered to one replace_all edit, not one call per occurrence.
+        assertTrue(
+            "Expected a replace_all instruction in: ${result.message}",
+            result.message.contains("replace_all") && result.message.contains("ONE edit"),
+        )
+        val replaceAllFirst = result.message.indexOf("replace_all")
+        val surroundingLater = result.message.indexOf("surrounding lines")
+        assertTrue(
+            "replace_all must be offered before adding surrounding lines: ${result.message}",
+            replaceAllFirst in 0 until surroundingLater,
+        )
+    }
+
+    @Test
+    fun givenAnAmbiguousCodeRegion_whenEditedWithoutReplaceAll_thenUniquenessIsSuggestedFirst() {
+        createFile("Main.kt", "if (a) {\n    x()\n}\nif (a) {\n    x()\n}\n")
+
+        val result = edit(
+            "file_path" to "Main.kt",
+            "old_string" to "if (a) {\n    x()\n}",
+            "new_string" to "if (a) {\n    y()\n}",
+        )
+
+        assertFalse(result.success)
+        assertTrue(
+            "A multi-line region is not a rename: ${result.message}",
+            result.message.contains("add surrounding lines"),
+        )
+    }
+
+    @Test
     fun givenAnIdenticalReplacement_whenEdited_thenItIsRejectedRatherThanRewritingTheFile() {
         val original = "same\n"
         val file = createFile("Main.kt", original)
@@ -177,6 +215,45 @@ class EditFileHandlerTest {
 
         assertFalse(result.success)
         assertEquals(original, file.readText())
+    }
+
+    @Test
+    fun givenTheUsersInstructionPastedIntoBothArgs_whenEdited_thenTheSplitPairIsSuggested() {
+        // The exact local-model failure this hint exists for: "change _bind with _binding" echoed
+        // into old_string and new_string, then repeated verbatim until the agent loop gave up.
+        val original = "val _bind = 1\n"
+        val file = createFile("Main.kt", original)
+
+        val result = edit(
+            "file_path" to "Main.kt",
+            "old_string" to "_bind with _binding",
+            "new_string" to "_bind with _binding",
+        )
+
+        assertFalse(result.success)
+        assertTrue(
+            "Expected the corrected pair in: ${result.message}",
+            result.message.contains("old_string=\"_bind\"") &&
+                result.message.contains("new_string=\"_binding\""),
+        )
+        assertEquals(original, file.readText())
+    }
+
+    @Test
+    fun givenIdenticalArgsThatAreRealCode_whenEdited_thenNoSplitIsInvented() {
+        createFile("Main.kt", "val a = 1\n")
+
+        val result = edit(
+            "file_path" to "Main.kt",
+            "old_string" to "val a = 1",
+            "new_string" to "val a = 1",
+        )
+
+        assertFalse(result.success)
+        assertFalse(
+            "A code snippet must not be re-read as an instruction: ${result.message}",
+            result.message.contains("retry with"),
+        )
     }
 
     // --- Argument validation ------------------------------------------------

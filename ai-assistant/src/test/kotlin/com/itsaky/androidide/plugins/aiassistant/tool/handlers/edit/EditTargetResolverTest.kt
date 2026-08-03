@@ -81,6 +81,31 @@ class EditTargetResolverTest {
         val reason = rejection("c/Main.kt")
 
         assertTrue("must offer the candidates: $reason", reason.contains("did you mean"))
+        assertTrue("both candidates belong in the message: $reason", reason.contains("b/Main.kt"))
+    }
+
+    @Test
+    fun givenOneExactNameMatchBesideOtherLanguages_whenResolved_thenTheExactNameWins() {
+        // The extension the model asked for settles it; bouncing this back costs a whole turn for
+        // nothing. Only rivals *with the same name* make the choice genuinely ambiguous.
+        createFile("app/src/main/kotlin/Main.kt")
+        createFile("app/legacy/Main.java")
+
+        val target = resolved("app/src/Main.kt")
+
+        assertEquals("app/src/main/kotlin/Main.kt", target.displayPath)
+        assertEquals("app/src/Main.kt", target.correctedFrom)
+    }
+
+    @Test
+    fun givenTwoSameNameMatchesAndAStemMatch_whenResolved_thenItStillAsks() {
+        createFile("a/Main.kt")
+        createFile("b/Main.kt")
+        createFile("c/Main.java")
+
+        val reason = rejection("d/Main.kt")
+
+        assertTrue("got: $reason", reason.contains("did you mean"))
     }
 
     @Test
