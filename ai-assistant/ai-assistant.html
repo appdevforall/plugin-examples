@@ -115,7 +115,13 @@ cd ../ai-assistant &amp;&amp; ./gradlew assemblePlugin</code></pre>
     <li>Copy both <code>.cgp</code> files to the device and install via the CoGo
       Plugin Manager — <b>AI Core first</b>, then AI Assistant. Restart the IDE.</li>
     <li>Open <b>Settings</b> and either select a <code>.gguf</code> model (Local)
-      or enter a Gemini API key (Gemini).</li>
+      or set up a Gemini API key (Gemini).</li>
+    <li>For Gemini, tap <b>Get a free key</b> to open Google AI Studio in your
+      browser — it creates the underlying Cloud project for you, so no Google
+      Cloud console visit is needed. Copy the key, paste it into the key field,
+      then tap <b>Save Key</b>. Saving checks the key with Google first: a key Google rejects
+      is not stored, and one that can't be checked (offline, or AI Core disabled)
+      is kept only if you confirm.</li>
     <li>Open the <b>Agent</b> tab and start chatting.</li>
   </ul>
 

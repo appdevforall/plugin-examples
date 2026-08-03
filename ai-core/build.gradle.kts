@@ -68,6 +68,7 @@ dependencies {
     testImplementation(files("../libs/plugin-api.jar"))
     testImplementation("junit:junit:4.13.2")
     testImplementation("io.mockk:mockk:1.13.8")
+    testImplementation("org.json:json:20231013")
 }
 
 /**

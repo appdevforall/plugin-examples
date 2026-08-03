@@ -329,7 +329,7 @@ class GeminiBackend(private val context: PluginContext) : LlmBackend, Cancellabl
     fun listModels(): CompletableFuture<List<String>> {
         val future = CompletableFuture<List<String>>()
 
-        scope.launch {
+        val job = scope.launch {
             try {
                 val key = readGeminiApiKey()
                 if (key.isNullOrBlank()) {
@@ -348,14 +348,57 @@ class GeminiBackend(private val context: PluginContext) : LlmBackend, Cancellabl
                 future.completeExceptionally(e)
             }
         }
+        future.cancelJobOnCancel(job)
 
         return future
     }
 
     /**
-     * Fetch and parse the ListModels catalog, following pagination, keeping only
-     * models that support [METHOD_GENERATE_CONTENT] and stripping the `models/`
-     * prefix from each name. Runs on the caller's (IO) coroutine.
+     * List the models a caller-supplied [apiKey] can use, instead of the one saved on disk.
+     *
+     * Lets ai-assistant check a just-typed key *before* it is persisted; the no-arg [listModels]
+     * reads the stored key. Nothing here touches the stored key or [keyCache].
+     *
+     * @param apiKey the candidate key to authenticate the request with; never logged
+     * @return the chat-capable catalog for [apiKey], or a future completed exceptionally with the
+     *   `ListModels HTTP <code>` [IOException] from [fetchAvailableModels] — the caller reads the
+     *   status code out of that message to tell a refused key from an unreachable network
+     */
+    fun listModels(apiKey: String): CompletableFuture<List<String>> {
+        val future = CompletableFuture<List<String>>()
+        val key = apiKey.trim()
+        if (key.isEmpty()) {
+            future.completeExceptionally(IllegalArgumentException("Gemini API key is blank"))
+            return future
+        }
+        // close() cancels the scope, making launch a silent no-op; fail loudly instead.
+        if (!scope.isActive) {
+            future.completeExceptionally(IllegalStateException("Gemini backend is closed"))
+            return future
+        }
+
+        val job = scope.launch {
+            try {
+                val models = fetchAvailableModels(key)
+                context.logger.info("GeminiBackend: candidate key lists ${models.size} chat models")
+                future.complete(models)
+            } catch (e: CancellationException) {
+                future.cancel(true)
+                throw e
+            } catch (e: Exception) {
+                context.logger.warn("GeminiBackend: candidate key check failed: ${e.message}")
+                future.completeExceptionally(e)
+            }
+        }
+        future.cancelJobOnCancel(job)
+
+        return future
+    }
+
+    /**
+     * Fetch and parse the ListModels catalog, following pagination, keeping only models that
+     * support [METHOD_GENERATE_CONTENT]. Runs on the caller's (IO) coroutine. The
+     * `ListModels HTTP <code>` message is a cross-plugin contract — keep that shape if you reword.
      */
     private fun fetchAvailableModels(apiKey: String): List<String> {
         val names = mutableListOf<String>()
@@ -585,18 +628,67 @@ User: $userPrompt"""
     }
 
     /**
-     * Format error message with user-friendly descriptions.
+     * Turn a failure into one user-facing sentence.
+     *
+     * [GeminiErrorFormatter] decides *what* went wrong; the wording comes from `strings.xml`. The
+     * raw HTTP error body stays on the logged exception and must never reach the transcript.
      */
-    private fun formatErrorMessage(e: Exception): String {
-        return when {
-            e.message?.contains("API key", ignoreCase = true) == true ->
-                "Invalid API key. Please check your Gemini API key in settings."
-            e.message?.contains("quota", ignoreCase = true) == true ||
-            e.message?.contains("limit", ignoreCase = true) == true ->
-                "API quota exceeded. Please check your Gemini API usage."
-            e.message?.contains("network", ignoreCase = true) == true ->
-                "Network error. Please check your internet connection."
-            else -> "Gemini API error: ${e.message}"
+    private fun formatErrorMessage(e: Exception): String =
+        userMessage(GeminiErrorFormatter.classify(e, getModelName()))
+
+    /**
+     * Resolve a [GeminiFailure] against the plugin's own resources.
+     *
+     * `context.androidContext` is plugin-scoped, so this plugin's string ids resolve here. A failed
+     * lookup degrades to the generic message rather than throwing out of an error handler.
+     */
+    private fun userMessage(failure: GeminiFailure): String = try {
+        val resources = context.androidContext
+        when (failure) {
+            is GeminiFailure.ModelUnavailable ->
+                resources.getString(R.string.gemini_error_model_unavailable, failure.modelName)
+
+            GeminiFailure.QuotaExceeded ->
+                resources.getString(R.string.gemini_error_quota)
+
+            GeminiFailure.KeyRefused ->
+                resources.getString(R.string.gemini_error_key_refused)
+
+            GeminiFailure.KeyInvalid ->
+                resources.getString(R.string.gemini_error_key_invalid)
+
+            is GeminiFailure.RequestRejected -> failure.reason?.let {
+                resources.getString(R.string.gemini_error_request_rejected_reason, it)
+            } ?: resources.getString(R.string.gemini_error_request_rejected)
+
+            is GeminiFailure.ServiceUnavailable ->
+                resources.getString(R.string.gemini_error_service_unavailable, failure.httpStatus)
+
+            is GeminiFailure.Unexpected -> failure.reason?.let {
+                resources.getString(R.string.gemini_error_unexpected_reason, failure.httpStatus, it)
+            } ?: resources.getString(R.string.gemini_error_unexpected, failure.httpStatus)
+
+            GeminiFailure.Unreachable ->
+                resources.getString(R.string.gemini_error_unreachable)
+
+            is GeminiFailure.Failed -> failure.reason?.let {
+                resources.getString(R.string.gemini_error_failed_reason, it)
+            } ?: resources.getString(R.string.gemini_error_failed)
         }
+    } catch (e: Exception) {
+        context.logger.error("GeminiBackend: could not resolve error string for $failure", e)
+        "The Gemini request failed."
     }
+}
+
+/**
+ * Cancel [job] when this future is cancelled by its caller.
+ *
+ * [CompletableFuture.cancel] only flips the future's own state, so without this a caller that
+ * gives up leaves the HTTP fetch running to completion for a result nobody will read.
+ *
+ * @param job the coroutine producing this future's value
+ */
+private fun <T> CompletableFuture<T>.cancelJobOnCancel(job: Job) {
+    whenComplete { _, _ -> if (isCancelled) job.cancel() }
 }
