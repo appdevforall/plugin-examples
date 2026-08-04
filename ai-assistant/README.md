@@ -28,6 +28,8 @@ sibling [`ai-core`](../ai-core/) plugin.
 - Agent tool-loop with per-tool approval dialogs
 - Session persistence
 - Works with either backend exposed by `ai-core` (on-device GGUF or Gemini API)
+- Settings contributed to the IDE's own Preferences via `SettingsExtension`
+  (**Preferences → Configuration → Agent**), and reachable from the chat too
 
 ## Building
 
@@ -47,7 +49,8 @@ The build resolves `plugin-api.jar` from the repo-root `../libs/`.
 1. Build and install **`ai-core` first** (see [`../ai-core/README.md`](../ai-core/README.md)).
 2. Build this plugin, copy `build/plugin/ai-assistant.cgp` to the device.
 3. Install via CodeOnTheGo's Plugin Manager, then restart the IDE.
-4. Open **AI Settings** to pick a local model or configure a Gemini API key.
+4. Open **Preferences → Configuration → Agent** to pick a local model or configure a
+   Gemini API key. The Agent tab's overflow menu opens the same screen.
 
 ## Gemini key setup (ADFA-2709)
 
@@ -92,7 +95,9 @@ check decide.
 
 - `AiAssistantPlugin.kt` — plugin entry point / lifecycle
 - `fragments/ChatFragment.kt`, `viewmodel/ChatViewModel.kt` — chat UI + state
-- `fragments/AiSettingsFragment.kt`, `viewmodel/AiSettingsViewModel.kt` — model/backend config
+- `fragments/AiSettingsFragment.kt`, `viewmodel/AiSettingsViewModel.kt` — model/backend
+  config; mounted full-screen by the host's `PluginScreenActivity`, so it carries its own
+  app bar and closes by finishing that activity
 - `gemini/` — Gemini key onboarding + pre-save verification
 - `tool/` — the agent tool-loop (executor, router, per-tool handlers, approval)
 
@@ -103,7 +108,7 @@ check decide.
   this plugin's private `SharedPreferences` (`AgentSettings`), as
   `enc:v1:` + base64(iv‖ciphertext). A copied prefs file — root, `adb backup`,
   forensic dump — is useless without this device's Keystore. Remove the key any
-  time from **AI Settings** (or `clearGeminiApiKey()`).
+  time from **Preferences → Configuration → Agent** (or `clearGeminiApiKey()`).
   - A key stored before this plugin encrypted them is still plaintext on disk;
     it is re-encrypted in place the first time it's read
     (`SecureApiKeyStore.readAndMigrate`), so no user action is needed.

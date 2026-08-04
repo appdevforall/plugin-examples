@@ -9,7 +9,7 @@
         android:id="@+id/engine_status_text"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Initializing engine..."
+        android:text="@string/engine_initializing"
         android:textAppearance="?android:attr/textAppearanceSmall"
         android:layout_marginTop="8dp"
         android:textColor="?android:attr/textColorSecondary"/>
@@ -28,7 +28,7 @@
         android:id="@+id/selected_model_path"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="No model selected"
+        android:text="@string/model_none_selected"
         android:textAppearance="?android:attr/textAppearanceSmall"
         android:textColor="?android:attr/textColorSecondary"
         android:paddingBottom="8dp"/>
@@ -37,7 +37,7 @@
         android:id="@+id/btn_browse_model"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Browse for Model File" />
+        android:text="@string/btn_browse_model" />
 
     <Button
         android:id="@+id/loadSavedButton"
@@ -45,7 +45,7 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
         android:enabled="false"
-        android:text="Load from saved"
+        android:text="@string/btn_load_saved_model"
         tools:enabled="true" />
 
     <LinearLayout
@@ -58,7 +58,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Optional SHA-256 (for verification)"
+            android:text="@string/label_local_model_sha"
             android:textAppearance="?android:attr/textAppearanceSmall"
             android:paddingBottom="4dp"/>
 
@@ -67,7 +67,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:inputType="textNoSuggestions"
-            android:hint="SHA-256 hash"
+            android:hint="@string/hint_local_model_sha"
             android:maxLines="1" />
     </LinearLayout>
 
@@ -75,7 +75,7 @@
         android:id="@+id/switch_simple_local_prompt"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Use simple local prompt"
+        android:text="@string/label_use_simple_local_prompt"
         android:checked="true"
         android:layout_marginTop="16dp" />
 

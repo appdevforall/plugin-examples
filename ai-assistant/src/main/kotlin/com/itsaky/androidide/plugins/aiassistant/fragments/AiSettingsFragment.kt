@@ -16,7 +16,7 @@ import android.view.WindowManager
 import android.widget.*
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.DrawableRes
-import androidx.fragment.app.DialogFragment
+import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -37,12 +37,12 @@ import java.util.Date
 import java.util.Locale
 import kotlin.math.roundToInt
 
-class AiSettingsFragment : DialogFragment() {
-
-    companion object {
-        /** FragmentResult key signalling the chat screen that settings were closed. */
-        const val RESULT_SETTINGS_CLOSED = "ai_settings_closed"
-    }
+/**
+ * The Agent settings screen, reached from Preferences → Configuration → Agent and from the Agent
+ * chat's own shortcuts. The host mounts it full-screen in PluginScreenActivity, which provides no
+ * toolbar, so this fragment brings its own app bar and closes by finishing that activity.
+ */
+class AiSettingsFragment : Fragment() {
 
     private lateinit var viewModel: AiSettingsViewModel
     private lateinit var settingsToolbar: LinearLayout
@@ -102,15 +102,17 @@ class AiSettingsFragment : DialogFragment() {
         }
 
     /**
-     * Route inflation through the host so the dialog's views resolve against a Context whose
+     * Route inflation through the host so this screen's views resolve against a Context whose
      * Configuration tracks the IDE's day/night setting (DayNight PluginTheme + values-night/
-     * colors). Replaces the old cloneInContext(pluginContext), which pinned the UI to light mode.
+     * colors); the raw fragment inflater pins the screen to light mode.
+     *
+     * Overridden here rather than applied inside [onCreateView] so that `layoutInflater` itself is
+     * the themed one — the backend panes swapped into [backendSpecificContainer] and anything else
+     * reaching for it get the theme for free. Same shape as ChatFragment.
      */
     override fun onGetLayoutInflater(savedInstanceState: Bundle?): LayoutInflater {
         val inflater = super.onGetLayoutInflater(savedInstanceState)
-        return com.itsaky.androidide.plugins.base.PluginFragmentHelper.getPluginInflater(
-            com.itsaky.androidide.plugins.aiassistant.AiAssistantPlugin.PLUGIN_ID, inflater
-        )
+        return PluginFragmentHelper.getPluginInflater(AiAssistantPlugin.PLUGIN_ID, inflater)
     }
 
     override fun onCreateView(
@@ -138,16 +140,8 @@ class AiSettingsFragment : DialogFragment() {
     override fun onDestroyView() {
         // Drops the captured Gemini pane views along with the callback.
         onGeminiPaneResume = null
+        setSecureWindow(false)
         super.onDestroyView()
-    }
-
-    override fun onDismiss(dialog: android.content.DialogInterface) {
-        super.onDismiss(dialog)
-        // This is a dialog, so the chat screen behind it never gets onResume when we close.
-        // Signal it to re-resolve the selected backend (routing + availability + label).
-        if (isAdded) {
-            parentFragmentManager.setFragmentResult(RESULT_SETTINGS_CLOSED, Bundle.EMPTY)
-        }
     }
 
     private fun initializeViewModel() {
@@ -170,8 +164,8 @@ class AiSettingsFragment : DialogFragment() {
 
     private fun setupToolbar() {
         backButton.setOnClickListener {
-            // Close the dialog
-            dismiss()
+            // This screen owns the whole activity, so closing it means finishing that activity.
+            requireActivity().finish()
         }
         wireTooltip(backButton, AiAssistantPlugin.TOOLTIP_TAG_SETTINGS_BACK)
     }
@@ -209,8 +203,8 @@ class AiSettingsFragment : DialogFragment() {
         // The Gemini pane's views are about to go; its resume callback must not outlive them.
         onGeminiPaneResume = null
 
-        // Reuse the fragment's theme-aware inflater (routed through getPluginInflater) so these
-        // sub-layouts follow the IDE day/night theme like the rest of the dialog.
+        // layoutInflater is the theme-aware one (see onGetLayoutInflater), so these sub-layouts
+        // follow the IDE day/night theme like the rest of the screen.
         when (backend) {
             AiBackend.LOCAL_LLM -> {
                 val localLlmView = layoutInflater
@@ -608,15 +602,15 @@ class AiSettingsFragment : DialogFragment() {
     }
 
     /**
-     * Add or clear [WindowManager.LayoutParams.FLAG_SECURE] on this dialog's window.
+     * Add or clear [WindowManager.LayoutParams.FLAG_SECURE] on the host activity's window.
      *
      * Set while the key is in clear text, or screenshots and the recents thumbnail would capture
-     * it. A null window on the first call is safe: the initial state is masked.
+     * it. Cleared in [onDestroyView], since the window outlives this fragment's view.
      *
      * @param secure true to block capture, false to allow it again
      */
     private fun setSecureWindow(secure: Boolean) {
-        val window = dialog?.window ?: return
+        val window = activity?.window ?: return
         if (secure) {
             window.setFlags(
                 WindowManager.LayoutParams.FLAG_SECURE,
