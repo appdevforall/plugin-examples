@@ -1,5 +1,7 @@
 package com.itsaky.androidide.plugins.aiassistant.gemini
 
+import com.itsaky.androidide.plugins.PluginLogger
+import com.itsaky.androidide.plugins.aiassistant.AiAssistantPlugin
 import com.itsaky.androidide.plugins.services.LlmInferenceService
 import com.itsaky.androidide.plugins.services.SharedServices
 import java.lang.reflect.InvocationTargetException
@@ -62,6 +64,13 @@ class ReflectiveGeminiCatalogGateway(
             SharedServices.get(LlmInferenceService::class.java)?.getBackend(BACKEND_ID)
     }
 
+    /**
+     * This plugin's IDE-surfaced log, so a broken cross-plugin contract shows up in the IDE's own
+     * log view rather than only in logcat. Null before `initialize()` and in JVM tests.
+     */
+    private val logger: PluginLogger?
+        get() = AiAssistantPlugin.getContext()?.logger
+
     override fun listModelsForSavedKey(): CatalogResult =
         callListModels(paramTypes = emptyArray(), args = emptyArray())
 
@@ -81,7 +90,7 @@ class ReflectiveGeminiCatalogGateway(
         val backend = try {
             backendProvider()
         } catch (e: Exception) {
-            android.util.Log.e(TAG, "Could not resolve the '$BACKEND_ID' backend", e)
+            logger?.error("$TAG: could not resolve the '$BACKEND_ID' backend", e)
             return CatalogResult.Failed(e)
         } ?: return CatalogResult.NoBackend
 
@@ -89,10 +98,9 @@ class ReflectiveGeminiCatalogGateway(
             backend.javaClass.getMethod(METHOD_LIST_MODELS, *paramTypes)
         } catch (e: NoSuchMethodException) {
             val signature = paramTypes.joinToString { it.simpleName }
-            android.util.Log.e(
-                TAG,
-                "ai-core's ${backend.javaClass.name} has no $METHOD_LIST_MODELS($signature): the " +
-                    "cross-plugin contract changed. Expected " +
+            logger?.error(
+                "$TAG: ai-core's ${backend.javaClass.name} has no " +
+                    "$METHOD_LIST_MODELS($signature): the cross-plugin contract changed. Expected " +
                     "`fun listModels($signature): CompletableFuture<List<String>>`.",
                 e
             )
@@ -104,10 +112,10 @@ class ReflectiveGeminiCatalogGateway(
         } catch (e: InvocationTargetException) {
             // Unwrap: the interesting failure is the one listModels threw, not the wrapper.
             val cause = e.cause ?: e
-            android.util.Log.e(TAG, "$METHOD_LIST_MODELS threw", cause)
+            logger?.error("$TAG: $METHOD_LIST_MODELS threw", cause)
             return CatalogResult.Failed(cause)
         } catch (e: Exception) {
-            android.util.Log.e(TAG, "Could not invoke $METHOD_LIST_MODELS", e)
+            logger?.error("$TAG: could not invoke $METHOD_LIST_MODELS", e)
             return CatalogResult.Failed(e)
         }
 
@@ -116,7 +124,7 @@ class ReflectiveGeminiCatalogGateway(
         if (future == null) {
             val message =
                 "$METHOD_LIST_MODELS returned ${raw?.javaClass?.name}, expected CompletableFuture"
-            android.util.Log.e(TAG, message)
+            logger?.error("$TAG: $message")
             return CatalogResult.Failed(IllegalStateException(message))
         }
 
@@ -126,14 +134,13 @@ class ReflectiveGeminiCatalogGateway(
             // The API failure ai-core reported; its message carries the HTTP status.
             CatalogResult.Failed(e.cause ?: e)
         } catch (e: CancellationException) {
-            android.util.Log.w(TAG, "$METHOD_LIST_MODELS was cancelled by ai-core", e)
+            logger?.warn("$TAG: $METHOD_LIST_MODELS was cancelled by ai-core", e)
             CatalogResult.Failed(e)
         } catch (e: TimeoutException) {
             future.cancel(true)
-            android.util.Log.e(
-                TAG,
-                "$METHOD_LIST_MODELS did not complete within ${LIST_MODELS_TIMEOUT_SECONDS}s; " +
-                    "is ai-core still active?",
+            logger?.error(
+                "$TAG: $METHOD_LIST_MODELS did not complete within " +
+                    "${LIST_MODELS_TIMEOUT_SECONDS}s; is ai-core still active?",
                 e
             )
             CatalogResult.Failed(e)

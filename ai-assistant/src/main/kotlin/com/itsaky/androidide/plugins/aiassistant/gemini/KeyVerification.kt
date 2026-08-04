@@ -45,8 +45,9 @@ sealed interface KeyVerification {
 /**
  * Interpret a catalog lookup as a verdict on the key that produced it.
  *
- * Free of Android framework state apart from a diagnostic log, so every row of the mapping is
- * unit-testable without a device or a live ai-core.
+ * Pure: no Android framework state and no logging of its own — the failure itself is already
+ * reported by [ReflectiveGeminiCatalogGateway] — so every row of the mapping is unit-testable
+ * without a device or a live ai-core.
  */
 fun CatalogResult.toKeyVerification(): KeyVerification = when (this) {
     is CatalogResult.Success ->
@@ -64,19 +65,15 @@ fun CatalogResult.toKeyVerification(): KeyVerification = when (this) {
  * with no status at all, an [IOException] is transport trouble and anything else is unchecked.
  */
 private fun classifyFailure(cause: Throwable): KeyVerification =
-    when (val status = httpStatusOf(cause)) {
+    when (failureStatusOf(cause)) {
         null -> if (cause is IOException) KeyVerification.Unreachable else KeyVerification.Unknown
         // Ordered before the 4xx range: a throttled key is valid, and must not read as refused.
         429 -> KeyVerification.RateLimited
         in 400..499 -> KeyVerification.Rejected
         // Google's fault, not the key's: a 5xx says nothing about the credential.
         in 500..599 -> KeyVerification.Unreachable
-        else -> KeyVerification.Unknown.also {
-            android.util.Log.w(
-                "KeyVerification",
-                "Unmapped ListModels HTTP $status; treating the key as unchecked, not rejected"
-            )
-        }
+        // A status outside 4xx/5xx on a failure says nothing: unchecked, never rejected.
+        else -> KeyVerification.Unknown
     }
 
 /**
@@ -85,17 +82,17 @@ private fun classifyFailure(cause: Throwable): KeyVerification =
  * Anchored on the whole prefix, not a bare `HTTP \d{3}`: Google's error body is appended to that
  * message, and a looser pattern could read a verdict on the key out of server-supplied text.
  */
-private val HTTP_STATUS = Regex("""ListModels HTTP (\d{3})""")
+private val LIST_MODELS_FAILURE_STATUS = Regex("""ListModels HTTP (\d{3})""")
 
 /** Depth cap: a malformed cause chain can be self-referential, and this runs on user input. */
 private const val MAX_CAUSE_DEPTH = 5
 
-/** First HTTP status found walking [cause] and its causes, or null when there is none. */
-private fun httpStatusOf(cause: Throwable): Int? {
+/** First failure status found walking [cause] and its causes, or null when there is none. */
+private fun failureStatusOf(cause: Throwable): Int? {
     var current: Throwable? = cause
     var depth = 0
     while (current != null && depth < MAX_CAUSE_DEPTH) {
-        HTTP_STATUS.find(current.message.orEmpty())
+        LIST_MODELS_FAILURE_STATUS.find(current.message.orEmpty())
             ?.let { return it.groupValues[1].toIntOrNull() }
         current = current.cause
         depth++

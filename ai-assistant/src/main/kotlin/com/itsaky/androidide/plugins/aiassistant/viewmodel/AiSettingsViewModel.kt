@@ -19,6 +19,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.itsaky.androidide.plugins.PluginContext
+import com.itsaky.androidide.plugins.PluginLogger
 
 /**
  * State for the model file loading.
@@ -121,6 +122,13 @@ class AiSettingsViewModel(
      */
     private fun getPluginPrefs() = getContext()?.getPluginSharedPreferences("AgentSettings")
 
+    /**
+     * This plugin's IDE-surfaced log, so settings diagnostics land in the IDE's own log view rather
+     * than only in logcat. Null before `initialize()` and in JVM tests.
+     */
+    private val logger: PluginLogger?
+        get() = getContext()?.logger
+
     /** Human-readable name persisted alongside the model path at load time, if any. */
     fun getSavedModelName(): String? =
         getPluginPrefs()?.getString("local_llm_model_name", null)?.takeIf { it.isNotBlank() }
@@ -152,7 +160,7 @@ class AiSettingsViewModel(
                         }
                     }
             } catch (e: Exception) {
-                android.util.Log.w(TAG, "Could not resolve display name for $uriString", e)
+                logger?.warn("$TAG: could not resolve display name for $uriString", e)
             }
         }
         return fallbackDisplayName(uriString)
@@ -230,15 +238,15 @@ class AiSettingsViewModel(
             throw e
         } catch (e: Exception) {
             // Last-resort net: a verification crash must never be mistaken for a pass.
-            android.util.Log.e(TAG, "Gemini key verification failed unexpectedly", e)
+            logger?.error("$TAG: Gemini key verification failed unexpectedly", e)
             CatalogResult.Failed(e)
         }
         result.toKeyVerification().also { verification ->
             // Diagnostic only: saving a key is not a request for a catalog, so the UI omits this.
             if (verification is KeyVerification.Verified) {
-                android.util.Log.d(
-                    TAG,
-                    "Gemini key verified against ${verification.modelCount} chat-capable models"
+                logger?.debug(
+                    "$TAG: Gemini key verified against ${verification.modelCount} " +
+                        "chat-capable models"
                 )
             }
         }
@@ -259,13 +267,13 @@ class AiSettingsViewModel(
             // Checked first: returning true here would have the UI claim an unwritten key was saved.
             val prefs = getPluginPrefs()
             if (prefs == null) {
-                android.util.Log.e(TAG, "Cannot save Gemini API key: plugin preferences unavailable")
+                logger?.error("$TAG: cannot save Gemini API key: plugin preferences unavailable")
                 return@withContext false
             }
             val encrypted = try {
                 SecureApiKeyStore.encrypt(apiKey.trim())
             } catch (e: Exception) {
-                android.util.Log.e(TAG, "Failed to encrypt Gemini API key", e)
+                logger?.error("$TAG: failed to encrypt Gemini API key", e)
                 return@withContext false
             }
             // commit(), not apply(): only a synchronous write can honestly return "persisted".
@@ -346,7 +354,7 @@ class AiSettingsViewModel(
             try {
                 val apiKey = getGeminiApiKey()?.trim()
                 if (apiKey.isNullOrBlank()) {
-                    android.util.Log.w(TAG, "No Gemini API key saved; showing fallback models")
+                    logger?.warn("$TAG: no Gemini API key saved; showing fallback models")
                     _geminiModels.postValue(GeminiModelOptions(FALLBACK_MODELS, isLive = false))
                     return@launch
                 }
@@ -354,12 +362,12 @@ class AiSettingsViewModel(
                 when (val result = catalogGateway.listModelsForSavedKey()) {
                     is CatalogResult.Success -> {
                         if (result.models.isEmpty()) {
-                            android.util.Log.w(TAG, "Live model list empty; showing fallback models")
+                            logger?.warn("$TAG: live model list empty; showing fallback models")
                             _geminiModels.postValue(
                                 GeminiModelOptions(FALLBACK_MODELS, isLive = false)
                             )
                         } else {
-                            android.util.Log.d(TAG, "Fetched ${result.models.size} Gemini models")
+                            logger?.debug("$TAG: fetched ${result.models.size} Gemini models")
                             _geminiModels.postValue(
                                 GeminiModelOptions(result.models, isLive = true)
                             )
@@ -372,7 +380,7 @@ class AiSettingsViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                android.util.Log.e(TAG, "Error fetching Gemini models", e)
+                logger?.error("$TAG: error fetching Gemini models", e)
                 _geminiModels.postValue(GeminiModelOptions(FALLBACK_MODELS, isLive = false))
             } finally {
                 _geminiModelsLoading.postValue(false)
@@ -411,9 +419,9 @@ class AiSettingsViewModel(
                     ModelLoadingState.Loaded(fileName)
                 )
 
-                android.util.Log.d(TAG, "Model path saved: $uriString ($fileName)")
+                logger?.debug("$TAG: model path saved: $uriString ($fileName)")
             } catch (e: Exception) {
-                android.util.Log.e("AiSettingsViewModel", "Error saving model path", e)
+                logger?.error("$TAG: error saving model path", e)
                 _modelLoadingState.postValue(
                     ModelLoadingState.Error("Failed to save model path: ${e.message}")
                 )
