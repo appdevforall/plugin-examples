@@ -33,7 +33,13 @@ import java.io.File
  * ChatFragment for Agent chat UI.
  * Provides a full chat interface with LLM integration.
  */
-class ChatFragment : Fragment() {
+class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
+
+    private companion object {
+        /** Tag the approval dialog is shown under, so it can be found again after recreation. */
+        const val APPROVAL_DIALOG_TAG = "approval_dialog"
+    }
+
     private var _binding: FragmentChatBinding? = null
     private val binding get() = _binding!!
 
@@ -63,10 +69,11 @@ class ChatFragment : Fragment() {
     }
 
     /**
-     * Route inflation through the host so the plugin's views resolve against a Context whose
-     * Configuration tracks the IDE's day/night setting — this is what lets values-night/ colors
-     * and the DayNight PluginTheme take effect. Replaces the old cloneInContext(pluginContext),
-     * which used the plugin's base Context and stayed pinned to light mode.
+     * Routes inflation through the host so views resolve against a Context whose Configuration
+     * tracks the IDE's day/night setting, which is what lets values-night/ colors and the DayNight
+     * PluginTheme take effect. The old cloneInContext() stayed pinned to light mode.
+     * @param savedInstanceState forwarded to the superclass inflater.
+     * @return the theme-aware inflater the plugin's layouts must be inflated with.
      */
     override fun onGetLayoutInflater(savedInstanceState: Bundle?): LayoutInflater {
         val inflater = super.onGetLayoutInflater(savedInstanceState)
@@ -108,9 +115,7 @@ class ChatFragment : Fragment() {
         setupBackendIndicator()
         observeViewModel()
 
-        // The settings screen is a DialogFragment, so this fragment's onResume does not fire
-        // when it closes. Listen for its dismissal to re-resolve the selected backend (routing +
-        // availability) and refresh the indicator label.
+        // Settings is a DialogFragment, so onResume does not fire when it closes.
         parentFragmentManager.setFragmentResultListener(
             AiSettingsFragment.RESULT_SETTINGS_CLOSED, viewLifecycleOwner
         ) { _, _ ->
@@ -123,11 +128,9 @@ class ChatFragment : Fragment() {
     }
 
     /**
-     * Check for test prompt from broadcast receiver and auto-send if present.
-     * Uses SharedPreferences set by TestBroadcastReceiver for reliable communication.
-     *
-     * Debug builds only. This path auto-drives the agent — which owns file-mutating
-     * tools — without any user gesture, so it must not exist in a released plugin.
+     * Auto-sends a test prompt left in SharedPreferences by TestBroadcastReceiver. Debug builds
+     * only: this drives the agent, and its file-mutating tools, with no user gesture, so it must
+     * not exist in a released plugin.
      */
     private fun injectPendingTestPrompt() {
         if (!BuildConfig.DEBUG) return
@@ -172,16 +175,14 @@ class ChatFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
-        // Check backend availability when fragment becomes visible
-        // This ensures we check after all plugins have loaded
+        // On becoming visible, so the check runs after every plugin has loaded.
         viewModel.checkBackendAvailability()
         // Reflect the currently selected backend (updates after returning from settings).
         viewModel.refreshBackendLabel()
     }
 
     private fun initializeViewModel() {
-        // Pass plugin context getter instead of service directly
-        // This allows ViewModel to get service lazily
+        // A context getter, not the service, so the ViewModel resolves it lazily.
         viewModel = ViewModelProvider(
             this,
             ChatViewModelFactory { getPluginContext() }
@@ -194,8 +195,7 @@ class ChatFragment : Fragment() {
     }
 
     private fun setupRecyclerView() {
-        // The adapter inflates item views from parent.context (the RecyclerView's theme-aware
-        // Context), so it no longer needs a Context passed in.
+        // Item views inflate from parent.context, so no Context needs passing in.
         chatAdapter = ChatAdapter(markwon, ::wireTooltip) { action, message ->
             onMessageAction(action, message)
         }
@@ -209,8 +209,7 @@ class ChatFragment : Fragment() {
 
     private fun setupToolbar() {
         binding.btnOverflowMenu.setOnClickListener { view ->
-            // Anchor's Context is the theme-aware plugin Context (inflated via getPluginInflater),
-            // so the menu resource resolves and follows the IDE day/night theme.
+            // The anchor's Context is theme-aware, so the menu follows the IDE day/night theme.
             val popup = android.widget.PopupMenu(view.context, view)
             popup.menuInflater.inflate(com.itsaky.androidide.plugins.aiassistant.R.menu.chat_overflow_menu, popup.menu)
 
@@ -345,27 +344,42 @@ class ChatFragment : Fragment() {
         }
     }
 
+    /**
+     * The approval dialog currently on screen, looked up by tag rather than held in a field:
+     * after a configuration change this fragment is a new instance, and a field would be null
+     * while the framework-recreated dialog is still up — leaving it un-dismissable.
+     */
+    private fun currentApprovalDialog(): ApprovalDialogFragment? =
+        childFragmentManager.findFragmentByTag(APPROVAL_DIALOG_TAG) as? ApprovalDialogFragment
+
     private suspend fun observePendingApprovalRequest() {
         viewModel.pendingApprovalRequest.collect { request ->
             if (request != null) {
                 showApprovalDialog(request)
+            } else {
+                // Withdrawn by Stop or Clear Chat: nothing awaits it, so don't strand the dialog.
+                currentApprovalDialog()?.dismissAllowingStateLoss()
             }
         }
     }
 
     private fun showApprovalDialog(request: com.itsaky.androidide.plugins.aiassistant.tool.ApprovalRequest) {
-        val dialog = ApprovalDialogFragment.newInstance(request) { result ->
-            viewModel.submitApproval(result)
-        }
-        dialog.show(parentFragmentManager, "approval_dialog")
+        // childFragmentManager makes this fragment the parent, which is how Host is resolved.
+        if (currentApprovalDialog() != null) return
+        ApprovalDialogFragment.newInstance(request).show(childFragmentManager, APPROVAL_DIALOG_TAG)
+    }
+
+    override fun onApprovalDecision(
+        result: com.itsaky.androidide.plugins.aiassistant.tool.ApprovalResult,
+        correction: String?,
+    ) {
+        viewModel.submitApproval(result, correction)
     }
 
     /**
-     * Opens the file picker rooted at the open project. The host's [IdeProjectService] is the
-     * only source of truth for that root — PathGuard's `System.getProperty` fallback resolves
-     * to "/" in the IDE process, which would root the picker at the device filesystem instead
-     * of the project. With no project open there is nothing to confine the picker to, so this
-     * fails closed and says so rather than opening an unconfined browser.
+     * Opens the file picker rooted at the open project. [IdeProjectService] is the only source of
+     * truth for that root; PathGuard's property fallback resolves to "/" here, which would root the
+     * picker at the whole device. With no project open this fails closed and says so.
      */
     private fun showFilePicker() {
         val projectService = getPluginContext()?.services?.get(IdeProjectService::class.java)
@@ -434,10 +448,10 @@ class ChatFragment : Fragment() {
     }
 
     /**
-     * Surface an [AgentState.Error] as a transient, actionable Snackbar with a shortcut into
-     * settings. Snackbar (not Toast) is mandatory here: a Toast built from the plugin's Context
-     * crashes the IDE with a SecurityException because the plugin package isn't a real installed
-     * UID; Snackbar attaches to the existing host view hierarchy instead.
+     * Surfaces an [AgentState.Error] as a Snackbar with a shortcut into settings. Snackbar, never
+     * Toast: a Toast built from the plugin's Context crashes the IDE with a SecurityException,
+     * since the plugin package is not a real installed UID.
+     * @param message the error text to show.
      */
     private fun showErrorSnackbar(message: String) {
         val binding = _binding ?: return

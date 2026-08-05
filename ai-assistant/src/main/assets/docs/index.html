@@ -54,6 +54,12 @@
   <ul>
     <li>Read and search files <b>within the current project</b>.</li>
     <li>Create and update files (asks for approval before writing).</li>
+    <li>Edit part of a file — the agent proposes a find/replace change, and the
+      approval dialog shows you the exact before/after before anything is
+      written. You can <b>Accept</b> it, <b>Decline</b> it, or choose
+      <b>Correct</b> to tell the agent what to change and let it try again.
+      When the file is open in the editor, the change is applied to the buffer,
+      so <b>Ctrl+Z undoes it</b> and your unsaved work is preserved.</li>
     <li>Trigger a Gradle sync and read build output.</li>
     <li>Add dependencies and generate code from templates.</li>
   </ul>

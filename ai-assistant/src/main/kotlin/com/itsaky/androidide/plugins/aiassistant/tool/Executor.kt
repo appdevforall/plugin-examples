@@ -3,7 +3,9 @@ package com.itsaky.androidide.plugins.aiassistant.tool
 import android.util.Log
 import com.itsaky.androidide.plugins.aiassistant.models.ToolResult
 import com.itsaky.androidide.plugins.aiassistant.tool.handlers.PathGuard
+import com.itsaky.androidide.plugins.aiassistant.utils.AgentTrace
 import com.itsaky.androidide.plugins.aiassistant.utils.ToolExecutionTracker
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -28,7 +30,9 @@ class Executor(
         )
 
         /**
-         * Get required arguments for a tool.
+         * Arguments a tool cannot run without.
+         * @param toolName the tool being dispatched.
+         * @return the required argument names, empty when the tool has none.
          */
         fun requiredArgsForTool(toolName: String): List<String> {
             return when (toolName) {
@@ -38,40 +42,68 @@ class Executor(
                 "search_project" -> listOf("query")
                 "create_file" -> listOf("file_path", "content")
                 "update_file" -> listOf("file_path", "content")
+                // new_string omitted: empty is a legal edit (deletion), so EditFileHandler checks it.
+                "edit_file" -> listOf("file_path", "old_string")
                 else -> emptyList()
             }
+        }
+
+        /**
+         * Required args holding verbatim file text, where whitespace is content: checked for
+         * emptiness rather than blankness, since `old_string = "    "` is a legal edit and
+         * rejecting it would contradict `EditFileHandler.validate`.
+         */
+        private val VERBATIM_TEXT_ARGS = setOf("old_string")
+
+        /**
+         * Whether [value] fails the required-argument check for [key].
+         * @param key the required argument's name.
+         * @param value the supplied value, or null when absent.
+         * @return true when the argument must be reported missing.
+         */
+        private fun isMissing(key: String, value: Any?): Boolean {
+            val text = value?.toString()
+            return if (key in VERBATIM_TEXT_ARGS) text.isNullOrEmpty() else text?.trim().isNullOrEmpty()
         }
     }
 
     /**
-     * Execute a list of tool calls.
-     * Read-only tools are executed in parallel, write tools sequentially.
+     * Executes a batch of tool calls, treating its order as a dependency graph: consecutive
+     * read-only calls ([PARALLEL_SAFE_TOOLS]) run concurrently, every write runs alone between such
+     * runs. Hoisting all reads broke `create_file` + `read_file`; mixing broke `search` + `edit`.
+     * @param toolCalls the calls to run, in the order the model emitted them.
+     * @return one result per call, positionally aligned with [toolCalls].
      */
     suspend fun execute(toolCalls: List<ToolCall>): List<ToolResult> = coroutineScope {
         Log.i(TAG, "Executing ${toolCalls.size} tool call(s)...")
 
         val results = arrayOfNulls<ToolResult>(toolCalls.size)
 
-        // Read-only tools run concurrently.
-        val parallelJobs = toolCalls.mapIndexedNotNull { index, call ->
-            if (call.name in PARALLEL_SAFE_TOOLS) {
-                async { results[index] = executeCall(call, "Parallel") }
-            } else null
-        }
-
-        // Write tools run one at a time, in input order.
-        toolCalls.forEachIndexed { index, call ->
-            if (call.name !in PARALLEL_SAFE_TOOLS) {
-                results[index] = executeCall(call, "Sequential")
+        var index = 0
+        while (index < toolCalls.size) {
+            if (toolCalls[index].name !in PARALLEL_SAFE_TOOLS) {
+                results[index] = executeCall(toolCalls[index], "Sequential")
+                index++
+                continue
             }
+            // Extend over every read-only call that follows, stopping at the first write.
+            var end = index
+            while (end < toolCalls.size && toolCalls[end].name in PARALLEL_SAFE_TOOLS) end++
+            (index until end).map { i ->
+                async { results[i] = executeCall(toolCalls[i], "Parallel") }
+            }.awaitAll()
+            index = end
         }
 
-        parallelJobs.awaitAll()
         results.requireNoNulls().toList()
     }
 
     /**
-     * Execute a single tool call.
+     * Runs one call end to end: alias remapping, required-argument and containment checks,
+     * pre-approval validation, the approval gate, then dispatch.
+     * @param call the tool call to run.
+     * @param executionMode "Parallel"/"Sequential", for logging.
+     * @return the tool's result, or the failure that stopped it short of running.
      */
     private suspend fun executeCall(call: ToolCall, executionMode: String): ToolResult {
         val toolName = call.name
@@ -99,39 +131,92 @@ class Executor(
             }
         }
 
+        // Handler-declared aliases; a canonical key the model did supply always wins.
+        handler.argAliases.forEach { (alias, canonical) ->
+            if (!normalizedArgs.containsKey(canonical) && normalizedArgs.containsKey(alias)) {
+                normalizedArgs[canonical] = normalizedArgs[alias]
+                Log.d(TAG, "($executionMode): Remapped '$alias' → '$canonical' for $toolName tool")
+                AgentTrace.detail("ARGS", "$toolName remapped $alias→$canonical")
+            }
+        }
+
         // Check required arguments
         val missingArgs = requiredArgsForTool(toolName).filter { key ->
-            val value = normalizedArgs[key]?.toString()?.trim().orEmpty()
-            value.isBlank()
+            isMissing(key, normalizedArgs[key])
         }
         if (missingArgs.isNotEmpty()) {
             val message = "Missing required argument(s): ${missingArgs.joinToString(", ")}"
             Log.i(TAG, "($executionMode): Tool '$toolName' missing args: $missingArgs")
+            AgentTrace.refusal("ARGS", "$toolName mode=$executionMode", message)
             return ToolResult.failure(message)
         }
 
-        pathContainmentFailure(toolName, handler, normalizedArgs, executionMode)?.let { return it }
+        pathContainmentFailure(toolName, handler, normalizedArgs, executionMode)?.let {
+            AgentTrace.refusal("GUARD", "$toolName containment", it.message)
+            return it
+        }
+
+        // Rejects a doomed call before it costs a dialog; guarded since validate() can throw.
+        val validation = try {
+            handler.validate(normalizedArgs)
+        } catch (ce: CancellationException) {
+            throw ce
+        } catch (e: Exception) {
+            Log.e(TAG, "($executionMode): Pre-approval validation of '$toolName' threw", e)
+            AgentTrace.refusal(
+                "PRECHECK",
+                "$toolName validation threw",
+                e.message ?: e.javaClass.simpleName,
+            )
+            return ToolResult.failure("Error validating $toolName: ${e.message}", e.stackTraceToString())
+        }
+
+        val validatedArgs = when (validation) {
+            is Validation.Rejected -> {
+                val failure = validation.result
+                Log.i(TAG, "($executionMode): Tool '$toolName' failed pre-approval validation: ${failure.message}")
+                AgentTrace.refusal("PRECHECK", "$toolName rejected before approval", failure.message)
+                return failure
+            }
+            is Validation.Accepted -> {
+                // Model-supplied keys only: handler bookkeeping is not an "args corrected" event.
+                if (normalizedArgs.any { (key, value) -> validation.args[key] != value }) {
+                    AgentTrace.stage("PRECHECK", "$toolName args corrected", AgentTrace.previewArgs(validation.args))
+                }
+                validation.args
+            }
+        }
 
         // Check approval
-        val approvalResponse = approvalManager.ensureApproved(toolName, handler, normalizedArgs)
+        val approvalStart = System.currentTimeMillis()
+        val approvalResponse = approvalManager.ensureApproved(toolName, handler, validatedArgs)
+        val approvalMs = System.currentTimeMillis() - approvalStart
         if (!approvalResponse.approved) {
             val message = approvalResponse.denialMessage ?: "Action denied by user."
             Log.i(TAG, "($executionMode): Tool '$toolName' denied. $message")
+            AgentTrace.stage("APPROVAL", "$toolName approved=false waitedMs=$approvalMs", AgentTrace.preview(message))
             return ToolResult.failure(message)
         }
+        AgentTrace.stage("APPROVAL", "$toolName approved=true waitedMs=$approvalMs")
 
-        Log.d(TAG, "($executionMode): Dispatching '$toolName' with args: $normalizedArgs")
+        Log.d(TAG, "($executionMode): Dispatching '$toolName' with args: $validatedArgs")
+        AgentTrace.stage("EXEC", "$toolName mode=$executionMode", AgentTrace.previewArgs(validatedArgs))
 
         // Before tool execution
         val toolStartTime = System.currentTimeMillis()
 
-        val result = toolRouter.dispatch(toolName, normalizedArgs)
+        val result = toolRouter.dispatch(toolName, validatedArgs)
 
         // After tool execution
         val toolDuration = System.currentTimeMillis() - toolStartTime
         toolExecutionTracker?.logToolCall(toolName, toolDuration)
 
         Log.i(TAG, "($executionMode): Result: ${result.toResultMap()}")
+        AgentTrace.stage(
+            "EXEC",
+            "$toolName done success=${result.success} tookMs=$toolDuration",
+            AgentTrace.preview(result.message),
+        )
         return result
     }
 
