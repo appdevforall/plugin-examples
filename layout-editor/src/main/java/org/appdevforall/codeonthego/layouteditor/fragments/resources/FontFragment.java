@@ -1,5 +1,6 @@
 package org.appdevforall.codeonthego.layouteditor.fragments.resources;
 
+import static org.appdevforall.codeonthego.layouteditor.PluginToast.showPluginToast;
 import static org.appdevforall.codeonthego.layouteditor.utils.Utils.isValidFontFile;
 
 import android.content.Context;
@@ -13,6 +14,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.view.inputmethod.InputMethodManager;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
@@ -20,7 +22,6 @@ import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.blankj.utilcode.util.ToastUtils;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
@@ -97,7 +98,7 @@ public class FontFragment extends Fragment {
       File[] files = project.getFonts();
 
       if (files == null) {
-        requireActivity().runOnUiThread(() -> ToastUtils.showShort(getString(R.string.msg_error_load_failed)));
+        requireActivity().runOnUiThread(() -> showPluginToast(requireContext(), getString(R.string.msg_error_load_failed)));
         return;
       }
 
@@ -107,7 +108,7 @@ public class FontFragment extends Fragment {
 
         if (!isValidFontFile(file)) {
           requireActivity().runOnUiThread(() ->
-            ToastUtils.showLong(getString(R.string.msg_font_load_invalid, name))
+            showPluginToast(requireContext(), getString(R.string.msg_font_load_invalid, name), Toast.LENGTH_LONG)
           );
           continue;
         }
@@ -123,13 +124,13 @@ public class FontFragment extends Fragment {
   }
 
   private void postToast(String msg) {
-    requireActivity().runOnUiThread(() -> ToastUtils.showLong(msg));
+    requireActivity().runOnUiThread(() -> showPluginToast(requireContext(), msg, Toast.LENGTH_LONG));
   }
 
   public void addFont(final Uri uri) {
     String path = FileUtil.convertUriToFilePath(this.getContext(),uri);
     if (TextUtils.isEmpty(path)) {
-      ToastUtils.showLong(R.string.invalid_data_intent);
+      showPluginToast(requireContext(), getString(R.string.invalid_data_intent), Toast.LENGTH_LONG);
       return;
     }
     final String lastSegment = FileUtil.getLastSegmentFromPath(path);

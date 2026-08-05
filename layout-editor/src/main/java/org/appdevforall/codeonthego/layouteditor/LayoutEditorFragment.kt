@@ -25,7 +25,6 @@ import androidx.drawerlayout.widget.DrawerLayout
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.blankj.utilcode.util.ToastUtils
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.itsaky.androidide.plugins.base.PluginFragmentHelper
@@ -423,7 +422,7 @@ class LayoutEditorFragment : Fragment() {
 
 	private fun isProjectReady(): Boolean {
 		if (!::project.isInitialized) {
-			ToastUtils.showShort(getString(R.string.loading_project))
+			showPluginToast(requireContext(), getString(R.string.loading_project))
 			return false
 		}
 		return true
@@ -846,13 +845,13 @@ class LayoutEditorFragment : Fragment() {
 		val success = persistEditorLayout(layoutFile)
 		if (!success) {
 			withContext(Dispatchers.Main) {
-				ToastUtils.showShort(getString(string.failed_to_save_layout))
+				showPluginToast(requireContext(), getString(string.failed_to_save_layout))
 			}
 			return
 		}
 
 		binding.editorLayout.markAsSaved()
-		ToastUtils.showShort(getString(string.layout_saved))
+		showPluginToast(requireContext(), getString(string.layout_saved))
 	}
 
 	private fun showSaveChangesDialog() {

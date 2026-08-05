@@ -8,10 +8,11 @@ import android.os.Environment
 import android.provider.DocumentsContract
 import android.provider.MediaStore
 import android.text.TextUtils
-import com.blankj.utilcode.util.ToastUtils
+import android.widget.Toast
 import com.itsaky.androidide.eventbus.events.editor.ReportCaughtExceptionEvent
 import com.itsaky.androidide.plugins.base.PluginFragmentHelper
 import org.appdevforall.codeonthego.layouteditor.LayoutEditorPlugin
+import org.appdevforall.codeonthego.layouteditor.showPluginToast
 import org.greenrobot.eventbus.EventBus
 import java.io.BufferedReader
 import java.io.ByteArrayOutputStream
@@ -79,7 +80,7 @@ object FileUtil {
       return true
     } catch (e: IOException) {
       e.printStackTrace()
-      ToastUtils.showLong(e.toString())
+      showPluginToast(context, e.toString(), Toast.LENGTH_LONG)
 
       EventBus.getDefault().post(
           ReportCaughtExceptionEvent(
@@ -101,7 +102,7 @@ object FileUtil {
         outputStream?.close()
       } catch (e: Exception) {
         e.printStackTrace()
-        ToastUtils.showLong(e.toString())
+        showPluginToast(context, e.toString(), Toast.LENGTH_LONG)
         EventBus.getDefault().post(
         ReportCaughtExceptionEvent(
             throwable = e,
