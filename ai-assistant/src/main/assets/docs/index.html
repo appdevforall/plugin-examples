@@ -56,6 +56,28 @@
       agent reads are sent to Google over HTTPS.</li>
   </ul>
 
+  <h2>Will this model fit in memory?</h2>
+  <p>When you pick a local <code>.gguf</code> file, it is measured against the RAM
+  free on the device at that moment, before anything is loaded. If it looks too
+  large you get a warning with the actual figures and two choices:</p>
+  <ul>
+    <li><b>Cancel</b> — nothing is saved and nothing is loaded. Whatever model you
+      had selected before stays in use. Dismissing the warning with Back does the
+      same thing.</li>
+    <li><b>Proceed anyway</b> — the model is accepted despite the shortfall. Use
+      this when you are about to close other apps, for example.</li>
+  </ul>
+  <p>The warning quotes two numbers. Memory <b>to load</b> is the weights: these are
+  memory-mapped, so they need not all fit at once — when they don't, the device pages
+  them in and out, which is why an oversized model can stall for minutes instead of
+  failing immediately. Memory <b>to run</b> is the KV cache and compute buffers, which
+  are ordinary allocations and do have to fit. That is why a model can be reported as
+  risky rather than impossible: the outcome genuinely depends on how much paging your
+  device will tolerate.</p>
+  <p>To fit a large model, close other apps and select it again, or pick a smaller or
+  more heavily quantized build. A Q4_K_M quantization of a 1–3B model is the most
+  likely to run comfortably.</p>
+
   <h2>What the agent can do</h2>
   <ul>
     <li>Read and search files <b>within the current project</b>.</li>

@@ -254,6 +254,11 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend, Cancella
             currentModelPath = null
         }
 
+        // Measured after the unload: availMem excludes the context and batch it just released.
+        ModelLoadDiagnostics.refuseBeforeLoad(availableMemoryBytes())?.let { shortfall ->
+            throw ModelLoadException(loadMessages.describe(shortfall), shortfall)
+        }
+
         context.logger.info("Loading model: $resolvedPath")
         try {
             llama.load(resolvedPath)
