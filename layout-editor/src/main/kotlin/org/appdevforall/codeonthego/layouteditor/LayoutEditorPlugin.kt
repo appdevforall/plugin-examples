@@ -85,7 +85,8 @@ class LayoutEditorPlugin : IPlugin, UIExtension, DocumentationExtension, BuildSt
     )
 
     private fun openEditorIfValid() {
-        val file = context.services.get(IdeEditorService::class.java)?.getCurrentFile()
+        val editorService = context.services.get(IdeEditorService::class.java)
+        val file = editorService?.getCurrentFile()
         if (file == null || !isLayoutXml(file)) {
             context.logger.warn("Layout Editor requires an Android layout XML file")
             return
@@ -98,16 +99,23 @@ class LayoutEditorPlugin : IPlugin, UIExtension, DocumentationExtension, BuildSt
             return
         }
 
-        val dialogContext = pluginDialogContext(activity)
-        val errors = validationErrorsFor(file, dialogContext)
+        val pluginContext = PluginFragmentHelper.getPluginContext(PLUGIN_ID)
+        if (pluginContext == null) {
+            context.logger.error("No plugin resource context; cannot validate ${file.name}")
+            return
+        }
+
+        val errors = validationErrorsFor(editorService.getCurrentFileContent(), file, pluginContext)
         if (errors != null) {
-            MaterialAlertDialogBuilder(dialogContext)
-                .setTitle(R.string.xml_error_title)
+            MaterialAlertDialogBuilder(activity)
+                .setTitle(pluginContext.getString(R.string.xml_error_title))
                 .setMessage(errors)
                 .setPositiveButton(android.R.string.ok, null)
                 .show()
             return
         }
+
+        editorService.saveCurrentFile()
 
         LayoutEditorState.set(
             filePath = file.absolutePath.substringBefore("layout"),
@@ -116,16 +124,24 @@ class LayoutEditorPlugin : IPlugin, UIExtension, DocumentationExtension, BuildSt
         uiService.openPluginScreen(PLUGIN_ID, LayoutEditorFragment::class.java.name, "Layout Editor")
     }
 
-    private fun validationErrorsFor(file: File, dialogContext: android.content.Context): String? {
-        val xml = runCatching { file.readText() }.getOrElse {
-            context.logger.warn("Failed to read ${file.name}: ${it.message}")
-            return dialogContext.getString(R.string.xml_error_read_failed, file.name)
+    private fun validationErrorsFor(
+        xml: String?,
+        file: File,
+        pluginContext: android.content.Context,
+    ): String? {
+        if (xml == null) {
+            context.logger.warn("No editor buffer available for ${file.name}")
+            return pluginContext.getString(R.string.xml_error_read_failed, file.name)
         }
 
-        val converted = ConvertImportedXml(xml).getXmlConverted(dialogContext)
-            ?: return dialogContext.getString(R.string.xml_error_not_well_formed)
+        if (xml.isBlank()) {
+            return pluginContext.getString(R.string.xml_error_empty_file, file.name)
+        }
 
-        return when (val result = XmlLayoutParser(dialogContext).validateXml(converted, dialogContext)) {
+        val converted = ConvertImportedXml(xml).getXmlConverted(pluginContext)
+            ?: return pluginContext.getString(R.string.xml_error_not_well_formed)
+
+        return when (val result = XmlLayoutParser(pluginContext).validateXml(converted, pluginContext)) {
             is ValidationResult.Success -> null
             is ValidationResult.Error -> result.formattedMessage
         }

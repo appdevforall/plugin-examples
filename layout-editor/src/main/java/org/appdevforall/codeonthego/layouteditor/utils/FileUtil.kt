@@ -34,26 +34,9 @@ private const val BUFFER_SIZE = 1024
 object FileUtil {
   fun readFromUri(uri: Uri, context: Context): String? {
     try {
-      val inputStream = context.contentResolver.openInputStream(uri)
-
-      // Creates a BufferedReader to read the contents of the InputStream
-      val reader = BufferedReader(InputStreamReader(inputStream))
-
-      // Creates a StringBuilder to store the file's contents
-      val sb = StringBuilder()
-      var line: String?
-
-      // Reads each line from the file and adds it to StringBuilder
-      while ((reader.readLine().also { line = it }) != null) {
-        sb.append(line)
+      return context.contentResolver.openInputStream(uri)?.use { input ->
+        BufferedReader(InputStreamReader(input)).readText()
       }
-
-      // Closes the InputStream and the BufferedReader
-      inputStream!!.close()
-      reader.close()
-
-      // Returns the string containing the content of the XML file
-      return sb.toString()
     } catch (e: Exception) {
       e.printStackTrace()
     }

@@ -29,6 +29,7 @@
     <string name="xml_error_not_well_formed">This file is not valid XML. Fix the markup, then open the Layout Editor again.</string>
     <string name="xml_error_title">Cannot open the Layout Editor</string>
     <string name="xml_error_read_failed">We could not read %1$s.</string>
+    <string name="xml_error_empty_file">%1$s is empty, so there is nothing to edit.</string>
     <string name="xml_error_not_loaded">This layout could not be opened in the editor, so it was left unchanged on disk.</string>
     <string name="xml_error_nothing_to_save">The canvas is empty. Add a view before saving, or exit without saving to keep the file as it is.</string>
     <string name="app_name" translatable="false">Code on the Go</string>

@@ -169,9 +169,7 @@ class LayoutEditorFragment : Fragment() {
 					)
 					project = projectManager.openedProject!!
 					updateMenuState()
-					androidToDesignConversion(
-						Uri.fromFile(File(projectManager.openedProject?.mainLayout?.path ?: "")),
-					)
+					openLayout(project.mainLayout)
 
 					binding.topAppBar.title = project.name
 					layoutAdapter = LayoutListAdapter(project)
@@ -754,35 +752,30 @@ class LayoutEditorFragment : Fragment() {
 	}
 
   private suspend fun openLayout(layoutFile: LayoutFile) {
-    val (production, design, layoutName) = withContext(Dispatchers.IO) {
-      val production = layoutFile.readLayoutFile()
-      var design = layoutFile.readDesignFile()
-
-      if (design.isNullOrBlank() && !production.isNullOrBlank()) {
-        val converted = withContext(Dispatchers.Default) {
-					ConvertImportedXml(production).getXmlConverted(requireContext())
-				}
-        if (!converted.isNullOrBlank()) {
-          layoutFile.saveDesignFile(converted)
-          design = converted
-        }
-      }
-      Triple(production, design, layoutFile.name)
+    val production = withContext(Dispatchers.IO) { layoutFile.readLayoutFile() }
+    if (production.isNullOrBlank()) {
+      showLoadFailure(getString(string.xml_error_empty_file, layoutFile.name))
+      return
     }
+
+    val design = withContext(Dispatchers.Default) {
+      ConvertImportedXml(production).getXmlConverted(requireContext())
+    }
+    if (design.isNullOrBlank()) {
+      showLoadFailure(getString(string.xml_error_not_well_formed))
+      return
+    }
+    withContext(Dispatchers.IO) { layoutFile.saveDesignFile(design) }
 
       currentLayoutBasePath = File(layoutFile.path).parent
       val loadResult = binding.editorLayout.loadLayoutFromParser(design, currentLayoutBasePath)
 
 		if (loadResult is ValidationResult.Error) {
-			loadedLayoutFile = null
-			MaterialAlertDialogBuilder(requireContext())
-				.setTitle(R.string.xml_error_title)
-				.setMessage(loadResult.formattedMessage)
-				.setPositiveButton(android.R.string.ok) { _, _ -> requireActivity().finish() }
-				.setCancelable(false)
-				.show()
+			showLoadFailure(loadResult.formattedMessage)
 			return
 		}
+
+		val layoutName = layoutFile.name
 
 		loadedLayoutFile = layoutFile
 		project.currentLayout = layoutFile
@@ -806,6 +799,16 @@ class LayoutEditorFragment : Fragment() {
 	}
 
 	private fun currentLayoutFileOrNull(): LayoutFile? = loadedLayoutFile
+
+	private fun showLoadFailure(message: String) {
+		loadedLayoutFile = null
+		MaterialAlertDialogBuilder(requireContext())
+			.setTitle(R.string.xml_error_title)
+			.setMessage(message)
+			.setPositiveButton(android.R.string.ok) { _, _ -> requireActivity().finish() }
+			.setCancelable(false)
+			.show()
+	}
 
 	/**
 	 * Writes the current editor state to disk.
