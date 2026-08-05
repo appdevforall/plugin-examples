@@ -7,13 +7,6 @@ import android.os.Handler
 import android.os.Looper
 import android.widget.Toast
 
-/**
- * Shows a toast using a context whose resources include this plugin's package.
- *
- * utilcodex's ToastUtils resolves its own bundled layout through Utils.getApp() — the host
- * Application, whose Resources never have the plugin APK loaded — so it throws
- * Resources.NotFoundException ("No package ID <id> found") from inside a plugin.
- */
 @JvmOverloads
 fun showPluginToast(
     context: Context,

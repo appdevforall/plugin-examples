@@ -1,5 +1,6 @@
 package org.appdevforall.codeonthego.layouteditor
 
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.itsaky.androidide.plugins.IPlugin
@@ -15,6 +16,9 @@ import com.itsaky.androidide.plugins.services.BuildStatusListener
 import com.itsaky.androidide.plugins.services.IdeBuildService
 import com.itsaky.androidide.plugins.services.IdeEditorService
 import com.itsaky.androidide.plugins.services.IdeUIService
+import org.appdevforall.codeonthego.layouteditor.editor.convert.ConvertImportedXml
+import org.appdevforall.codeonthego.layouteditor.tools.ValidationResult
+import org.appdevforall.codeonthego.layouteditor.tools.XmlLayoutParser
 import java.io.File
 
 /**
@@ -86,12 +90,45 @@ class LayoutEditorPlugin : IPlugin, UIExtension, DocumentationExtension, BuildSt
             context.logger.warn("Layout Editor requires an Android layout XML file")
             return
         }
+
+        val uiService = context.services.get(IdeUIService::class.java)
+        val activity = uiService?.getCurrentActivity()
+        if (activity == null) {
+            context.logger.warn("Layout Editor needs a foreground activity to open")
+            return
+        }
+
+        val dialogContext = pluginDialogContext(activity)
+        val errors = validationErrorsFor(file, dialogContext)
+        if (errors != null) {
+            MaterialAlertDialogBuilder(dialogContext)
+                .setTitle(R.string.xml_error_title)
+                .setMessage(errors)
+                .setPositiveButton(android.R.string.ok, null)
+                .show()
+            return
+        }
+
         LayoutEditorState.set(
             filePath = file.absolutePath.substringBefore("layout"),
             layoutFileName = file.name.substringBefore("."),
         )
-        context.services.get(IdeUIService::class.java)
-            ?.openPluginScreen(PLUGIN_ID, LayoutEditorFragment::class.java.name, "Layout Editor")
+        uiService.openPluginScreen(PLUGIN_ID, LayoutEditorFragment::class.java.name, "Layout Editor")
+    }
+
+    private fun validationErrorsFor(file: File, dialogContext: android.content.Context): String? {
+        val xml = runCatching { file.readText() }.getOrElse {
+            context.logger.warn("Failed to read ${file.name}: ${it.message}")
+            return dialogContext.getString(R.string.xml_error_read_failed, file.name)
+        }
+
+        val converted = ConvertImportedXml(xml).getXmlConverted(dialogContext)
+            ?: return dialogContext.getString(R.string.xml_error_not_well_formed)
+
+        return when (val result = XmlLayoutParser(dialogContext).validateXml(converted, dialogContext)) {
+            is ValidationResult.Success -> null
+            is ValidationResult.Error -> result.formattedMessage
+        }
     }
 
     private fun isLayoutXmlOpen(): Boolean {
