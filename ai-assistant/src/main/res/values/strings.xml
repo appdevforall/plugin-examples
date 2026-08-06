@@ -119,7 +119,7 @@
     <string name="msg_api_key_save_failed">Couldn\'t save the API key on this device. Please try again.</string>
     <string name="msg_api_key_unreadable">The stored API key could not be read on this device. Please enter it again.</string>
 
-    <string name="btn_get_free_key">Get a free key</string>
+    <string name="btn_get_free_key">Get API Key</string>
     <string name="msg_no_browser_for_key">No browser available. The link was copied — open it on another device: %s</string>
     <string name="msg_key_link_copy_failed">Couldn\'t open a browser. Get your key at %s</string>
     <string name="msg_key_hint_paste_into_field">Copied your key? Paste it into the field above, then tap Save Key.</string>

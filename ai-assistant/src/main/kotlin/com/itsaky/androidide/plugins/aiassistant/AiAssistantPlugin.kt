@@ -472,9 +472,9 @@ class AiAssistantPlugin : IPlugin, UIExtension, DocumentationExtension {
             tag = TOOLTIP_TAG_SETTINGS_GEMINI_KEY,
             summary = "Enter your Google Gemini API key. It is stored only on this device.",
             detail = """
-                <p>Paste a Gemini API key to enable the cloud backend. Keys are free
-                to create at <b>aistudio.google.com/apikey</b> — tap <b>Get a free
-                key</b> to go straight there. Google AI Studio sets up the
+                <p>Paste a Gemini API key to enable the cloud backend. Keys are
+                created at <b>aistudio.google.com/apikey</b> — tap <b>Get API
+                Key</b> to go straight there. Google AI Studio sets up the
                 underlying Cloud project for you, so there is no Cloud console and
                 no billing setup involved.</p>
                 <p>The key is encrypted with a key held in this device's
@@ -500,7 +500,7 @@ class AiAssistantPlugin : IPlugin, UIExtension, DocumentationExtension {
         ),
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_SETTINGS_GET_KEY,
-            summary = "Open Google AI Studio in your browser to create a free Gemini API key.",
+            summary = "Open Google AI Studio in your browser to create a Gemini API key.",
             detail = """
                 <p>Opens <b>aistudio.google.com/apikey</b> in your normal browser,
                 where you sign in with your Google account and tap <i>Create API

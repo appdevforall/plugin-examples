@@ -79,7 +79,7 @@ class AiSettingsViewModel(
     }
 
     /**
-     * True between tapping *Get a free key* and the settings screen's next resume, so the UI can
+     * True between tapping *Get API Key* and the settings screen's next resume, so the UI can
      * point at the next step once the user is back from AI Studio. Held here rather than on the
      * fragment so a rotation while the browser is in front doesn't reset it and swallow the hint.
      */

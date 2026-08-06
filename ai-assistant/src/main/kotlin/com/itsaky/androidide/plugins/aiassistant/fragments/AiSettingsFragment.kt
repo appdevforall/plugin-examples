@@ -370,7 +370,7 @@ class AiSettingsFragment : DialogFragment() {
             verificationText.setCompoundDrawablesRelativeWithIntrinsicBounds(0, 0, 0, 0)
         }
 
-        // "Get a free key" is absent here on purpose: it stays visible while Gemini is selected.
+        // "Get API Key" is absent here on purpose: it stays visible while Gemini is selected.
         fun updateUiState(isEditing: Boolean) {
             if (isEditing) {
                 statusTextView.visibility = View.GONE

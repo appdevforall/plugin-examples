@@ -53,7 +53,7 @@ The build resolves `plugin-api.jar` from the repo-root `../libs/`.
 
 The Gemini pane guides key acquisition instead of just showing an empty field:
 
-- **Get a free key** opens `https://aistudio.google.com/apikey` in the *system*
+- **Get API Key** opens `https://aistudio.google.com/apikey` in the *system*
   browser. AI Studio provisions the underlying Cloud project itself, so the
   Google Cloud console is not part of the flow, and sign-in happens in the
   browser — this process never sees a Google password.
