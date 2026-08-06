@@ -1,17 +1,22 @@
 package com.itsaky.androidide.plugins.aiassistant.fragments
 
+import android.content.res.Configuration
+import android.graphics.Rect
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.doOnAttach
 import androidx.core.view.isVisible
-import androidx.core.widget.doAfterTextChanged
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.chip.Chip
 import com.google.android.material.snackbar.Snackbar
 import com.itsaky.androidide.plugins.PluginContext
@@ -21,6 +26,7 @@ import com.itsaky.androidide.plugins.aiassistant.R
 import com.itsaky.androidide.plugins.aiassistant.adapters.ChatAdapter
 import com.itsaky.androidide.plugins.aiassistant.databinding.FragmentChatBinding
 import com.itsaky.androidide.plugins.aiassistant.models.AgentState
+import com.itsaky.androidide.plugins.aiassistant.models.isRunning
 import com.itsaky.androidide.plugins.aiassistant.viewmodel.ChatViewModel
 import com.itsaky.androidide.plugins.base.PluginFragmentHelper
 import com.itsaky.androidide.plugins.services.IdeProjectService
@@ -48,6 +54,11 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
     private lateinit var chatAdapter: ChatAdapter
     private lateinit var markwon: Markwon
     private val contextFiles = mutableListOf<File>()
+
+    private var composer: ComposerAutoHideController? = null
+
+    /** The message list's layout-declared padding, before any cutout inset is added. */
+    private val basePadding = Rect()
 
     private val tooltipService: IdeTooltipService? by lazy {
         try {
@@ -98,7 +109,15 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
         }
         super.onDestroyView()
         viewModel.stopProcessing()
+        composer?.detach()
+        composer = null
         _binding = null
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        // The process can be killed while backgrounded even though rotation never recreates us.
+        composer?.saveState(outState)
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -112,6 +131,8 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
         setupToolbar()
         setupRecyclerView()
         setupInputArea()
+        setupCutoutPadding()
+        setupComposer(savedInstanceState)
         setupStatusBar()
         setupBackendIndicator()
         observeViewModel()
@@ -226,23 +247,15 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
     }
 
     private fun setupInputArea() {
-        binding.promptInputEdittext.doAfterTextChanged { text ->
-            binding.sendButton.isEnabled = !text.isNullOrBlank()
-        }
-
         binding.sendButton.setOnClickListener {
-            val currentAgentState = viewModel.agentState.value
-            when (currentAgentState) {
-                is AgentState.Executing, is AgentState.Processing -> {
-                    viewModel.stopProcessing()
-                }
-                else -> {
-                    val message = binding.promptInputEdittext.text?.toString() ?: return@setOnClickListener
-                    if (message.isNotBlank()) {
-                        hideKeyboard()
-                        viewModel.sendMessage(message)
-                        binding.promptInputEdittext.text?.clear()
-                    }
+            if (viewModel.agentState.value.isRunning) {
+                viewModel.stopProcessing()
+            } else {
+                val message = binding.promptInputEdittext.text?.toString() ?: return@setOnClickListener
+                if (message.isNotBlank()) {
+                    composer?.hideKeyboard()
+                    viewModel.sendMessage(message)
+                    binding.promptInputEdittext.text?.clear()
                 }
             }
         }
@@ -258,6 +271,70 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
         wireTooltip(binding.backendStatusText, AiAssistantPlugin.TOOLTIP_TAG_SETTINGS_BACKEND)
     }
 
+    /**
+     * Records the message list's own padding so the cutout inset is added to it rather than
+     * replacing it, and stays correct however many inset passes the window makes.
+     */
+    private fun setupCutoutPadding() {
+        val list = binding.chatRecyclerView
+        basePadding.set(list.paddingLeft, list.paddingTop, list.paddingRight, list.paddingBottom)
+        ViewCompat.setOnApplyWindowInsetsListener(binding.root) { _, insets ->
+            applyCutoutPadding(insets)
+            insets
+        }
+        // No dispatched insets to read on the first attach, so take them from the window.
+        binding.root.doOnAttach { view ->
+            ViewCompat.getRootWindowInsets(view)?.let(::applyCutoutPadding)
+        }
+    }
+
+    /**
+     * Holds the message list clear of the camera cutout. Portrait puts it in the status bar and
+     * these insets come back zero; landscape moves it onto a side edge, right where message text
+     * would otherwise start. The toolbar and composer keep their own edge-to-edge alignment.
+     */
+    private fun applyCutoutPadding(insets: WindowInsetsCompat) {
+        val binding = _binding ?: return
+        val cutout = insets.getInsets(WindowInsetsCompat.Type.displayCutout())
+        binding.chatRecyclerView.setPadding(
+            basePadding.left + cutout.left,
+            basePadding.top,
+            basePadding.right + cutout.right,
+            basePadding.bottom,
+        )
+    }
+
+    /**
+     * On a short screen the composer folds away so the history gets its height, and a floating
+     * chevron brings it back. Everywhere else the composer stays pinned and the chevron is absent.
+     */
+    private fun setupComposer(savedInstanceState: Bundle?) {
+        val controller = ComposerAutoHideController(
+            binding,
+            viewLifecycleOwner.lifecycleScope,
+            ::wireTooltip,
+        )
+        // The fragment's own Resources, which is the host activity's and tracks rotation.
+        controller.attach(savedInstanceState, resources.configuration)
+        composer = controller
+    }
+
+    /**
+     * EditorActivity handles orientation itself, so rotating never recreates this fragment and an
+     * alternative-resource bucket would stay frozen at the orientation it was inflated in. The one
+     * thing that must track rotation is re-applied here instead.
+     */
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        val binding = _binding ?: return
+        composer?.onConfigurationChanged(newConfig)
+        // Posted so the window has published the rotated cutout before it is read back.
+        binding.root.post {
+            val root = _binding?.root ?: return@post
+            ViewCompat.getRootWindowInsets(root)?.let(::applyCutoutPadding)
+        }
+    }
+
     private fun setupStatusBar() {
         binding.agentStatusContainer.isVisible = false
     }
@@ -266,7 +343,7 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.activeBackendLabel.collect { label ->
-                    binding.backendStatusText.text = label
+                    _binding?.backendStatusText?.text = label
                 }
             }
         }
@@ -285,56 +362,54 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
     private suspend fun observeMessages() {
         android.util.Log.d("ChatFragment", "observeMessages: Starting to collect messages")
         viewModel.messages.collect { messages ->
+            val binding = _binding ?: return@collect
             android.util.Log.d("ChatFragment", "observeMessages: Received ${messages.size} messages")
             messages.forEachIndexed { index, msg ->
                 android.util.Log.d("ChatFragment", "  Message $index: sender=${msg.sender}, text=${msg.text.take(50)}")
             }
             binding.emptyChatView.isVisible = messages.isEmpty()
             android.util.Log.d("ChatFragment", "observeMessages: Calling submitList with ${messages.size} messages")
+            // Sampled before the list changes: streaming re-emits on every token, so scrolling
+            // unconditionally would drag the user back down whenever they scrolled up to read.
+            val stickToBottom = binding.chatRecyclerView.isAtBottom()
             chatAdapter.submitList(messages) {
                 android.util.Log.d("ChatFragment", "observeMessages: submitList callback - scrolling to ${messages.size - 1}")
-                if (messages.isNotEmpty()) {
-                    binding.chatRecyclerView.scrollToPosition(messages.size - 1)
+                if (stickToBottom && messages.isNotEmpty()) {
+                    // Null after onDestroyView: submitList posts this callback.
+                    _binding?.chatRecyclerView?.scrollToPosition(messages.lastIndex)
                 }
             }
         }
     }
 
+    /** True while the newest message is fully visible, i.e. the user is not reading back. */
+    private fun RecyclerView.isAtBottom(): Boolean = !canScrollVertically(1)
+
     private suspend fun observeAgentState() {
         viewModel.agentState.collect { state ->
+            val binding = _binding ?: return@collect
             when (state) {
-                is AgentState.Idle -> {
-                    binding.agentStatusContainer.isVisible = false
-                    binding.sendButton.isEnabled = true
-                    binding.sendButton.text = getString(R.string.send)
-                }
+                is AgentState.Idle -> binding.agentStatusContainer.isVisible = false
                 is AgentState.Executing -> {
                     binding.agentStatusContainer.isVisible = true
                     binding.agentStatusMessage.text = state.formattedProgress
                     binding.agentStatusTimer.text = state.formattedTiming
-                    binding.sendButton.isEnabled = true
-                    binding.sendButton.text = getString(R.string.btn_stop)
                     viewModel.startStateTimer(state)
                 }
                 is AgentState.Processing -> {
                     binding.agentStatusContainer.isVisible = true
                     binding.agentStatusMessage.text = getString(R.string.generating_response)
                     binding.agentStatusTimer.text = ""
-                    binding.sendButton.isEnabled = true
-                    binding.sendButton.text = getString(R.string.btn_stop)
                 }
                 is AgentState.Error -> {
                     binding.agentStatusContainer.isVisible = false
-                    binding.sendButton.isEnabled = true
-                    binding.sendButton.text = getString(R.string.send)
                     viewModel.stopStateTimer()
                     showErrorSnackbar(state.message)
                 }
-                else -> {
-                    binding.sendButton.isEnabled = false
-                    binding.sendButton.text = getString(R.string.send)
-                }
+                else -> Unit
             }
+            // The composer owns the send/stop button, since Stop is what pins it open.
+            composer?.onAgentRunningChanged(state.isRunning)
         }
     }
 
@@ -386,6 +461,7 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
         val dialog = FilePickerDialogFragment.newInstance(startPath) { files ->
             addContextFiles(files)
         }
+        composer?.pauseUntilClosed(dialog.lifecycle)
         dialog.show(parentFragmentManager, "file_picker")
     }
 
@@ -407,9 +483,19 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
                 contextFiles.remove(file)
                 binding.contextChipGroup.removeView(this)
                 viewModel.setContextFiles(contextFiles)
+                updateContextChipVisibility()
             }
         }
         binding.contextChipGroup.addView(chip)
+        updateContextChipVisibility()
+    }
+
+    /**
+     * Keeps the chip row out of the layout while empty; in a short bottom sheet the row it would
+     * otherwise occupy comes straight out of the chat history's height.
+     */
+    private fun updateContextChipVisibility() {
+        binding.contextChipScroll.isVisible = binding.contextChipGroup.childCount > 0
     }
 
     private fun onMessageAction(action: String, message: com.itsaky.androidide.plugins.aiassistant.models.ChatMessage) {
@@ -428,11 +514,6 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
                 openSettingsFragment()
             }
         }
-    }
-
-    private fun hideKeyboard() {
-        val imm = requireContext().getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
-        imm.hideSoftInputFromWindow(binding.promptInputEdittext.windowToken, 0)
     }
 
     /**

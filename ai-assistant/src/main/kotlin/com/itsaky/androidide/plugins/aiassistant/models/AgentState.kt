@@ -76,3 +76,10 @@ sealed class AgentState {
      */
     data class Error(val message: String) : AgentState()
 }
+
+/**
+ * True while a run is in flight, which is what the composer keys its Stop control off. One
+ * definition so the UI cannot drift from it a state at a time.
+ */
+val AgentState.isRunning: Boolean
+    get() = this is AgentState.Executing || this is AgentState.Processing

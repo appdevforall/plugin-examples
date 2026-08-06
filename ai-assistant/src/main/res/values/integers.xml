@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Composer auto-hide tuning. Integers rather than dimens: both are compared against values that
+  are already in their own unit — Configuration.screenHeightDp is dp, and the delay is
+  milliseconds — whereas getDimension() resolves to px and would silently scale with density.
+-->
+<resources>
+    <!-- Below this available height the composer costs more than the history can spare. -->
+    <integer name="chat_composer_compact_height_dp">480</integer>
+    <!-- Idle time before the composer folds away on a short screen. -->
+    <integer name="chat_composer_auto_hide_ms">5000</integer>
+</resources>
