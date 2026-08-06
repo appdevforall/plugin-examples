@@ -12,17 +12,18 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.view.inputmethod.InputMethodManager
+import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.vectordrawable.graphics.drawable.VectorDrawableCompat
-import com.blankj.utilcode.util.ToastUtils
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.itsaky.androidide.eventbus.events.file.FileRenameEvent
 import com.itsaky.androidide.plugins.base.PluginFragmentHelper
 import org.appdevforall.codeonthego.layouteditor.LayoutEditorPlugin
+import org.appdevforall.codeonthego.layouteditor.showPluginToast
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -185,7 +186,7 @@ class DrawableFragment : Fragment() {
     fun addDrawable(uri: Uri) {
         val path = FileUtil.convertUriToFilePath(requireContext(), uri)
         if (path.isEmpty()) {
-            ToastUtils.showLong(R.string.invalid_data_intent)
+            showPluginToast(requireContext(), getString(R.string.invalid_data_intent), Toast.LENGTH_LONG)
             return
         }
 
@@ -336,7 +337,7 @@ class DrawableFragment : Fragment() {
 
         if (!oldFile.renameTo(newFile)) {
             withContext(Dispatchers.Main) {
-                ToastUtils.showLong(R.string.rename_failed)
+                showPluginToast(requireContext(), getString(R.string.rename_failed), Toast.LENGTH_LONG)
             }
             return@withContext
         }
@@ -415,7 +416,7 @@ class DrawableFragment : Fragment() {
                 drawableList.removeAt(position)
                 adapter?.notifyItemRemoved(position)
             } else {
-                ToastUtils.showLong(R.string.delete_failed)
+                showPluginToast(requireContext(), getString(R.string.delete_failed), Toast.LENGTH_LONG)
             }
         }
     }

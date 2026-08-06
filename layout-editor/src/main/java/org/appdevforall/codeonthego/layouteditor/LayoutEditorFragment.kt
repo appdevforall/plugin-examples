@@ -25,7 +25,6 @@ import androidx.drawerlayout.widget.DrawerLayout
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.blankj.utilcode.util.ToastUtils
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.itsaky.androidide.plugins.base.PluginFragmentHelper
@@ -52,6 +51,7 @@ import org.appdevforall.codeonthego.layouteditor.managers.IdManager.clear
 import org.appdevforall.codeonthego.layouteditor.managers.PreferencesManager
 import org.appdevforall.codeonthego.layouteditor.managers.ProjectManager
 import org.appdevforall.codeonthego.layouteditor.managers.UndoRedoManager
+import org.appdevforall.codeonthego.layouteditor.tools.ValidationResult
 import org.appdevforall.codeonthego.layouteditor.tools.XmlLayoutGenerator
 import org.appdevforall.codeonthego.layouteditor.utils.BitmapUtil.createBitmapFromView
 import org.appdevforall.codeonthego.layouteditor.utils.Constants
@@ -83,9 +83,9 @@ class LayoutEditorFragment : Fragment() {
 	private lateinit var layoutAdapter: LayoutListAdapter
 
 	private val updateMenuIconsState: Runnable = Runnable { undoRedo!!.updateButtons() }
-	private var originalProductionXml: String? = null
-	private var originalDesignXml: String? = null
     private var currentLayoutBasePath: String? = null
+
+	private var loadedLayoutFile: LayoutFile? = null
 
 	private val onBackPressedCallback =
 		object : OnBackPressedCallback(true) {
@@ -107,10 +107,7 @@ class LayoutEditorFragment : Fragment() {
 					}
 
 					else -> {
-						lifecycleScope.launch {
-							saveXml()
-							requireActivity().finish()
-						}
+						requireActivity().finish()
 					}
 				}
 			}
@@ -172,9 +169,7 @@ class LayoutEditorFragment : Fragment() {
 					)
 					project = projectManager.openedProject!!
 					updateMenuState()
-					androidToDesignConversion(
-						Uri.fromFile(File(projectManager.openedProject?.mainLayout?.path ?: "")),
-					)
+					openLayout(project.mainLayout)
 
 					binding.topAppBar.title = project.name
 					layoutAdapter = LayoutListAdapter(project)
@@ -423,7 +418,7 @@ class LayoutEditorFragment : Fragment() {
 
 	private fun isProjectReady(): Boolean {
 		if (!::project.isInitialized) {
-			ToastUtils.showShort(getString(R.string.loading_project))
+			showPluginToast(requireContext(), getString(R.string.loading_project))
 			return false
 		}
 		return true
@@ -583,10 +578,7 @@ class LayoutEditorFragment : Fragment() {
 				if (binding.editorLayout.isLayoutModified()) {
 					showSaveChangesDialog()
 				} else {
-					lifecycleScope.launch {
-						saveXml()
-						requireActivity().finish()
-					}
+					requireActivity().finish()
 				}
 				return true
 			}
@@ -760,27 +752,32 @@ class LayoutEditorFragment : Fragment() {
 	}
 
   private suspend fun openLayout(layoutFile: LayoutFile) {
-    val (production, design, layoutName) = withContext(Dispatchers.IO) {
-      val production = layoutFile.readLayoutFile()
-      var design = layoutFile.readDesignFile()
-
-      if (design.isNullOrBlank() && !production.isNullOrBlank()) {
-        val converted = withContext(Dispatchers.Default) {
-					ConvertImportedXml(production).getXmlConverted(requireContext())
-				}
-        if (!converted.isNullOrBlank()) {
-          layoutFile.saveDesignFile(converted)
-          design = converted
-        }
-      }
-      Triple(production, design, layoutFile.name)
+    val production = withContext(Dispatchers.IO) { layoutFile.readLayoutFile() }
+    if (production.isNullOrBlank()) {
+      showLoadFailure(getString(string.xml_error_empty_file, layoutFile.name))
+      return
     }
-    originalProductionXml = production
-    originalDesignXml = design
+
+    val design = withContext(Dispatchers.Default) {
+      ConvertImportedXml(production).getXmlConverted(requireContext())
+    }
+    if (design.isNullOrBlank()) {
+      showLoadFailure(getString(string.xml_error_not_well_formed))
+      return
+    }
+    withContext(Dispatchers.IO) { layoutFile.saveDesignFile(design) }
 
       currentLayoutBasePath = File(layoutFile.path).parent
-      binding.editorLayout.loadLayoutFromParser(design, currentLayoutBasePath)
+      val loadResult = binding.editorLayout.loadLayoutFromParser(design, currentLayoutBasePath)
 
+		if (loadResult is ValidationResult.Error) {
+			showLoadFailure(loadResult.formattedMessage)
+			return
+		}
+
+		val layoutName = layoutFile.name
+
+		loadedLayoutFile = layoutFile
 		project.currentLayout = layoutFile
 		binding.topAppBar.subtitle = layoutName
 
@@ -801,16 +798,16 @@ class LayoutEditorFragment : Fragment() {
 			.show()
 	}
 
-	private fun currentLayoutFileOrNull(): LayoutFile? {
-		if (!::project.isInitialized) return null
-		return project.currentLayout
-	}
+	private fun currentLayoutFileOrNull(): LayoutFile? = loadedLayoutFile
 
-	private fun restoreOriginalXmlIfNeeded() {
-		val xmlToRestore = originalDesignXml ?: originalProductionXml
-		if (!xmlToRestore.isNullOrBlank()) {
-            binding.editorLayout.loadLayoutFromParser(xmlToRestore, currentLayoutBasePath)
-		}
+	private fun showLoadFailure(message: String) {
+		loadedLayoutFile = null
+		MaterialAlertDialogBuilder(requireContext())
+			.setTitle(R.string.xml_error_title)
+			.setMessage(message)
+			.setPositiveButton(android.R.string.ok) { _, _ -> requireActivity().finish() }
+			.setCancelable(false)
+			.show()
 	}
 
 	/**
@@ -820,15 +817,11 @@ class LayoutEditorFragment : Fragment() {
 	 * - No UI side-effects (no toast / no markAsSaved) to keep it reusable
 	 */
 	private suspend fun persistEditorLayout(layoutFile: LayoutFile): Boolean {
-		return runCatching {
-			if (binding.editorLayout.isEmpty()) {
-				withContext(Dispatchers.IO) {
-					layoutFile.saveLayout("")
-					layoutFile.saveDesignFile("")
-				}
-				return@runCatching
-			}
+		if (binding.editorLayout.isEmpty()) {
+			return false
+		}
 
+		return runCatching {
 			val generator = XmlLayoutGenerator()
 			val productionXml = generator.generate(binding.editorLayout, true)
 			val designXml = generator.generate(binding.editorLayout, false)
@@ -841,18 +834,30 @@ class LayoutEditorFragment : Fragment() {
 	}
 
 	private suspend fun saveXml() {
-		val layoutFile = currentLayoutFileOrNull() ?: return
+		val layoutFile = currentLayoutFileOrNull() ?: run {
+			withContext(Dispatchers.Main) {
+				showPluginToast(requireContext(), getString(string.xml_error_not_loaded))
+			}
+			return
+		}
+
+		if (binding.editorLayout.isEmpty()) {
+			withContext(Dispatchers.Main) {
+				showPluginToast(requireContext(), getString(string.xml_error_nothing_to_save))
+			}
+			return
+		}
 
 		val success = persistEditorLayout(layoutFile)
 		if (!success) {
 			withContext(Dispatchers.Main) {
-				ToastUtils.showShort(getString(string.failed_to_save_layout))
+				showPluginToast(requireContext(), getString(string.failed_to_save_layout))
 			}
 			return
 		}
 
 		binding.editorLayout.markAsSaved()
-		ToastUtils.showShort(getString(string.layout_saved))
+		showPluginToast(requireContext(), getString(string.layout_saved))
 	}
 
 	private fun showSaveChangesDialog() {
@@ -865,15 +870,7 @@ class LayoutEditorFragment : Fragment() {
 					requireActivity().finish()
 				}
 			}.setNegativeButton(R.string.discard_changes_and_exit) { _, _ ->
-				lifecycleScope.launch {
-					val layoutFile = currentLayoutFileOrNull() ?: run {
-						requireActivity().finish()
-						return@launch
-					}
-					restoreOriginalXmlIfNeeded()
-					persistEditorLayout(layoutFile)
-					requireActivity().finish()
-				}
+				requireActivity().finish()
 			}.setNeutralButton(R.string.cancel_and_stay_in_editor) { dialog, _ ->
 				dialog.dismiss()
 			}.setCancelable(false)

@@ -122,13 +122,20 @@ class XmlLayoutParser(
 	fun processXml(xml: String, context: Context): ValidationResult {
 		val result = validateXml(xml, context)
 
-		if (result is ValidationResult.Success) {
-			parseFromXml()
-		} else if (result is ValidationResult.Error) {
+		if (result is ValidationResult.Error) {
 			Log.e(TAG, "Failed to parse layout. Errors:\n${result.formattedMessage}")
+			return result
 		}
 
-		return result
+		return runCatching { parseFromXml() }.fold(
+			onSuccess = { result },
+			onFailure = { e ->
+				Log.e(TAG, "Failed to apply attributes", e)
+				ValidationResult.Error(
+					listOf(context.getString(R.string.xml_error_generic, e.message ?: "")),
+				)
+			},
+		)
 	}
 
 	private fun parseFromXml(

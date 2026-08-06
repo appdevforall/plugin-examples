@@ -23,7 +23,6 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.viewpager2.widget.ViewPager2
-import com.blankj.utilcode.util.ToastUtils
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.itsaky.androidide.plugins.base.PluginFragmentHelper
 import kotlinx.coroutines.launch
@@ -105,7 +104,7 @@ class ResourceManagerFragment : Fragment() {
                 }
                 setupViewPager()
             } catch (e: Exception) {
-                ToastUtils.showShort(R.string.msg_error_opening_project)
+                showPluginToast(requireContext(), getString(R.string.msg_error_opening_project))
                 Log.e("ResourceManagerFragment", "Error loading project", e)
                 requireActivity().finish()
             }
@@ -292,7 +291,7 @@ class ResourceManagerFragment : Fragment() {
                             .show()
                     }
                 } catch (e: FileNotFoundException) {
-                    ToastUtils.showShort(e.toString())
+                    showPluginToast(requireContext(), e.toString())
                 }
             }
         } else {
