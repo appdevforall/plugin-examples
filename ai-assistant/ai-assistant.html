@@ -65,11 +65,20 @@
   <ul>
     <li><b>Conversational agent</b> — chat with streaming responses in the
       Agent tab.</li>
-    <li><b>Project-aware tools</b> — read files, search the project, create and
-      update files, trigger a Gradle sync, read build output, add dependencies,
-      and generate code from templates.</li>
+    <li><b>Project-aware tools</b> — read files, search the project, create,
+      update and surgically edit files, trigger a Gradle sync, read build
+      output, add dependencies, and generate code from templates.</li>
+    <li><b>Reviewable edits</b> — <code>edit_file</code> replaces an exact
+      snippet rather than rewriting a whole file, which is what makes editing
+      workable on a small local model. Each edit is shown as a before/after
+      diff to accept, decline, or send back with a correction, and lands in the
+      editor buffer (undoable with Ctrl+Z) when the file is open.</li>
     <li><b>Dual inference backends</b> — fully offline on-device inference, or
       Gemini in the cloud, selectable in Settings.</li>
+    <li><b>Direct commands</b> — explicit requests like "open MainActivity.java",
+      "list files", "read &lt;file&gt;" or "search &lt;query&gt;" run the tool
+      directly (resolving a bare filename to its path), so they work reliably on
+      any model.</li>
     <li><b>Safety controls</b> — filesystem tools are confined to the project
       root, and mutating tools require explicit user approval.</li>
   </ul>

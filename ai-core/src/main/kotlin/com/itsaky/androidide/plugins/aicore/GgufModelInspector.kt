@@ -51,6 +51,17 @@ object GgufModelInspector {
         val isEmbeddingOnly: Boolean get() = kind == ModelKind.EMBEDDING
     }
 
+    /**
+     * Cheap magic-only check that never throws; reads just the first 4 bytes.
+     * @param modelPath path to the candidate file
+     * @return true if the file begins with the GGUF magic; false on any read error or mismatch
+     */
+    fun isGguf(modelPath: String): Boolean = try {
+        DataInputStream(BufferedInputStream(FileInputStream(File(modelPath)), 16)).use { readU32(it) == GGUF_MAGIC }
+    } catch (_: Exception) {
+        false
+    }
+
     /** Reads [modelPath]'s GGUF header and classifies it. Never throws. */
     fun classify(modelPath: String): Result {
         val arch = try {

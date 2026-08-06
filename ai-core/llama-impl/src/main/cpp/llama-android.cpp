@@ -8,14 +8,23 @@
 #include <unordered_map>
 #include <mutex>
 #include <unistd.h>
+#include <cstdint>
 #include "llama.h"
-#include <codecvt>
-#include <locale>
 #include "common.h"
 
 #define TAG "llama-android.cpp"
 #define LOGi(...) __android_log_print(ANDROID_LOG_INFO, TAG, __VA_ARGS__)
 #define LOGe(...) __android_log_print(ANDROID_LOG_ERROR, TAG, __VA_ARGS__)
+
+// Verbose, per-token tracing. It fires once per prompt token and once per
+// generated token — hundreds of log/JNI calls per reply on the hot path — so it
+// is compiled out of release builds (NDEBUG). The __VA_ARGS__ are not evaluated
+// in release, so any string-building in the arguments is skipped too.
+#ifdef NDEBUG
+#define LOGv(...) ((void) 0)
+#else
+#define LOGv(...) __android_log_print(ANDROID_LOG_INFO, TAG, __VA_ARGS__)
+#endif
 
 jclass la_int_var;
 jmethodID la_int_var_value;
@@ -77,24 +86,76 @@ static std::atomic<int> g_n_ctx(4096);
 static std::atomic<bool> g_kv_cache_reuse(true);
 static std::vector<llama_token> g_cached_tokens;
 
+// Converts standard UTF-8 to UTF-16. NewStringUTF() is unusable here because it
+// expects modified UTF-8 (CESU-8), so 4-byte sequences such as emoji would mangle.
+// Invalid bytes become '?' so a truncated sequence cannot corrupt the remainder.
+// @param text NUL-terminated UTF-8, may be null
+// @return a new local reference to the converted string
 static jstring new_jstring_utf8(JNIEnv *env, const char *text) {
     if (!text) {
         return env->NewStringUTF("");
     }
 
-    try {
-        std::wstring_convert<std::codecvt_utf8_utf16<char16_t>, char16_t> converter;
-        std::u16string u16 = converter.from_bytes(text);
-        return env->NewString(reinterpret_cast<const jchar *>(u16.data()),
-                              static_cast<jsize>(u16.size()));
-    } catch (const std::range_error &) {
-        std::string sanitized;
-        sanitized.reserve(strlen(text));
-        for (const unsigned char ch: std::string(text)) {
-            sanitized.push_back(ch < 0x80 ? static_cast<char>(ch) : '?');
+    const auto *bytes = reinterpret_cast<const unsigned char *>(text);
+    std::u16string u16;
+    u16.reserve(strlen(text));
+
+    while (*bytes != 0x00) {
+        uint32_t cp;
+        int num;
+
+        if ((bytes[0] & 0x80) == 0x00) {
+            // U+0000 to U+007F
+            cp = bytes[0];
+            num = 1;
+        } else if ((bytes[0] & 0xE0) == 0xC0) {
+            // U+0080 to U+07FF
+            cp = bytes[0] & 0x1Fu;
+            num = 2;
+        } else if ((bytes[0] & 0xF0) == 0xE0) {
+            // U+0800 to U+FFFF
+            cp = bytes[0] & 0x0Fu;
+            num = 3;
+        } else if ((bytes[0] & 0xF8) == 0xF0) {
+            // U+10000 to U+10FFFF
+            cp = bytes[0] & 0x07u;
+            num = 4;
+        } else {
+            u16.push_back(u'?');
+            bytes += 1;
+            continue;
         }
-        return env->NewStringUTF(sanitized.c_str());
+
+        bool ok = true;
+        for (int i = 1; i < num; ++i) {
+            if ((bytes[i] & 0xC0) != 0x80) {
+                // Resync here; this also covers the terminator, so we never overrun.
+                ok = false;
+                num = i;
+                break;
+            }
+            cp = (cp << 6) | (bytes[i] & 0x3Fu);
+        }
+
+        if (!ok || cp > 0x10FFFF || (cp >= 0xD800 && cp <= 0xDFFF)) {
+            u16.push_back(u'?');
+            bytes += num;
+            continue;
+        }
+
+        if (cp <= 0xFFFF) {
+            u16.push_back(static_cast<char16_t>(cp));
+        } else {
+            // Split an astral code point into a UTF-16 surrogate pair.
+            cp -= 0x10000;
+            u16.push_back(static_cast<char16_t>(0xD800 + (cp >> 10)));
+            u16.push_back(static_cast<char16_t>(0xDC00 + (cp & 0x3FFu)));
+        }
+        bytes += num;
     }
+
+    return env->NewString(reinterpret_cast<const jchar *>(u16.data()),
+                          static_cast<jsize>(u16.size()));
 }
 
 extern "C"
@@ -302,6 +363,12 @@ Java_android_llama_cpp_LLamaAndroid_new_1context(JNIEnv *env, jobject, jlong jmo
         return 0;
     }
 
+    // A fresh context has an empty KV cache, so the prefix record must start empty too.
+    {
+        std::lock_guard<std::mutex> lock(g_globals_mutex);
+        g_cached_tokens.clear();
+    }
+
     return reinterpret_cast<jlong>(context);
 }
 
@@ -309,6 +376,11 @@ extern "C"
 JNIEXPORT void JNICALL
 Java_android_llama_cpp_LLamaAndroid_free_1context(JNIEnv *, jobject, jlong context) {
     llama_free(reinterpret_cast<llama_context *>(context));
+
+    // g_cached_tokens outlives the context it describes; left stale, the next completion_init()
+    // reuses a prefix this now-empty cache doesn't have and decodes from a truncated context.
+    std::lock_guard<std::mutex> lock(g_globals_mutex);
+    g_cached_tokens.clear();
 }
 
 extern "C"
@@ -554,6 +626,51 @@ Java_android_llama_cpp_LLamaAndroid_new_1sampler(JNIEnv *, jobject) {
     return reinterpret_cast<jlong>(smpl);
 }
 
+/**
+ * Build a sampler chain constrained by a GBNF grammar, so the model can only
+ * emit tokens the grammar allows — used for reliable text-based tool calls on
+ * weak local models.
+ *
+ * @param model_pointer native llama_model handle.
+ * @param grammar       GBNF grammar text, entered at its "root" rule.
+ * @return the native sampler handle, or 0 if the model is null or the grammar
+ *         fails to parse (the caller falls back to the plain sampler).
+ */
+extern "C"
+JNIEXPORT jlong JNICALL
+Java_android_llama_cpp_LLamaAndroid_new_1grammar_1sampler(
+        JNIEnv *env, jobject, jlong model_pointer, jstring grammar) {
+    const auto model = reinterpret_cast<llama_model *>(model_pointer);
+    if (model == nullptr) return 0;
+    if (grammar == nullptr) return 0;  // no grammar string — caller falls back
+
+    const llama_vocab *vocab = llama_model_get_vocab(model);
+    if (vocab == nullptr) return 0;    // model has no vocab — can't build a grammar sampler
+
+    // NULL under memory pressure (pending OOM); clear the exception and fall back.
+    const char *grammar_cstr = env->GetStringUTFChars(grammar, nullptr);
+    if (grammar_cstr == nullptr) {
+        if (env->ExceptionCheck()) env->ExceptionClear();
+        return 0;
+    }
+    llama_sampler *grmr = llama_sampler_init_grammar(vocab, grammar_cstr, "root");
+    env->ReleaseStringUTFChars(grammar, grammar_cstr);
+    if (grmr == nullptr) return 0;  // invalid grammar — caller falls back
+
+    auto sparams = llama_sampler_chain_default_params();
+    sparams.no_perf = true;
+    llama_sampler *smpl = llama_sampler_chain_init(sparams);
+
+    // Grammar first: it masks tokens that would violate the grammar, so the
+    // selector below only ever picks a valid token.
+    llama_sampler_chain_add(smpl, grmr);
+    llama_sampler_chain_add(smpl, llama_sampler_init_penalties(64, 1.1f, 0.0f, 0.0f));
+    // Greedy: with the grammar mask in place, pick the most likely valid token.
+    llama_sampler_chain_add(smpl, llama_sampler_init_greedy());
+
+    return reinterpret_cast<jlong>(smpl);
+}
+
 extern "C"
 JNIEXPORT void JNICALL
 Java_android_llama_cpp_LLamaAndroid_free_1sampler(JNIEnv *, jobject, jlong sampler_pointer) {
@@ -632,55 +749,45 @@ Java_android_llama_cpp_LLamaAndroid_completion_1init(
     g_prompt_tokens = static_cast<int>(tokens_list.size());
 
     for (auto id: tokens_list) {
-        LOGi("token: `%s`-> %d ", common_token_to_piece(context, id).c_str(), id);
+        LOGv("token: `%s`-> %d ", common_token_to_piece(context, id).c_str(), id);
     }
 
     common_batch_clear(*batch);
 
-    bool reuse = false;
-    size_t reuse_prefix = 0;
+    // Reuse the longest common prefix with the cached sequence so the unchanged prefix (system prompt) isn't re-prefilled.
+    size_t lcp = 0;
     {
         std::lock_guard<std::mutex> lock(g_globals_mutex);
         if (g_kv_cache_reuse.load() && !g_cached_tokens.empty()) {
-            if (g_cached_tokens.size() <= tokens_list.size()) {
-                reuse = true;
-                for (size_t i = 0; i < g_cached_tokens.size(); i++) {
-                    if (g_cached_tokens[i] != tokens_list[i]) {
-                        reuse = false;
-                        break;
-                    }
-                }
-                if (reuse) {
-                    reuse_prefix = g_cached_tokens.size();
-                }
+            const size_t maxlcp = std::min(g_cached_tokens.size(), tokens_list.size());
+            while (lcp < maxlcp && g_cached_tokens[lcp] == tokens_list[lcp]) {
+                lcp++;
             }
         }
     }
 
-    if (!reuse) {
-        // Fully reset KV cache to avoid non-consecutive sequence positions.
-        llama_memory_clear(llama_get_memory(context), true);
-        {
-            std::lock_guard<std::mutex> lock(g_globals_mutex);
-            if (!g_kv_cache_reuse.load()) {
-                g_cached_tokens.clear();
-            }
-            g_cached_tokens.assign(tokens_list.begin(), tokens_list.end());
-        }
-        // evaluate the initial prompt
-        for (auto i = 0; i < tokens_list.size(); i++) {
-            common_batch_add(*batch, tokens_list[i], i, {0}, false);
-        }
+    // Always leave at least one token to decode, so we get logits for the next token.
+    if (lcp == tokens_list.size() && lcp > 0) {
+        lcp--;
+    }
+
+    llama_memory_t mem = llama_get_memory(context);
+    if (lcp == 0) {
+        // Nothing reusable — full reset.
+        llama_memory_clear(mem, true);
     } else {
-        {
-            std::lock_guard<std::mutex> lock(g_globals_mutex);
-            g_cached_tokens.assign(tokens_list.begin(), tokens_list.end());
-        }
-        if (reuse_prefix < tokens_list.size()) {
-            for (auto i = reuse_prefix; i < tokens_list.size(); i++) {
-                common_batch_add(*batch, tokens_list[i], i, {0}, false);
-            }
-        }
+        // Evict cached positions past the common prefix.
+        llama_memory_seq_rm(mem, 0, (llama_pos) lcp, -1);
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(g_globals_mutex);
+        g_cached_tokens.assign(tokens_list.begin(), tokens_list.end());
+    }
+
+    // Prefill only the divergent tail.
+    for (size_t i = lcp; i < tokens_list.size(); i++) {
+        common_batch_add(*batch, tokens_list[i], (llama_pos) i, {0}, false);
     }
 
     if (batch->n_tokens > 0) {
@@ -797,11 +904,15 @@ Java_android_llama_cpp_LLamaAndroid_completion_1loop(
             new_token = new_jstring_utf8(env, cached_token_chars.c_str());
         }
 
+#ifndef NDEBUG
+        // Per-token JNI upcall into the Kotlin logger — debug-only; on the hot
+        // path in release it would add a JNI round-trip (and a lock) per token.
         {
             std::lock_guard<std::mutex> lock(g_globals_mutex);
             log_info_to_kt("cached: %s, new_token_chars: `%s`, id: %d", cached_token_chars.c_str(),
                        new_token_chars.c_str(), new_token_id);
         }
+#endif
 
         {
             std::lock_guard<std::mutex> lock(g_globals_mutex);

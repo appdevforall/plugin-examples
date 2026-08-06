@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="plugin_primary">#B1C5FF</color>
+    <color name="plugin_on_primary">#172E60</color>
+    <color name="status_success_text">#8CD9B0</color>
+    <color name="status_error_text">#FFB4AB</color>
+</resources>

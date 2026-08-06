@@ -32,6 +32,13 @@ class ToolRouter(
         return try {
             Log.d(TAG, "Dispatching $toolName with args: $args")
             handler.execute(args)
+        } catch (ce: kotlinx.coroutines.CancellationException) {
+            // It is an Exception on the JVM, so the catch below would report Stop as a failure.
+            Log.i(TAG, "Tool $toolName cancelled")
+            // Traced, or the run appears to hang mid-tool with no EXEC-done line.
+            com.itsaky.androidide.plugins.aiassistant.utils.AgentTrace
+                .refusal("EXEC", "$toolName cancelled", "run stopped before the tool finished")
+            throw ce
         } catch (e: Exception) {
             Log.e(TAG, "Error executing tool $toolName", e)
             ToolResult.failure("Error executing $toolName: ${e.message}", e.stackTraceToString())

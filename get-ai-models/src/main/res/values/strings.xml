@@ -1,0 +1,66 @@
+<resources>
+    <string name="app_name">Get AI Models</string>
+
+    <!-- Catalog list -->
+    <string name="spec_line">%1$s · %2$s · %3$s</string>
+    <string name="publisher_label">Publisher: %1$s</string>
+    <string name="min_ram_label">Minimum RAM: %1$s (informational — your device is not checked)</string>
+    <string name="gates_unproven">Not yet validated in the AI plugin — the tool-use evaluation is pending</string>
+    <string name="license_label">License: %1$s · Context: %2$s tokens · Base model: %3$s</string>
+    <string name="catalog_unavailable">The bundled model catalog could not be read.</string>
+
+    <!-- Row actions and state -->
+    <string name="action_download">Download</string>
+    <string name="action_retry">Retry</string>
+    <string name="action_verify">Verify</string>
+    <string name="action_verify_again">Verify file again</string>
+    <string name="action_delete_file">Delete file</string>
+    <string name="state_verifying">Verifying…</string>
+    <string name="state_downloaded">Downloaded</string>
+    <string name="action_cancel_download">Cancel</string>
+    <string name="cancel_label_percent">Cancel · %1$d%%</string>
+    <string name="content_description_cancel">Cancel downloading %1$s</string>
+    <string name="status_pending">Queued — waiting to start</string>
+    <string name="status_downloading">Downloading %1$s of %2$s</string>
+    <string name="status_paused_wifi">Paused — waiting for Wi-Fi · %1$s of %2$s</string>
+    <string name="status_paused_network">Paused — no connection · %1$s of %2$s</string>
+    <string name="status_paused_retry">Paused — retrying · %1$s of %2$s</string>
+    <string name="status_paused_unknown">Paused · %1$s of %2$s</string>
+    <string name="status_verifying">Checking SHA-256…</string>
+    <string name="status_verified">Verified and saved to %1$s</string>
+    <string name="status_verified_no_path">Verified %1$s — find it in your Downloads app. Android did not report where it was saved, so this plugin cannot show it again after a restart, or delete it for you.</string>
+    <string name="status_changed">The file at %1$s is no longer the size that was verified — verify it again</string>
+    <string name="status_checksum_failed">Checksum did not match — the file was deleted</string>
+    <string name="status_failed">Could not download: %1$s</string>
+    <string name="content_description_download">Download %1$s</string>
+    <string name="content_description_verify">Verify %1$s again</string>
+    <string name="content_description_delete">Delete the downloaded file for %1$s</string>
+
+    <!-- Deletion -->
+    <string name="delete_dialog_title">Delete this file?</string>
+    <string name="delete_dialog_message">%1$s (%2$s)\n\n%3$s\n\nThis permanently deletes the file from your device and cannot be undone. You can download it again later.</string>
+    <string name="delete_dialog_message_changed">%1$s\n\n%2$s\n\nThis file no longer matches the size that was verified, so it may have been replaced or edited since. Deleting it is permanent and cannot be undone.</string>
+    <string name="delete_dialog_confirm">Delete</string>
+    <string name="snack_deleted">Deleted %1$s</string>
+    <string name="snack_delete_failed">Could not delete %1$s — the file is still on your device</string>
+
+    <!-- Network gates -->
+    <string name="no_network_message">No internet connection.</string>
+    <string name="metered_dialog_title">Metered connection</string>
+    <string name="metered_dialog_message">This connection is metered. Downloading %1$s (%2$s) may use your mobile data allowance.\n\nDownload anyway?</string>
+    <string name="metered_dialog_proceed">Download</string>
+    <string name="action_cancel">Cancel</string>
+
+    <!-- Verification outcome -->
+    <string name="checksum_dialog_title">Checksum failed</string>
+    <string name="checksum_dialog_message">%1$s finished downloading but its SHA-256 did not match the catalog, so the file was deleted.\n\nDownload it again?</string>
+    <string name="checksum_dialog_retry">Download again</string>
+    <string name="action_not_now">Not now</string>
+    <string name="snack_download_started">Downloading %1$s — progress is on the row and in the notification</string>
+    <string name="snack_download_cancelled">Cancelled %1$s</string>
+    <string name="snack_verified">%1$s verified and saved to Downloads</string>
+    <string name="snack_verify_failed">%1$s does not match the catalog checksum — the file was left in place</string>
+    <string name="snack_download_failed">%1$s could not be downloaded: %2$s</string>
+    <string name="downloader_unavailable">Downloads are unavailable — the plugin is not active.</string>
+    <string name="help_unavailable">Help is not available.</string>
+</resources>

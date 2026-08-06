@@ -54,6 +54,12 @@
   <ul>
     <li>Read and search files <b>within the current project</b>.</li>
     <li>Create and update files (asks for approval before writing).</li>
+    <li>Edit part of a file — the agent proposes a find/replace change, and the
+      approval dialog shows you the exact before/after before anything is
+      written. You can <b>Accept</b> it, <b>Decline</b> it, or choose
+      <b>Correct</b> to tell the agent what to change and let it try again.
+      When the file is open in the editor, the change is applied to the buffer,
+      so <b>Ctrl+Z undoes it</b> and your unsaved work is preserved.</li>
     <li>Trigger a Gradle sync and read build output.</li>
     <li>Add dependencies and generate code from templates.</li>
   </ul>
@@ -63,6 +69,38 @@
     are rejected, so the model cannot read or overwrite arbitrary files on the
     device.
   </div>
+
+  <h2>Attaching context files</h2>
+  <ul>
+    <li>Tap the <b>attach</b> button beside the prompt to pick files whose
+      contents are sent with your next message.</li>
+    <li>The picker is rooted at the project you have open and cannot browse
+      above it. With no project open it declines to open at all.</li>
+    <li><b>Toggle All</b> selects every file in the folder you are viewing;
+      <b>Add Selected</b> attaches them as chips above the prompt.</li>
+    <li>On the Gemini backend, attached file contents leave the device.</li>
+  </ul>
+
+  <h2>Your Gemini API key</h2>
+  <p>The key is encrypted with AES/GCM under a hardware-backed Android Keystore
+  secret, and only the ciphertext is written to the plugin's private storage —
+  a copied preferences file is useless without this device's Keystore. Clear it
+  any time from <b>Settings</b>. If the Keystore entry is ever lost — clearing the
+  app's data, for example — the stored key can no longer be read and will need to
+  be entered again; tapping <b>Edit</b> tells you when that has happened.</p>
+
+  <h2>Reading the conversation</h2>
+  <ul>
+    <li><b>Retry</b> appears on a message whose reply failed, and re-sends the
+      same prompt with the same attached files rather than adding a new one.</li>
+    <li><b>Open AI Settings</b> appears instead when the agent has not been
+      configured yet — no local model chosen, or no Gemini key saved.</li>
+    <li><b>System log</b> rows are collapsed records of the agent's internal
+      steps: tools run, files touched, backend errors. Tap the header to expand
+      one. They are saved with the session but are not sent to the model.</li>
+    <li>Long-press a message to copy its text, or to edit and re-send one of
+      your own.</li>
+  </ul>
 
   <h2>Troubleshooting</h2>
   <ul>

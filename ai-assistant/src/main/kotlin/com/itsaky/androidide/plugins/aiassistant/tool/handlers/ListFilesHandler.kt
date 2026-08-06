@@ -15,39 +15,28 @@ class ListFilesHandler(
     override val toolName = "list_files"
     override val description = "List files and directories in a given path"
     override val requiresApproval = false
+    override val pathArgs = listOf("directory")
+    // Resolved internally (below) to rescue slash-prefixed paths; opt out of the
+    // Executor pre-guard that would reject "/app/src" first.
+    override val resolvesPathsInternally = true
 
     override suspend fun execute(args: Map<String, Any?>): ToolResult {
-        var directory = args["directory"]?.toString()?.trim()?.takeIf { it.isNotBlank() }
+        val directory = args["directory"]?.toString()?.trim()?.takeIf { it.isNotBlank() }
 
-        // Get project root for containment check
-        val projectRoot = System.getProperty("project.dir")
-            ?: System.getProperty("user.dir")
-            ?: "/storage/emulated/0/AndroidIDEProjects"
-        val projectRootCanonical = File(projectRoot).canonicalPath
-
-        // If no directory specified, use project root
-        if (directory.isNullOrBlank()) {
-            directory = projectRoot
-            Log.d("ListFilesHandler", "No directory specified, using project root: $directory")
-        }
-
-        Log.d("ListFilesHandler", "Listing files in directory: $directory")
+        Log.d("ListFilesHandler", "Listing files in directory: ${directory ?: "<project root>"}")
 
         return try {
-            // Resolve path against project root if relative
-            val dir = if (directory.startsWith("/")) {
-                File(directory).absoluteFile
+            // Resolve/containment-check via PathGuard; blank defaults to the root.
+            // A slash-prefixed relative dir ("/app/src") escapes the root, so retry
+            // it as relative — matching Read/OpenFileHandler.
+            val dir = if (directory == null) {
+                File(PathGuard.projectRoot())
             } else {
-                File(projectRoot, directory).absoluteFile
+                PathGuard.resolveWithin(directory)
+                    ?: PathGuard.resolveWithin(directory.removePrefix("/"))
+                    ?: return ToolResult.failure("Directory path must be within project directory")
             }
             Log.d("ListFilesHandler", "Absolute path: ${dir.absolutePath}")
-
-            // Security: Verify directory is within project root
-            val dirCanonical = dir.canonicalPath
-            if (!dirCanonical.startsWith(projectRootCanonical + File.separator) && dirCanonical != projectRootCanonical) {
-                Log.e("ListFilesHandler", "Path escape attempt: $dirCanonical is outside project root $projectRootCanonical")
-                return ToolResult.failure("Directory path must be within project directory")
-            }
 
             if (!dir.exists()) {
                 Log.w("ListFilesHandler", "Directory does not exist: ${dir.absolutePath}")
@@ -111,12 +100,5 @@ class ListFilesHandler(
             bytes < 1024 * 1024 * 1024 -> "${bytes / (1024 * 1024)} MB"
             else -> "${bytes / (1024 * 1024 * 1024)} GB"
         }
-    }
-
-    private fun findDefaultDirectory(): String {
-        // Return project root only for security
-        return System.getProperty("project.dir")
-            ?: System.getProperty("user.dir")
-            ?: "/storage/emulated/0/AndroidIDEProjects"
     }
 }

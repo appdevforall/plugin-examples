@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Destructive action: fixed red, identical in light and dark, mirroring bg_verify_button.xml. Not
+    theme-derived on purpose - see the comment on danger_button_background in values/colors.xml.
+-->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_pressed="true">
+        <shape android:shape="rectangle">
+            <corners android:radius="20dp" />
+            <solid android:color="@color/danger_button_background_pressed" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="20dp" />
+            <solid android:color="@color/danger_button_background" />
+        </shape>
+    </item>
+</selector>

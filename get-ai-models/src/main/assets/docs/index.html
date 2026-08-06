@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Get AI Models</title>
+    <style>
+        body {
+            background: #ffffff;
+            color: #000000;
+            font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+            font-size: 16px;
+            line-height: 1.55;
+            margin: 0;
+            padding: 20px 18px 48px;
+        }
+        h1 { font-size: 24px; margin: 0 0 4px; }
+        h2 { font-size: 19px; margin: 28px 0 8px; border-bottom: 1px solid #d8ded9; padding-bottom: 4px; }
+        h3 { font-size: 16px; margin: 20px 0 6px; }
+        p, li { color: #000000; }
+        code { background: #eef2ef; border-radius: 3px; padding: 1px 4px; font-size: 14px; }
+        table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 14px; display: block; overflow-x: auto; }
+        th, td { border: 1px solid #c9d2cb; padding: 6px 8px; text-align: left; vertical-align: top; }
+        th { background: #eef2ef; }
+        .lead { color: #33413a; }
+        .note { background: #f4f8f5; border-left: 4px solid #006c4c; padding: 10px 12px; margin: 14px 0; }
+        ol.tight li, ul.tight li { margin-bottom: 4px; }
+    </style>
+</head>
+<body>
+
+<h1>Get AI Models</h1>
+<p class="lead">Browse a bundled catalog of small GGUF language-model files and download them to
+your device, checksum-verified. Each row shows its own licence - read it before use.</p>
+
+<div class="note">
+    <b>This plugin downloads models. It does not run them.</b> Loading a <code>.gguf</code> and
+    generating text is the job of a separate AI plugin built around llama.cpp. Your device's memory is
+    never checked. The only thing recorded is which files have passed their checksum, so a verified
+    download is not forgotten when the IDE restarts - and so a file it downloaded can be deleted
+    again from the same row.
+</div>
+
+<h2>Where to find it</h2>
+<p>Open a project, then open the editor's bottom drawer. <b>Get AI Models</b> sits beside the
+built-in tabs (Build Output, App Logs, and so on). Long-press the tab, a row, or any of the
+Download / Cancel / Verify / Delete controls for a quick explanation of each.</p>
+
+<h2>Reading a row</h2>
+<p>Each row is <b>one file</b> - a model at one quantization - so the same model can appear more
+than once at different quantizations. The compact line under the name reads:</p>
+<p><code>parameters &middot; quantization &middot; on-disk size</code></p>
+<p>Tap the row to expand it. The expanded view adds:</p>
+<ul class="tight">
+    <li><b>Strengths and weaknesses</b> - written for this exact file, not for the model family.
+    Quantization is part of the judgement: a 4-bit build of a bigger model and an 8-bit build of a
+    smaller one behave differently.</li>
+    <li><b>Publisher</b> - who published the GGUF. That is often a re-uploader who converted
+    someone else's weights, which is why the licence is checked on both.</li>
+    <li><b>Minimum RAM</b> - a judgement call about what the file needs to be usable, shown for
+    you to weigh. It is informational only; the plugin never reads your device's memory and never
+    blocks a download because of it.</li>
+    <li><b>Licence, context window, and base model.</b></li>
+</ul>
+
+<h2>Downloading</h2>
+<ol class="tight">
+    <li>Tap <b>Download</b>.</li>
+    <li>If there is no connection, nothing starts and the tab says so.</li>
+    <li>If the connection is metered, you are warned with the file size and can proceed or cancel.
+    Cancelling starts nothing.</li>
+    <li>Otherwise the file is handed to Android's download manager. Progress appears in the system
+    notification area <i>and</i> on the row itself: the Download button is replaced by a
+    <b>Cancel</b> control whose background fills as the file arrives, with the exact figures beneath
+    the model name.</li>
+    <li>When the transfer finishes, the file's SHA-256 is computed and compared with the catalog.
+    The button reads <i>Verifying&hellip;</i> while that happens; on a multi-gigabyte file it takes
+    a few seconds.</li>
+    <li>On a match the file is kept and the row reads <b>Downloaded</b>. On a mismatch the file is
+    <b>deleted</b> and you are offered a re-download.</li>
+</ol>
+
+<h3>If the download seems to be stuck</h3>
+<p>Dismissing the system notification does <b>not</b> cancel the download - it only removes the
+notification. The row keeps reporting on its own, which is why progress is drawn there too.</p>
+<p>Check the line beneath the model name:</p>
+<ul class="tight">
+    <li><b>Downloading 1.4 GB of 4.68 GB</b> - bytes are moving. Large files over a slow link
+    genuinely take a long time.</li>
+    <li><b>Paused - waiting for Wi-Fi</b> - the download began on Wi-Fi and you are now on mobile
+    data. It resumes by itself when Wi-Fi returns, and will not spend your data allowance in the
+    meantime. To fetch it over mobile data instead, cancel and start it again while on that
+    connection, and accept the metered warning.</li>
+    <li><b>Paused - no connection</b> - waiting for any usable network.</li>
+    <li><b>Paused - retrying</b> - a transient error; Android retries shortly.</li>
+    <li><b>Queued - waiting to start</b> - accepted but not begun yet.</li>
+</ul>
+<p>Tap the Cancel control to abandon a download; the partial file is discarded.</p>
+
+<h3>Where files land</h3>
+<p>Always <code>/sdcard/Download</code>, under the file name shown in the catalog. There is no
+other destination and no setting to change it. If a file of that name already exists, Android's
+download manager writes a suffixed copy (<code>&hellip;-1.gguf</code>) and the checksum is computed
+against whichever file it actually wrote.</p>
+<p>On some Android versions the download manager hands back a file without telling us its folder. The
+checksum is still verified, and the file is still in your Downloads - but the row will say the location
+is unknown, will not offer <b>Delete file</b>, and will forget the <b>Downloaded</b> badge when the IDE
+restarts. Your Downloads app can still see the file.</p>
+
+<h3>What happens if you close the tab</h3>
+<p>The transfer and the checksum gate keep going - they belong to the plugin, not to the tab.
+Reopening the tab shows the current state of each row. A download still in flight when the
+<i>plugin</i> is reloaded finishes in the notification area but is no longer checksum-verified by
+us.</p>
+
+<h2>What the plugin remembers</h2>
+<p>A file that passes the checksum is remembered, so <b>Downloaded</b> survives restarting the IDE.
+Hashing several gigabytes takes real time, so the result is stored rather than recomputed: the entry
+id, where the file was written, and its size at that moment.</p>
+<p>A remembered badge is never trusted blindly. On start-up each record is re-checked with a single
+cheap look at the disk:</p>
+<table>
+    <tr><th>On disk</th><th>The row shows</th></tr>
+    <tr>
+        <td>Nothing at that path</td>
+        <td><b>Download</b>. The record is dropped - this is what you see after deleting the file in
+        a file manager.</td>
+    </tr>
+    <tr>
+        <td>Present, same size as when it was verified</td>
+        <td><b>Downloaded</b>.</td>
+    </tr>
+    <tr>
+        <td>Present, different size</td>
+        <td><b>Verify</b>. The old checksum no longer holds, so it is not claimed.</td>
+    </tr>
+</table>
+<p>The size check catches a truncated or half-written file instantly and for free. It cannot spot a
+file replaced by a <i>different</i> file of exactly the same length - for that, expand a verified row
+and tap <b>Verify file again</b> to hash the bytes now.</p>
+<p>If a re-verify fails, the file is <b>left in place</b>. That is different from a failed download,
+which is deleted: a file already sitting on your device was not written by this download, so removing
+it is your decision.</p>
+
+<h2>Deleting a file</h2>
+<p>An expanded row for a file you have downloaded also offers <b>Delete file</b>. It frees the space
+and returns the row to <b>Download</b>, so nothing stops you fetching it again later.</p>
+<p>You are asked to confirm first, and the confirmation names the file and its full path. There is no
+undo and no trash.</p>
+<p><b>What it can touch.</b> Only the file this plugin downloaded, at the exact path it was written
+to. A <code>.gguf</code> you put in <code>/sdcard/Download</code> yourself will never be offered for
+deletion, even if it happens to share a catalogued file name.</p>
+<ul class="tight">
+    <li>If a model is <b>currently loaded by an AI plugin</b>, the row clears but the disk space is
+    not reclaimed until that plugin releases the file. Unload the model first if you are deleting to
+    free space.</li>
+    <li>The system Downloads list may keep listing the file until Android next scans the folder. The
+    file is gone; only the listing is stale.</li>
+    <li>If the delete fails, the row is left as it was and says so - it will not pretend a file is
+    gone when it is not.</li>
+</ul>
+<p>Everything remembered lives in the plugin's own storage and is cleared when the plugin is
+uninstalled. Nothing about your device or your downloads leaves the device.</p>
+
+<h2>Why a download can fail</h2>
+<table>
+    <tr><th>What you see</th><th>What it means</th></tr>
+    <tr>
+        <td>No internet connection.</td>
+        <td>No usable network. Nothing was started.</td>
+    </tr>
+    <tr>
+        <td>Metered connection warning</td>
+        <td>You are on cellular or a metered hotspot. Proceeding allows the transfer to use that
+        connection. A download that <i>started</i> on Wi-Fi will not silently continue over
+        cellular - it pauses until an unmetered network is back.</td>
+    </tr>
+    <tr>
+        <td>Checksum did not match - the file was deleted</td>
+        <td>The bytes on disk are not the bytes the catalog pins. Usually a truncated or resumed
+        transfer. Retrying is the right response.</td>
+    </tr>
+    <tr>
+        <td>Could not download: download failed (reason N)</td>
+        <td>Android's download manager gave up. <code>N</code> is its own reason code - commonly
+        insufficient free space, or an HTTP error from the host.</td>
+    </tr>
+    <tr>
+        <td>Could not download: download was cancelled</td>
+        <td>The download was removed outside the IDE, typically from the system Downloads app.</td>
+    </tr>
+</table>
+
+<h2>How a model gets into the catalog</h2>
+<p>The catalog is a static JSON file inside the plugin. It is not fetched, updatable, or
+user-editable: a new list ships as a new plugin version. Entries are admitted by checklist, not by
+taste. Every one of these has to hold:</p>
+<ol class="tight">
+    <li>Instruction-tuned, not a base model.</li>
+    <li>A fully open licence with no restrictions - verified on the base model <i>and</i> on the
+    GGUF re-uploader's repository. <b>Waived for some current entries</b>, so check the licence shown
+    on the row itself.</li>
+    <li>The exact file loads and generates coherent output in our llama.cpp-based AI plugin.</li>
+    <li>It passes a fixed tool-calling evaluation at 80% or better.</li>
+    <li>A valid chat template, embedded in the GGUF or documented for it.</li>
+    <li>A single-file download from a reputable uploader, with the SHA-256 pinned to a specific
+    repository revision.</li>
+    <li>A context window of at least 16k tokens.</li>
+</ol>
+<p>Quantization is deliberately <b>not</b> restricted. <code>Q4_0</code> and <code>Q4_K_M</code>
+are common, but any quantization that clears the gates is eligible - the gates are about behaviour,
+not about a preferred format.</p>
+<p>Gates 3 and 4 are proven by a repeatable admission test that runs the candidate through the AI
+plugin. <b>That harness does not exist yet</b>, so nothing in this version has been through it - every
+expanded row says so. They are unproven, not failed: no listed file has been shown to misbehave, and
+none has been confirmed to work either. Peak memory and tokens-per-second budgets are deliberately
+<i>not</i> gates yet; they may be added later.</p>
+
+<h2>Privacy and network use</h2>
+<p>The plugin talks to exactly one kind of address: the HTTPS download URL stored in the catalog
+for the row you tapped. It sends no telemetry, fetches no remote catalog, and makes no request
+until you tap Download.</p>
+
+</body>
+</html>

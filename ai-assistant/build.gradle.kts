@@ -16,12 +16,13 @@ android {
         applicationId = "com.itsaky.androidide.plugins.aiassistant"
         minSdk = 33
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.1.0"
     }
 
     buildFeatures {
         viewBinding = true
+        buildConfig = true
     }
 
     buildTypes {
@@ -43,6 +44,10 @@ android {
         compilerOptions {
             jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
         }
+    }
+
+    testOptions {
+        unitTests.isReturnDefaultValues = true
     }
 
     packaging {
@@ -77,10 +82,10 @@ dependencies {
     // JSON serialization for session persistence
     implementation("com.google.code.gson:gson:2.10.1")
 
-    // Plugin dependencies are loaded at runtime by the plugin manager
-    // No explicit compile-time dependency on the ai-core plugin needed
+    testImplementation(files("../libs/plugin-api.jar"))
     testImplementation("junit:junit:4.13.2")
     testImplementation("io.mockk:mockk:1.13.8")
+    testImplementation("org.json:json:20231013")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
     testImplementation("androidx.arch.core:core-testing:2.2.0")
 }
