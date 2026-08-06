@@ -426,7 +426,7 @@ class ChatViewModel(
         }
 
         val prompt = """
-        You are a senior Android developer integrated into AndroidIDE. Your goal is to build complete, working Android apps from user descriptions.
+        You are a senior Android developer integrated into CodeOnTheGo. Your goal is to build complete, working Android apps from user descriptions.
 
         AVAILABLE TOOLS:
         $toolDescriptions
@@ -503,7 +503,7 @@ class ChatViewModel(
         }
 
         val prompt = """
-        You are a coding assistant inside AndroidIDE.
+        You are a coding assistant inside CodeOnTheGo.
 
         Rules:
         - Reply with exactly ONE tool call, nothing else.

@@ -60,6 +60,7 @@ class AiAssistantPlugin : IPlugin, UIExtension, DocumentationExtension {
         const val TOOLTIP_TAG_SETTINGS_SIMPLE_PROMPT = "ai_settings_simple_prompt"
         const val TOOLTIP_TAG_SETTINGS_GEMINI_KEY = "ai_settings_gemini_key"
         const val TOOLTIP_TAG_SETTINGS_GEMINI_MODEL = "ai_settings_gemini_model"
+        const val TOOLTIP_TAG_SETTINGS_GET_KEY = "ai_settings_get_free_key"
 
         @Volatile
         private var pluginContext: PluginContext? = null
@@ -471,17 +472,50 @@ class AiAssistantPlugin : IPlugin, UIExtension, DocumentationExtension {
             tag = TOOLTIP_TAG_SETTINGS_GEMINI_KEY,
             summary = "Enter your Google Gemini API key. It is stored only on this device.",
             detail = """
-                <p>Paste a Gemini API key to enable the cloud backend. The key is
-                encrypted with a key held in this device's hardware-backed Android
-                Keystore before it is written to this plugin's private preferences,
-                and is sent only to Google's API over HTTPS. Requests (your prompts
-                and project context) leave the device when Gemini is selected.</p>
-                <p>Use the eye button to check what you typed, <b>Save</b> to store
-                it, <b>Edit</b> to change it later and <b>Clear</b> to remove it
-                from the device.</p>
+                <p>Paste a Gemini API key to enable the cloud backend. Keys are
+                created at <b>aistudio.google.com/apikey</b> — tap <b>Get API
+                Key</b> to go straight there. Google AI Studio sets up the
+                underlying Cloud project for you, so there is no Cloud console and
+                no billing setup involved.</p>
+                <p>The key is encrypted with a key held in this device's
+                hardware-backed Android Keystore before it is written to this
+                plugin's private preferences, and is sent only to Google's API over
+                HTTPS. Requests (your prompts and project context) leave the device
+                when Gemini is selected.</p>
+                <p><b>Save</b> checks the key with Google before storing it, so a
+                key that doesn't work is reported straight away instead of failing
+                later mid-chat — a key Google rejects is not saved at all. If the
+                check can't be completed (no network, or the AI Core plugin is
+                disabled or out of date) you are asked whether to keep the key
+                anyway.</p>
+                <p>Use the eye button to check what you typed, <b>Edit</b> to change
+                the key later and <b>Clear</b> to remove it from the device.</p>
                 <p>If the Keystore entry is ever lost — clearing the app's data,
                 for instance — the stored key can no longer be decrypted and must
                 be re-entered here.</p>
+            """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(description = "AI Assistant guide", uri = "index.html", order = 0)
+            )
+        ),
+        PluginTooltipEntry(
+            tag = TOOLTIP_TAG_SETTINGS_GET_KEY,
+            summary = "Open Google AI Studio in your browser to create a Gemini API key.",
+            detail = """
+                <p>Opens <b>aistudio.google.com/apikey</b> in your normal browser,
+                where you sign in with your Google account and tap <i>Create API
+                key</i>. AI Studio creates the Cloud project behind the scenes — the
+                Google Cloud console is not part of this.</p>
+                <p>Sign-in happens in the browser, so this plugin never sees your
+                Google password. Copy the key Google shows you, come back here and
+                paste it into the key field, then tap <b>Save Key</b>.</p>
+                <p>Gemini has a free tier. Note that on the free tier Google may use
+                prompts and responses to improve its products — and this plugin
+                sends your prompts and any file contents the agent reads. If that
+                matters for your project, use the on-device <b>Local</b> backend
+                instead: nothing leaves the device.</p>
+                <p>If no browser is installed the link is copied to the clipboard
+                so you can open it elsewhere.</p>
             """.trimIndent(),
             buttons = listOf(
                 PluginTooltipButton(description = "AI Assistant guide", uri = "index.html", order = 0)

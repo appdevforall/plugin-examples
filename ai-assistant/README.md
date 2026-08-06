@@ -49,11 +49,51 @@ The build resolves `plugin-api.jar` from the repo-root `../libs/`.
 3. Install via CodeOnTheGo's Plugin Manager, then restart the IDE.
 4. Open **AI Settings** to pick a local model or configure a Gemini API key.
 
+## Gemini key setup (ADFA-2709)
+
+The Gemini pane guides key acquisition instead of just showing an empty field:
+
+- **Get API Key** opens `https://aistudio.google.com/apikey` in the *system*
+  browser. AI Studio provisions the underlying Cloud project itself, so the
+  Google Cloud console is not part of the flow, and sign-in happens in the
+  browser — this process never sees a Google password.
+  If no browser can handle the intent, the URL is copied to the clipboard instead
+  so there is still a way forward.
+- **The clipboard is never read.** Pasting the key is left to the field's own
+  long-press menu, which keeps Android 13+'s system read notice tied to a
+  deliberate user action instead of firing on a background probe. Returning from
+  AI Studio only shows a hint pointing at the field (or at **Edit**, when a key is
+  already stored).
+- **Save checks the key with Google before storing it.** A key Google rejects
+  (HTTP 400/401/403) is **not** persisted. A key that can't be checked — offline,
+  or `ai-core` unavailable — prompts a save-anyway confirmation and is recorded as
+  unverified, so the status line doesn't claim more than was established. HTTP 429
+  counts as valid: a rate-limited key is a working key.
+
+The check reuses `GeminiBackend.listModels(apiKey)` in `ai-core` (which already
+holds `network.access`), so this plugin's manifest gains no new permission and no
+new dependency. `gemini/` holds the pieces: `GeminiCatalogGateway` (the one
+reflective seam into `ai-core`), `CatalogResult` (what one lookup returned),
+`KeyVerification` (the verdict + classifier), and `GeminiKeyOnboarding` (the AI
+Studio URL).
+
+That reflective seam means the two plugins ship as a pair: the `listModels(apiKey)`
+overload is new, and against an older `ai-core` the lookup fails with
+`NoSuchMethodException`, which lands in the same save-anyway prompt as being
+offline. It deliberately does **not** fall back to the no-arg `listModels()` —
+that call authenticates with the *saved* key, so it would clear a candidate key on
+the strength of a different credential.
+
+**No shape check on the key.** AI Studio issues authorization-type keys that don't
+match the classic `AIza…` form; Save gates on blankness alone and lets the live
+check decide.
+
 ## Key classes
 
 - `AiAssistantPlugin.kt` — plugin entry point / lifecycle
 - `fragments/ChatFragment.kt`, `viewmodel/ChatViewModel.kt` — chat UI + state
 - `fragments/AiSettingsFragment.kt`, `viewmodel/AiSettingsViewModel.kt` — model/backend config
+- `gemini/` — Gemini key onboarding + pre-save verification
 - `tool/` — the agent tool-loop (executor, router, per-tool handlers, approval)
 
 ## Security

@@ -5,19 +5,21 @@ import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.itsaky.androidide.plugins.aiassistant.gemini.CatalogResult
+import com.itsaky.androidide.plugins.aiassistant.gemini.GeminiCatalogGateway
+import com.itsaky.androidide.plugins.aiassistant.gemini.KeyVerification
+import com.itsaky.androidide.plugins.aiassistant.gemini.ReflectiveGeminiCatalogGateway
+import com.itsaky.androidide.plugins.aiassistant.gemini.toKeyVerification
 import com.itsaky.androidide.plugins.aiassistant.security.SecureApiKeyStore
 import com.itsaky.androidide.plugins.aiassistant.R
 import com.itsaky.androidide.plugins.aiassistant.util.GgufFileInspector
-import com.itsaky.androidide.plugins.services.LlmInferenceService
-import com.itsaky.androidide.plugins.services.SharedServices
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.itsaky.androidide.plugins.PluginContext
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.TimeoutException
+import com.itsaky.androidide.plugins.PluginLogger
 
 /**
  * State for the model file loading.
@@ -58,7 +60,8 @@ data class GeminiModelOptions(val models: List<String>, val isLive: Boolean)
 
 class AiSettingsViewModel(
     private val getContext: () -> PluginContext?,
-    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val catalogGateway: GeminiCatalogGateway = ReflectiveGeminiCatalogGateway()
 ) : ViewModel() {
 
     companion object {
@@ -67,13 +70,6 @@ class AiSettingsViewModel(
         /** Default selection; kept in sync with GeminiBackend.DEFAULT_MODEL. */
         private const val DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
 
-        /**
-         * Failsafe cap on the cross-plugin model listing, above ai-core's own per-request budget
-         * (15 s connect + 15 s read, paginated) so a slow-but-live fetch is never truncated.
-         * Bounds a future that may never complete; it is not a network timeout.
-         */
-        private const val LIST_MODELS_TIMEOUT_SECONDS = 60L
-
         /** Shown only when the live catalog can't be fetched — current models, no retired ones. */
         private val FALLBACK_MODELS = listOf(
             "gemini-2.5-flash",
@@ -81,6 +77,13 @@ class AiSettingsViewModel(
             "gemini-2.0-flash",
         )
     }
+
+    /**
+     * True between tapping *Get API Key* and the settings screen's next resume, so the UI can
+     * point at the next step once the user is back from AI Studio. Held here rather than on the
+     * fragment so a rotation while the browser is in front doesn't reset it and swallow the hint.
+     */
+    var sentUserToAiStudio: Boolean = false
 
     private val _savedModelPath = MutableLiveData<String?>(null)
     val savedModelPath: LiveData<String?> get() = _savedModelPath
@@ -111,7 +114,20 @@ class AiSettingsViewModel(
         }
     }
 
+    /**
+     * This plugin's settings store — and, for the Gemini keys, ai-core's too.
+     *
+     * ai-core resolves this plugin's `PluginContext` and asks for the same name, so both sides
+     * share one process-wide `SharedPreferencesImpl`: writes here need no flush to be visible.
+     */
     private fun getPluginPrefs() = getContext()?.getPluginSharedPreferences("AgentSettings")
+
+    /**
+     * This plugin's IDE-surfaced log, so settings diagnostics land in the IDE's own log view rather
+     * than only in logcat. Null before `initialize()` and in JVM tests.
+     */
+    private val logger: PluginLogger?
+        get() = getContext()?.logger
 
     /** Human-readable name persisted alongside the model path at load time, if any. */
     fun getSavedModelName(): String? =
@@ -144,7 +160,7 @@ class AiSettingsViewModel(
                         }
                     }
             } catch (e: Exception) {
-                android.util.Log.w(TAG, "Could not resolve display name for $uriString", e)
+                logger?.warn("$TAG: could not resolve display name for $uriString", e)
             }
         }
         return fallbackDisplayName(uriString)
@@ -205,31 +221,77 @@ class AiSettingsViewModel(
     }
 
     /**
-     * Encrypts [apiKey] via [SecureApiKeyStore] and persists only the ciphertext to private
-     * prefs, off the main thread (Keystore IPC + AES/GCM). Nothing is written on failure.
+     * Check whether [apiKey] actually works, without storing it anywhere.
+     *
+     * Asks ai-core to list the models the candidate key can reach; see [KeyVerification] for what
+     * each verdict establishes. Run this *before* [saveGeminiApiKey]. The key is never logged.
+     *
+     * @param apiKey the candidate key as typed, trimmed here
+     * @return the verdict; [KeyVerification.Unknown] when nothing could be established
+     */
+    suspend fun verifyGeminiKey(apiKey: String): KeyVerification = withContext(ioDispatcher) {
+        val candidate = apiKey.trim()
+        if (candidate.isEmpty()) return@withContext KeyVerification.Rejected
+        val result = try {
+            catalogGateway.listModels(candidate)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // Last-resort net: a verification crash must never be mistaken for a pass.
+            logger?.error("$TAG: Gemini key verification failed unexpectedly", e)
+            CatalogResult.Failed(e)
+        }
+        result.toKeyVerification().also { verification ->
+            // Diagnostic only: saving a key is not a request for a catalog, so the UI omits this.
+            if (verification is KeyVerification.Verified) {
+                logger?.debug(
+                    "$TAG: Gemini key verified against ${verification.modelCount} " +
+                        "chat-capable models"
+                )
+            }
+        }
+    }
+
+    /**
+     * Encrypts [apiKey] via [SecureApiKeyStore] and persists only the ciphertext to private prefs,
+     * off the main thread. Nothing is written on failure. Kept separate from [verifyGeminiKey]: a
+     * rejected key never reaches here, and an unverifiable one only after the user says so.
      *
      * @param apiKey the plaintext key to store (trimmed before encryption)
+     * @param verified true when [verifyGeminiKey] confirmed this key; recorded in the same write so
+     *   the flag can never outlive or precede the key it describes
      * @return true only if the key was both encrypted and persisted
      */
-    suspend fun saveGeminiApiKey(apiKey: String): Boolean = withContext(ioDispatcher) {
-        // Checked first: returning true here would have the UI claim an unwritten key was saved.
-        val prefs = getPluginPrefs()
-        if (prefs == null) {
-            android.util.Log.e(TAG, "Cannot save Gemini API key: plugin preferences unavailable")
-            return@withContext false
+    suspend fun saveGeminiApiKey(apiKey: String, verified: Boolean = false): Boolean =
+        withContext(ioDispatcher) {
+            // Checked first: returning true here would have the UI claim an unwritten key was saved.
+            val prefs = getPluginPrefs()
+            if (prefs == null) {
+                logger?.error("$TAG: cannot save Gemini API key: plugin preferences unavailable")
+                return@withContext false
+            }
+            val encrypted = try {
+                SecureApiKeyStore.encrypt(apiKey.trim())
+            } catch (e: Exception) {
+                logger?.error("$TAG: failed to encrypt Gemini API key", e)
+                return@withContext false
+            }
+            // commit(), not apply(): only a synchronous write can honestly return "persisted".
+            prefs.edit()
+                .putString("gemini_api_key", encrypted)
+                .putLong("gemini_api_key_timestamp", System.currentTimeMillis())
+                .putBoolean("gemini_api_key_verified", verified)
+                .commit()
         }
-        val encrypted = try {
-            SecureApiKeyStore.encrypt(apiKey.trim())
-        } catch (e: Exception) {
-            android.util.Log.e(TAG, "Failed to encrypt Gemini API key", e)
-            return@withContext false
-        }
-        prefs.edit()
-            .putString("gemini_api_key", encrypted)
-            .putLong("gemini_api_key_timestamp", System.currentTimeMillis())
-            .apply()
-        true
-    }
+
+    /**
+     * Whether the stored key was confirmed working by Google when it was saved.
+     *
+     * False for a key kept after an inconclusive check, so the status line can say "saved" without
+     * claiming "verified". Raw pref only, so safe on the main thread.
+     */
+    fun isGeminiKeyVerified(): Boolean =
+        getPluginPrefs()?.getBoolean("gemini_api_key_verified", false) ?: false
 
     /**
      * Decrypt the stored key off the main thread (Keystore IPC + AES/GCM), upgrading a
@@ -256,6 +318,8 @@ class AiSettingsViewModel(
         getPluginPrefs()?.edit()?.apply {
             remove("gemini_api_key")
             remove("gemini_api_key_timestamp")
+            // Removed with the key, or the next saved key would inherit this one's verdict.
+            remove("gemini_api_key_verified")
             apply()
         }
     }
@@ -290,81 +354,37 @@ class AiSettingsViewModel(
             try {
                 val apiKey = getGeminiApiKey()?.trim()
                 if (apiKey.isNullOrBlank()) {
-                    android.util.Log.w(TAG, "No Gemini API key saved; showing fallback models")
+                    logger?.warn("$TAG: no Gemini API key saved; showing fallback models")
                     _geminiModels.postValue(GeminiModelOptions(FALLBACK_MODELS, isLive = false))
                     return@launch
                 }
 
-                val llmService = SharedServices.get(LlmInferenceService::class.java)
-                val geminiBackend = llmService?.getBackend("gemini")
-                if (geminiBackend == null) {
-                    android.util.Log.e(TAG, "Gemini backend not available")
-                    _geminiModels.postValue(GeminiModelOptions(FALLBACK_MODELS, isLive = false))
-                    return@launch
+                when (val result = catalogGateway.listModelsForSavedKey()) {
+                    is CatalogResult.Success -> {
+                        if (result.models.isEmpty()) {
+                            logger?.warn("$TAG: live model list empty; showing fallback models")
+                            _geminiModels.postValue(
+                                GeminiModelOptions(FALLBACK_MODELS, isLive = false)
+                            )
+                        } else {
+                            logger?.debug("$TAG: fetched ${result.models.size} Gemini models")
+                            _geminiModels.postValue(
+                                GeminiModelOptions(result.models, isLive = true)
+                            )
+                        }
+                    }
+                    // Logged by the gateway; degrade to current-models-only, never a 404 model.
+                    CatalogResult.NoBackend, is CatalogResult.Failed ->
+                        _geminiModels.postValue(GeminiModelOptions(FALLBACK_MODELS, isLive = false))
                 }
-
-                val models = listModelsViaBackend(geminiBackend)
-                if (models.isEmpty()) {
-                    android.util.Log.w(TAG, "Live model list empty; showing fallback models")
-                    _geminiModels.postValue(GeminiModelOptions(FALLBACK_MODELS, isLive = false))
-                } else {
-                    android.util.Log.d(TAG, "Fetched ${models.size} Gemini models")
-                    _geminiModels.postValue(GeminiModelOptions(models, isLive = true))
-                }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
-                android.util.Log.e(TAG, "Error fetching Gemini models", e)
+                logger?.error("$TAG: error fetching Gemini models", e)
                 _geminiModels.postValue(GeminiModelOptions(FALLBACK_MODELS, isLive = false))
             } finally {
                 _geminiModelsLoading.postValue(false)
             }
-        }
-    }
-
-    /**
-     * Ask ai-core's Gemini backend for its live model catalog.
-     *
-     * `listModels()` isn't on the shared [LlmInferenceService.LlmBackend] interface, so reflection
-     * is the only way across the plugin classloader boundary — an unchecked contract, hence the
-     * loud log when it breaks rather than a silent fall back to [FALLBACK_MODELS].
-     *
-     * @param backend the resolved "gemini" backend instance from [SharedServices]
-     * @return the live catalog, or an empty list when unavailable
-     */
-    private fun listModelsViaBackend(backend: Any): List<String> {
-        val method = try {
-            backend.javaClass.getMethod("listModels")
-        } catch (e: NoSuchMethodException) {
-            android.util.Log.e(
-                TAG,
-                "ai-core's ${backend.javaClass.name} has no listModels(): the cross-plugin " +
-                    "contract changed. Expected `fun listModels(): CompletableFuture<List<String>>`.",
-                e
-            )
-            return emptyList()
-        }
-        val result = method.invoke(backend)
-
-        @Suppress("UNCHECKED_CAST")
-        val future = result as? CompletableFuture<List<String>>
-        if (future == null) {
-            android.util.Log.e(
-                TAG,
-                "listModels() returned ${result?.javaClass?.name}, expected CompletableFuture"
-            )
-            return emptyList()
-        }
-        // Bounded: a future from ai-core's already-cancelled scope would never complete.
-        return try {
-            future.get(LIST_MODELS_TIMEOUT_SECONDS, TimeUnit.SECONDS).orEmpty()
-        } catch (e: TimeoutException) {
-            future.cancel(true)
-            android.util.Log.e(
-                TAG,
-                "listModels() did not complete within ${LIST_MODELS_TIMEOUT_SECONDS}s; " +
-                    "is ai-core still active?",
-                e
-            )
-            emptyList()
         }
     }
 
@@ -399,9 +419,9 @@ class AiSettingsViewModel(
                     ModelLoadingState.Loaded(fileName)
                 )
 
-                android.util.Log.d(TAG, "Model path saved: $uriString ($fileName)")
+                logger?.debug("$TAG: model path saved: $uriString ($fileName)")
             } catch (e: Exception) {
-                android.util.Log.e("AiSettingsViewModel", "Error saving model path", e)
+                logger?.error("$TAG: error saving model path", e)
                 _modelLoadingState.postValue(
                     ModelLoadingState.Error("Failed to save model path: ${e.message}")
                 )

@@ -9,7 +9,6 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginBottom="8dp"
-        android:text="API Key saved on: %s"
         android:textAppearance="?android:attr/textAppearanceMedium"
         android:textColor="?android:attr/textColorSecondary"
         android:visibility="gone" />
@@ -23,7 +22,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Gemini API Key"
+            android:text="@string/label_gemini_api_key"
             android:textAppearance="?android:attr/textAppearanceSmall"
             android:paddingBottom="4dp"/>
 
@@ -56,6 +55,17 @@
         </LinearLayout>
     </LinearLayout>
 
+    <TextView
+        android:id="@+id/gemini_key_verification_text"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:drawablePadding="6dp"
+        android:gravity="center_vertical"
+        android:textAppearance="?android:attr/textAppearanceSmall"
+        android:textColor="?android:attr/textColorSecondary"
+        android:visibility="gone" />
+
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -64,19 +74,19 @@
 
         <Button
             android:id="@+id/btn_clear_api_key"
-            style="?android:attr/borderlessButtonStyle"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="Clear"
+            android:text="@string/btn_clear_api_key"
             android:visibility="gone" />
 
         <Button
             android:id="@+id/btn_edit_api_key"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
             android:layout_weight="1"
-            android:text="Edit"
+            android:text="@string/btn_edit_api_key"
             android:visibility="gone" />
 
         <Button
@@ -84,8 +94,15 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="Save Key" />
+            android:text="@string/btn_save_api_key" />
 
     </LinearLayout>
+
+    <Button
+        android:id="@+id/btn_get_free_key"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="@string/btn_get_free_key" />
 
 </LinearLayout>

@@ -1,6 +1,8 @@
 package com.itsaky.androidide.plugins.aiassistant.fragments
 
 import android.annotation.SuppressLint
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -13,12 +15,16 @@ import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.*
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.DrawableRes
 import androidx.fragment.app.DialogFragment
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aiassistant.AiAssistantPlugin
 import com.itsaky.androidide.plugins.aiassistant.R
+import com.itsaky.androidide.plugins.aiassistant.gemini.GeminiKeyOnboarding
+import com.itsaky.androidide.plugins.aiassistant.gemini.KeyVerification
 import com.itsaky.androidide.plugins.base.PluginFragmentHelper
 import com.itsaky.androidide.plugins.services.IdeTooltipService
 import com.itsaky.androidide.plugins.aiassistant.viewmodel.AiBackend
@@ -29,6 +35,7 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.roundToInt
 
 class AiSettingsFragment : DialogFragment() {
 
@@ -43,6 +50,13 @@ class AiSettingsFragment : DialogFragment() {
     private lateinit var backendSpinner: Spinner
     private lateinit var backendSpecificContainer: FrameLayout
     private var tooltipService: IdeTooltipService? = null
+
+    /**
+     * Set while the Gemini pane is on screen, so [onResume] can nudge the user towards **Paste
+     * key** after they come back from AI Studio. Cleared when the pane is replaced or the view is
+     * destroyed — it captures views, so holding it any longer would leak them.
+     */
+    private var onGeminiPaneResume: (() -> Unit)? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -116,6 +130,17 @@ class AiSettingsFragment : DialogFragment() {
         setupBackendSelector()
     }
 
+    override fun onResume() {
+        super.onResume()
+        onGeminiPaneResume?.invoke()
+    }
+
+    override fun onDestroyView() {
+        // Drops the captured Gemini pane views along with the callback.
+        onGeminiPaneResume = null
+        super.onDestroyView()
+    }
+
     override fun onDismiss(dialog: android.content.DialogInterface) {
         super.onDismiss(dialog)
         // This is a dialog, so the chat screen behind it never gets onResume when we close.
@@ -181,6 +206,8 @@ class AiSettingsFragment : DialogFragment() {
 
     private fun updateBackendSpecificUi(backend: AiBackend) {
         backendSpecificContainer.removeAllViews()
+        // The Gemini pane's views are about to go; its resume callback must not outlive them.
+        onGeminiPaneResume = null
 
         // Reuse the fragment's theme-aware inflater (routed through getPluginInflater) so these
         // sub-layouts follow the IDE day/night theme like the rest of the dialog.
@@ -309,14 +336,41 @@ class AiSettingsFragment : DialogFragment() {
         val editButton = view.findViewById<Button>(R.id.btn_edit_api_key)
         val clearButton = view.findViewById<Button>(R.id.btn_clear_api_key)
         val statusTextView = view.findViewById<TextView>(R.id.gemini_api_key_status_text)
+        val getKeyButton = view.findViewById<Button>(R.id.btn_get_free_key)
+        val verificationText = view.findViewById<TextView>(R.id.gemini_key_verification_text)
 
         // Not on apiKeyInput: long-press there is the paste menu, and a key is pasted.
-        listOf(toggleVisibilityButton, saveButton, editButton, clearButton, statusTextView)
-            .forEach { wireTooltip(it, AiAssistantPlugin.TOOLTIP_TAG_SETTINGS_GEMINI_KEY) }
+        listOf(
+            toggleVisibilityButton, saveButton, editButton, clearButton, statusTextView,
+            verificationText
+        ).forEach { wireTooltip(it, AiAssistantPlugin.TOOLTIP_TAG_SETTINGS_GEMINI_KEY) }
+        wireTooltip(getKeyButton, AiAssistantPlugin.TOOLTIP_TAG_SETTINGS_GET_KEY)
 
         // Create model selection container
         val modelContainer = createModelSelectionUi(view)
 
+        /**
+         * Show the outcome of (or progress of) the live key check.
+         *
+         * @param message the user-facing line; carries no status glyph of its own
+         * @param icon leading status drawable, or 0 for the states that don't warrant one
+         *   (in-progress, and the hints shown on returning from AI Studio)
+         */
+        fun showVerification(message: String, @DrawableRes icon: Int = 0) {
+            verificationText.text = message
+            // Relative (not left/right) so the icon follows the layout direction in RTL locales.
+            verificationText.setCompoundDrawablesRelativeWithIntrinsicBounds(icon, 0, 0, 0)
+            verificationText.visibility = View.VISIBLE
+        }
+
+        /** Drop a verdict that no longer describes what is in the field. */
+        fun hideVerification() {
+            verificationText.visibility = View.GONE
+            verificationText.text = ""
+            verificationText.setCompoundDrawablesRelativeWithIntrinsicBounds(0, 0, 0, 0)
+        }
+
+        // "Get API Key" is absent here on purpose: it stays visible while Gemini is selected.
         fun updateUiState(isEditing: Boolean) {
             if (isEditing) {
                 statusTextView.visibility = View.GONE
@@ -380,34 +434,141 @@ class AiSettingsFragment : DialogFragment() {
             applyKeyVisibility()
         }
 
+        getKeyButton.setOnClickListener { openAiStudio() }
+
+        // Coming back from AI Studio, point at the next step; the clipboard is never read.
+        onGeminiPaneResume = {
+            // Kept on the ViewModel so a rotation while AI Studio is in front doesn't lose the hint.
+            if (viewModel.sentUserToAiStudio) {
+                viewModel.sentUserToAiStudio = false
+                // With a key already stored the field is hidden, so the next tap is Edit.
+                showVerification(
+                    if (apiKeyLayout.visibility == View.VISIBLE) {
+                        getString(R.string.msg_key_hint_paste_into_field)
+                    } else {
+                        getString(R.string.msg_key_hint_edit_first)
+                    }
+                )
+            }
+        }
+
+        /** Enable or disable everything that would race the in-flight key check. */
+        fun setKeyEntryEnabled(enabled: Boolean) {
+            saveButton.isEnabled = enabled
+            getKeyButton.isEnabled = enabled
+            apiKeyInput.isEnabled = enabled
+        }
+
+        /**
+         * Encrypt and store [apiKey], then reflect the outcome. Only ever reached for a key Google
+         * confirmed, or one the user chose to keep after an inconclusive check.
+         */
+        suspend fun persistKey(
+            apiKey: String,
+            verified: Boolean,
+            resultText: String,
+            @DrawableRes resultIcon: Int
+        ) {
+            if (!viewModel.saveGeminiApiKey(apiKey, verified)) {
+                Toast.makeText(
+                    requireContext(),
+                    getString(R.string.msg_api_key_save_failed),
+                    Toast.LENGTH_LONG
+                ).show()
+                return
+            }
+            Toast.makeText(
+                requireContext(),
+                getString(R.string.msg_api_key_saved),
+                Toast.LENGTH_SHORT
+            ).show()
+            updateUiState(isEditing = false)
+            statusTextView.text = savedApiKeyStatusText()
+            showVerification(resultText, resultIcon)
+            // A different key can reach a different set of models, so the picker is re-fetched.
+            viewModel.fetchGeminiModels()
+        }
+
+        /**
+         * Offer to keep a key that could not be checked. Distinct from a rejection: refusing a good
+         * key because the device is offline would leave the plugin unconfigurable, so this gets the
+         * muted "unchecked" icon and a key Google actually refused never reaches here.
+         */
+        fun confirmSaveUnverified(apiKey: String, reason: String) {
+            showVerification(reason, R.drawable.ic_key_unchecked)
+            MaterialAlertDialogBuilder(requireContext())
+                .setTitle(R.string.title_save_unverified_key)
+                .setMessage(getString(R.string.msg_save_unverified_key, reason))
+                .setNegativeButton(R.string.action_cancel, null)
+                .setPositiveButton(R.string.action_save_anyway) { _, _ ->
+                    viewLifecycleOwner.lifecycleScope.launch {
+                        persistKey(
+                            apiKey,
+                            verified = false,
+                            resultText = reason,
+                            resultIcon = R.drawable.ic_key_unchecked
+                        )
+                    }
+                }
+                .show()
+        }
+
         saveButton.setOnClickListener {
             val apiKey = apiKeyInput.text.toString().trim()
+            // Blankness is the only shape rule: AI Studio keys need not match the AIza… form.
             if (apiKey.isBlank()) {
                 Toast.makeText(requireContext(), getString(R.string.msg_api_key_empty), Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
-            saveButton.isEnabled = false
+            setKeyEntryEnabled(false)
+            showVerification(getString(R.string.msg_verifying_key))
             viewLifecycleOwner.lifecycleScope.launch {
-                val saved = try {
-                    viewModel.saveGeminiApiKey(apiKey)
+                val verdict = try {
+                    viewModel.verifyGeminiKey(apiKey)
                 } finally {
-                    saveButton.isEnabled = true
+                    setKeyEntryEnabled(true)
                 }
-                if (!saved) {
-                    Toast.makeText(requireContext(), getString(R.string.msg_api_key_save_failed), Toast.LENGTH_LONG).show()
-                    return@launch
+                when (verdict) {
+                    // Model count omitted: the user saved a key, not asked for a catalog.
+                    is KeyVerification.Verified -> persistKey(
+                        apiKey,
+                        verified = true,
+                        resultText = getString(R.string.msg_key_verified),
+                        resultIcon = R.drawable.ic_key_verified
+                    )
+
+                    // A rate-limited key is a working key, so it gets the same icon as a clean pass.
+                    KeyVerification.RateLimited -> persistKey(
+                        apiKey,
+                        verified = true,
+                        resultText = getString(R.string.msg_key_verified_rate_limited),
+                        resultIcon = R.drawable.ic_key_verified
+                    )
+
+                    // Nothing is written: a definitive refusal would only resurface mid-chat.
+                    KeyVerification.Rejected -> {
+                        showVerification(
+                            getString(R.string.msg_key_rejected),
+                            R.drawable.ic_key_rejected
+                        )
+                        apiKeyInput.requestFocus()
+                    }
+
+                    KeyVerification.Unreachable ->
+                        confirmSaveUnverified(apiKey, getString(R.string.msg_key_unreachable))
+
+                    KeyVerification.Unknown ->
+                        confirmSaveUnverified(apiKey, getString(R.string.msg_key_uncheckable))
                 }
-                Toast.makeText(requireContext(), getString(R.string.msg_api_key_saved), Toast.LENGTH_SHORT).show()
-                updateUiState(isEditing = false)
-                statusTextView.text = savedApiKeyStatusText()
             }
         }
 
-        // Reveal the (already-fetched) key in an editable, focused field. Kept separate from
-        // the click handler so the listener does one thing: fetch, then hand off.
+        // Reveal the (already-fetched) key in an editable, focused field.
         fun revealEditMode(apiKey: String) {
             apiKeyInput.setText(apiKey)
             apiKeyInput.setSelection(apiKey.length)
+            // The old verdict described the stored key, which is about to change.
+            hideVerification()
             updateUiState(isEditing = true)
             isKeyVisible = false
             applyKeyVisibility()
@@ -437,6 +598,7 @@ class AiSettingsFragment : DialogFragment() {
         clearButton.setOnClickListener {
             viewModel.clearGeminiApiKey()
             Toast.makeText(requireContext(), getString(R.string.msg_api_key_cleared), Toast.LENGTH_SHORT).show()
+            hideVerification()
             updateUiState(isEditing = true)
             apiKeyInput.setText("")
         }
@@ -448,11 +610,8 @@ class AiSettingsFragment : DialogFragment() {
     /**
      * Add or clear [WindowManager.LayoutParams.FLAG_SECURE] on this dialog's window.
      *
-     * Set while the API key is displayed in clear text: without it the key is captured by
-     * screenshots, screen recordings and the recents-screen thumbnail, which would undo the
-     * point of encrypting it at rest. The window may not exist yet on the first call (this runs
-     * from view setup, before onStart), which is safe — the initial state is masked, so there is
-     * no flag to apply until the user actually reveals the key.
+     * Set while the key is in clear text, or screenshots and the recents thumbnail would capture
+     * it. A null window on the first call is safe: the initial state is masked.
      *
      * @param secure true to block capture, false to allow it again
      */
@@ -468,34 +627,91 @@ class AiSettingsFragment : DialogFragment() {
         }
     }
 
-    /** Status line for a stored key: dated when the save time is known, generic otherwise. */
+    /**
+     * Status line for a stored key: dated when the save time is known, generic otherwise, and
+     * saying "verified" only for a key Google actually confirmed — a key kept through the
+     * save-anyway path was never checked and must not claim otherwise.
+     */
     private fun savedApiKeyStatusText(): String {
         val timestamp = viewModel.getGeminiApiKeySaveTimestamp()
+        val verified = viewModel.isGeminiKeyVerified()
         if (timestamp <= 0) return getString(R.string.msg_api_key_is_saved)
         val savedDate = SimpleDateFormat("MMMM d, yyyy", Locale.getDefault()).format(Date(timestamp))
-        return getString(R.string.msg_api_key_saved_on, savedDate)
+        return if (verified) {
+            getString(R.string.msg_api_key_verified_on, savedDate)
+        } else {
+            getString(R.string.msg_api_key_saved_on, savedDate)
+        }
     }
+
+    /**
+     * Open Google AI Studio's key page in the *system* browser.
+     *
+     * A real browser, not a WebView: Google blocks sign-in in embedded WebViews, and the user
+     * should see Google's own URL bar. With no browser at all, the URL is copied instead.
+     */
+    private fun openAiStudio() {
+        val url = GeminiKeyOnboarding.AI_STUDIO_URL
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+        runCatching { startActivity(intent) }
+            .onSuccess { viewModel.sentUserToAiStudio = true }
+            .onFailure { error ->
+                AiAssistantPlugin.getContext()?.logger
+                    ?.warn("AiSettingsFragment: no browser could open AI Studio", error)
+                val message = if (copyToClipboard(url)) {
+                    R.string.msg_no_browser_for_key
+                } else {
+                    R.string.msg_key_link_copy_failed
+                }
+                Toast.makeText(requireContext(), getString(message, url), Toast.LENGTH_LONG).show()
+            }
+    }
+
+    /**
+     * Put [text] on the clipboard.
+     *
+     * Only ever used for the public AI Studio URL — never for a key, which would put the secret
+     * somewhere every app on the device can read it.
+     *
+     * @return true when the clipboard accepted the value
+     */
+    private fun copyToClipboard(text: String): Boolean {
+        val clipboard = requireContext()
+            .getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return false
+        return runCatching {
+            clipboard.setPrimaryClip(ClipData.newPlainText(getString(R.string.app_name), text))
+        }.isSuccess
+    }
+
+    /**
+     * Density-independent [dp] as whole pixels, for the views this screen builds in code. The
+     * `setPadding` family takes raw pixels, so a literal shrinks as screen density rises.
+     *
+     * @param dp the density-independent size to convert
+     * @return the equivalent size in device pixels
+     */
+    private fun dp(dp: Int): Int = (dp * resources.displayMetrics.density).roundToInt()
 
     private fun createModelSelectionUi(parent: View): LinearLayout {
         val context = requireContext()
         val container = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(0, 32, 0, 0)
+            setPadding(0, dp(32), 0, 0)
         }
 
         // Add title
         val titleText = TextView(context).apply {
-            text = "Gemini Model"
+            text = getString(R.string.label_gemini_model)
             textSize = 16f
-            setPadding(0, 0, 0, 16)
+            setPadding(0, 0, 0, dp(16))
         }
         container.addView(titleText)
 
         // Add current model display
         val currentModelText = TextView(context).apply {
             id = View.generateViewId()
-            text = "Current: ${viewModel.getGeminiModel()}"
-            setPadding(0, 0, 0, 8)
+            text = getString(R.string.current_model, viewModel.getGeminiModel())
+            setPadding(0, 0, 0, dp(8))
         }
         container.addView(currentModelText)
 
@@ -508,7 +724,7 @@ class AiSettingsFragment : DialogFragment() {
         // Add refresh button
         val refreshButton = Button(context).apply {
             id = View.generateViewId()
-            text = "Refresh Models"
+            text = getString(R.string.refresh_models)
         }
         container.addView(refreshButton)
 
@@ -559,7 +775,7 @@ class AiSettingsFragment : DialogFragment() {
                     modelSpinner.setSelection(0)
                     val migrated = models[0]
                     viewModel.saveGeminiModel(migrated)
-                    currentModelText?.text = "Current: $migrated"
+                    currentModelText?.text = getString(R.string.current_model, migrated)
                 }
             }
         }
