@@ -19,10 +19,6 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0.0"
-
-        ndk {
-            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
-        }
     }
 
     buildTypes {
@@ -62,7 +58,7 @@ android {
 dependencies {
     compileOnly(files("../libs/plugin-api.jar"))
     compileOnly(files("../libs/eventbus-events.jar"))
-    compileOnly(files("../libs/shared.jar"))
+    compileOnly(files("libs/shared.jar"))
 
     implementation("com.google.android.material:material:1.10.0")
     implementation("androidx.fragment:fragment-ktx:1.8.8")
