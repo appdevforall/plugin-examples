@@ -40,12 +40,18 @@
   your project through an approval-gated tool loop. Inference is served by the
   companion <b>AI Core</b> plugin, so install <b>AI Core first</b>.</p>
 
+  <h2>Where the settings live</h2>
+  <p>The backend, the model and your Gemini API key are all configured on one
+  screen, reached from <b>Preferences → Configuration → Agent</b>. The same screen
+  opens from the Agent tab's overflow menu (<b>Settings</b>), so you do not have to
+  leave the chat to change something. Every setting saves as you change it.</p>
+
   <h2>Choosing a backend</h2>
   <ul>
     <li><b>Local (on-device)</b> — runs a <code>.gguf</code> model via
-      llama.cpp. Open <b>Settings</b>, pick a model file from your Downloads
-      folder. Nothing leaves the device.</li>
-    <li><b>Gemini (cloud)</b> — enter a Gemini API key in <b>Settings</b>; see
+      llama.cpp. Open <b>Preferences → Configuration → Agent</b> and pick a model
+      file from your Downloads folder. Nothing leaves the device.</li>
+    <li><b>Gemini (cloud)</b> — enter a Gemini API key on the same screen; see
       <i>Getting a Gemini API key</i> below. Prompts and any file contents the
       agent reads are sent to Google over HTTPS.</li>
   </ul>
@@ -86,8 +92,9 @@
   <b>aistudio.google.com/apikey</b>, and Google AI Studio sets up the underlying
   Cloud project for you the first time you accept its terms.</p>
   <ol>
-    <li>In <b>Settings</b> with the <b>Gemini</b> backend selected, tap
-      <b>Get API Key</b>. Your normal browser opens at AI Studio.</li>
+    <li>On the <b>Agent</b> settings screen with the <b>Gemini</b> backend
+      selected, tap <b>Get API Key</b>. Your normal browser opens at AI
+      Studio.</li>
     <li>Sign in with your Google account <i>in the browser</i> and tap
       <b>Create API key</b>. This plugin never sees your Google password.</li>
     <li>Copy the key Google shows you, return to the IDE and paste it into the
@@ -130,7 +137,8 @@
   <p>The key is encrypted with AES/GCM under a hardware-backed Android Keystore
   secret, and only the ciphertext is written to the plugin's private storage —
   a copied preferences file is useless without this device's Keystore. Clear it
-  any time from <b>Settings</b>. If the Keystore entry is ever lost — clearing the
+  any time from <b>Preferences → Configuration → Agent</b>. If the Keystore entry
+  is ever lost — clearing the
   app's data, for example — the stored key can no longer be read and will need to
   be entered again; tapping <b>Edit</b> tells you when that has happened.</p>
 
@@ -139,7 +147,8 @@
     <li><b>Retry</b> appears on a message whose reply failed, and re-sends the
       same prompt with the same attached files rather than adding a new one.</li>
     <li><b>Open AI Settings</b> appears instead when the agent has not been
-      configured yet — no local model chosen, or no Gemini key saved.</li>
+      configured yet — no local model chosen, or no Gemini key saved. It opens the
+      <b>Agent</b> settings screen directly.</li>
     <li><b>System log</b> rows are collapsed records of the agent's internal
       steps: tools run, files touched, backend errors. Tap the header to expand
       one. They are saved with the session but are not sent to the model.</li>
@@ -150,7 +159,8 @@
   <h2>Troubleshooting</h2>
   <ul>
     <li><b>"No model configured"</b> — select a <code>.gguf</code> file (Local)
-      or set an API key (Gemini) in Settings.</li>
+      or set an API key (Gemini) under <b>Preferences → Configuration →
+      Agent</b>.</li>
     <li><b>Gemini errors</b> — check the API key, network connection, and quota.
       Re-tapping <b>Save</b> on the key re-runs the live check and tells you which
       of the three it is.</li>

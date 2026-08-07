@@ -25,6 +25,7 @@ import com.itsaky.androidide.plugins.aiassistant.viewmodel.ChatViewModel
 import com.itsaky.androidide.plugins.base.PluginFragmentHelper
 import com.itsaky.androidide.plugins.services.IdeProjectService
 import com.itsaky.androidide.plugins.services.IdeTooltipService
+import com.itsaky.androidide.plugins.services.IdeUIService
 import io.noties.markwon.Markwon
 import kotlinx.coroutines.launch
 import java.io.File
@@ -115,14 +116,6 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
         setupBackendIndicator()
         observeViewModel()
 
-        // Settings is a DialogFragment, so onResume does not fire when it closes.
-        parentFragmentManager.setFragmentResultListener(
-            AiSettingsFragment.RESULT_SETTINGS_CLOSED, viewLifecycleOwner
-        ) { _, _ ->
-            viewModel.checkBackendAvailability()
-            viewModel.refreshBackendLabel()
-        }
-
         // Check for test prompt from broadcast receiver (E2E testing)
         injectPendingTestPrompt()
     }
@@ -177,7 +170,8 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
         super.onResume()
         // On becoming visible, so the check runs after every plugin has loaded.
         viewModel.checkBackendAvailability()
-        // Reflect the currently selected backend (updates after returning from settings).
+        // Re-resolve the selected backend here: the settings screen is a separate activity that
+        // fully covers chat, so returning from it always delivers onResume.
         viewModel.refreshBackendLabel()
     }
 
@@ -441,10 +435,24 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
         imm.hideSoftInputFromWindow(binding.promptInputEdittext.windowToken, 0)
     }
 
+    /**
+     * Open the Agent settings screen — the same one Preferences → Configuration → Agent opens, so
+     * there is one implementation of it. The host mounts it full-screen in PluginScreenActivity;
+     * returning from it gives this fragment a real onResume.
+     */
     private fun openSettingsFragment() {
-        val settingsFragment = AiSettingsFragment()
-        // Show as dialog fragment to avoid overlapping with chat UI
-        settingsFragment.show(parentFragmentManager, "ai_settings")
+        val opened = PluginFragmentHelper.getServiceRegistry(AiAssistantPlugin.PLUGIN_ID)
+            ?.get(IdeUIService::class.java)
+            ?.openPluginScreen(
+                AiAssistantPlugin.PLUGIN_ID,
+                AiSettingsFragment::class.java.name,
+                getString(R.string.pref_agent_title)
+            ) ?: false
+        if (!opened) {
+            AiAssistantPlugin.getContext()?.logger
+                ?.warn("ChatFragment: could not open the Agent settings screen")
+            showInfoSnackbar(getString(R.string.msg_settings_unavailable))
+        }
     }
 
     /**
@@ -457,7 +465,7 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
         val binding = _binding ?: return
         Snackbar
             .make(binding.root, message, Snackbar.LENGTH_LONG)
-            .setAction("Settings") { openSettingsFragment() }
+            .setAction(getString(R.string.menu_settings)) { openSettingsFragment() }
             .show()
     }
 

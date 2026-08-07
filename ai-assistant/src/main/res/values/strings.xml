@@ -102,8 +102,15 @@
     <string name="sender_system">System</string>
     <string name="sender_tool">Tool</string>
 
+    <!-- Preferences row (Preferences → Configuration → Agent) -->
+    <string name="pref_agent_title">Agent</string>
+    <string name="pref_agent_summary">AI backend, model and API key</string>
+    <string name="msg_settings_unavailable">Couldn\'t open Agent settings. Open them from Preferences → Configuration → Agent.</string>
+
     <!-- Settings -->
     <string name="settings_title">AI Settings</string>
+    <string name="cd_settings_back">Close settings</string>
+    <string name="label_ai_backend">AI Backend</string>
     <string name="cd_show_api_key">Show API key</string>
     <string name="cd_hide_api_key">Hide API key</string>
     <string name="hint_gemini_api_key">Enter your Gemini API key</string>
@@ -174,6 +181,14 @@
     <string name="model_loaded">✅ Model loaded: %s</string>
     <string name="model_load_error">❌ Error: %s</string>
     <string name="model_loading_toast">Loading model…</string>
+
+    <!-- Settings: local model pane -->
+    <string name="model_none_selected">No model selected</string>
+    <string name="btn_browse_model">Browse for Model File</string>
+    <string name="btn_load_saved_model">Load from saved</string>
+    <string name="label_local_model_sha">Optional SHA-256 (for verification)</string>
+    <string name="hint_local_model_sha">SHA-256 hash</string>
+    <string name="label_use_simple_local_prompt">Use simple local prompt</string>
 
     <!-- Settings: models -->
     <string name="label_gemini_model">Gemini Model</string>
