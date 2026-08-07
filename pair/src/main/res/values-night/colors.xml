@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="plugin_primary">#5EEAD4</color>
+    <color name="plugin_on_primary">#042F2C</color>
+    <color name="plugin_primary_container">#134E48</color>
+    <color name="plugin_on_primary_container">#CCFBF1</color>
+
+    <color name="plugin_secondary">#D4D4D4</color>
+    <color name="plugin_on_secondary">#0A0A0A</color>
+    <color name="plugin_secondary_container">#262626</color>
+    <color name="plugin_on_secondary_container">#FAFAF9</color>
+
+    <color name="plugin_surface">#0A0A0A</color>
+    <color name="plugin_on_surface">#FAFAF9</color>
+    <color name="plugin_surface_variant">#171717</color>
+    <color name="plugin_on_surface_variant">#A3A3A3</color>
+    <color name="plugin_surface_dim">#000000</color>
+
+    <color name="plugin_outline">#525252</color>
+    <color name="plugin_outline_variant">#262626</color>
+
+    <color name="plugin_error">#F87171</color>
+    <color name="plugin_on_error">#7F1D1D</color>
+    <color name="plugin_error_container">#7F1D1D</color>
+    <color name="plugin_on_error_container">#FEE2E2</color>
+
+    <color name="plugin_success">#4ADE80</color>
+    <color name="plugin_success_container">#14532D</color>
+
+    <color name="plugin_text_muted">#A3A3A3</color>
+    <color name="plugin_text_subtle">#737373</color>
+
+    <color name="plugin_ripple">#1FFAFAF9</color>
+
+    <color name="peer_color_1">#5EEAD4</color>
+    <color name="peer_color_2">#FB923C</color>
+    <color name="peer_color_3">#60A5FA</color>
+    <color name="peer_color_4">#FACC15</color>
+    <color name="peer_color_5">#C084FC</color>
+</resources>
