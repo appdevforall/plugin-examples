@@ -12,11 +12,11 @@ pluginBuilder {
 
 android {
     namespace = "dev.omar.plugin.iconsrepo"
-    compileSdk = 34
+    compileSdk = 36
     defaultConfig {
         applicationId = "dev.omar.plugin.iconsrepo"
         minSdk = 26
-        targetSdk = 34
+        targetSdk = 36
         versionCode = 1
         versionName = "1.0.0"
     }

@@ -10,12 +10,12 @@ pluginBuilder {
 
 android {
     namespace = "com.itsaky.androidide.plugins.vectorsearch"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.itsaky.androidide.plugins.vectorsearch"
         minSdk = 33
-        targetSdk = 34
+        targetSdk = 36
         versionCode = 1
         versionName = "1.0.0"
     }
@@ -46,7 +46,7 @@ dependencies {
     compileOnly(files("../libs/plugin-api.jar"))
 
     // Coroutines for async operations
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
     // SQLite for embeddings storage (Android built-in, but explicit for clarity)
     implementation("androidx.sqlite:sqlite:2.4.0")
