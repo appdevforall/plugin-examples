@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Template Manager — Documentation</title>
+    <style>
+        html, body {
+            background: #ffffff;
+            color: #000000;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.55;
+            margin: 0;
+            padding: 2rem 1.5rem;
+        }
+        body {
+            max-width: 820px;
+            margin: 0 auto;
+        }
+        h1, h2, h3 {
+            color: #000000;
+            margin-top: 1.6em;
+        }
+        h1 { font-size: 1.9rem; margin-top: 0; }
+        h2 { font-size: 1.35rem; border-bottom: 1px solid #000000; padding-bottom: 0.2em; }
+        h3 { font-size: 1.1rem; }
+        p, li { color: #000000; }
+        code, pre {
+            background: #ffffff;
+            color: #000000;
+            border: 1px solid #000000;
+            border-radius: 3px;
+            font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+            font-size: 0.92em;
+        }
+        code { padding: 0.05em 0.35em; }
+        pre {
+            padding: 0.75em 1em;
+            overflow-x: auto;
+        }
+        pre code { border: none; padding: 0; }
+        ul, ol { padding-left: 1.4rem; }
+        a { color: #000000; }
+        table { border-collapse: collapse; margin: 1em 0; }
+        th, td { border: 1px solid #000000; padding: 0.35em 0.7em; text-align: left; }
+        .meta {
+            font-size: 0.9rem;
+            color: #000000;
+            margin-top: -0.4rem;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Template Manager</h1>
+<p class="meta">A Code On The Go plugin for browsing, installing, uninstalling, and deleting project/file templates (<code>.cgt</code> files) from inside the IDE.</p>
+
+<h2>Executive Overview</h2>
+<p>
+    Code On The Go ships project and file <em>templates</em> as <code>.cgt</code> archives — the
+    building blocks the <b>New Project</b> / <b>New File</b> wizard offers. Normally the only way
+    to add or remove a template is to hand-edit the IDE's template store on disk.
+    <b>Template Manager</b> replaces that with a single on-device screen: it lists every
+    template the IDE already has and every <code>.cgt</code> sitting in your Downloads folder, and
+    lets you install, uninstall, or delete them with one tap.
+</p>
+<p>
+    Install this plugin if you download community <code>.cgt</code> templates, build your own, or
+    want to prune the templates that appear in the New Project wizard — all without leaving the IDE
+    or touching a file manager.
+</p>
+
+<h2>Core Functionality</h2>
+<ul>
+    <li><b>Unified template list</b> — one card per <code>.cgt</code>, titled with the file's own
+        name and showing its version and status (a single-template file also shows its description).
+        <span>Installed</span> templates (registered with the IDE) are marked green;
+        <span>Not installed</span> templates found in Downloads are marked red.</li>
+    <li><b>Install</b> — registers a Downloads <code>.cgt</code> with the IDE and moves the file into
+        the template store, so it appears in the New Project / New File wizard.</li>
+    <li><b>Uninstall</b> — unregisters a template and restores the <code>.cgt</code> back to Downloads
+        (the Downloads copy is written <em>before</em> the store copy is removed, so a failed restore
+        never loses your only copy).</li>
+    <li><b>Delete</b> — permanently removes a <code>.cgt</code> from Downloads, after a confirmation
+        dialog.</li>
+    <li><b>Multi-template bundles</b> — a single <code>.cgt</code> can carry several templates. Such
+        cards show a &ldquo;Contains N templates&rdquo; note and open a sub-screen with one card per
+        bundled template, each with its own <b>Details</b>.</li>
+    <li><b>Details</b> — version, description, and any optional wizard parameters declared under the
+        template's <code>parameters.optional</code>.</li>
+</ul>
+
+<h2>Technical Architecture</h2>
+
+<h3>Module layout</h3>
+<pre><code>src/main/
+├── kotlin/org/appdevforall/templatemanagerplugin/
+│   ├── TemplateManagerPlugin.kt              IPlugin + UIExtension + EditorTabExtension + DocumentationExtension
+│   ├── fragments/TemplateManagerPluginFragment.kt  dashboard UI + install/uninstall/delete logic
+│   ├── adapters/CgtFileAdapter.kt            main list adapter + per-file overflow menu
+│   ├── adapters/TemplateCardAdapter.kt       per-template cards for multi-template bundles
+│   ├── parsing/CgtTemplateReader.kt          pure .cgt (zip) → template metadata reader
+│   └── models/CgtFileItem.kt                 card model + TemplateMetadata
+├── assets/docs/                              Tier 3 offline in-app help (index.html)
+├── assets/icon_day.png / icon_night.png      Plugin Manager icons
+└── AndroidManifest.xml                       plugin.* metadata</code></pre>
+<p>
+    A <code>.cgt</code> is a zip whose <code>&lt;path&gt;/template/template.json</code> entries describe
+    each bundled template. <code>CgtTemplateReader</code> parses those entries into in-memory metadata
+    (it reads entries to a <code>byte[]</code> and never extracts to disk). Directory scanning and zip
+    parsing run on a background dispatcher; results are applied on the main thread.
+</p>
+
+<h3>IDE services used</h3>
+<ul>
+    <li><code>IdeTemplateService</code> — <code>registerTemplate</code> / <code>unregisterTemplate</code> /
+        <code>reloadTemplates</code> to add and remove templates from the store.</li>
+    <li><code>IdeEnvironmentService</code> — locates the IDE home directory to find the template store.</li>
+    <li><code>IdeTooltipService</code> — shows the in-app help tooltip on a long-press.</li>
+    <li><code>IdeEditorTabService</code> — opens the plugin's main editor tab from the sidebar entry.</li>
+</ul>
+
+<h3>Permissions</h3>
+<table>
+    <tr><th>Permission</th><th>Why</th></tr>
+    <tr><td><code>filesystem.read</code></td><td>List and parse <code>.cgt</code> files in Downloads and the template store.</td></tr>
+    <tr><td><code>filesystem.write</code></td><td>Register / unregister templates and move / delete <code>.cgt</code> files.</td></tr>
+</table>
+<p>No network, system-command, or native-code permission is requested.</p>
+
+<h3>Lifecycle &amp; resource discipline</h3>
+<p>
+    Background scans run in the fragment's <code>viewLifecycleOwner.lifecycleScope</code> and are
+    cancelled when the view is destroyed or a new scan starts; the zip stream is closed via
+    <code>use { }</code>; the RecyclerView adapter and view references are cleared in
+    <code>onDestroyView()</code>. The plugin holds no static IDE references.
+</p>
+
+<h2>Usage</h2>
+<ol>
+    <li>Open <b>Template Manager</b> from the IDE's left sidebar (or its editor tab).</li>
+    <li>Place any <code>.cgt</code> you want to install in your <code>Download/</code> folder; it appears
+        as a red <em>Not installed</em> card.</li>
+    <li>Use each card's overflow (&#8942;) menu to <b>Install</b>, <b>Uninstall</b>, <b>Delete</b>, or view
+        <b>Details</b>.</li>
+    <li>Long-press any card for in-app help; the tooltip's guide button opens the full offline
+        documentation.</li>
+</ol>
+<p>Build from source with the repo-root Gradle wrapper:</p>
+<pre><code>./gradlew assemblePlugin        # release  -> build/plugin/templatemanagerplugin.cgp
+./gradlew assemblePluginDebug   # debug</code></pre>
+
+<h2>Key Benefits</h2>
+<ul>
+    <li>Manage the New Project / New File template catalog entirely on-device — no file manager, no ADB.</li>
+    <li>Safe uninstall that restores the <code>.cgt</code> to Downloads before removing the store copy.</li>
+    <li>Understand exactly what a <code>.cgt</code> contains — including multi-template bundles and their
+        optional wizard parameters — before installing it.</li>
+    <li>Minimal, filesystem-only permissions; no network access.</li>
+</ul>
+
+</body>
+</html>

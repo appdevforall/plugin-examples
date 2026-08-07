@@ -42,6 +42,14 @@
             android:name="plugin.sidebar_items"
             android:value="1" />
 
+        <!-- Plugin Manager icons (day/night). Required for debug installs. -->
+        <meta-data
+            android:name="plugin.icon_day"
+            android:value="assets/icon_day.png" />
+        <meta-data
+            android:name="plugin.icon_night"
+            android:value="assets/icon_night.png" />
+
     </application>
 
 </manifest>

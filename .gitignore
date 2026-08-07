@@ -5,6 +5,7 @@
 **/*.iml
 **/.DS_Store
 **/*.keystore
+**/*.cgp
 **/release.properties
 **/RecentProject_database*
 **/agent/

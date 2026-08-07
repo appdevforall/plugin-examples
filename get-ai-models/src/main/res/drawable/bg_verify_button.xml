@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Fixed blue button, identical in light and dark. Deliberately NOT theme-derived: a Material button
+    style resolved its background through theme attributes while android:textColor resolved as a plain
+    colour resource, and the two landed in different configurations - light text on a light background
+    in night mode and the reverse in day mode. A selector rather than a ripple foreground because
+    android:foreground on a non-FrameLayout needs API 23 and this plugin supports 21.
+-->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_pressed="true">
+        <shape android:shape="rectangle">
+            <corners android:radius="20dp" />
+            <solid android:color="@color/verify_button_background_pressed" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="20dp" />
+            <solid android:color="@color/verify_button_background" />
+        </shape>
+    </item>
+</selector>

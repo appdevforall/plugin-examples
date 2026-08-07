@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        DayNight so the plugin UI follows the IDE's light/dark setting. Colours are referenced as
+        @color/plugin_* and mirrored name-for-name in res/values-night/colors.xml; layouts must
+        never hardcode #RRGGBB, which would not flip with the theme.
+    -->
+    <style name="PluginTheme" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/plugin_primary</item>
+        <item name="colorOnPrimary">@color/plugin_on_primary</item>
+        <item name="colorPrimaryContainer">@color/plugin_primary_container</item>
+        <item name="colorOnPrimaryContainer">@color/plugin_on_primary_container</item>
+        <item name="colorSecondary">@color/plugin_secondary</item>
+        <item name="colorOnSecondary">@color/plugin_on_secondary</item>
+        <item name="colorSurface">@color/plugin_surface</item>
+        <item name="colorOnSurface">@color/plugin_on_surface</item>
+        <item name="colorOnSurfaceVariant">@color/plugin_on_surface_variant</item>
+        <item name="colorOutline">@color/plugin_outline</item>
+        <item name="colorOutlineVariant">@color/plugin_outline_variant</item>
+    </style>
+
+    <!--
+        The row's secondary actions (Verify file again, Delete file).
+
+        Parented on Widget.AppCompat.Button rather than left to the theme's buttonStyle: under a
+        Material3 theme that attribute points at MaterialButton, which ignores android:background and
+        tints itself from theme attributes - the mismatch that rendered these dark-on-dark in day mode
+        and light-on-light at night, and the reason they were plain TextViews before. Every colour is
+        set on the button itself as a fixed @drawable/@color, so nothing resolves through a theme
+        attribute, and the views stay real Buttons with the focus, click and accessibility semantics
+        a TextView had to fake.
+
+        stateListAnimator is cleared because the platform button style animates elevation, which would
+        draw a shadow around a flat pill background.
+    -->
+    <style name="PluginRowButton" parent="Widget.AppCompat.Button">
+        <item name="android:minWidth">0dp</item>
+        <item name="android:minHeight">40dp</item>
+        <item name="android:paddingStart">20dp</item>
+        <item name="android:paddingEnd">20dp</item>
+        <item name="android:paddingTop">0dp</item>
+        <item name="android:paddingBottom">0dp</item>
+        <item name="android:textSize">13sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:stateListAnimator">@null</item>
+        <item name="android:elevation">0dp</item>
+    </style>
+</resources>

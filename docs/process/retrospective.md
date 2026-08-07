@@ -1,5 +1,46 @@
 # Retrospectives
 
+## 2026-07-09 — Flutter Template plugin: review + rebuild on the CoGo template system (ADFA-3857, PR #44)
+
+### Time Breakdown
+| Started | Phase | 👤 Hands-On Time | 🤖 Agent Time | Problems |
+|---------|-------|-----------------|---------------|----------|
+| Jul 9 10:16pm | PR #43 review — `/plugin-review` on `pair`, post inline PR comments | █ 5m | ██ 12m | |
+| Jul 10 1:35am | Scope + plan — Jira triage, dev-assets/Pebble study (3 Explore agents), AskUserQuestion, approved plan | ████ 20m | ████ 22m | |
+| Jul 10 1:49am | Build — rebuild submission as headless `IdeTemplateService` installer, author 5 Pebble `.cgt` templates | ██ 12m | █████ 50m | ⚠ `pubspec name:` newline-trim bug (caught on device) |
+| Jul 10 2:30am | Icons — Flutter day/night plugin icons + 5 template thumbnails (ImageMagick) | █ 6m | ███ 25m | ⚠ Glide plugin-icon disk cache showed stale PCF icon |
+| Jul 10 2:44am | Verify + ship — device install/generate/substitute, commit, push, PR #44 | ██ 10m | ████ 22m | ⚠ LeakCanary hijacked `monkey` launch; emulator UI flakiness |
+| Jul 10 4:15am | Retro + root consolidation — shared repo-root `libs/`+wrapper, docs | █ 5m | ██ 15m | |
+
+### Metrics
+| Metric | Duration |
+|--------|----------|
+| Total wall-clock (active, excl. two long idle gaps) | ~3h |
+| Hands-on | ~1h (rough; the analyzer over-counts AskUserQuestion/plan text as typing) |
+| Automated agent time | ~2h 20m |
+| Idle/away (overnight + compaction gap) | ~16h |
+| Retro analysis time | ~10 min |
+
+### Key Observations
+- **Rebuild-not-patch was the right call, and verifying the API first avoided PR #43's failure mode.** Ali's submission wrote hardcoded Dart to `/sdcard` (broken under scoped storage) because his bundled `plugin-api.jar` lacked `IdeTemplateService`. PR #43 had just failed by calling an *unreleased* API; here I confirmed `IdeTemplateService`/`CgtTemplateBuilder` exist in the **repo-root** `libs/` before building. Trusting the root jar (not a per-plugin copy) is what made the installer approach safe.
+- **Device verification earned its keep — again.** `assemblePlugin` + `unzip -l` looked clean, but installing on the emulator and actually generating a project surfaced the `pubspec.yaml` `name:` corruption (Pebble trimmed the newline after a bare `${{APP_NAME | lower}}`, merging it into `description:`). This is the second consecutive session where build-success masked a real defect.
+- **Two IDE-side quirks cost real time:** LeakCanary intercepting the `monkey` LAUNCHER intent (opened its Leaks screen instead of the IDE), and Glide's path-keyed plugin-icon disk cache showing the stale PCF icon after reinstall. Both are now documented so they're one-line fixes next time.
+- **Explore agents front-loaded the design well.** Three parallel Explore agents (dev-assets pattern, Pebble mechanics, PCFInstaller shape) delivered the whole recipe before any code was written — the build phase had almost no false starts.
+
+### Feedback
+**What worked:** The plan-first approach (Explore agents → AskUserQuestion on the 5-variant/SDK scope → approved plan) meant the rebuild went cleanly. Device verification caught the pubspec bug.
+**What didn't:** "i feel like leak canary slowed us down" — the `monkey`-launch detour into LeakCanary's UI was avoidable. Emulator UI-automation flakiness (ANRs, empty bounds) made the final device re-verify not worth it.
+
+### Actions Taken
+| Issue | Action Type | Change |
+|-------|-------------|--------|
+| LeakCanary hijacked `monkey` app-launch | CLAUDE.md + learnings.md | Documented launching via `am start -n com.itsaky.androidide/.activities.SplashActivity` (Verification §; learnings "Android / adb") |
+| Pebble bare-tag newline-trim silently corrupts generated files | CLAUDE.md + learnings.md | Documented quoting values that must survive on their own line: `name: "${{APP_NAME \| lower}}"` (template-installer subsection; new learnings section) |
+| Glide plugin-icon disk cache shows stale icon after reinstall | learnings.md (bug already tracked) | Documented cache-clear (`adb root` + rm `image_manager_disk_cache`). Underlying CoGo bug is already filed as **ADFA-4446** (Glide load in `PluginListAdapter.kt` lacks a content signature) — no new ticket needed |
+| Per-plugin `libs/` and gradle-wrapper copies drift from repo | CLAUDE.md + code | Mandated repo-root shared `libs/` **and** a single repo-root Gradle wrapper; promoted the wrapper to root and pointed `flutter-template` at `../gradlew` / `../libs/*.jar`; deleted its local copies |
+
+**Glide icon-cache bug — already tracked as [ADFA-4446](https://appdevforall.atlassian.net/browse/ADFA-4446)** (filed 2026-06-25). Root cause: `PluginListAdapter.kt` (~line 71) loads the extracted icon `File` with Glide and no cache signature, so `ObjectKey(File)` hashes the stable path and serves the old bitmap when content changes in place. Fix on file: `.signature(ObjectKey(iconFile.lastModified()))`. No new ticket was created; my session draft turned out to duplicate it.
+
 ## 2026-07-01 — Code review (PR #31) + AI Literacy Course ordering fix (PR #36)
 
 ### Time Breakdown
@@ -78,3 +119,43 @@
 | Agent waited to be asked before running plugin-review | CLAUDE.md | Added "Proactively offer `/plugin-review`" paragraph to the "Plugin review skill" section, listing the triggering changes (new plugin import, dep change, API touch, new asset, libs/ update) |
 | Agent marked builds "verified" without device-level proof | CLAUDE.md | Added new "Verification" section before "Adding a new plugin", stating build success is necessary but never sufficient and device install is the terminal verification step |
 | Same as above, reinforcement | Memory | `feedback_plugin_verify_on_device.md` created mid-session — per-project memory layer reinforcing the CLAUDE.md rule |
+
+## 2026-07-24 - Template Manager plugin: review → fix blockers → device verify → icons/naming → PR
+
+### Time Breakdown
+| Started | Phase | 👤 Hands-On | 🤖 Agent | Problems |
+|---------|-------|-------------|----------|----------|
+| 3:28pm | Initial review (research subagent, build via symlink, security audit, rubric scorecard) | ██ 8m | ██ 11m | |
+| 3:39pm | Fix blockers + first device install (`../libs`, manifest, Tier 3, HTML docs; build; emulator install; sidebar + list verified) | ██ 10m | ████ 39m | ⚠ tooltip showed `n/a` |
+| 4:18pm | Root-cause tooltip + icons + card + permissions (`documentation.db` → 3-arg `showTooltip`; icons v1→v2 CGT; card title; reinstall; Tier 1/2/3 verified) | ██ 8m | ██ 22m | ⚠ 1 wrong hypothesis; icons redone once |
+| 4:40pm | Naming normalization + "Template Manager" rename (reinstall + verify) | █ 3m | █ 12m | |
+| 4:52pm | Commit + push + PR #51 | █ 1m | █ 5m | |
+
+### Metrics
+| Metric | Duration |
+|--------|----------|
+| Total wall-clock | ~1h 32m |
+| Hands-on | ~30m (33%) |
+| Automated agent time | ~62m (67%) |
+| Idle/testing/away | minimal |
+| Retro analysis time | ~2 min |
+
+_Note: the transcript script reported 108 min "hands-on" but over-counted — it billed two skill injections (plugin-review SKILL text; commit-push-pr context) as user typing (~54 min phantom). Real hands-on ≈ 30 min, mostly reading review reports._
+
+### Key Observations
+- **Device verification, not the build, found the defect.** Build green + manifest correct, yet the tooltip rendered `n/a` — a bug the original code also had. Only a device long-press exposed it. Strongest evidence yet for "build success ≠ verification."
+- **First tooltip fix hypothesis was wrong.** Changing `getTooltipCategory` alone didn't work; the fix came from inspecting `documentation.db` (entry was registered; the 2-arg `showTooltip` lookup was at fault). Lesson: go to ground truth sooner instead of reasoning from sibling-plugin comparison.
+- **Icons rendered twice** (stacked-cards → "meh" → CGT-file). Partly driven by the later CGT requirement; a quick direction sketch before a full render could have saved a pass.
+- **~20 turns of autonomous device driving** (install/uninstall/reinstall/DB queries/tooltip tests) with no input needed. High productive-to-rework ratio.
+- **Platform reinstall cost is inherent** (release signature mismatch forces uninstall→restart→clear-cache→reinstall→restart); batching changes to minimize cycles was correct.
+
+### Feedback
+**What worked:** (from user) The tooltip issue should never recur — asked to codify the foundational wiring so it's right the first time.
+**What didn't:** Getting the tooltip wiring right required a device round-trip and one wrong hypothesis; it's deterministic tech that shouldn't have been ambiguous.
+
+### Actions Taken
+| Issue | Action Type | Change |
+|---|---|---|
+| Tooltip wiring got `n/a` and cost a device round-trip; it's foundational and deterministic | CLAUDE.md | Added "### In-app help wiring (tooltips + Tier 3, `DocumentationExtension`)" under Architecture — the exact recipe: category = `plugin_<pluginId>`, always 3-arg `showTooltip(anchorView, category, tag)`, tooltipTag rules, Tier 3 setup, and the `documentation.db` debug query |
+| `/plugin-review` couldn't statically catch the 2-arg `showTooltip` / wrong-category trap | Skill (RUBRIC.md 6.7) | Added two Fail-level checks: category must be exactly `plugin_<pluginId>`, and manual `showTooltip` must use the 3-arg category overload (bare 2-arg → `n/a`) |
+| Tooltip + icon-cache gotchas would otherwise be re-learned | Docs (learnings.md) | Added the tooltip `n/a` root-cause + debug query and the Glide icon-cache invalidation note to "Plugin build & install gotchas" |

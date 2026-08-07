@@ -63,6 +63,7 @@ import org.appdevforall.codeonthego.layouteditor.managers.IdManager.removeId
 import org.appdevforall.codeonthego.layouteditor.managers.PreferencesManager
 import org.appdevforall.codeonthego.layouteditor.managers.UndoRedoManager
 import org.appdevforall.codeonthego.layouteditor.tools.XmlLayoutGenerator
+import org.appdevforall.codeonthego.layouteditor.tools.ValidationResult
 import org.appdevforall.codeonthego.layouteditor.tools.XmlLayoutParser
 import org.appdevforall.codeonthego.layouteditor.utils.ArgumentUtil.parseType
 import org.appdevforall.codeonthego.layouteditor.utils.Constants
@@ -484,9 +485,9 @@ class DesignEditor : LinearLayout {
 
 	private fun sanitizeIdName(base: String): String = widgetIdOverrides[base] ?: base
 
-	fun loadLayoutFromParser(xml: String, basePath: String? = null) {
+	fun loadLayoutFromParser(xml: String, basePath: String? = null): ValidationResult {
 		clearAll()
-		if (xml.isEmpty()) return
+		if (xml.isEmpty()) return ValidationResult.Success
 
 		// Store basePath for undo/redo operations
 		if (basePath != null) {
@@ -496,9 +497,14 @@ class DesignEditor : LinearLayout {
 		val parser = XmlLayoutParser(context, currentBasePath)
 		this.parser = parser
 
-		parser.processXml(xml, context)
+		val result = parser.processXml(xml, context)
 
-		val root = parser.root ?: return
+		val root = parser.root
+			?: return if (result is ValidationResult.Error) {
+				result
+			} else {
+				ValidationResult.Error(listOf(context.getString(R.string.xml_error_no_root_view)))
+			}
 		addView(root)
 		viewAttributeMap = parser.viewAttributeMap
 
@@ -519,6 +525,8 @@ class DesignEditor : LinearLayout {
 		toggleStrokeWidgets()
 
 		initAttributeInitializer()
+
+		return result
 	}
 
 	private fun ensureConstraintsApplied() {

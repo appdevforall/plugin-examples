@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="plugin_primary">#006C4C</color>
+    <color name="plugin_on_primary">#FFFFFF</color>
+    <color name="plugin_primary_container">#89F8C7</color>
+    <color name="plugin_on_primary_container">#002114</color>
+    <color name="plugin_secondary">#4D6357</color>
+    <color name="plugin_on_secondary">#FFFFFF</color>
+    <color name="plugin_surface">#FBFDF9</color>
+    <color name="plugin_on_surface">#191C1A</color>
+    <color name="plugin_on_surface_variant">#404943</color>
+    <color name="plugin_outline">#707973</color>
+    <color name="plugin_outline_variant">#BFC9C1</color>
+    <color name="status_text">@color/plugin_on_surface</color>
+    <color name="status_background">#E7EAE4</color>
+    <color name="status_success_text">@color/plugin_primary</color>
+    <color name="status_success_background">@color/plugin_primary_container</color>
+    <color name="status_error_text">#BA1A1A</color>
+    <color name="status_error_background">#FFDAD6</color>
+</resources>

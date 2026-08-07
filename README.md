@@ -22,6 +22,14 @@ See the official [plugin documentation](https://www.appdevforall.org/codeonthego
 | [`compose-preview/`](compose-preview/)             | Renders Jetpack Compose `@Preview` functions on-device — no full app build or run. |
 | [`ai-literacy-course/`](ai-literacy-course/)       | Bundles Learn AI Anywhere's offline "Introduction to AI" course (26 videos + interactive activities) and plays it full-screen, fully offline. |
 | [`layout-editor/`](layout-editor/)                 | Visual drag-and-drop editor for Android XML layouts. |
+| [`ai-core/`](ai-core/)                             | Shared on-device LLM inference backend (bundled llama.cpp AAR) plus a Gemini API backend, exposed to other plugins as a runtime service. |
+| [`ai-assistant/`](ai-assistant/)                   | In-IDE AI chat assistant with tool calling; talks to `ai-core` for inference over local or Gemini models. |
+| [`flutter-template/`](flutter-template/)           | Adds Flutter starter project templates (Basic, BLoC, Provider, GetX, Riverpod) to the New Project screen. |
+| [`code-suggestions-plugin/`](code-suggestions-plugin/) | Inline ghost-text code completions powered by AI. |
+| [`speech-to-text-plugin/`](speech-to-text-plugin/) | Voice-to-code: converts speech to code with AI generation. |
+| [`vector-search-plugin/`](vector-search-plugin/) | Semantic code search using embeddings and vector similarity. |
+| [`get-ai-models/`](get-ai-models/)                 | Bottom-drawer catalog of curated, fully-open GGUF model files; downloads one to `/sdcard/Download` and verifies its SHA-256. |
+| [`project-to-template/`](project-to-template/)     | Converts the open Android project into a Code On The Go (.cgt) template and installs it into the IDE's New Project picker. |
 | [`pair/`](pair/)                                   | Real-time pair programming across two devices on the same WiFi — host or join a session and sync edits and cursor presence live over the local network. |
 
 ## Building a plugin
@@ -34,6 +42,24 @@ cd Beepy
 ```
 
 The resulting `.cgp` file lands under the plugin's `build/plugin/` directory. Install it from inside CodeOnTheGo via the Plugin Manager.
+
+## Git hooks
+
+This repo ships a `pre-push` nudge in `.githooks/` that reminds you to run the
+plugin-review skill (`/plugin-review` in Claude Code) whenever you're pushing
+changes to a plugin folder. Running the skill before opening a PR keeps peer
+review focused on substance instead of issues the skill catches automatically
+(resource leaks, missing manifest entries, missing in-IDE help).
+
+Git honors only a single `core.hooksPath`, so the committed hook does nothing
+until you enable it once after cloning:
+
+```sh
+./scripts/setup-hooks.sh   # runs: git config core.hooksPath .githooks
+```
+
+The hook is a **reminder only** — it never blocks a push, and it stays quiet
+when your push doesn't touch any plugin folder.
 
 ## The `libs/` folder
 

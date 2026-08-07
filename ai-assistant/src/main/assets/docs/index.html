@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Assistant — Guide</title>
+<style>
+  body {
+    background: #ffffff;
+    color: #000000;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+    margin: 0;
+    padding: 1.25rem;
+    max-width: 760px;
+  }
+  h1 { font-size: 1.5rem; margin: 0 0 0.75rem; }
+  h2 { font-size: 1.15rem; margin: 1.5rem 0 0.5rem; }
+  code {
+    background: #f4f4f4;
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.9em;
+  }
+  ul { padding-left: 1.25rem; }
+  li { margin: 0.25rem 0; }
+  .note {
+    border-left: 3px solid #999;
+    padding: 0.25rem 0.75rem;
+    margin: 1rem 0;
+    background: #fafafa;
+  }
+</style>
+</head>
+<body>
+  <h1>AI Assistant — Agent Guide</h1>
+
+  <p>The <b>Agent</b> tab is a chat assistant that can read, search, and edit
+  your project through an approval-gated tool loop. Inference is served by the
+  companion <b>AI Core</b> plugin, so install <b>AI Core first</b>.</p>
+
+  <h2>Choosing a backend</h2>
+  <ul>
+    <li><b>Local (on-device)</b> — runs a <code>.gguf</code> model via
+      llama.cpp. Open <b>Settings</b>, pick a model file from your Downloads
+      folder. Nothing leaves the device.</li>
+    <li><b>Gemini (cloud)</b> — enter a Gemini API key in <b>Settings</b>; see
+      <i>Getting a Gemini API key</i> below. Prompts and any file contents the
+      agent reads are sent to Google over HTTPS.</li>
+  </ul>
+
+  <h2>What the agent can do</h2>
+  <ul>
+    <li>Read and search files <b>within the current project</b>.</li>
+    <li>Create and update files (asks for approval before writing).</li>
+    <li>Edit part of a file — the agent proposes a find/replace change, and the
+      approval dialog shows you the exact before/after before anything is
+      written. You can <b>Accept</b> it, <b>Decline</b> it, or choose
+      <b>Correct</b> to tell the agent what to change and let it try again.
+      When the file is open in the editor, the change is applied to the buffer,
+      so <b>Ctrl+Z undoes it</b> and your unsaved work is preserved.</li>
+    <li>Trigger a Gradle sync and read build output.</li>
+    <li>Add dependencies and generate code from templates.</li>
+  </ul>
+
+  <div class="note">
+    File tools are confined to the project root: paths that resolve outside it
+    are rejected, so the model cannot read or overwrite arbitrary files on the
+    device.
+  </div>
+
+  <h2>Attaching context files</h2>
+  <ul>
+    <li>Tap the <b>attach</b> button beside the prompt to pick files whose
+      contents are sent with your next message.</li>
+    <li>The picker is rooted at the project you have open and cannot browse
+      above it. With no project open it declines to open at all.</li>
+    <li><b>Toggle All</b> selects every file in the folder you are viewing;
+      <b>Add Selected</b> attaches them as chips above the prompt.</li>
+    <li>On the Gemini backend, attached file contents leave the device.</li>
+  </ul>
+
+  <h2>Getting a Gemini API key</h2>
+  <p>You do <b>not</b> need the Google Cloud console. Keys are created at
+  <b>aistudio.google.com/apikey</b>, and Google AI Studio sets up the underlying
+  Cloud project for you the first time you accept its terms.</p>
+  <ol>
+    <li>In <b>Settings</b> with the <b>Gemini</b> backend selected, tap
+      <b>Get API Key</b>. Your normal browser opens at AI Studio.</li>
+    <li>Sign in with your Google account <i>in the browser</i> and tap
+      <b>Create API key</b>. This plugin never sees your Google password.</li>
+    <li>Copy the key Google shows you, return to the IDE and paste it into the
+      <b>Gemini API Key</b> field (long-press the field, then <i>Paste</i>).</li>
+    <li>Tap <b>Save Key</b>. The key is checked with Google immediately.</li>
+  </ol>
+  <p>What <b>Save</b> reports:</p>
+  <ul>
+    <li><b>Verified — your API key works</b> — Google accepted the key and it has
+      been stored.</li>
+    <li><b>Key accepted, Google is rate-limiting</b> — the key is valid and stored;
+      the quota is busy right now, not the credential.</li>
+    <li><b>Invalid API key</b> — Google refused it, so <b>nothing is saved</b>.
+      Check what you pasted and try again. Keys are long, single-line, and contain
+      no spaces.</li>
+    <li><b>Couldn't reach Google</b> / <b>Couldn't check this key</b> — the check
+      itself failed (no network, or the AI Core plugin is disabled or out of
+      date), so you are
+      asked whether to keep the key anyway. Kept this way it is stored but not
+      confirmed, and the status line says so.</li>
+  </ul>
+  <p>If no browser is installed, the AI Studio link is copied to the clipboard so
+  you can open it on another device and type the key in by hand.</p>
+
+  <div class="note">
+    AI Studio isn't available in every country. If you can't create a key, the
+    <b>Local</b> backend needs no account at all — pick a <code>.gguf</code> chat
+    model and everything runs on the device.
+  </div>
+
+  <h2>Free tier and your data</h2>
+  <p>Gemini has a free tier that is enough to use this plugin. Be aware that on
+  the <b>free</b> tier Google may use prompts and responses to improve its
+  products; the paid tier does not. Because the agent sends your prompts, project
+  context and the contents of files it reads, that applies to your code too. This
+  has always been true of the Gemini backend — it is written down here so it isn't
+  a surprise. The <b>Local</b> backend sends nothing anywhere.</p>
+
+  <h2>Your Gemini API key</h2>
+  <p>The key is encrypted with AES/GCM under a hardware-backed Android Keystore
+  secret, and only the ciphertext is written to the plugin's private storage —
+  a copied preferences file is useless without this device's Keystore. Clear it
+  any time from <b>Settings</b>. If the Keystore entry is ever lost — clearing the
+  app's data, for example — the stored key can no longer be read and will need to
+  be entered again; tapping <b>Edit</b> tells you when that has happened.</p>
+
+  <h2>Reading the conversation</h2>
+  <ul>
+    <li><b>Retry</b> appears on a message whose reply failed, and re-sends the
+      same prompt with the same attached files rather than adding a new one.</li>
+    <li><b>Open AI Settings</b> appears instead when the agent has not been
+      configured yet — no local model chosen, or no Gemini key saved.</li>
+    <li><b>System log</b> rows are collapsed records of the agent's internal
+      steps: tools run, files touched, backend errors. Tap the header to expand
+      one. They are saved with the session but are not sent to the model.</li>
+    <li>Long-press a message to copy its text, or to edit and re-send one of
+      your own.</li>
+  </ul>
+
+  <h2>Troubleshooting</h2>
+  <ul>
+    <li><b>"No model configured"</b> — select a <code>.gguf</code> file (Local)
+      or set an API key (Gemini) in Settings.</li>
+    <li><b>Gemini errors</b> — check the API key, network connection, and quota.
+      Re-tapping <b>Save</b> on the key re-runs the live check and tells you which
+      of the three it is.</li>
+    <li><b>"Invalid API key"</b> — the key was not stored. Make sure you copied
+      the key itself from AI Studio and not the page's URL.</li>
+    <li><b>Agent tab missing</b> — confirm both AI Core and AI Assistant are
+      installed and the IDE was restarted.</li>
+  </ul>
+</body>
+</html>

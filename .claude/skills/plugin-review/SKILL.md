@@ -1,6 +1,6 @@
 ---
 name: cogo-plugin-review
-description: Review a Code on the Go (CoGo or cotg) plugin project for submission readiness — verify the assemblePlugin build, audit actual security risks, and score the code against the submission rubric (compatibility, resource discipline, build reproducibility, native binaries, reflection ban, html documentation, tooltips and in-app help, manifest completeness). Use when the user asks to review, audit, or check a Code On The Go plugin repo.
+description: Review a Code on the Go (CoGo or cotg) plugin project for submission readiness — verify the assemblePlugin build, audit actual security risks, and score the code against the submission rubric (compatibility, resource discipline, build reproducibility, native binaries, reflection ban, html documentation, tooltips and in-app help, manifest completeness, icons and imagery). Use when the user asks to review, audit, or check a Code On The Go plugin repo.
 metadata:
   author: Hal Eisen
   keywords:
@@ -97,7 +97,7 @@ Search the source tree:
 - May have other sections. If other sections are present, ensure they are relevant and correct
 - Must have a white background and body text must be black.
 - Must be written in English
-- Must be at the top-level of the plugin. Must have the same name as the plugin with the .html extension
+- Must be at the top-level of the plugin folder, named after the **plugin folder** (kebab-case) with a `.html` extension: `template-manager/` → `template-manager.html`. The short folder-name form is preferred; a `-documentation` suffix (`random-xkcd-documentation.html`) is also acceptable. Do **not** name it after the lowercase `pluginBuilder { pluginName }` when that differs from the folder (i.e. not `templatemanagerplugin.html`).
 
 #### 6.7 Tooltips and in-app help
 Code On The Go has a three-tier in-IDE help model: Tier 1 (brief) and Tier 2 (more detail) are tooltips; Tier 3 is a full offline web page reached from a button on the tooltip. Plugins participate through `DocumentationExtension` (all symbols verifiable in `plugin-api.jar`). This is separate from the 6.6 install-decision page — grade them independently.
@@ -116,6 +116,14 @@ Code On The Go has a three-tier in-IDE help model: Tier 1 (brief) and Tier 2 (mo
 - **IDE version range**: both `plugin.min_ide_version` and `plugin.max_ide_version` present.
 - **minSdk**: either `<uses-sdk>` in the source manifest or `minSdk =` in `build.gradle.kts` (AGP merges the latter into the final manifest, which is conventional and acceptable).
 
+#### 6.8 Plugin icons and imagery
+The Plugin Manager shows a day/night icon per plugin; template-installer plugins also show a per-variant thumbnail on the New Project screen. Symbols verifiable in `plugin-api.jar` (`PluginMetadata.iconDayPath`/`iconNightPath`, `templates.CgtTemplateBuilder.thumbnailFromAssets`).
+
+- **Icon meta-data present**: `grep -n 'plugin.icon_day\|plugin.icon_night' src/main/AndroidManifest.xml`. Both keys must be `<meta-data>` on `<application>`. Missing either → **Fail** for debug installs (release builds skip the icon check, so a release-only submission with no icon is at most **Partial** — note it either way). A single `plugin.icon` or reliance on `android:icon`/`res/drawable/ic_plugin.xml` does **not** satisfy this — the Plugin Manager reads the zip path from `plugin.icon_day`/`_night`.
+- **Icon path resolves to a real image**: each `android:value` must be an in-`.cgp` path (`assets/<name>.png`). Confirm the file exists at `src/main/assets/<name>.png` (the `assets/` prefix maps to `src/main/assets/`). Run `file src/main/assets/icon_day.png` (and `_night`) — a value pointing at a nonexistent path, or a "PNG" that is actually a Git LFS pointer / non-PNG, → **Fail**. Conventional size ~192×192 (96–256 seen); flag tiny (e.g. 24×24) or clearly-broken images as **Partial**.
+- **Template variant thumbnails** (only for template-installer plugins — those calling `IdeTemplateService`/`CgtTemplateBuilder`): for each variant registered via `thumbnailFromAssets("…/thumb.png", context)`, confirm the referenced `thumb.png` exists under `src/main/assets/templates/<Variant>/…`. A missing `thumb.png` for a registered variant → **Fail**. Then check the thumbnails are **distinct**, not identical placeholders — `md5sum src/main/assets/templates/*/template/thumb.png | sort` (adjust the glob to the real layout); two or more variants sharing one byte-identical `thumb.png` → **Fail** (this is the exact defect fixed in commit `0363237`). Conventional size 512×512 PNG. Non-template plugins: **N/A**, say so.
+- On-device re-verification caveat: the Plugin Manager caches icons via Glide keyed by path without mtime invalidation, so an updated icon under the same plugin id won't visibly refresh until the Glide disk cache is cleared or you install on a clean device (see CLAUDE.md).
+
 ### Phase 4 — Compose the report
 
 One combined report, three sections:
@@ -133,6 +141,7 @@ One combined report, three sections:
    | 6.5 No reflection | … | … |
    | 6.6 Html documentation | … | … |
    | 6.7 Tooltips & in-app help | … | … |
+   | 6.8 Icons & imagery | … | … |
    | Manifest declarations | … | … |
 
 End with **Overall verdict**: green-light / conditional (list blockers) / block. A Fail on any clause is a blocker; a Partial is conditional.

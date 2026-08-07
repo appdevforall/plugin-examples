@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Speech to Text — Guide</title>
+<style>
+  body {
+    background: #ffffff;
+    color: #000000;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+    margin: 0;
+    padding: 1.25rem;
+    max-width: 760px;
+  }
+  h1 { font-size: 1.5rem; margin: 0 0 0.75rem; }
+  h2 { font-size: 1.15rem; margin: 1.5rem 0 0.5rem; }
+  code {
+    background: #f4f4f4;
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.9em;
+  }
+  ul { padding-left: 1.25rem; }
+  li { margin: 0.25rem 0; }
+  .note {
+    border-left: 3px solid #999;
+    padding: 0.25rem 0.75rem;
+    margin: 1rem 0;
+    background: #fafafa;
+  }
+</style>
+</head>
+<body>
+  <h1>Speech to Text — Voice to Code</h1>
+
+  <p><b>Speech to Text</b> adds a <b>Voice to Code</b> button to the editor
+  toolbar (the microphone icon). Tap it, speak, and the recognized text — or
+  code generated from it — is inserted at the cursor.</p>
+
+  <h2>Using it</h2>
+  <ul>
+    <li>Open a file in the editor (the button is disabled when nothing is open).</li>
+    <li>Tap the <b>microphone</b>. On first use, grant the microphone permission
+      and tap again.</li>
+    <li>Speak your request. The icon shows the state: mic (idle) → waves
+      (recording) → spinner (processing).</li>
+    <li>If <b>AI Core</b> is installed, the transcript is turned into code by the
+      model; otherwise the raw transcript is inserted.</li>
+  </ul>
+
+  <h2>On-device vs. cloud recognition</h2>
+  <p>The plugin prefers Android's <b>on-device</b> speech recognition. If the
+  device lacks an offline recognizer, Android may fall back to its network
+  recognition service.</p>
+
+  <h2>Privacy</h2>
+  <div class="note">
+    Speech recognition is handled by Android's recognizer (on-device when
+    available). When AI Core is used to generate code, the transcript is sent to
+    the configured backend — on-device for <b>Local</b>, or to Google over HTTPS
+    for <b>Gemini</b>. Audio is captured only while recording and is not stored
+    by the plugin.
+  </div>
+
+  <h2>Troubleshooting</h2>
+  <ul>
+    <li><b>Button greyed out</b> — open a file first; voice input inserts at the
+      editor cursor.</li>
+    <li><b>"Speech recognition is not available"</b> — the device has no speech
+      recognizer; install/enable Google's speech services.</li>
+    <li><b>Permission prompt didn't appear</b> — grant Microphone under
+      Settings → Apps → CodeOnTheGo → Permissions, then tap again.</li>
+  </ul>
+</body>
+</html>

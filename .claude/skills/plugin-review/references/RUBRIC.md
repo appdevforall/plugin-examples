@@ -38,13 +38,21 @@ Help must be available *inside* the running IDE, not only in the standalone 6.6 
 
 Requirements:
 
-- The plugin implements `DocumentationExtension` and returns its `plugin_<pluginId>` category from `getTooltipCategory()`.
+- The plugin implements `DocumentationExtension` and returns **exactly** `"plugin_<pluginId>"` (the full `plugin.id`) from `getTooltipCategory()`. Any other value (short slug, dotless/underscore form) registers entries under a category the lookup never queries, so tooltips render the literal `n/a` at runtime — **Fail**.
+- **Manual `showTooltip` calls must pass the category.** If the plugin shows a tooltip on a custom view via `IdeTooltipService`, it must use the 3-arg `showTooltip(anchorView, category, tag)` with `category = "plugin_<pluginId>"`. A bare 2-arg `showTooltip(view, tag)` resolves under the wrong default category and renders `n/a` even though the entry is registered correctly — **Fail** (the entry exists but never displays; only device long-press reveals it). See the CLAUDE.md "In-app help wiring" recipe.
 - **Every UI element the plugin contributes has a tooltip.** Each `NavigationItem`, `MenuItem`, `TabItem`, FAB/toolbar action, and `EditorTabItem` carries a `tooltipTag` (or `tooltip` for `EditorTabItem`); any custom `View` the plugin shows is wired to the tooltip system. No contributed element may be left without help.
 - Every `tooltipTag` resolves to a `PluginTooltipEntry` returned from `getTooltipEntries()` — no dangling tags. Each entry provides a Tier 1 `summary` and a Tier 2 `detail`.
 - **Complete help is available within the app.** The plugin ships a Tier 3 bundle via `getTier3DocsAssetPath()` that comprehensively covers its functionality, and tooltips link to it through `PluginTooltipButton`s. Tier 3 must work offline (served locally); it is not a link out to the public internet.
 - Tooltip and Tier 3 content is in English and readable (light background, dark body text), consistent with 6.6.
 
 This is distinct from 6.6: 6.6 is the install-decision page that ships at the plugin's top level; 6.7 is the in-IDE tooltip + Tier 3 help wired through `DocumentationExtension`. A plugin can pass 6.6 and still fail 6.7.
+
+## 6.8 Plugin icons and imagery
+
+The Plugin Manager renders a day/night icon pair for every plugin, and template-installer plugins additionally render a thumbnail for each template variant on the New Project screen. Both must be present and correct.
+
+- **Plugin icon (day/night pair).** The manifest declares `plugin.icon_day` and `plugin.icon_night` as `<meta-data>` on `<application>`, each `android:value` pointing at an in-`.cgp` path (`assets/<name>.png`). Both variants are required — the IDE picks the light or dark icon per theme, and debug installs enforce the icon (release builds skip the check). The images are real PNGs (not res-drawables, not `android:icon`, not Git LFS stubs), conventionally ~192×192.
+- **Template variant thumbnails.** Every template variant a plugin registers via `CgtTemplateBuilder.thumbnailFromAssets(...)` supplies a real, distinct `thumb.png` (512×512 PNG) at the referenced asset path. Identical placeholder thumbnails shared across variants, or a missing `thumb.png` for a registered variant, is a defect — each variant must be visually distinguishable on the New Project screen.
 
 ## Manifest
 
