@@ -1,8 +1,8 @@
 name: Check toolchain
 
 # Fails a pull request that drifts off the standard plugin toolchain
-# (compileSdk/targetSdk 36, AGP 8.11.0, Kotlin 2.3.0, Gradle 8.14.3-bin,
-# Java 17) — see ADFA-4907.
+# (ADFA-4907). The standard itself lives in scripts/check-toolchain.sh — it is
+# deliberately not restated here, so there is only one copy of the numbers.
 #
 # This is the only workflow here that runs automatically on pull requests.
 # "Build plugin artifacts" and "Update libs from CodeOnTheGo" are both
