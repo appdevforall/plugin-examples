@@ -27,11 +27,15 @@
 
         <meta-data
             android:name="plugin.min_ide_version"
-            android:value="1.0.0" />
+            android:value="26.32" />
+
+        <meta-data
+            android:name="plugin.max_ide_version"
+            android:value="26.32" />
 
         <meta-data
             android:name="plugin.permissions"
-            android:value="filesystem.read,filesystem.write,network.access,native.code" />
+            android:value="filesystem.read,filesystem.write,network.access" />
 
         <meta-data
             android:name="plugin.main_class"
@@ -39,6 +43,10 @@
 
         <meta-data
             android:name="plugin.sidebar_items"
+            android:value="1" />
+
+        <meta-data
+            android:name="plugin.editor_tabs"
             android:value="1" />
 
         <meta-data
