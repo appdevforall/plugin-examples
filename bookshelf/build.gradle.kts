@@ -46,7 +46,7 @@ dependencies {
     compileOnly(files("../libs/gradle-plugin.jar"))
     compileOnly(files("../libs/plugin-api.jar"))
 
-    implementation("org.jetbrains.kotlin:kotlin-stdlib:2.1.21")
+    implementation("org.jetbrains.kotlin:kotlin-stdlib:2.3.0")
 }
 
 tasks.matching {

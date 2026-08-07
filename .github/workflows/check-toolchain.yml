@@ -1,0 +1,46 @@
+name: Check toolchain
+
+# Fails a pull request that drifts off the standard plugin toolchain
+# (compileSdk/targetSdk 36, AGP 8.11.0, Kotlin 2.3.0, Gradle 8.14.3-bin,
+# Java 17) — see ADFA-4907.
+#
+# This is the only workflow here that runs automatically on pull requests.
+# "Build plugin artifacts" and "Update libs from CodeOnTheGo" are both
+# workflow_dispatch-only, which is why toolchain drift previously reached
+# main with no CI signal at all.
+#
+# It is pure text inspection — no JDK, no Gradle, no network — so it costs a
+# few seconds and is safe to make a required check.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check-toolchain:
+    name: Toolchain versions
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check toolchain versions
+        run: ./scripts/check-toolchain.sh
+
+      - name: Report declared versions
+        # Runs even when the check above fails, so the run summary shows what
+        # every module actually declares next to the failure list.
+        if: always()
+        run: |
+          {
+            echo '### Declared toolchain versions'
+            echo
+            echo '```'
+            ./scripts/check-toolchain.sh --list
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

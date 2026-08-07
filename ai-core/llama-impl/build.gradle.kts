@@ -11,7 +11,7 @@ kotlin {
 
 android {
 	namespace = "android.llama.cpp"
-	compileSdk = 34
+	compileSdk = 36
 
 	defaultConfig {
 		minSdk = 33
