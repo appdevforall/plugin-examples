@@ -66,6 +66,10 @@ class AiAssistantPlugin : IPlugin, UIExtension, DocumentationExtension, Settings
         const val TOOLTIP_TAG_SETTINGS_GEMINI_MODEL = "ai_settings_gemini_model"
         const val TOOLTIP_TAG_SETTINGS_GET_KEY = "ai_settings_get_free_key"
 
+        // Tags for the memory pre-flight warning (see MemoryWarningDialogFragment).
+        const val TOOLTIP_TAG_MEMORY_PROCEED = "agent_memory_warning_proceed"
+        const val TOOLTIP_TAG_MEMORY_CANCEL = "agent_memory_warning_cancel"
+
         @Volatile
         private var pluginContext: PluginContext? = null
 
@@ -457,6 +461,39 @@ class AiAssistantPlugin : IPlugin, UIExtension, DocumentationExtension, Settings
                 models can't generate replies. Larger models are slower and use
                 more memory; the file is copied into the app's private storage on
                 first use.</p>
+                <p>The model is measured against this device's free memory before it
+                is accepted. If it looks too large you get the figures and a choice
+                to cancel or continue.</p>
+            """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(description = "AI Assistant guide", uri = "index.html", order = 0)
+            )
+        ),
+        PluginTooltipEntry(
+            tag = TOOLTIP_TAG_MEMORY_PROCEED,
+            summary = "Load this model anyway, accepting that it may fail or slow the device.",
+            detail = """
+                <p>The model's weights plus its working memory look larger than the
+                RAM free right now. Weights are memory-mapped, so a load can still
+                succeed by paging — which is why the outcome is a risk rather than a
+                certainty: it may work, fail quickly, or stall for minutes first.</p>
+                <p>Use this when you know the numbers are wrong for your situation,
+                for example because you are about to close other apps.</p>
+            """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(description = "AI Assistant guide", uri = "index.html", order = 0)
+            )
+        ),
+        PluginTooltipEntry(
+            tag = TOOLTIP_TAG_MEMORY_CANCEL,
+            summary = "Abandon this model; the previously selected one is left untouched.",
+            detail = """
+                <p>Nothing is saved and nothing is loaded, so the model you had
+                selected before stays in use. This is the safe choice, and also what
+                happens if you dismiss the warning with Back.</p>
+                <p>To fit a large model, close other apps and pick it again, or
+                choose a smaller or more heavily quantized build — a Q4_K_M
+                quantization of a 1–3B model is the most likely to run.</p>
             """.trimIndent(),
             buttons = listOf(
                 PluginTooltipButton(description = "AI Assistant guide", uri = "index.html", order = 0)

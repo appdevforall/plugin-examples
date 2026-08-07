@@ -17,8 +17,10 @@ import android.widget.*
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.DrawableRes
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aiassistant.AiAssistantPlugin
@@ -31,6 +33,7 @@ import com.itsaky.androidide.plugins.aiassistant.viewmodel.AiBackend
 import com.itsaky.androidide.plugins.aiassistant.viewmodel.AiSettingsViewModel
 import com.itsaky.androidide.plugins.aiassistant.viewmodel.EngineState
 import com.itsaky.androidide.plugins.aiassistant.viewmodel.ModelLoadingState
+import com.itsaky.androidide.plugins.aiassistant.viewmodel.ModelMemoryWarning
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -42,7 +45,7 @@ import kotlin.math.roundToInt
  * chat's own shortcuts. The host mounts it full-screen in PluginScreenActivity, which provides no
  * toolbar, so this fragment brings its own app bar and closes by finishing that activity.
  */
-class AiSettingsFragment : Fragment() {
+class AiSettingsFragment : Fragment(), MemoryWarningDialogFragment.Host {
 
     private lateinit var viewModel: AiSettingsViewModel
     private lateinit var settingsToolbar: LinearLayout
@@ -130,6 +133,57 @@ class AiSettingsFragment : Fragment() {
         initializeViews(view)
         setupToolbar()
         setupBackendSelector()
+        observeMemoryWarnings()
+    }
+
+    /**
+     * Puts a "this model may not fit" question to the user. Collected under STARTED so the dialog is
+     * never shown to a stopped fragment; the event waits in the ViewModel until then.
+     */
+    private fun observeMemoryWarnings() {
+        dropStaleMemoryWarning()
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.modelMemoryWarnings.collect(::showMemoryWarning)
+            }
+        }
+    }
+
+    /**
+     * Dismiss a warning dialog the framework restored around a question that no longer exists.
+     * After process death the load that raised it is gone, so every button on it would be a silent
+     * no-op — better to take it away than to leave the user pressing a dialog that decides nothing.
+     */
+    private fun dropStaleMemoryWarning() {
+        if (viewModel.hasPendingMemoryWarning) return
+        val restored = childFragmentManager.findFragmentByTag(MemoryWarningDialogFragment.TAG)
+        (restored as? MemoryWarningDialogFragment)?.dismissAllowingStateLoss()
+    }
+
+    /**
+     * Shown as a child fragment, so it survives rotation and can still reach this host. Must stay
+     * idempotent: an unanswered question is re-published to every new collector by
+     * [com.itsaky.androidide.plugins.aiassistant.viewmodel.UserConfirmation].
+     *
+     * @param warning the model and the figures to put to the user
+     */
+    private fun showMemoryWarning(warning: ModelMemoryWarning) {
+        if (childFragmentManager.findFragmentByTag(MemoryWarningDialogFragment.TAG) != null) return
+        MemoryWarningDialogFragment.newInstance(warning)
+            .show(childFragmentManager, MemoryWarningDialogFragment.TAG)
+    }
+
+    override fun onModelMemoryDecision(proceed: Boolean) {
+        viewModel.onMemoryWarningDecision(proceed)
+        // Not requireContext(): onCancel can reach us as the fragment is going away.
+        val ctx = context ?: return
+        if (!proceed) {
+            Toast.makeText(
+                ctx,
+                getString(R.string.llm_memory_warning_declined),
+                Toast.LENGTH_LONG,
+            ).show()
+        }
     }
 
     override fun onResume() {

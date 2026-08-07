@@ -10,12 +10,22 @@ import com.itsaky.androidide.plugins.aiassistant.gemini.GeminiCatalogGateway
 import com.itsaky.androidide.plugins.aiassistant.gemini.KeyVerification
 import com.itsaky.androidide.plugins.aiassistant.gemini.ReflectiveGeminiCatalogGateway
 import com.itsaky.androidide.plugins.aiassistant.gemini.toKeyVerification
+import com.itsaky.androidide.plugins.aiassistant.memory.DeviceMemory
+import com.itsaky.androidide.plugins.aiassistant.memory.ModelMemoryEstimator
+import com.itsaky.androidide.plugins.aiassistant.memory.ModelMemoryGate
+import com.itsaky.androidide.plugins.aiassistant.memory.SystemDeviceMemory
 import com.itsaky.androidide.plugins.aiassistant.security.SecureApiKeyStore
 import com.itsaky.androidide.plugins.aiassistant.R
+import com.itsaky.androidide.plugins.aiassistant.util.ByteSize
+import com.itsaky.androidide.plugins.aiassistant.util.ContentModelFileSource
 import com.itsaky.androidide.plugins.aiassistant.util.GgufFileInspector
+import com.itsaky.androidide.plugins.aiassistant.util.GgufHeaderReader
+import com.itsaky.androidide.plugins.aiassistant.util.ModelFileInfo
+import com.itsaky.androidide.plugins.aiassistant.util.ModelFileSource
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.itsaky.androidide.plugins.PluginContext
@@ -58,11 +68,44 @@ enum class AiBackend(val displayName: String) {
  */
 data class GeminiModelOptions(val models: List<String>, val isLive: Boolean)
 
+/**
+ * A selected model that may not fit in this device's memory, with the figures to show the user.
+ *
+ * @param modelName the model's display name
+ * @param loadBytes memory the weights need
+ * @param runBytes memory the KV cache and compute buffers need on top of the weights
+ * @param availableBytes free RAM when the check ran
+ * @param severity whether the shortfall makes failure likely or merely possible
+ */
+data class ModelMemoryWarning(
+    val modelName: String,
+    val loadBytes: Long,
+    val runBytes: Long,
+    val availableBytes: Long,
+    val severity: ModelMemoryGate.Severity,
+)
+
+/**
+ * @param deviceMemory free-RAM reading for the pre-flight; null builds the live one, which cannot
+ *   be a default argument because it needs [logger], and a default cannot reach an instance member
+ * @param modelFiles reads a selected model's name, size and bytes; null builds the live one
+ */
 class AiSettingsViewModel(
     private val getContext: () -> PluginContext?,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
-    private val catalogGateway: GeminiCatalogGateway = ReflectiveGeminiCatalogGateway()
+    private val catalogGateway: GeminiCatalogGateway = ReflectiveGeminiCatalogGateway(),
+    deviceMemory: DeviceMemory? = null,
+    modelFiles: ModelFileSource? = null,
 ) : ViewModel() {
+
+    private val deviceMemory: DeviceMemory = deviceMemory ?: SystemDeviceMemory(
+        contextProvider = { getContext()?.androidContext },
+        onReadError = { e -> logger?.warn("$TAG: could not read free memory", e) },
+    )
+
+    private val modelFiles: ModelFileSource = modelFiles ?: ContentModelFileSource { what, e ->
+        logger?.warn("$TAG: $what", e)
+    }
 
     companion object {
         private const val TAG = "AiSettingsViewModel"
@@ -94,6 +137,22 @@ class AiSettingsViewModel(
     private val _engineState = MutableLiveData<EngineState>(EngineState.Initialized)
     val engineState: LiveData<EngineState> get() = _engineState
 
+    /** The memory pre-flight's consent gate; see [loadModelFromUri]. */
+    private val memoryConfirmation = UserConfirmation<ModelMemoryWarning>()
+
+    /**
+     * Models that may not fit in memory, to be put to the user as a warning. One-shot events: each
+     * is delivered once, and the answer comes back through [onMemoryWarningDecision].
+     */
+    val modelMemoryWarnings: Flow<ModelMemoryWarning> get() = memoryConfirmation.requests
+
+    /**
+     * Whether a memory warning is actually waiting on an answer. False after process death, where
+     * the dialog is restored by the framework but the load that raised it is long gone — the UI
+     * uses this to drop a dialog whose answer nobody would receive.
+     */
+    val hasPendingMemoryWarning: Boolean get() = memoryConfirmation.hasOutstandingRequest
+
     init {
         checkInitialState()
     }
@@ -105,14 +164,21 @@ class AiSettingsViewModel(
 
         // For plugin, engine is always "ready" since it's managed by ai-core plugin
         _engineState.value = EngineState.Initialized
-        // Reflect a previously selected model so it survives closing/reopening settings,
-        // using the display name persisted at load time (no content-provider query here).
-        _modelLoadingState.value = if (savedPath != null) {
+        _modelLoadingState.value = modelStateFor(savedPath)
+    }
+
+    /**
+     * The state describing the model that is actually configured. Built from the name persisted at
+     * load time, so it needs no provider query.
+     *
+     * @param savedPath the stored model path, or null when none is configured
+     */
+    private fun modelStateFor(savedPath: String?): ModelLoadingState =
+        if (savedPath != null) {
             ModelLoadingState.Loaded(getSavedModelName() ?: fallbackDisplayName(savedPath))
         } else {
             ModelLoadingState.Idle
         }
-    }
 
     /**
      * This plugin's settings store — and, for the Gemini keys, ai-core's too.
@@ -138,33 +204,7 @@ class AiSettingsViewModel(
     }
 
     /** Decoded last path segment — a cheap fallback that at least avoids raw %3A escapes. */
-    fun fallbackDisplayName(uriOrPath: String): String =
-        (try { android.net.Uri.decode(uriOrPath) } catch (e: Exception) { uriOrPath }).substringAfterLast('/')
-
-    /**
-     * Resolve the real file name for a selected model. For a `content://` URI this queries the
-     * document provider's [OpenableColumns.DISPLAY_NAME] (e.g. "Llama-3.2-1B.gguf"); otherwise,
-     * and on any failure, it falls back to the decoded last path segment. Do NOT call on the main
-     * thread — the provider query can block.
-     */
-    private fun resolveDisplayName(uriString: String): String {
-        if (uriString.startsWith("content://")) {
-            try {
-                val uri = android.net.Uri.parse(uriString)
-                getContext()?.androidContext?.contentResolver
-                    ?.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)
-                    ?.use { c ->
-                        val idx = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
-                        if (idx >= 0 && c.moveToFirst() && !c.isNull(idx)) {
-                            c.getString(idx)?.takeIf { it.isNotBlank() }?.let { return it }
-                        }
-                    }
-            } catch (e: Exception) {
-                logger?.warn("$TAG: could not resolve display name for $uriString", e)
-            }
-        }
-        return fallbackDisplayName(uriString)
-    }
+    fun fallbackDisplayName(uriOrPath: String): String = modelFiles.fallbackDisplayName(uriOrPath)
 
     fun getAvailableBackends(): List<AiBackend> = AiBackend.entries
 
@@ -264,7 +304,7 @@ class AiSettingsViewModel(
      */
     suspend fun saveGeminiApiKey(apiKey: String, verified: Boolean = false): Boolean =
         withContext(ioDispatcher) {
-            // Checked first: returning true here would have the UI claim an unwritten key was saved.
+            // Checked first, or the UI would claim an unwritten key was saved.
             val prefs = getPluginPrefs()
             if (prefs == null) {
                 logger?.error("$TAG: cannot save Gemini API key: plugin preferences unavailable")
@@ -389,19 +429,23 @@ class AiSettingsViewModel(
     }
 
     /**
-     * Load a model from URI.
-     * In the plugin context, we just save the path - the actual loading
-     * is handled by the ai-core plugin's LocalLlmBackend.
+     * Saves the selected model's path; ai-core's `LocalLlmBackend` does the loading itself. That
+     * write is what makes it load, so the memory pre-flight gates it: a model the user declines is
+     * never stored, and therefore never loaded (ADFA-1798).
+     *
+     * @param uriString the selected model, as a `content://` URI or a filesystem path
+     * @param context resolves the model's display name, size and header
      */
     fun loadModelFromUri(uriString: String, context: Context) {
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(ioDispatcher) {
             _modelLoadingState.postValue(ModelLoadingState.Loading)
 
             try {
-                // Resolve the real file name (not the raw content-URI doc id) for display.
-                val fileName = resolveDisplayName(uriString)
+                // One lookup for both: the real file name to show, and the size to estimate from.
+                val fileInfo = modelFiles.info(context, uriString)
+                val fileName = fileInfo.displayName
 
-                // Reject a non-GGUF pick up front, so no bad path is persisted or shown as "Loaded".
+                // Rejected up front, so no bad path is persisted or shown as "Loaded".
                 if (!GgufFileInspector.looksLikeGguf(context.contentResolver, uriString)) {
                     _modelLoadingState.postValue(
                         ModelLoadingState.Error(context.getString(R.string.error_model_not_gguf, fileName))
@@ -409,17 +453,28 @@ class AiSettingsViewModel(
                     return@launch
                 }
 
+                if (!confirmMemoryHeadroom(uriString, fileInfo, context)) {
+                    logger?.info("$TAG: model declined at the memory warning: $fileName")
+                    // Never the configured model: re-checking it and declining must not revoke it.
+                    if (uriString != getLocalModelPath()) {
+                        modelFiles.releaseAccess(context, uriString)
+                    }
+                    restoreSavedModelState()
+                    return@launch
+                }
+
                 // Persist the name before the path so the savedModelPath observer can read it.
                 saveLocalModelName(fileName)
                 saveLocalModelPath(uriString)
 
-                // In plugin context, we don't directly load the model
-                // The ai-core plugin will load it when needed
+                // Nothing is loaded here; ai-core reads this path when it needs the model.
                 _modelLoadingState.postValue(
                     ModelLoadingState.Loaded(fileName)
                 )
 
                 logger?.debug("$TAG: model path saved: $uriString ($fileName)")
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 logger?.error("$TAG: error saving model path", e)
                 _modelLoadingState.postValue(
@@ -428,4 +483,70 @@ class AiSettingsViewModel(
             }
         }
     }
+
+    /**
+     * Answers an outstanding [modelMemoryWarnings] question. Safe to call from the main thread, and
+     * a no-op when nothing is waiting.
+     *
+     * @param proceed true to load the model anyway, false to abandon the selection
+     */
+    fun onMemoryWarningDecision(proceed: Boolean) {
+        memoryConfirmation.answer(proceed)
+    }
+
+    /**
+     * Checks the model against free RAM and, when it looks too large, asks the user whether to go
+     * ahead. Fails OPEN: an unreadable size or header means no warning rather than a wrong one.
+     *
+     * @return true to continue with this model
+     */
+    private suspend fun confirmMemoryHeadroom(
+        uriString: String,
+        fileInfo: ModelFileInfo,
+        context: Context
+    ): Boolean {
+        val modelName = fileInfo.displayName
+        val estimate = ModelMemoryEstimator.estimate(
+            fileSizeBytes = fileInfo.sizeBytes,
+            header = GgufHeaderReader.read { modelFiles.openStream(context, uriString) },
+        )
+        // Read last and never cached: the user may have just closed apps to make room.
+        val availableBytes = deviceMemory.availableBytes()
+
+        return when (val verdict = ModelMemoryGate.evaluate(estimate, availableBytes)) {
+            ModelMemoryGate.Verdict.Safe -> true
+
+            ModelMemoryGate.Verdict.Unknown -> {
+                val missing = if (estimate == null) "the model's size" else "free memory"
+                logger?.warn("$TAG: could not read $missing; skipping the pre-flight for $modelName")
+                true
+            }
+
+            is ModelMemoryGate.Verdict.Risky -> {
+                logger?.warn(
+                    "$TAG: $modelName may not fit: needs ${ByteSize.format(verdict.estimate.loadBytes)}" +
+                        " + ${ByteSize.format(verdict.estimate.runBytes)} to run," +
+                        " ${ByteSize.format(verdict.availableBytes)} free (${verdict.severity})"
+                )
+                memoryConfirmation.ask(
+                    ModelMemoryWarning(
+                        modelName = modelName,
+                        loadBytes = verdict.estimate.loadBytes,
+                        runBytes = verdict.estimate.runBytes,
+                        availableBytes = verdict.availableBytes,
+                        severity = verdict.severity,
+                    )
+                )
+            }
+        }
+    }
+
+    /**
+     * Republishes the model that is actually configured, so abandoning a selection leaves the
+     * screen describing the previous model rather than the one that was never stored.
+     */
+    private fun restoreSavedModelState() {
+        _modelLoadingState.postValue(modelStateFor(getLocalModelPath()))
+    }
+
 }
