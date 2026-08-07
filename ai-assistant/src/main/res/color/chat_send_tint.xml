@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Send is the composer's only accent, greyed out until there is something to send. Driven by
+  state_activated rather than state_enabled so the button keeps receiving the long-press that
+  opens its tooltip; an empty-input tap is already a no-op in the click handler.
+-->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:color="@color/plugin_primary" android:state_activated="true" />
+    <item android:color="@color/plugin_text_subtle" />
+</selector>

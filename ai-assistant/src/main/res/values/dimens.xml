@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  One set of metrics for every orientation, deliberately.
+
+  EditorActivity declares configChanges="orientation|screenSize|...", so rotating never recreates
+  the activity, the fragment or these views. Alternative-resource buckets (values-h480dp and the
+  like) are therefore resolved once at inflation and frozen: after a rotation the layout keeps
+  whichever orientation's values it was born with, silently and with no way to notice from the
+  build. So the sizes below are a compromise that has to work on a phone in landscape (the
+  tightest case) while still looking right in portrait. Anything that genuinely must change with
+  orientation belongs in ChatFragment.onConfigurationChanged, not here.
+-->
+<resources>
+    <dimen name="chat_toolbar_height">48dp</dimen>
+    <dimen name="chat_title_text_size">18sp</dimen>
+    <dimen name="chat_input_bar_padding">8dp</dimen>
+    <!--
+      Cancels the group's 8dp top padding bar the 1dp border itself, so the tab hangs immediately
+      under the border without covering it. Keep in step with chat_input_bar_padding.
+    -->
+    <dimen name="chat_input_bar_padding_negative">-7dp</dimen>
+    <dimen name="chat_input_min_height">48dp</dimen>
+    <dimen name="chat_composer_button_size">44dp</dimen>
+    <dimen name="chat_composer_icon_padding">10dp</dimen>
+    <dimen name="chat_composer_corner_radius">22dp</dimen>
+    <dimen name="chat_caption_text_size">12sp</dimen>
+    <dimen name="chat_caption_spacing">4dp</dimen>
+    <integer name="chat_input_max_lines">4</integer>
+
+    <!-- Composer tab. The collapsed one overlays the list, so it costs no layout height. -->
+    <dimen name="chat_composer_toggle_width">48dp</dimen>
+    <dimen name="chat_composer_toggle_height">16dp</dimen>
+    <dimen name="chat_composer_tab_padding_horizontal">10dp</dimen>
+    <dimen name="chat_composer_tab_padding_vertical">2dp</dimen>
+    <!-- Keeps the expanded tab off the input field below it. -->
+    <dimen name="chat_composer_tab_spacing">6dp</dimen>
+    <dimen name="chat_composer_toggle_touch_height">48dp</dimen>
+    <dimen name="chat_composer_tab_inset_top">32dp</dimen>
+    <dimen name="chat_composer_tab_padding_top">34dp</dimen>
+</resources>
