@@ -75,7 +75,7 @@ class PairPlugin : IPlugin, UIExtension, EditorTabExtension, DocumentationExtens
         )
     }
 
-    override fun getTooltipCategory(): String = "plugin_pair"
+    override fun getTooltipCategory(): String = "plugin_$PLUGIN_ID"
 
     override fun getTooltipEntries(): List<PluginTooltipEntry> = listOf(
         PluginTooltipEntry(
