@@ -1,7 +1,8 @@
 package com.itsaky.androidide.plugins.aicore.tool.handlers.edit
 
 import android.util.Log
-import com.itsaky.androidide.plugins.aicore.utils.AgentTrace
+import com.itsaky.androidide.plugins.aicore.logging.AgentTrace
+import com.itsaky.androidide.plugins.aicore.logging.LOG_PREFIX
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -16,7 +17,7 @@ import java.nio.file.StandardCopyOption
  */
 object AtomicFileWriter {
 
-    private const val TAG = "AtomicFileWriter"
+    private const val TAG = "$LOG_PREFIX.AtomicFileWriter"
 
     /** Suffix of the staging file; visible in a directory listing only while a write is running. */
     private const val TEMP_SUFFIX = ".aiedit"

@@ -2,12 +2,15 @@ package com.itsaky.androidide.plugins.aicore.tool.handlers
 
 import android.util.Log
 import com.itsaky.androidide.plugins.PluginContext
+import com.itsaky.androidide.plugins.aicore.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aicore.models.ToolResult
 import com.itsaky.androidide.plugins.aicore.tool.ToolHandler
 import com.itsaky.androidide.plugins.services.GradleSyncCallback
 import com.itsaky.androidide.plugins.services.IdeBuildService
 import java.util.concurrent.CompletableFuture
 import kotlinx.coroutines.delay
+
+private const val TAG = "$LOG_PREFIX.GradleSyncHandler"
 
 /**
  * Handler for triggering Gradle project sync.
@@ -20,12 +23,12 @@ class GradleSyncHandler(
     override val requiresApproval = false
 
     override suspend fun execute(args: Map<String, Any?>): ToolResult {
-        Log.d("GradleSyncHandler", "Gradle sync requested")
+        Log.d(TAG, "Gradle sync requested")
 
         return try {
             val buildService = pluginContext.services.get(IdeBuildService::class.java)
             if (buildService == null) {
-                Log.w("GradleSyncHandler", "IdeBuildService not available")
+                Log.w(TAG, "IdeBuildService not available")
                 return ToolResult.failure(
                     "Build service not available",
                     "The IDE build service is not available."
@@ -35,10 +38,10 @@ class GradleSyncHandler(
             // Track both success flag and output message
             val syncComplete = CompletableFuture<Pair<Boolean, String>>()
 
-            Log.d("GradleSyncHandler", "Triggering gradle sync...")
+            Log.d(TAG, "Triggering gradle sync...")
             buildService.triggerGradleSync(object : GradleSyncCallback {
                 override fun onComplete(success: Boolean, output: String) {
-                    Log.d("GradleSyncHandler", "Sync completed: success=$success, output length=${output.length}")
+                    Log.d(TAG, "Sync completed: success=$success, output length=${output.length}")
                     val message = if (success) {
                         output.ifEmpty { "Gradle sync completed successfully" }
                     } else {
@@ -52,7 +55,7 @@ class GradleSyncHandler(
             val (syncSuccess, result) = try {
                 syncComplete.get(120_000, java.util.concurrent.TimeUnit.MILLISECONDS)
             } catch (e: Exception) {
-                Log.w("GradleSyncHandler", "Gradle sync timed out or failed: ${e.message}")
+                Log.w(TAG, "Gradle sync timed out or failed: ${e.message}")
                 Pair(false, "Gradle sync in progress or timed out (may take 1-2 minutes)")
             }
 
@@ -66,7 +69,7 @@ class GradleSyncHandler(
                 ToolResult.failure(result)
             }
         } catch (e: Exception) {
-            Log.e("GradleSyncHandler", "Error triggering gradle sync", e)
+            Log.e(TAG, "Error triggering gradle sync", e)
             ToolResult.failure(
                 "Error triggering sync",
                 "${e.message ?: "Unknown error"}\n\n${e.stackTraceToString()}"

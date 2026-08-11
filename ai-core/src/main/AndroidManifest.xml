@@ -20,7 +20,7 @@
 
         <meta-data
             android:name="plugin.description"
-            android:value="The Agent chat and the LLM inference router. Install it plus at least one backend plugin (AI Local Backend, AI Gemini Backend) to use any AI feature." />
+            android:value="The Agent chat and the LLM inference router. Install it plus at least one backend plugin (AI Agent Local, AI Agent Gemini) to use any AI feature." />
 
         <meta-data
             android:name="plugin.author"
@@ -49,7 +49,7 @@
 
         <meta-data
             android:name="plugin.main_class"
-            android:value="com.itsaky.androidide.plugins.aicore.AiCorePlugin" />
+            android:value="com.itsaky.androidide.plugins.aicore.plugin.AiCorePlugin" />
 
         <meta-data
             android:name="plugin.icon_day"

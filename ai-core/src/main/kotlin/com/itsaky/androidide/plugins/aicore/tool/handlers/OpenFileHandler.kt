@@ -2,12 +2,15 @@ package com.itsaky.androidide.plugins.aicore.tool.handlers
 
 import android.util.Log
 import com.itsaky.androidide.plugins.PluginContext
+import com.itsaky.androidide.plugins.aicore.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aicore.models.ToolResult
 import com.itsaky.androidide.plugins.aicore.tool.ToolHandler
 import com.itsaky.androidide.plugins.services.IdeEditorService
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+
+private const val TAG = "$LOG_PREFIX.OpenFileHandler"
 
 /**
  * Handler for opening files in the IDE editor.
@@ -30,12 +33,12 @@ class OpenFileHandler(
             return ToolResult.failure("file_path is required")
         }
 
-        Log.d("OpenFileHandler", "Opening file: $filePath")
+        Log.d(TAG, "Opening file: $filePath")
 
         return try {
             val file = when (val resolution = PathGuard.resolve(filePath)) {
                 is PathGuard.Resolution.Resolved -> {
-                    Log.d("OpenFileHandler", "Resolved '$filePath' -> ${resolution.file.path}")
+                    Log.d(TAG, "Resolved '$filePath' -> ${resolution.file.path}")
                     resolution.file
                 }
                 is PathGuard.Resolution.Ambiguous -> {
@@ -46,17 +49,17 @@ class OpenFileHandler(
                     )
                 }
                 PathGuard.Resolution.Escaped -> {
-                    Log.w("OpenFileHandler", "Path outside project and no match found: $filePath")
+                    Log.w(TAG, "Path outside project and no match found: $filePath")
                     return ToolResult.failure("File path must be within project directory")
                 }
                 PathGuard.Resolution.NotFound -> {
-                    Log.w("OpenFileHandler", "File does not exist: $filePath")
+                    Log.w(TAG, "File does not exist: $filePath")
                     return ToolResult.failure("File not found", "File does not exist: $filePath")
                 }
             }
 
             if (!file.isFile) {
-                Log.w("OpenFileHandler", "Path is not a file: $filePath")
+                Log.w(TAG, "Path is not a file: $filePath")
                 return ToolResult.failure(
                     "Not a file",
                     "Path is a directory, not a file: $filePath"
@@ -65,7 +68,7 @@ class OpenFileHandler(
 
             val editorService = pluginContext.services.get(IdeEditorService::class.java)
             if (editorService == null) {
-                Log.w("OpenFileHandler", "IdeEditorService not available")
+                Log.w(TAG, "IdeEditorService not available")
                 return ToolResult.failure(
                     "Editor service not available",
                     "The IDE editor service is not available."
@@ -75,20 +78,20 @@ class OpenFileHandler(
             // Opening a tab touches UI; execute() runs on Dispatchers.IO.
             val success = withContext(mainDispatcher) { editorService.openFile(file) }
             if (success) {
-                Log.d("OpenFileHandler", "File opened successfully: $filePath")
+                Log.d(TAG, "File opened successfully: $filePath")
                 ToolResult.success(
                     message = "Opened file in editor",
                     data = filePath
                 )
             } else {
-                Log.w("OpenFileHandler", "Failed to open file: $filePath")
+                Log.w(TAG, "Failed to open file: $filePath")
                 ToolResult.failure(
                     "Failed to open file",
                     "Could not open $filePath in the editor."
                 )
             }
         } catch (e: Exception) {
-            Log.e("OpenFileHandler", "Error opening file", e)
+            Log.e(TAG, "Error opening file", e)
             ToolResult.failure("Error opening file", e.message ?: "Unknown error")
         }
     }

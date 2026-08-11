@@ -11,7 +11,7 @@ import androidx.core.widget.doAfterTextChanged
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
-import com.itsaky.androidide.plugins.aicore.AiCorePlugin
+import com.itsaky.androidide.plugins.aicore.plugin.AiCorePlugin
 import com.itsaky.androidide.plugins.aicore.R
 import com.itsaky.androidide.plugins.aicore.databinding.FragmentChatBinding
 import kotlinx.coroutines.CoroutineScope

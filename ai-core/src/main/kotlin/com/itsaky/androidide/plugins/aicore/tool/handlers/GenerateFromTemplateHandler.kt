@@ -2,10 +2,13 @@ package com.itsaky.androidide.plugins.aicore.tool.handlers
 
 import android.util.Log
 import com.itsaky.androidide.plugins.PluginContext
+import com.itsaky.androidide.plugins.aicore.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aicore.models.ToolResult
 import com.itsaky.androidide.plugins.aicore.tool.ToolHandler
 import com.itsaky.androidide.plugins.services.IdeTemplateService
 import org.json.JSONObject
+
+private const val TAG = "$LOG_PREFIX.GenerateFromTemplateHandler"
 
 /**
  * Handler for generating files from Pebble templates.
@@ -30,12 +33,12 @@ class GenerateFromTemplateHandler(
         @Suppress("UNCHECKED_CAST")
         val variables = (args["variables"] as? Map<String, Any?>) ?: emptyMap()
 
-        Log.d("GenerateFromTemplateHandler", "Generating from template: $templateName with ${variables.size} variables")
+        Log.d(TAG, "Generating from template: $templateName with ${variables.size} variables")
 
         return try {
             val templateService = pluginContext.services.get(IdeTemplateService::class.java)
             if (templateService == null) {
-                Log.w("GenerateFromTemplateHandler", "IdeTemplateService not available")
+                Log.w(TAG, "IdeTemplateService not available")
                 return ToolResult.failure(
                     "Template service not available",
                     "The IDE template service is not available. Templates may not be registered."
@@ -44,7 +47,7 @@ class GenerateFromTemplateHandler(
 
             // Get available templates
             val registeredTemplates = templateService.getRegisteredTemplates()
-            Log.d("GenerateFromTemplateHandler", "Available templates: $registeredTemplates")
+            Log.d(TAG, "Available templates: $registeredTemplates")
 
             if (registeredTemplates.isEmpty()) {
                 return ToolResult.failure(
@@ -62,7 +65,7 @@ class GenerateFromTemplateHandler(
                 )
             }
 
-            Log.d("GenerateFromTemplateHandler", "Found template: $matchingTemplate")
+            Log.d(TAG, "Found template: $matchingTemplate")
 
             // Note: Actual template execution requires CgtTemplateBuilder integration
             // For now, return a note that user should use the template directly from Plugin Manager
@@ -81,7 +84,7 @@ class GenerateFromTemplateHandler(
                 }
             )
         } catch (e: Exception) {
-            Log.e("GenerateFromTemplateHandler", "Error generating from template", e)
+            Log.e(TAG, "Error generating from template", e)
             ToolResult.failure(
                 "Error with template",
                 "${e.message ?: "Unknown error"}\n\n${e.stackTraceToString()}"

@@ -1,7 +1,9 @@
 package com.itsaky.androidide.plugins.aicore.tool
 
 import android.util.Log
-import com.itsaky.androidide.plugins.aicore.utils.AgentTrace
+import com.itsaky.androidide.plugins.aicore.logging.AgentTrace
+import com.itsaky.androidide.plugins.aicore.logging.LOG_PREFIX
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -9,14 +11,13 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
-import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Manages user approval for tool execution.
  * Tools that modify system state require explicit user approval.
  */
 class ToolApprovalManager {
-    private val TAG = "ToolApprovalManager"
+    private val TAG = "$LOG_PREFIX.ToolApprovalManager"
 
     // Approval request timeout: 5 minutes
     private val APPROVAL_TIMEOUT_MS = 5 * 60 * 1000L

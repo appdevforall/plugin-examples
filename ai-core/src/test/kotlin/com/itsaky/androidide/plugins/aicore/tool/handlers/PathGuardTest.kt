@@ -1,5 +1,7 @@
 package com.itsaky.androidide.plugins.aicore.tool.handlers
 
+import java.io.File
+import java.nio.file.Files
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -7,8 +9,6 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
-import java.io.File
-import java.nio.file.Files
 
 /**
  * Unit tests for [PathGuard] — the shared containment guard for filesystem tools;

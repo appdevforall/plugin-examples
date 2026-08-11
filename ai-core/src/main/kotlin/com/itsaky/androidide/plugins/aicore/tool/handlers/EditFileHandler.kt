@@ -8,8 +8,8 @@ import com.itsaky.androidide.plugins.aicore.tool.handlers.edit.AtomicFileWriter
 import com.itsaky.androidide.plugins.aicore.tool.handlers.edit.EditTargetResolver
 import com.itsaky.androidide.plugins.aicore.tool.handlers.edit.EditorBufferApplier
 import com.itsaky.androidide.plugins.aicore.tool.handlers.edit.FileTextMatcher
-import com.itsaky.androidide.plugins.aicore.utils.AgentTrace
-import com.itsaky.androidide.plugins.aicore.utils.parseToolBoolean
+import com.itsaky.androidide.plugins.aicore.logging.AgentTrace
+import com.itsaky.androidide.plugins.aicore.tool.parseToolBoolean
 import com.itsaky.androidide.plugins.services.IdeEditorService
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher

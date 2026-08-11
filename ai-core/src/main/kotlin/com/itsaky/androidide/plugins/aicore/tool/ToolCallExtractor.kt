@@ -1,6 +1,7 @@
 package com.itsaky.androidide.plugins.aicore.tool
 
 import android.util.Log
+import com.itsaky.androidide.plugins.aicore.logging.LOG_PREFIX
 import org.json.JSONObject
 
 /**
@@ -9,7 +10,7 @@ import org.json.JSONObject
  */
 class ToolCallExtractor {
     companion object {
-        private const val TAG = "ToolCallExtractor"
+        private const val TAG = "$LOG_PREFIX.ToolCallExtractor"
 
         /** The `<tool_call>{…}</tool_call>` envelope both system prompts ask for. */
         private val TOOL_CALL_REGEX =

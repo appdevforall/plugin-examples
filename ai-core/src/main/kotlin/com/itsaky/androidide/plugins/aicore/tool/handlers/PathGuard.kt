@@ -1,6 +1,7 @@
 package com.itsaky.androidide.plugins.aicore.tool.handlers
 
 import android.util.Log
+import com.itsaky.androidide.plugins.aicore.logging.LOG_PREFIX
 import java.io.File
 import java.nio.file.Files
 
@@ -11,7 +12,7 @@ import java.nio.file.Files
  */
 object PathGuard {
 
-    private const val TAG = "PathGuard"
+    private const val TAG = "$LOG_PREFIX.PathGuard"
     private const val DEFAULT_ROOT = "/storage/emulated/0/AndroidIDEProjects"
 
     /** Host-backed supplier of the current project root; queried on every resolution. */

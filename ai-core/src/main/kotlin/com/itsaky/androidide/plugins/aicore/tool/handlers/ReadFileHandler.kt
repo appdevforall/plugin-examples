@@ -2,8 +2,11 @@ package com.itsaky.androidide.plugins.aicore.tool.handlers
 
 import android.util.Log
 import com.itsaky.androidide.plugins.PluginContext
+import com.itsaky.androidide.plugins.aicore.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aicore.models.ToolResult
 import com.itsaky.androidide.plugins.aicore.tool.ToolHandler
+
+private const val TAG = "$LOG_PREFIX.ReadFileHandler"
 
 /**
  * Handler for reading file contents.
@@ -52,7 +55,7 @@ class ReadFileHandler(
                 }
             }
         } catch (e: Exception) {
-            Log.e("ReadFileHandler", "Error reading file", e)
+            Log.e(TAG, "Error reading file", e)
             ToolResult.failure("Error reading file: ${e.message}")
         }
     }

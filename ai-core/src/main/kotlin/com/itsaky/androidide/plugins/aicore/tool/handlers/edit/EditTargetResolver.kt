@@ -1,6 +1,7 @@
 package com.itsaky.androidide.plugins.aicore.tool.handlers.edit
 
 import android.util.Log
+import com.itsaky.androidide.plugins.aicore.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aicore.tool.handlers.PathGuard
 import java.io.File
 
@@ -11,7 +12,7 @@ import java.io.File
  */
 object EditTargetResolver {
 
-    private const val TAG = "EditTargetResolver"
+    private const val TAG = "$LOG_PREFIX.EditTargetResolver"
 
     /** Outcome of [resolve]. */
     sealed interface Target {

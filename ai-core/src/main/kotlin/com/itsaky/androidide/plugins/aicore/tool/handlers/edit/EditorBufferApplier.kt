@@ -1,12 +1,13 @@
 package com.itsaky.androidide.plugins.aicore.tool.handlers.edit
 
 import android.util.Log
-import com.itsaky.androidide.plugins.aicore.utils.AgentTrace
+import com.itsaky.androidide.plugins.aicore.logging.AgentTrace
+import com.itsaky.androidide.plugins.aicore.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.services.IdeEditorService
 import com.itsaky.androidide.plugins.services.SelectionRange
+import java.io.File
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
-import java.io.File
 
 /**
  * Applies an edit to a file **open in the editor** through the buffer, not behind it: unsaved work is
@@ -21,7 +22,7 @@ class EditorBufferApplier(
 ) {
 
     private companion object {
-        const val TAG = "EditorBufferApplier"
+        const val TAG = "$LOG_PREFIX.EditorBufferApplier"
     }
 
     /** Outcome of [apply]. */

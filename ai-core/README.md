@@ -17,9 +17,9 @@ adopted on first activation.
 **AI Core ships no backend of its own.** Backends are separate plugins that
 register themselves with it on activation:
 
-- [`ai-backend-local`](../ai-backend-local/) — on-device GGUF inference through a
+- [`ai-agent-local`](../ai-agent-local/) — on-device GGUF inference through a
   bundled, prebuilt **llama.cpp** AAR. Registers as `local`.
-- [`ai-backend-gemini`](../ai-backend-gemini/) — the Gemini REST API over
+- [`ai-agent-gemini`](../ai-agent-gemini/) — the Gemini REST API over
   `HttpURLConnection` (no third-party SDK), so it is unaffected by the host IDE's
   OkHttp version. Registers as `gemini`.
 
@@ -29,7 +29,7 @@ Install AI Core **plus at least one backend**, or every request fails with
 ## Building
 
 Prerequisites: Android SDK (API 33+), JDK 17. Create `local.properties` with
-`sdk.dir=...`. No NDK, submodule or CMake — those moved to `ai-backend-local`
+`sdk.dir=...`. No NDK, submodule or CMake — those moved to `ai-agent-local`
 with the native code.
 
 ```bash
@@ -64,14 +64,20 @@ overrides exist rather than trusting behaviour to catch it.
 
 ## Key classes
 
-- `AiCorePlugin.kt` — plugin entry point; publishes the router, contributes the
-  Agent tab and settings screen, and adopts a pre-merge install's data
-- `LlmInferenceServiceImpl.kt` — the SharedServices-exposed router
-- `AiBackend.kt` — maps a stored backend setting onto a backend id
+Every source file sits in a package named for its layer; nothing is loose at the
+root of `com/itsaky/androidide/plugins/aicore/`.
+
+- `plugin/AiCorePlugin.kt` — plugin entry point; publishes the router, contributes
+  the Agent tab and settings screen, and adopts a pre-merge install's data
+- `services/LlmInferenceServiceImpl.kt` — the SharedServices-exposed router
+- `backends/AiBackend.kt` — maps a stored backend setting onto a backend id
 - `backends/BackendRegistry.kt` — the installed backends, as the settings
   selector sees them
 - `backends/BackendFragmentFactory.kt` — loads a backend's settings pane with
   that backend plugin's own classloader
+- `managers/ChatStorageManager.kt` — chat history persisted as JSON
+- `logging/` — `LOG_PREFIX` (`AiCore`), prefixing every logcat tag this plugin
+  writes, and `AgentTrace`, the one-stream trace of an agent run
 - `fragments/`, `viewmodel/`, `tool/` — the Agent chat, its tool loop and handlers
 
 ## License

@@ -2,7 +2,7 @@ package com.itsaky.androidide.plugins.aicore.viewmodel
 
 import android.content.Context
 import android.content.SharedPreferences
-import com.itsaky.androidide.plugins.aicore.data.ChatStorageManager
+import com.itsaky.androidide.plugins.aicore.managers.ChatStorageManager
 import com.itsaky.androidide.plugins.aicore.models.ChatMessage
 import com.itsaky.androidide.plugins.aicore.models.ChatSession
 import com.itsaky.androidide.plugins.aicore.models.Sender

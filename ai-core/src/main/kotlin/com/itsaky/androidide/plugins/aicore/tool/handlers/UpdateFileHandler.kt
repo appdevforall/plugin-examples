@@ -2,8 +2,11 @@ package com.itsaky.androidide.plugins.aicore.tool.handlers
 
 import android.util.Log
 import com.itsaky.androidide.plugins.PluginContext
+import com.itsaky.androidide.plugins.aicore.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aicore.models.ToolResult
 import com.itsaky.androidide.plugins.aicore.tool.ToolHandler
+
+private const val TAG = "$LOG_PREFIX.UpdateFileHandler"
 
 /**
  * Handler for updating existing files.
@@ -37,7 +40,7 @@ class UpdateFileHandler(
                     file.writeText(content)
                 } catch (e: Exception) {
                     runCatching { file.writeText(previous) }
-                        .onFailure { Log.e("UpdateFileHandler", "Could not restore $filePath after a failed write", it) }
+                        .onFailure { Log.e(TAG, "Could not restore $filePath after a failed write", it) }
                     throw e
                 }
 
@@ -47,7 +50,7 @@ class UpdateFileHandler(
                 )
             }
         } catch (e: Exception) {
-            Log.e("UpdateFileHandler", "Error updating file", e)
+            Log.e(TAG, "Error updating file", e)
             ToolResult.failure("Error updating file: ${e.message}", e.stackTraceToString())
         }
     }

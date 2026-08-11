@@ -9,7 +9,7 @@ import android.widget.FrameLayout
 import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.DialogFragment
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import com.itsaky.androidide.plugins.aicore.AiCorePlugin
+import com.itsaky.androidide.plugins.aicore.plugin.AiCorePlugin
 import com.itsaky.androidide.plugins.aicore.R
 import com.itsaky.androidide.plugins.aicore.tool.ApprovalRequest
 import com.itsaky.androidide.plugins.aicore.tool.ApprovalResult

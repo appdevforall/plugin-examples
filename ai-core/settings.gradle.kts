@@ -35,4 +35,4 @@ dependencyResolutionManagement {
 rootProject.name = "ai-core"
 
 // No subprojects: the llama.cpp native modules and the prebuilt AAR moved to
-// ai-backend-local along with the local backend itself.
+// ai-agent-local along with the local backend itself.

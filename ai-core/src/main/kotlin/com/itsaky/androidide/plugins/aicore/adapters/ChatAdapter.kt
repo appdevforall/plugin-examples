@@ -15,17 +15,20 @@ import android.widget.TextView
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
-import com.itsaky.androidide.plugins.aicore.AiCorePlugin
+import com.google.android.material.snackbar.Snackbar
 import com.itsaky.androidide.plugins.aicore.R
+import com.itsaky.androidide.plugins.aicore.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aicore.models.ChatMessage
 import com.itsaky.androidide.plugins.aicore.models.MessageStatus
 import com.itsaky.androidide.plugins.aicore.models.Sender
-import com.google.android.material.snackbar.Snackbar
+import com.itsaky.androidide.plugins.aicore.plugin.AiCorePlugin
 import io.noties.markwon.Markwon
 import java.text.DecimalFormat
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+private const val TAG = "$LOG_PREFIX.ChatAdapter"
 
 /**
  * @param wireTooltip attaches this plugin's long-press help for a tag to a view. Supplied by
@@ -81,7 +84,7 @@ class ChatAdapter(
 
     override fun getItemCount(): Int {
         val count = super.getItemCount()
-        android.util.Log.d("ChatAdapter", "getItemCount() = $count")
+        android.util.Log.d(TAG, "getItemCount() = $count")
         return count
     }
 
@@ -97,7 +100,7 @@ class ChatAdapter(
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
-        android.util.Log.d("ChatAdapter", "onCreateViewHolder called, viewType=$viewType")
+        android.util.Log.d(TAG, "onCreateViewHolder called, viewType=$viewType")
         // Inflate from the RecyclerView's Context so item views follow the IDE day/night theme.
         val inflater = LayoutInflater.from(parent.context)
         return when (viewType) {

@@ -13,7 +13,7 @@ import android.widget.Spinner
 import android.widget.TextView
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.commit
-import com.itsaky.androidide.plugins.aicore.AiCorePlugin
+import com.itsaky.androidide.plugins.aicore.plugin.AiCorePlugin
 import com.itsaky.androidide.plugins.aicore.R
 import com.itsaky.androidide.plugins.aicore.backends.BackendFragmentFactory
 import com.itsaky.androidide.plugins.aicore.backends.BackendOption

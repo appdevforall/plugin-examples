@@ -2,9 +2,12 @@ package com.itsaky.androidide.plugins.aicore.tool.handlers
 
 import android.util.Log
 import com.itsaky.androidide.plugins.PluginContext
+import com.itsaky.androidide.plugins.aicore.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aicore.models.ToolResult
 import com.itsaky.androidide.plugins.aicore.tool.ToolHandler
 import com.itsaky.androidide.plugins.services.IdeProjectManipulationService
+
+private const val TAG = "$LOG_PREFIX.AddDependencyHandler"
 
 /**
  * Handler for adding dependencies to the project build file.
@@ -27,31 +30,31 @@ class AddDependencyHandler(
         val buildFile = args["build_file"]?.toString()?.trim()
             ?: "app/build.gradle.kts"  // Default to app module
 
-        Log.d("AddDependencyHandler", "Adding dependency: $dependency to $buildFile")
+        Log.d(TAG, "Adding dependency: $dependency to $buildFile")
 
         return try {
             val service = pluginContext.services.get(IdeProjectManipulationService::class.java)
             if (service == null) {
-                Log.w("AddDependencyHandler", "IdeProjectManipulationService not available")
+                Log.w(TAG, "IdeProjectManipulationService not available")
                 return ToolResult.failure("Project manipulation service not available")
             }
 
             val success = service.addDependency(dependency, buildFile)
             if (success) {
-                Log.d("AddDependencyHandler", "Dependency added successfully: $dependency")
+                Log.d(TAG, "Dependency added successfully: $dependency")
                 ToolResult.success(
                     message = "Added dependency: $dependency",
                     data = "Dependency added to $buildFile. Run gradle_sync to reload."
                 )
             } else {
-                Log.w("AddDependencyHandler", "Failed to add dependency: $dependency")
+                Log.w(TAG, "Failed to add dependency: $dependency")
                 ToolResult.failure(
                     "Failed to add dependency",
                     "Could not add $dependency to $buildFile. Check the build file format."
                 )
             }
         } catch (e: Exception) {
-            Log.e("AddDependencyHandler", "Error adding dependency", e)
+            Log.e(TAG, "Error adding dependency", e)
             ToolResult.failure(
                 "Error adding dependency",
                 "${e.message ?: "Unknown error"}\n\n${e.stackTraceToString()}"

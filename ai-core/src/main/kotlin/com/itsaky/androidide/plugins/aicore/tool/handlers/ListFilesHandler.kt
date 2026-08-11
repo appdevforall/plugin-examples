@@ -2,9 +2,12 @@ package com.itsaky.androidide.plugins.aicore.tool.handlers
 
 import android.util.Log
 import com.itsaky.androidide.plugins.PluginContext
+import com.itsaky.androidide.plugins.aicore.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aicore.models.ToolResult
 import com.itsaky.androidide.plugins.aicore.tool.ToolHandler
 import java.io.File
+
+private const val TAG = "$LOG_PREFIX.ListFilesHandler"
 
 /**
  * Handler for listing files in a directory.
@@ -23,7 +26,7 @@ class ListFilesHandler(
     override suspend fun execute(args: Map<String, Any?>): ToolResult {
         val directory = args["directory"]?.toString()?.trim()?.takeIf { it.isNotBlank() }
 
-        Log.d("ListFilesHandler", "Listing files in directory: ${directory ?: "<project root>"}")
+        Log.d(TAG, "Listing files in directory: ${directory ?: "<project root>"}")
 
         return try {
             // Resolve/containment-check via PathGuard; blank defaults to the root.
@@ -36,24 +39,24 @@ class ListFilesHandler(
                     ?: PathGuard.resolveWithin(directory.removePrefix("/"))
                     ?: return ToolResult.failure("Directory path must be within project directory")
             }
-            Log.d("ListFilesHandler", "Absolute path: ${dir.absolutePath}")
+            Log.d(TAG, "Absolute path: ${dir.absolutePath}")
 
             if (!dir.exists()) {
-                Log.w("ListFilesHandler", "Directory does not exist: ${dir.absolutePath}")
+                Log.w(TAG, "Directory does not exist: ${dir.absolutePath}")
                 return ToolResult.failure("Directory does not exist: ${dir.absolutePath}")
             }
 
             if (!dir.isDirectory) {
-                Log.w("ListFilesHandler", "Path is not a directory: ${dir.absolutePath}")
+                Log.w(TAG, "Path is not a directory: ${dir.absolutePath}")
                 return ToolResult.failure("Path is not a directory: ${dir.absolutePath}")
             }
 
             val fileList = dir.listFiles()?.sortedBy { it.name } ?: emptyList()
 
-            Log.d("ListFilesHandler", "Found ${fileList.size} items")
+            Log.d(TAG, "Found ${fileList.size} items")
 
             if (fileList.isEmpty()) {
-                Log.w("ListFilesHandler", "Directory is empty: ${dir.absolutePath}")
+                Log.w(TAG, "Directory is empty: ${dir.absolutePath}")
                 return ToolResult.success(
                     message = "Directory is empty: ${dir.absolutePath}",
                     data = "(no files or directories)"
@@ -87,7 +90,7 @@ class ListFilesHandler(
                 data = formatted
             )
         } catch (e: Exception) {
-            Log.e("ListFilesHandler", "Error listing files in $directory", e)
+            Log.e(TAG, "Error listing files in $directory", e)
             ToolResult.failure("Error listing files: ${e.message}", e.stackTraceToString())
         }
     }

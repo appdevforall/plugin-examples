@@ -1,10 +1,11 @@
 package com.itsaky.androidide.plugins.aicore.tool
 
 import android.util.Log
+import com.itsaky.androidide.plugins.aicore.logging.AgentTrace
+import com.itsaky.androidide.plugins.aicore.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aicore.models.ToolResult
+import com.itsaky.androidide.plugins.aicore.tool.ToolExecutionTracker
 import com.itsaky.androidide.plugins.aicore.tool.handlers.PathGuard
-import com.itsaky.androidide.plugins.aicore.utils.AgentTrace
-import com.itsaky.androidide.plugins.aicore.utils.ToolExecutionTracker
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -18,7 +19,7 @@ class Executor(
     private val approvalManager: ToolApprovalManager,
     private val toolExecutionTracker: ToolExecutionTracker? = null
 ) {
-    private val TAG = "Executor"
+    private val TAG = "$LOG_PREFIX.Executor"
 
     companion object {
         // Tools that only read state and can be executed in parallel safely

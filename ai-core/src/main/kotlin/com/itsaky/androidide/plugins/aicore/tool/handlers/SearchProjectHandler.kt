@@ -2,9 +2,12 @@ package com.itsaky.androidide.plugins.aicore.tool.handlers
 
 import android.util.Log
 import com.itsaky.androidide.plugins.PluginContext
+import com.itsaky.androidide.plugins.aicore.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aicore.models.ToolResult
 import com.itsaky.androidide.plugins.aicore.tool.ToolHandler
 import java.io.File
+
+private const val TAG = "$LOG_PREFIX.SearchProjectHandler"
 
 /**
  * Handler for searching files in the project.
@@ -54,7 +57,7 @@ class SearchProjectHandler(
                 )
             }
         } catch (e: Exception) {
-            Log.e("SearchProjectHandler", "Error searching project", e)
+            Log.e(TAG, "Error searching project", e)
             ToolResult.failure("Error searching project: ${e.message}", e.stackTraceToString())
         }
     }
@@ -98,7 +101,7 @@ class SearchProjectHandler(
                         }
                     } catch (e: Exception) {
                         // Skip files that can't be read as text
-                        Log.d("SearchProjectHandler", "Skipped non-text file: ${file.name}")
+                        Log.d(TAG, "Skipped non-text file: ${file.name}")
                     }
                 }
             }

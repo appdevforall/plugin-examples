@@ -1,6 +1,7 @@
 package com.itsaky.androidide.plugins.aicore.tool
 
 import android.util.Log
+import com.itsaky.androidide.plugins.aicore.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aicore.models.ToolResult
 
 /**
@@ -9,7 +10,7 @@ import com.itsaky.androidide.plugins.aicore.models.ToolResult
 class ToolRouter(
     private val handlers: List<ToolHandler>
 ) {
-    private val TAG = "ToolRouter"
+    private val TAG = "$LOG_PREFIX.ToolRouter"
     private val handlerMap: Map<String, ToolHandler> = handlers.associateBy { it.toolName }
 
     /**
@@ -36,7 +37,7 @@ class ToolRouter(
             // It is an Exception on the JVM, so the catch below would report Stop as a failure.
             Log.i(TAG, "Tool $toolName cancelled")
             // Traced, or the run appears to hang mid-tool with no EXEC-done line.
-            com.itsaky.androidide.plugins.aicore.utils.AgentTrace
+            com.itsaky.androidide.plugins.aicore.logging.AgentTrace
                 .refusal("EXEC", "$toolName cancelled", "run stopped before the tool finished")
             throw ce
         } catch (e: Exception) {

@@ -5,6 +5,9 @@ import androidx.lifecycle.viewModelScope
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aicore.R
 import com.itsaky.androidide.plugins.aicore.backends.BackendRegistry
+import com.itsaky.androidide.plugins.aicore.logging.AgentTrace
+import com.itsaky.androidide.plugins.aicore.logging.LOG_PREFIX
+import com.itsaky.androidide.plugins.aicore.managers.ChatStorageManager
 import com.itsaky.androidide.plugins.aicore.models.AgentState
 import com.itsaky.androidide.plugins.aicore.models.ChatMessage
 import com.itsaky.androidide.plugins.aicore.models.ChatSession
@@ -12,31 +15,31 @@ import com.itsaky.androidide.plugins.aicore.models.MessageStatus
 import com.itsaky.androidide.plugins.aicore.models.Sender
 import com.itsaky.androidide.plugins.aicore.models.ToolResult
 import com.itsaky.androidide.plugins.aicore.tool.AgentLoop
+import com.itsaky.androidide.plugins.aicore.tool.ApprovalRequest
+import com.itsaky.androidide.plugins.aicore.tool.ApprovalResult
 import com.itsaky.androidide.plugins.aicore.tool.Executor
 import com.itsaky.androidide.plugins.aicore.tool.ToolApprovalManager
 import com.itsaky.androidide.plugins.aicore.tool.ToolCall
 import com.itsaky.androidide.plugins.aicore.tool.ToolCallExtractor
+import com.itsaky.androidide.plugins.aicore.tool.ToolExecutionTracker
 import com.itsaky.androidide.plugins.aicore.tool.ToolRouter
-import com.itsaky.androidide.plugins.aicore.tool.ApprovalRequest
-import com.itsaky.androidide.plugins.aicore.tool.ApprovalResult
 import com.itsaky.androidide.plugins.aicore.tool.handlers.AddDependencyHandler
 import com.itsaky.androidide.plugins.aicore.tool.handlers.CreateFileHandler
 import com.itsaky.androidide.plugins.aicore.tool.handlers.EditFileHandler
-import com.itsaky.androidide.plugins.aicore.tool.handlers.PathGuard
 import com.itsaky.androidide.plugins.aicore.tool.handlers.GenerateFromTemplateHandler
 import com.itsaky.androidide.plugins.aicore.tool.handlers.GradleSyncHandler
 import com.itsaky.androidide.plugins.aicore.tool.handlers.ListFilesHandler
 import com.itsaky.androidide.plugins.aicore.tool.handlers.OpenFileHandler
+import com.itsaky.androidide.plugins.aicore.tool.handlers.PathGuard
 import com.itsaky.androidide.plugins.aicore.tool.handlers.ReadBuildOutputHandler
 import com.itsaky.androidide.plugins.aicore.tool.handlers.ReadFileHandler
 import com.itsaky.androidide.plugins.aicore.tool.handlers.SearchProjectHandler
 import com.itsaky.androidide.plugins.aicore.tool.handlers.UpdateFileHandler
-import com.itsaky.androidide.plugins.aicore.data.ChatStorageManager
-import com.itsaky.androidide.plugins.aicore.utils.AgentTrace
 import com.itsaky.androidide.plugins.services.IdeEditorService
-import com.itsaky.androidide.plugins.aicore.utils.ToolExecutionTracker
 import com.itsaky.androidide.plugins.services.LlmInferenceService
 import com.itsaky.androidide.plugins.services.SharedServices
+import java.io.File
+import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -52,8 +55,8 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
-import java.io.File
-import java.util.UUID
+
+private const val TAG = "$LOG_PREFIX.ChatViewModel"
 
 /**
  * ViewModel for managing chat state and LLM interactions.
@@ -67,7 +70,7 @@ class ChatViewModel(
         const val RESPOND_TOOL = "respond"
 
         /**
-         * [LlmConfig.extraParams] key for the local-backend GBNF; must match ai-backend-local's
+         * [LlmConfig.extraParams] key for the local-backend GBNF; must match ai-agent-local's
          * `LocalLlmBackend.EXTRA_PARAM_GRAMMAR`.
          */
         private const val EXTRA_PARAM_GRAMMAR = "grammar"
@@ -126,7 +129,7 @@ class ChatViewModel(
         return try {
             SharedServices.get(LlmInferenceService::class.java)
         } catch (e: Exception) {
-            android.util.Log.e("ChatViewModel", "Error getting LLM service", e)
+            android.util.Log.e(TAG, "Error getting LLM service", e)
             null
         }
     }
@@ -244,22 +247,22 @@ class ChatViewModel(
     }
 
     fun initializeStorage(context: android.content.Context) {
-        android.util.Log.d("ChatViewModel", "initializeStorage called")
+        android.util.Log.d(TAG, "initializeStorage called")
         storageManager = ChatStorageManager(context)
         loadSessions()
     }
 
     fun loadSessions() {
         val loaded = storageManager.loadSessions()
-        android.util.Log.d("ChatViewModel", "loadSessions: loaded ${loaded.size} sessions")
+        android.util.Log.d(TAG, "loadSessions: loaded ${loaded.size} sessions")
         if (loaded.isEmpty()) {
-            android.util.Log.d("ChatViewModel", "No sessions found, creating new session")
+            android.util.Log.d(TAG, "No sessions found, creating new session")
             createNewSession()
         } else {
             _sessions.value = loaded
             val currentId = storageManager.loadCurrentSessionId()
             val session = loaded.firstOrNull { it.id == currentId } ?: loaded.first()
-            android.util.Log.d("ChatViewModel", "Switching to session ${session.id} with ${session.messages.size} messages")
+            android.util.Log.d(TAG, "Switching to session ${session.id} with ${session.messages.size} messages")
             switchToSession(session.id)
         }
     }
@@ -338,7 +341,7 @@ class ChatViewModel(
                     contextBuilder.append(content)
                     contextBuilder.append("\n\n")
                 } catch (e: Exception) {
-                    android.util.Log.e("ChatViewModel", "Error reading context file ${file.name}: ${e.message}")
+                    android.util.Log.e(TAG, "Error reading context file ${file.name}: ${e.message}")
                 }
             }
         }
@@ -371,7 +374,7 @@ class ChatViewModel(
         val backend = try {
             getLlmService()?.getBackend(currentBackendId)
         } catch (e: Throwable) {
-            android.util.Log.w("ChatViewModel", "Could not resolve backend '$currentBackendId'", e)
+            android.util.Log.w(TAG, "Could not resolve backend '$currentBackendId'", e)
             null
         } ?: return null
 
@@ -384,8 +387,7 @@ class ChatViewModel(
                 )
             )?.takeIf { it.isNotBlank() }
         } catch (e: Throwable) {
-            android.util.Log.w(
-                "ChatViewModel",
+            android.util.Log.w(TAG,
                 "Backend '$currentBackendId' failed to supply a system prompt; using the default",
                 e
             )
@@ -401,7 +403,7 @@ class ChatViewModel(
     private fun backendTemperature(): Float? = try {
         getLlmService()?.getBackend(currentBackendId)?.defaultTemperature
     } catch (e: Throwable) {
-        android.util.Log.w("ChatViewModel", "Backend '$currentBackendId' failed to supply a temperature", e)
+        android.util.Log.w(TAG, "Backend '$currentBackendId' failed to supply a temperature", e)
         null
     }
 
@@ -554,7 +556,7 @@ class ChatViewModel(
                     sender = Sender.TOOL,
                     status = if (result.success) MessageStatus.SENT else MessageStatus.ERROR
                 )
-                android.util.Log.d("ChatViewModel", "Adding tool result message: $resultText")
+                android.util.Log.d(TAG, "Adding tool result message: $resultText")
                 _messages.value = _messages.value + resultMessage
                 syncMessageToSession(resultMessage)
             }
@@ -570,43 +572,43 @@ class ChatViewModel(
      * Retries with delays to handle plugin loading timing.
      */
     fun checkBackendAvailability() {
-        android.util.Log.d("ChatViewModel", "checkBackendAvailability: Starting check")
+        android.util.Log.d(TAG, "checkBackendAvailability: Starting check")
         viewModelScope.launch(Dispatchers.IO) {
             // Retry up to 5 times with 500ms delays to handle plugin loading order
             repeat(5) { attempt ->
-                android.util.Log.d("ChatViewModel", "checkBackendAvailability: Attempt ${attempt + 1}")
+                android.util.Log.d(TAG, "checkBackendAvailability: Attempt ${attempt + 1}")
                 val llmService = getLlmService()
-                android.util.Log.d("ChatViewModel", "checkBackendAvailability: llmService = $llmService")
+                android.util.Log.d(TAG, "checkBackendAvailability: llmService = $llmService")
                 if (llmService != null) {
                     try {
                         val backends = llmService.availableBackends
-                        android.util.Log.d("ChatViewModel", "checkBackendAvailability: Found ${backends.size} backends")
+                        android.util.Log.d(TAG, "checkBackendAvailability: Found ${backends.size} backends")
 
                         // The selection is stored as the backend's own id, so it needs no mapping:
                         // a backend this plugin has never heard of resolves like any other.
                         val preferredBackendId = BackendRegistry.selectedId()
                             ?: backends.firstOrNull()?.id
-                        android.util.Log.d("ChatViewModel", "checkBackendAvailability: Preferred backend = $preferredBackendId")
+                        android.util.Log.d(TAG, "checkBackendAvailability: Preferred backend = $preferredBackendId")
 
                         // First try to use the preferred backend
                         var foundAvailable = false
                         val preferredBackend = backends.find { it.id == preferredBackendId }
-                        android.util.Log.d("ChatViewModel", "checkBackendAvailability: Preferred backend (${preferredBackendId}) found=${preferredBackend != null}, available=${preferredBackend?.isAvailable}")
+                        android.util.Log.d(TAG, "checkBackendAvailability: Preferred backend (${preferredBackendId}) found=${preferredBackend != null}, available=${preferredBackend?.isAvailable}")
                         if (preferredBackend != null && preferredBackend.isAvailable) {
                             _isBackendAvailable.value = true
                             currentBackendId = preferredBackend.id
-                            android.util.Log.d("ChatViewModel", "checkBackendAvailability: Using preferred backend ${preferredBackend.id}")
+                            android.util.Log.d(TAG, "checkBackendAvailability: Using preferred backend ${preferredBackend.id}")
                             return@launch // Success, exit retry loop
                         }
 
                         // If preferred backend not available, try any available backend as fallback
                         for (backend in backends) {
-                            android.util.Log.d("ChatViewModel", "checkBackendAvailability: Checking backend ${backend.id}, available=${backend.isAvailable}")
+                            android.util.Log.d(TAG, "checkBackendAvailability: Checking backend ${backend.id}, available=${backend.isAvailable}")
                             if (backend.isAvailable) {
                                 _isBackendAvailable.value = true
                                 currentBackendId = backend.id
                                 foundAvailable = true
-                                android.util.Log.d("ChatViewModel", "checkBackendAvailability: Using fallback backend ${backend.id}")
+                                android.util.Log.d(TAG, "checkBackendAvailability: Using fallback backend ${backend.id}")
                                 break
                             }
                         }
@@ -615,7 +617,7 @@ class ChatViewModel(
                             return@launch // Success, exit retry loop
                         }
                     } catch (e: Exception) {
-                        android.util.Log.e("ChatViewModel", "Error checking backends on attempt ${attempt + 1}: ${e.message}", e)
+                        android.util.Log.e(TAG, "Error checking backends on attempt ${attempt + 1}: ${e.message}", e)
                     }
                 }
 
@@ -626,7 +628,7 @@ class ChatViewModel(
             }
 
             // All retries failed
-            android.util.Log.d("ChatViewModel", "checkBackendAvailability: All retries failed, no backend available")
+            android.util.Log.d(TAG, "checkBackendAvailability: All retries failed, no backend available")
             _isBackendAvailable.value = false
         }
     }
@@ -635,16 +637,16 @@ class ChatViewModel(
      * Send a user message and get agent response.
      */
     fun sendMessage(userMessage: String) {
-        android.util.Log.d("ChatViewModel", "sendMessage called")
+        android.util.Log.d(TAG, "sendMessage called")
         val llmService = getLlmService()
         if (llmService == null) {
-            android.util.Log.d("ChatViewModel", "sendMessage: LLM service not available")
+            android.util.Log.d(TAG, "sendMessage: LLM service not available")
             emitSystemError("LLM service not available. Install the AI Core plugin.")
             return
         }
 
         if (!_isBackendAvailable.value) {
-            android.util.Log.d("ChatViewModel", "sendMessage: Backend not available")
+            android.util.Log.d(TAG, "sendMessage: Backend not available")
             emitSystemError(
                 "No LLM backend is set up yet. Open Settings to choose an installed " +
                     "backend and finish configuring it."
@@ -653,13 +655,13 @@ class ChatViewModel(
         }
 
         if (userMessage.isBlank()) {
-            android.util.Log.d("ChatViewModel", "sendMessage: Message is blank")
+            android.util.Log.d(TAG, "sendMessage: Message is blank")
             return
         }
 
         // Reject re-entry while a generation is still in flight.
         if (!isGenerating.compareAndSet(false, true)) {
-            android.util.Log.d("ChatViewModel", "sendMessage: generation already in progress; ignoring")
+            android.util.Log.d(TAG, "sendMessage: generation already in progress; ignoring")
             return
         }
 
@@ -770,7 +772,7 @@ class ChatViewModel(
                 stopStateTimer()
                 throw ce
             } catch (e: Exception) {
-                android.util.Log.e("ChatViewModel", "sendMessage failed", e)
+                android.util.Log.e(TAG, "sendMessage failed", e)
                 AgentTrace.endRun("error: ${e.message}")
                 stopStateTimer()
                 _agentState.value = AgentState.Error(str(R.string.state_error, e.message))
@@ -931,7 +933,7 @@ class ChatViewModel(
             )
         } catch (e: Exception) {
             // A synchronous throw fires no callback; complete deferred so await() doesn't hang.
-            android.util.Log.e("ChatViewModel", "generateStreaming threw synchronously", e)
+            android.util.Log.e(TAG, "generateStreaming threw synchronously", e)
             viewModelScope.launch(Dispatchers.Main) {
                 _messages.value = _messages.value.filter { it.id != agentMessageId }
             }
@@ -1030,13 +1032,13 @@ class ChatViewModel(
      */
     fun switchToSession(sessionId: String) {
         val session = _sessions.value.firstOrNull { it.id == sessionId }
-        android.util.Log.d("ChatViewModel", "switchToSession: sessionId=$sessionId, session found=${session != null}")
+        android.util.Log.d(TAG, "switchToSession: sessionId=$sessionId, session found=${session != null}")
         if (session != null) {
             _currentSessionId.value = sessionId
             // Use immutable snapshot to ensure StateFlow emits on mutations
             _messages.value = session.messages.toList()
             _history.value = emptyList()
-            android.util.Log.d("ChatViewModel", "switchToSession: set _messages to ${session.messages.size} messages")
+            android.util.Log.d(TAG, "switchToSession: set _messages to ${session.messages.size} messages")
         }
     }
 

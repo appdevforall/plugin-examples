@@ -1,7 +1,7 @@
 package com.itsaky.androidide.plugins.aicore.fragments
 
 import com.itsaky.androidide.plugins.aicore.tool.handlers.EditFileHandler
-import com.itsaky.androidide.plugins.aicore.utils.parseToolBoolean
+import com.itsaky.androidide.plugins.aicore.tool.parseToolBoolean
 import org.json.JSONObject
 
 /**

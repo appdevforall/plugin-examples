@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Agent Local Plugin</title>
+<style>
+  body {
+    background: #ffffff;
+    color: #000000;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+    margin: 0;
+    padding: 1.25rem;
+    max-width: 820px;
+  }
+  h1 { font-size: 1.6rem; margin: 0 0 0.75rem; }
+  h2 { font-size: 1.2rem; margin: 1.75rem 0 0.5rem; border-bottom: 1px solid #e0e0e0; padding-bottom: 0.2rem; }
+  code {
+    background: #f4f4f4;
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.9em;
+  }
+  ul { padding-left: 1.25rem; }
+  li { margin: 0.3rem 0; }
+  table { border-collapse: collapse; margin: 0.5rem 0; width: 100%; }
+  th, td { border: 1px solid #ddd; padding: 0.4rem 0.6rem; text-align: left; vertical-align: top; }
+  th { background: #f4f4f4; }
+  .note {
+    border-left: 3px solid #999;
+    padding: 0.25rem 0.75rem;
+    margin: 1rem 0;
+    background: #fafafa;
+  }
+</style>
+</head>
+<body>
+  <h1>AI Agent Local Plugin</h1>
+
+  <h2>Executive overview</h2>
+  <p><b>AI Agent Local</b> runs large-language models <b>entirely on the
+  device</b>. It is a <b>headless</b> plugin with no screens of its own: it
+  registers itself as the <code>local</code> inference backend with <b>AI
+  Core</b>, which routes requests from <b>AI Assistant</b>, <b>Code
+  Suggestions</b>, <b>Speech to Text</b> and <b>Vector Search</b>.</p>
+  <p>Install <b>AI Core</b> alongside it — without the router this plugin has
+  nothing to register with. Install order does not matter.</p>
+  <p>This plugin declares <b>no INTERNET permission</b>. Prompts, code and
+  generated text cannot leave the device, because the plugin has no way to send
+  them anywhere.</p>
+
+  <h2>Core functionality</h2>
+  <ul>
+    <li><b>On-device GGUF inference</b> through a bundled, prebuilt llama.cpp
+      library.</li>
+    <li><b>Streaming responses</b>, with <b>Stop</b> cancelling the native
+      generation early rather than waiting for it to finish.</li>
+    <li><b>Chat with history</b>, rendered in the ChatML format that on-device
+      instruct models are fine-tuned on.</li>
+    <li><b>Model safety checks</b> — inspects a selected <code>.gguf</code>
+      header and refuses embedding-only models for chat, with a clear error
+      instead of a native crash.</li>
+    <li><b>Actionable load failures</b> — a failed load is classified (missing,
+      empty, not a GGUF, out of memory, unsupported quantization) and reported as
+      a message that says what to do next.</li>
+    <li><b>Storage-picker support</b> — a model chosen as a
+      <code>content://</code> document is copied once into private storage so the
+      native loader can open it, and only the current model is kept.</li>
+  </ul>
+
+  <h2>Technical architecture</h2>
+  <table>
+    <tr><th>Component</th><th>Role</th></tr>
+    <tr><td><code>LocalLlmPlugin</code></td><td>Plugin entry point. Registers the
+      backend with AI Core on activation, re-registering if AI Core activates
+      later; frees the native model on dispose.</td></tr>
+    <tr><td><code>LocalLlmBackend</code></td><td>The inference engine. Resolves
+      the selected model to a real file path, manages loading and unloading, and
+      serializes generations against the shared native context.</td></tr>
+    <tr><td><code>GgufModelInspector</code></td><td>Minimal GGUF header reader
+      that classifies a model as chat- or embedding-only.</td></tr>
+    <tr><td><code>ModelLoadDiagnostics</code></td><td>Classifies a load failure
+      from the file, free memory and the native error text, as a pure function
+      that is unit-tested off-device.</td></tr>
+    <tr><td><code>ModelLoadMessages</code></td><td>Renders a diagnosis as
+      user-facing text, keeping string resources out of the engine.</td></tr>
+  </table>
+  <p>The native library is committed prebuilt (four ABIs: arm64-v8a,
+  armeabi-v7a, x86, x86_64), so a normal build needs no NDK, CMake, or the
+  llama.cpp submodule.</p>
+
+  <h2>Usage</h2>
+  <ol>
+    <li>Install <b>AI Core</b> and <b>AI Agent Local</b> via the Plugin
+      Manager, then restart the IDE.</li>
+    <li>Install a consumer plugin (e.g. <b>AI Assistant</b>).</li>
+    <li>Open <b>AI Assistant &rarr; AI Settings</b>, select the local backend, and
+      pick a <code>.gguf</code> model file. This plugin has no settings screen of
+      its own; it reads that choice at request time.</li>
+  </ol>
+  <div class="note">
+    Model choice drives whether this works at all on a given device. A Q4_K_M
+    quantization of a 1&ndash;3B parameter model is the safest starting point;
+    larger models need more free RAM for the KV cache than the file size alone
+    suggests.
+  </div>
+
+  <h2>Key benefits</h2>
+  <ul>
+    <li><b>Complete privacy</b> — no network permission, so code and prompts
+      cannot be transmitted.</li>
+    <li><b>Works offline</b> — no connectivity, account, or API key needed.</li>
+    <li><b>No running costs</b> — no per-token billing or rate limits.</li>
+    <li><b>Crash-resistant</b> — model classification and header bounds-checking
+      turn would-be native crashes into recoverable, user-visible errors.</li>
+    <li><b>Reproducible builds</b> — no NDK required; the native library ships
+      prebuilt.</li>
+  </ul>
+</body>
+</html>

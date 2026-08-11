@@ -20,21 +20,24 @@ import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.chip.Chip
 import com.google.android.material.snackbar.Snackbar
 import com.itsaky.androidide.plugins.PluginContext
-import com.itsaky.androidide.plugins.aicore.AiCorePlugin
 import com.itsaky.androidide.plugins.aicore.BuildConfig
 import com.itsaky.androidide.plugins.aicore.R
 import com.itsaky.androidide.plugins.aicore.adapters.ChatAdapter
 import com.itsaky.androidide.plugins.aicore.databinding.FragmentChatBinding
+import com.itsaky.androidide.plugins.aicore.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aicore.models.AgentState
 import com.itsaky.androidide.plugins.aicore.models.isRunning
+import com.itsaky.androidide.plugins.aicore.plugin.AiCorePlugin
 import com.itsaky.androidide.plugins.aicore.viewmodel.ChatViewModel
 import com.itsaky.androidide.plugins.base.PluginFragmentHelper
 import com.itsaky.androidide.plugins.services.IdeProjectService
 import com.itsaky.androidide.plugins.services.IdeTooltipService
 import com.itsaky.androidide.plugins.services.IdeUIService
 import io.noties.markwon.Markwon
-import kotlinx.coroutines.launch
 import java.io.File
+import kotlinx.coroutines.launch
+
+private const val TAG = "$LOG_PREFIX.ChatFragment"
 
 /**
  * ChatFragment for Agent chat UI.
@@ -90,7 +93,7 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
     override fun onGetLayoutInflater(savedInstanceState: Bundle?): LayoutInflater {
         val inflater = super.onGetLayoutInflater(savedInstanceState)
         return com.itsaky.androidide.plugins.base.PluginFragmentHelper.getPluginInflater(
-            com.itsaky.androidide.plugins.aicore.AiCorePlugin.PLUGIN_ID, inflater
+            com.itsaky.androidide.plugins.aicore.plugin.AiCorePlugin.PLUGIN_ID, inflater
         )
     }
 
@@ -156,15 +159,15 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
             val shouldAutoSend = prefs.getBoolean("auto_send", false)
 
             if (!pendingPrompt.isNullOrBlank() && shouldAutoSend) {
-                android.util.Log.d("ChatFragment", "📝 Found pending test prompt: '$pendingPrompt'")
+                android.util.Log.d(TAG, "📝 Found pending test prompt: '$pendingPrompt'")
 
                 // Inject into input field
                 binding.promptInputEdittext.setText(pendingPrompt)
-                android.util.Log.d("ChatFragment", "✅ Prompt injected into input field")
+                android.util.Log.d(TAG, "✅ Prompt injected into input field")
 
                 // Auto-send after a short delay to ensure UI is ready
                 binding.promptInputEdittext.post {
-                    android.util.Log.d("ChatFragment", "🚀 Sending prompt automatically...")
+                    android.util.Log.d(TAG, "🚀 Sending prompt automatically...")
                     binding.sendButton.performClick()
 
                     // Clear the SharedPreferences after sending
@@ -175,11 +178,11 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
                         remove("timestamp")
                         apply()
                     }
-                    android.util.Log.d("ChatFragment", "🧹 Cleared pending prompt from preferences")
+                    android.util.Log.d(TAG, "🧹 Cleared pending prompt from preferences")
                 }
             }
         } catch (e: Exception) {
-            android.util.Log.e("ChatFragment", "Error checking for pending test prompt: ${e.message}")
+            android.util.Log.e(TAG, "Error checking for pending test prompt: ${e.message}")
         }
     }
 
@@ -206,7 +209,7 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
 
     private fun getPluginContext(): PluginContext? {
         // Access the plugin context via the companion object
-        return com.itsaky.androidide.plugins.aicore.AiCorePlugin.getContext()
+        return com.itsaky.androidide.plugins.aicore.plugin.AiCorePlugin.getContext()
     }
 
     private fun setupRecyclerView() {
@@ -360,20 +363,20 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
     }
 
     private suspend fun observeMessages() {
-        android.util.Log.d("ChatFragment", "observeMessages: Starting to collect messages")
+        android.util.Log.d(TAG, "observeMessages: Starting to collect messages")
         viewModel.messages.collect { messages ->
             val binding = _binding ?: return@collect
-            android.util.Log.d("ChatFragment", "observeMessages: Received ${messages.size} messages")
+            android.util.Log.d(TAG, "observeMessages: Received ${messages.size} messages")
             messages.forEachIndexed { index, msg ->
-                android.util.Log.d("ChatFragment", "  Message $index: sender=${msg.sender}, text=${msg.text.take(50)}")
+                android.util.Log.d(TAG, "  Message $index: sender=${msg.sender}, text=${msg.text.take(50)}")
             }
             binding.emptyChatView.isVisible = messages.isEmpty()
-            android.util.Log.d("ChatFragment", "observeMessages: Calling submitList with ${messages.size} messages")
+            android.util.Log.d(TAG, "observeMessages: Calling submitList with ${messages.size} messages")
             // Sampled before the list changes: streaming re-emits on every token, so scrolling
             // unconditionally would drag the user back down whenever they scrolled up to read.
             val stickToBottom = binding.chatRecyclerView.isAtBottom()
             chatAdapter.submitList(messages) {
-                android.util.Log.d("ChatFragment", "observeMessages: submitList callback - scrolling to ${messages.size - 1}")
+                android.util.Log.d(TAG, "observeMessages: submitList callback - scrolling to ${messages.size - 1}")
                 if (stickToBottom && messages.isNotEmpty()) {
                     // Null after onDestroyView: submitList posts this callback.
                     _binding?.chatRecyclerView?.scrollToPosition(messages.lastIndex)

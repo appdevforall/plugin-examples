@@ -46,7 +46,7 @@
   other AI plugins (<b>AI Assistant</b>, <b>Code Suggestions</b>, <b>Speech to
   Text</b>, and <b>Vector Search</b>) call at runtime.</p>
   <p><b>AI Core provides no models itself.</b> Inference is supplied by separate
-  backend plugins — <b>AI Local Backend</b> for on-device models, <b>AI Gemini
+  backend plugins — <b>AI Agent Local</b> for on-device models, <b>AI Gemini
   Backend</b> for Google's API — which register with AI Core when they activate.
   Install AI Core <i>and at least one backend</i>; without a backend, requests
   fail with "Backend not found". Install order does not matter.</p>
@@ -92,7 +92,7 @@
   <h2>Usage</h2>
   <ol>
     <li>Install <b>AI Core</b> via the Plugin Manager.</li>
-    <li>Install at least one backend: <b>AI Local Backend</b>, <b>AI Gemini
+    <li>Install at least one backend: <b>AI Agent Local</b>, <b>AI Gemini
       Backend</b>, or both. Restart the IDE.</li>
     <li>Install one or more consumer plugins (e.g. <b>AI Assistant</b>).</li>
     <li>Open <b>AI Assistant &rarr; AI Settings</b> to choose a backend and

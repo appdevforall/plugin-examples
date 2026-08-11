@@ -41,8 +41,8 @@
   inference router every other AI plugin uses.</p>
 
   <p>It ships no model of its own. Install <b>at least one backend plugin</b>
-  alongside it: <b>AI Local Backend</b> to run <code>.gguf</code> models on the
-  device, or <b>AI Gemini Backend</b> to call Google's API. Without one, the Agent
+  alongside it: <b>AI Agent Local</b> to run <code>.gguf</code> models on the
+  device, or <b>AI Agent Gemini</b> to call Google's API. Without one, the Agent
   has nothing to talk to.</p>
 
   <h2>Where the settings live</h2>
@@ -57,10 +57,10 @@
   settings — each backend supplies its own, so what you see depends on what you
   installed:</p>
   <ul>
-    <li><b>AI Local Backend</b> — runs a <code>.gguf</code> model via llama.cpp.
+    <li><b>AI Agent Local</b> — runs a <code>.gguf</code> model via llama.cpp.
       Its panel shows the engine status and a file picker for the model. Nothing
       leaves the device.</li>
-    <li><b>AI Gemini Backend</b> — calls Google's API. Its panel takes an API key
+    <li><b>AI Agent Gemini</b> — calls Google's API. Its panel takes an API key
       and lists the models that key can reach; see <i>Getting a Gemini API key</i>
       below. Prompts and any file contents the agent reads are sent to Google over
       HTTPS.</li>

@@ -2,8 +2,11 @@ package com.itsaky.androidide.plugins.aicore.tool.handlers
 
 import android.util.Log
 import com.itsaky.androidide.plugins.PluginContext
+import com.itsaky.androidide.plugins.aicore.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aicore.models.ToolResult
 import com.itsaky.androidide.plugins.aicore.tool.ToolHandler
+
+private const val TAG = "$LOG_PREFIX.CreateFileHandler"
 
 /**
  * Handler for creating new files.
@@ -25,39 +28,39 @@ class CreateFileHandler(
         }
 
         return try {
-            Log.d("CreateFileHandler", "Creating file: $filePath")
+            Log.d(TAG, "Creating file: $filePath")
 
             // Security: resolve against the project root and reject any escape.
             val file = PathGuard.resolveWithin(filePath)
                 ?: return ToolResult.failure("File path must be within project directory")
 
-            Log.d("CreateFileHandler", "Resolved path: ${file.absolutePath}")
+            Log.d(TAG, "Resolved path: ${file.absolutePath}")
 
             if (file.exists()) {
-                Log.w("CreateFileHandler", "File already exists: ${file.absolutePath}")
+                Log.w(TAG, "File already exists: ${file.absolutePath}")
                 return ToolResult.failure("File already exists: $filePath")
             }
 
             // Create parent directories if needed
             val parentDir = file.parentFile
             if (parentDir != null && !parentDir.exists()) {
-                Log.d("CreateFileHandler", "Creating parent directories: ${parentDir.absolutePath}")
+                Log.d(TAG, "Creating parent directories: ${parentDir.absolutePath}")
                 val created = parentDir.mkdirs()
-                Log.d("CreateFileHandler", "Parent directories creation result: $created")
+                Log.d(TAG, "Parent directories creation result: $created")
             }
 
             // Write content
-            Log.d("CreateFileHandler", "Writing ${content.length} characters to file")
+            Log.d(TAG, "Writing ${content.length} characters to file")
             file.writeText(content)
 
-            Log.d("CreateFileHandler", "File created successfully: ${file.absolutePath}")
+            Log.d(TAG, "File created successfully: ${file.absolutePath}")
 
             ToolResult.success(
                 message = "Created file: $filePath (${content.length} characters)",
                 data = file.absolutePath
             )
         } catch (e: Exception) {
-            Log.e("CreateFileHandler", "Error creating file at $filePath", e)
+            Log.e(TAG, "Error creating file at $filePath", e)
             ToolResult.failure(
                 "Error creating file: ${e.message}",
                 "Path: $filePath\nError: ${e.stackTraceToString()}"

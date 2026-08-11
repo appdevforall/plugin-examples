@@ -1,7 +1,8 @@
 package com.itsaky.androidide.plugins.aicore.backends
 
-import com.itsaky.androidide.plugins.aicore.AiBackend
-import com.itsaky.androidide.plugins.aicore.AiCorePlugin
+import com.itsaky.androidide.plugins.aicore.backends.AiBackend
+import com.itsaky.androidide.plugins.aicore.logging.LOG_PREFIX
+import com.itsaky.androidide.plugins.aicore.plugin.AiCorePlugin
 import com.itsaky.androidide.plugins.services.LlmInferenceService
 import com.itsaky.androidide.plugins.services.SharedServices
 
@@ -30,7 +31,7 @@ data class BackendOption(
  */
 object BackendRegistry {
 
-    private const val TAG = "BackendRegistry"
+    private const val TAG = "$LOG_PREFIX.BackendRegistry"
 
     /**
      * Every registered backend, sorted by label so the selector's order is stable across restarts

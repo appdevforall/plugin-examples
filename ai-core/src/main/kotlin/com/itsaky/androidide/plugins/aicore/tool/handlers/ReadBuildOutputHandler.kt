@@ -2,9 +2,12 @@ package com.itsaky.androidide.plugins.aicore.tool.handlers
 
 import android.util.Log
 import com.itsaky.androidide.plugins.PluginContext
+import com.itsaky.androidide.plugins.aicore.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aicore.models.ToolResult
 import com.itsaky.androidide.plugins.aicore.tool.ToolHandler
 import com.itsaky.androidide.plugins.services.IdeBuildService
+
+private const val TAG = "$LOG_PREFIX.ReadBuildOutputHandler"
 
 /**
  * Handler for reading the current build output.
@@ -17,12 +20,12 @@ class ReadBuildOutputHandler(
     override val requiresApproval = false
 
     override suspend fun execute(args: Map<String, Any?>): ToolResult {
-        Log.d("ReadBuildOutputHandler", "Reading build output")
+        Log.d(TAG, "Reading build output")
 
         return try {
             val buildService = pluginContext.services.get(IdeBuildService::class.java)
             if (buildService == null) {
-                Log.w("ReadBuildOutputHandler", "IdeBuildService not available")
+                Log.w(TAG, "IdeBuildService not available")
                 return ToolResult.failure(
                     "Build service not available",
                     "The IDE build service is not available."
@@ -31,7 +34,7 @@ class ReadBuildOutputHandler(
 
             val output = buildService.getBuildOutput()
             if (output.isNullOrBlank()) {
-                Log.d("ReadBuildOutputHandler", "No build output available")
+                Log.d(TAG, "No build output available")
                 ToolResult.success(
                     message = "No build output available",
                     data = "(No recent build output)"
@@ -44,14 +47,14 @@ class ReadBuildOutputHandler(
                     output
                 }
 
-                Log.d("ReadBuildOutputHandler", "Read ${truncated.length} chars of build output")
+                Log.d(TAG, "Read ${truncated.length} chars of build output")
                 ToolResult.success(
                     message = "Build output (last ${truncated.length} characters)",
                     data = truncated
                 )
             }
         } catch (e: Exception) {
-            Log.e("ReadBuildOutputHandler", "Error reading build output", e)
+            Log.e(TAG, "Error reading build output", e)
             ToolResult.failure(
                 "Error reading build output",
                 "${e.message ?: "Unknown error"}\n\n${e.stackTraceToString()}"
