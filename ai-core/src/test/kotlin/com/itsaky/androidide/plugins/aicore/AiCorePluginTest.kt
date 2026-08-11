@@ -7,6 +7,7 @@ import com.itsaky.androidide.plugins.services.SharedServices
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import org.junit.Assert.assertSame
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -34,22 +35,33 @@ class AiCorePluginTest {
     }
 
     @Test
-    fun testPluginInitialization() {
+    fun givenAContext_whenInitializing_thenItSucceedsAndPublishesThatContext() {
         val plugin = AiCorePlugin()
         val result = plugin.initialize(mockContext)
 
         assertTrue(result)
-        verify { mockLogger.info("AiCorePlugin: Plugin initialized successfully") }
+        // The backend plugins read their own settings through this; without it they report
+        // themselves unavailable and no inference happens anywhere.
+        assertSame(mockContext, SharedServices.get(PluginContext::class.java))
     }
 
     @Test
-    fun testPluginActivation() {
+    fun givenInitialized_whenActivating_thenItSucceeds() {
         val plugin = AiCorePlugin()
         plugin.initialize(mockContext)
-        val result = plugin.activate()
 
-        assertTrue(result)
-        verify { mockLogger.info("AiCorePlugin: Activating plugin") }
+        assertTrue(plugin.activate())
+    }
+
+    @Test
+    fun givenActivated_whenDeactivating_thenTheRouterIsWithdrawn() {
+        val plugin = AiCorePlugin()
+        plugin.initialize(mockContext)
+        plugin.activate()
+
+        assertTrue(plugin.deactivate())
+        // Leaving it published would hand consumers a router whose backends have all gone.
+        assertNull(SharedServices.get(LlmInferenceService::class.java))
     }
 
     @Test

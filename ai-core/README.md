@@ -1,8 +1,18 @@
 # AI Core plugin for CodeOnTheGo
 
-The **LLM inference router** for CodeOnTheGo's AI plugins. It publishes
-`LlmInferenceService` through `SharedServices`, which other plugins — e.g. the
-sibling [`ai-assistant`](../ai-assistant/) — consume at runtime.
+Two things in one plugin, and **mandatory for every AI feature**:
+
+1. The **Agent** — a tool-calling chat assistant that reads, searches and edits
+   the open project behind an approval gate, contributed as an editor tab plus a
+   settings screen.
+2. The **LLM inference router** — publishes `LlmInferenceService` through
+   `SharedServices`, which [`code-suggestions-plugin`](../code-suggestions-plugin/),
+   [`speech-to-text-plugin`](../speech-to-text-plugin/) and
+   [`vector-search-plugin`](../vector-search-plugin/) consume at runtime.
+
+The Agent and the router shipped as separate `ai-assistant` and `ai-core` plugins
+until they were merged here; an existing install's settings and chat history are
+adopted on first activation.
 
 **AI Core ships no backend of its own.** Backends are separate plugins that
 register themselves with it on activation:
@@ -54,9 +64,15 @@ overrides exist rather than trusting behaviour to catch it.
 
 ## Key classes
 
-- `AiCorePlugin.kt` — plugin entry point; publishes the service
+- `AiCorePlugin.kt` — plugin entry point; publishes the router, contributes the
+  Agent tab and settings screen, and adopts a pre-merge install's data
 - `LlmInferenceServiceImpl.kt` — the SharedServices-exposed router
-- `AiBackend.kt` — maps the AI Assistant backend setting onto a backend id
+- `AiBackend.kt` — maps a stored backend setting onto a backend id
+- `backends/BackendRegistry.kt` — the installed backends, as the settings
+  selector sees them
+- `backends/BackendFragmentFactory.kt` — loads a backend's settings pane with
+  that backend plugin's own classloader
+- `fragments/`, `viewmodel/`, `tool/` — the Agent chat, its tool loop and handlers
 
 ## License
 

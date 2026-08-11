@@ -22,10 +22,9 @@ See the official [plugin documentation](https://www.appdevforall.org/codeonthego
 | [`compose-preview/`](compose-preview/)             | Renders Jetpack Compose `@Preview` functions on-device — no full app build or run. |
 | [`ai-literacy-course/`](ai-literacy-course/)       | Bundles Learn AI Anywhere's offline "Introduction to AI" course (26 videos + interactive activities) and plays it full-screen, fully offline. |
 | [`layout-editor/`](layout-editor/)                 | Visual drag-and-drop editor for Android XML layouts. |
-| [`ai-core/`](ai-core/)                             | Shared LLM inference **router**, exposed to other plugins as a runtime service. Ships no model — install at least one backend plugin below. |
+| [`ai-core/`](ai-core/)                             | The **Agent** chat (tool-calling assistant) plus the shared LLM inference **router** other plugins consume. Ships no model — install at least one backend plugin below. Mandatory for every AI feature. |
 | [`ai-backend-local/`](ai-backend-local/)           | On-device `.gguf` inference backend for `ai-core` (bundled llama.cpp AAR). Registers as `local`; needs no network. |
 | [`ai-backend-gemini/`](ai-backend-gemini/)         | Google Gemini API inference backend for `ai-core`. Registers as `gemini`; needs an API key and network access. |
-| [`ai-assistant/`](ai-assistant/)                   | In-IDE AI chat assistant with tool calling; talks to `ai-core`, which routes to whichever backend plugin is installed. |
 | [`flutter-template/`](flutter-template/)           | Adds Flutter starter project templates (Basic, BLoC, Provider, GetX, Riverpod) to the New Project screen. |
 | [`code-suggestions-plugin/`](code-suggestions-plugin/) | Inline ghost-text code completions powered by AI. |
 | [`speech-to-text-plugin/`](speech-to-text-plugin/) | Voice-to-code: converts speech to code with AI generation. |

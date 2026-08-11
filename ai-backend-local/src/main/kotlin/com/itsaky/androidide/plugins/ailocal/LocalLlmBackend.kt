@@ -37,7 +37,7 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend, Cancella
          */
         const val EXTRA_PARAM_GRAMMAR = "grammar"
 
-        /** Pref key holding the selected model path or content URI, written by ai-assistant. */
+        /** Pref key holding the selected model path or content URI, written by the Agent settings screen. */
         private const val KEY_MODEL_PATH = "local_llm_model_path"
 
         /**
@@ -80,8 +80,8 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend, Cancella
     override fun getName(): String = "Local LLM"
 
     /**
-     * The settings a caller must collect to use this backend. The key is the one ai-assistant
-     * already writes into `AgentSettings`, so a UI driven by this spec stores it where this
+     * The settings a caller must collect to use this backend. The key is the one this plugin's own
+     * settings pane writes into `AgentSettings`, so a UI driven by this spec stores it where this
      * backend reads it.
      */
     override fun getConfigSpecs(): List<ConfigFieldSpec> = listOf(
@@ -139,9 +139,9 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend, Cancella
     override fun isAvailable(): Boolean {
         // Check if model is actually configured
         val prefs = try {
-            // Try to get ai-assistant plugin's preferences
-            val aiAssistantContext = SharedServices.get(PluginContext::class.java)
-            aiAssistantContext?.getPluginSharedPreferences("AgentSettings")
+            // Try to get AI Core plugin's preferences
+            val aiCoreContext = SharedServices.get(PluginContext::class.java)
+            aiCoreContext?.getPluginSharedPreferences("AgentSettings")
         } catch (e: Exception) {
             null
         }
@@ -406,8 +406,8 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend, Cancella
     private fun runGeneration(fullPrompt: String, config: LlmConfig): CompletableFuture<LlmResponse> {
         // Check if model is configured
         val prefs = try {
-            val aiAssistantContext = SharedServices.get(PluginContext::class.java)
-            aiAssistantContext?.getPluginSharedPreferences("AgentSettings")
+            val aiCoreContext = SharedServices.get(PluginContext::class.java)
+            aiCoreContext?.getPluginSharedPreferences("AgentSettings")
         } catch (e: Exception) {
             null
         }
@@ -541,8 +541,8 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend, Cancella
     private fun streamGeneration(fullPrompt: String, config: LlmConfig, callback: StreamCallback) {
         // Check if model is configured
         val prefs = try {
-            val aiAssistantContext = SharedServices.get(PluginContext::class.java)
-            aiAssistantContext?.getPluginSharedPreferences("AgentSettings")
+            val aiCoreContext = SharedServices.get(PluginContext::class.java)
+            aiCoreContext?.getPluginSharedPreferences("AgentSettings")
         } catch (e: Exception) {
             null
         }

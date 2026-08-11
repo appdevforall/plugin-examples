@@ -19,13 +19,13 @@ import javax.crypto.spec.GCMParameterSpec
  * written to SharedPreferences, so a copied prefs file (root, `adb backup`,
  * forensic dump) is useless without this device's Keystore.
  *
- * The alias and transform below are mirrored verbatim in ai-assistant's
- * `SecureApiKeyStore` so a key written there can be decrypted here — both
- * plugins run in the host app's process (same UID) and therefore share one
- * Android Keystore. Keep the two copies in sync.
+ * The [ALIAS] must stay stable across releases: a key encrypted under one
+ * alias cannot be read under another, so changing it silently invalidates
+ * every stored key. It is also what lets a key written before the AI plugins
+ * were reorganised still decrypt today — every plugin runs in the host app's
+ * process and UID, so they all share one Android Keystore.
  */
 object SecureApiKeyStore {
-    // Drift in the constants below fails this plugin's verifySecureApiKeyStoreParity build task.
     private const val TAG = "SecureApiKeyStore"
     private const val KEYSTORE = "AndroidKeyStore"
     private const val ALIAS = "cotg_ai_gemini_key_v1"

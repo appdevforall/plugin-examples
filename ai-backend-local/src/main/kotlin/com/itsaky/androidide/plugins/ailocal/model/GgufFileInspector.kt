@@ -8,12 +8,10 @@ import java.io.InputStream
 /**
  * Best-effort GGUF validation for a SAF-selected document.
  *
- * Kept out of AiSettingsViewModel so the ViewModel stays focused on UI state (SRP). It is
- * self-contained rather than reusing ai-backend-local's `GgufModelInspector` because ai-assistant and
- * ai-backend-local are separate plugins with isolated classloaders — ai-assistant cannot import its
- * classes, so this magic-byte check is unavoidably (and deliberately) duplicated across the
- * boundary. This object is the single definition on the ai-assistant side; keep the magic in sync
- * with `GgufModelInspector.GGUF_MAGIC` in ai-backend-local if the format ever changes.
+ * Separate from `GgufModelInspector` because the two answer different questions: this screens a
+ * `content://` document the user just picked, before any path is stored, so it must work from a
+ * stream and never throw. Keep [GGUF_MAGIC] in step with `GgufModelInspector.GGUF_MAGIC` if the
+ * format ever changes.
  */
 internal object GgufFileInspector {
 

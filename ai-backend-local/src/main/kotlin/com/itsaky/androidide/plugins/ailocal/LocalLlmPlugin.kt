@@ -190,7 +190,7 @@ class LocalLlmPlugin : IPlugin, DocumentationExtension {
                 <code>.gguf</code> model through a bundled llama.cpp build, so
                 prompts and code never leave the device.</p>
                 <p>Install <b>AI Core</b> as well, then pick the model file from
-                <b>AI Assistant → AI Settings</b>.</p>
+                <b>AI Core → Agent settings</b>.</p>
             """.trimIndent(),
             buttons = listOf(
                 PluginTooltipButton(

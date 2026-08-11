@@ -71,70 +71,8 @@ dependencies {
     testImplementation("org.json:json:20231013")
 }
 
-/**
- * Fails the build when the crypto constants of ai-assistant's and this plugin's duplicated
- * SecureApiKeyStore drift, which would otherwise surface only on a device as "backend not
- * available". On preBuild, not `test`: CI runs assemblePlugin and never the unit tests.
- */
-val verifySecureApiKeyStoreParity by tasks.registering {
-    group = "verification"
-    description = "Fails if ai-backend-gemini and ai-assistant's SecureApiKeyStore crypto constants differ."
-
-    val ours = file("src/main/kotlin/com/itsaky/androidide/plugins/aigemini/SecureApiKeyStore.kt")
-    val theirs = file(
-        "../ai-assistant/src/main/kotlin/com/itsaky/androidide/plugins/aiassistant/security/SecureApiKeyStore.kt"
-    )
-    // inputs.files (not inputs.file) so a missing sibling is an absent input, not a failure.
-    inputs.files(ours, theirs)
-
-    doLast {
-        if (!theirs.exists()) {
-            logger.warn(
-                "SecureApiKeyStore parity check skipped: ${theirs.path} not found. " +
-                    "Build ai-backend-gemini from the plugin-examples repo to verify it."
-            )
-            return@doLast
-        }
-
-        val required = listOf("KEYSTORE", "ALIAS", "TRANSFORM", "IV_LEN", "TAG_BITS", "ENC_PREFIX")
-        val constant = Regex("""const\s+val\s+(\w+)\s*=\s*(.+)""")
-
-        fun constantsOf(source: File): Map<String, String> = source.readLines()
-            .mapNotNull { constant.find(it) }
-            .associate { it.groupValues[1] to it.groupValues[2].substringBefore("//").trim() }
-            .filterKeys { it in required }
-
-        val ourConstants = constantsOf(ours)
-        val theirConstants = constantsOf(theirs)
-
-        val missing = required.filter { it !in ourConstants || it !in theirConstants }
-        val drifted = required.filter {
-            it in ourConstants && it in theirConstants && ourConstants[it] != theirConstants[it]
-        }
-
-        if (missing.isNotEmpty() || drifted.isNotEmpty()) {
-            val details = buildString {
-                if (missing.isNotEmpty()) {
-                    appendLine("  missing from one or both copies: ${missing.joinToString()}")
-                }
-                drifted.forEach {
-                    appendLine("  $it: ai-backend-gemini=${ourConstants[it]} ai-assistant=${theirConstants[it]}")
-                }
-            }
-            throw GradleException(
-                "SecureApiKeyStore crypto constants differ between ai-backend-gemini and ai-assistant.\n" +
-                    details +
-                    "A key encrypted by one plugin would not decrypt in the other. " +
-                    "Keep both copies in sync:\n" +
-                    "  ${ours.path}\n  ${theirs.path}"
-            )
-        }
-    }
-}
-
-tasks.named("preBuild") {
-    dependsOn(verifySecureApiKeyStoreParity)
-}
+// SecureApiKeyStore is no longer duplicated: this plugin holds the only copy, so there is nothing
+// left to drift against. The parity check that guarded the ai-assistant copy went with that plugin.
 
 // AAR metadata checks are disabled by convention for these application-as-library plugins.
 tasks.matching {

@@ -1,9 +1,162 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- App/Plugin Name -->
+    <string name="app_name">AI Assistant</string>
 
-    <!--
-      Intentionally empty. AI Core has no user-facing strings of its own: every message a user
-      reads comes from the backend plugin that produced it (ai-backend-gemini's gemini_error_*,
-      ai-backend-local's llm_load_error_*), resolved against that plugin's own resources.
-    -->
+    <!-- Chat Fragment -->
+    <string name="chat_title">AI Chat</string>
+    <string name="hint_enter_message">Enter your message…</string>
+    <string name="btn_send">Send</string>
+    <string name="btn_clear_chat">Clear chat</string>
+    <string name="desc_attach_context_file">Attach a file as context</string>
+    <string name="desc_send_message">Send message</string>
+    <string name="desc_stop_agent">Stop the agent</string>
+    <string name="desc_show_composer">Show the message box</string>
+    <string name="desc_hide_composer">Hide the message box</string>
+    <string name="desc_overflow_menu">More options</string>
+
+    <!-- Menu Items -->
+    <string name="menu_clear_chat">Clear chat</string>
+    <string name="menu_settings">Settings</string>
+    <string name="menu_new_chat">New chat</string>
+    <string name="menu_chat_history">Chat history</string>
+    <string name="menu_copy_chat">Copy chat</string>
+
+    <!-- Agent States -->
+    <string name="state_ready">Ready</string>
+    <string name="state_initializing">Initializing…</string>
+    <string name="state_thinking">Thinking…</string>
+    <string name="state_processing">Processing…</string>
+    <string name="state_executing">Executing step %1$d of %2$d: %3$s</string>
+    <string name="state_cancelling">Cancelling…</string>
+
+    <!-- Backend Status -->
+    <string name="backend_not_available">No LLM backend available. Configure AI Core plugin.</string>
+    <string name="backend_model">Model: %s</string>
+
+    <!-- Messages -->
+    <string name="msg_chat_cleared">Chat cleared</string>
+    <string name="msg_enter_message">Please enter a message</string>
+    <string name="msg_copied">Copied</string>
+    <string name="msg_generating">Generating…</string>
+
+    <!-- Message Actions -->
+    <string name="action_copy_text">Copy Text</string>
+    <string name="action_edit_message">Edit Message</string>
+    <string name="action_retry">Retry</string>
+    <string name="action_open_settings">Open AI Settings</string>
+
+    <!-- Tool Execution -->
+    <string name="tool_reading_file">Reading file…</string>
+    <string name="tool_listing_files">Listing files…</string>
+    <string name="tool_searching">Searching…</string>
+    <string name="tool_creating_file">Creating file…</string>
+    <string name="tool_updating_file">Updating file…</string>
+
+    <!-- Errors -->
+    <string name="error_llm_service_not_available">LLM service not available. Install AI Core plugin.</string>
+    <string name="error_no_backend">No LLM backend available. Please configure one in AI Core plugin.</string>
+    <string name="error_generation_failed">Failed to generate response</string>
+    <string name="error_file_read">Error reading file: %s</string>
+    <string name="error_file_write">Error writing file: %s</string>
+
+    <!-- Approval Dialog -->
+    <string name="approval_title">Approve %s?</string>
+    <string name="approval_message">The AI wants to execute:</string>
+    <string name="approval_args">Arguments:</string>
+    <string name="approval_approve_once">Approve Once</string>
+    <string name="approval_approve_session">Approve for Session</string>
+    <string name="approval_deny">Deny</string>
+    <string name="approval_header">🔒 Tool Approval Required</string>
+    <string name="approval_confirm_title">⚠️ Confirm: %s</string>
+    <string name="approval_run_now">✓ Run Now</string>
+    <string name="approval_always_allow">✓ Always Allow</string>
+    <string name="approval_proposed_change">Proposed change:</string>
+    <string name="approval_accept">✓ Accept</string>
+    <string name="approval_correct">✎ Correct</string>
+    <string name="approval_decline">✗ Decline</string>
+    <string name="approval_correction_title">What should the AI change?</string>
+    <string name="approval_correction_hint">e.g. keep the original name, only change the return type</string>
+    <string name="approval_correction_send">Send</string>
+    <string name="approval_correction_cancel">Back</string>
+
+    <!-- Token Usage -->
+    <string name="tokens_used">Tokens: %d%%</string>
+    <string name="tokens_na">Tokens: N/A</string>
+
+    <!-- Time Formatting -->
+    <string name="time_took">took %s</string>
+    <string name="time_format_seconds">%.1fs</string>
+    <string name="time_format_minutes" formatted="false">%dm %.1fs</string>
+
+    <!-- Copy Chat -->
+    <string name="copy_chat_title">Copy Chat</string>
+    <string name="copy_chat_copy">Copy to Clipboard</string>
+    <string name="copy_chat_share">Share as File</string>
+    <string name="copy_chat_empty">No messages to copy</string>
+    <string name="copy_chat_success">Chat copied to clipboard</string>
+    <string name="copy_chat_failed">Failed to copy chat</string>
+    <string name="copy_chat_share_failed">Failed to share chat</string>
+
+    <!-- Sender Labels -->
+    <string name="sender_user">User</string>
+    <string name="sender_agent">Agent</string>
+    <string name="sender_system">System</string>
+    <string name="sender_tool">Tool</string>
+
+    <!-- Preferences row (Preferences → Configuration → Agent) -->
+    <string name="pref_agent_title">Agent</string>
+    <string name="pref_agent_summary">AI backend, model and API key</string>
+    <string name="msg_settings_unavailable">Couldn\'t open Agent settings. Open them from Preferences → Configuration → Agent.</string>
+
+    <!-- Settings -->
+    <string name="settings_title">AI Settings</string>
+    <string name="cd_settings_back">Close settings</string>
+    <string name="label_ai_backend">AI Backend</string>
+
+    <string name="settings_backend">Backend</string>
+    <string name="settings_model">Model</string>
+    <string name="settings_temperature">Temperature</string>
+    <string name="settings_max_tokens">Max Tokens</string>
+
+    <!-- Task 4 - Chat Layout -->
+    <string name="ai_agent">AI Agent</string>
+    <string name="new_chat">New Chat</string>
+    <string name="add_context_file">Add context file</string>
+    <string name="type_a_message_or_prompt">Type a message or prompt…</string>
+    <string name="experimental_ai_use_at_your_own_risk">⚠️ Experimental AI. Use at your own risk.</string>
+    <string name="current_ai_backend">Current AI backend</string>
+
+    <!-- File picker -->
+    <string name="file_picker_title">Select Files</string>
+    <string name="file_picker_title_current">Select Files: %s</string>
+    <string name="file_picker_add_selected">Add Selected</string>
+    <string name="file_picker_toggle_all">Toggle All</string>
+    <string name="file_picker_error_no_project">Open a project first — context files are picked from the project you have open.</string>
+    <string name="file_picker_error_not_found">Project directory not found</string>
+
+    <!-- Agent loop / chat runtime messages -->
+    <string name="agent_max_steps_reached">Reached the %1$d-step limit. Ask me to continue if the task isn\'t finished.</string>
+    <string name="agent_repeated_calls">Stopped: the model kept requesting the same action. Try rephrasing your request.</string>
+    <string name="agent_action_failed">I couldn\'t complete that, the last action failed. See the details above.</string>
+    <string name="agent_no_response">(No response. Try rephrasing, or pick a larger model in AI Settings — very small models struggle with tool use.)</string>
+    <string name="generating_response">Generating response…</string>
+    <string name="system_log">System Log</string>
+
+    <!-- Settings: engine / model status -->
+
+    <!-- Settings: local model pane -->
+
+    <!-- Settings: models -->
+
+    <!-- Local model selection -->
+
+    <!-- Local model selection: memory pre-flight warning -->
+
+    <!-- Backend selector states; the panes themselves come from the backend plugins. -->
+    <string name="backend_none_installed">No AI backend is installed. Install a backend plugin, for example AI Local Backend for on-device models, or AI Gemini Backend for Google\'s API, from the Plugin Manager.</string>
+    <string name="backend_none_installed_short">No backend</string>
+    <string name="backend_no_settings">%1$s has no settings to configure.</string>
+    <string name="backend_pane_unavailable">This backend\'s settings are unavailable. It may have been uninstalled or disabled.</string>
+    <string name="state_error">Error: %s</string>
 </resources>

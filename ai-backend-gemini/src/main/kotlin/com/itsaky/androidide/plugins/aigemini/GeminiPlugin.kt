@@ -200,7 +200,7 @@ class GeminiPlugin : IPlugin, DocumentationExtension {
                 <code>gemini</code> backend to <b>AI Core</b>, calling Google's
                 Generative Language API over HTTPS.</p>
                 <p>Install <b>AI Core</b> as well, then enter your API key in
-                <b>AI Assistant → AI Settings</b>. Prompts and any file contents a
+                <b>AI Core → Agent settings</b>. Prompts and any file contents a
                 plugin sends are transmitted to Google.</p>
             """.trimIndent(),
             buttons = listOf(

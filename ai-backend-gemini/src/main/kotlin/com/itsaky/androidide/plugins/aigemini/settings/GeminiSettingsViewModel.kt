@@ -70,7 +70,7 @@ class GeminiSettingsViewModel(
     /**
      * The settings store this backend's transport reads at request time.
      *
-     * Namespaced to the AI Assistant plugin rather than to this one, so it is reached through that
+     * Namespaced to the AI Core plugin rather than to this one, so it is reached through that
      * plugin's `PluginContext` — the same lookup [GeminiBackend] makes. Writing anywhere else would
      * leave the transport reading a key this pane never set.
      */

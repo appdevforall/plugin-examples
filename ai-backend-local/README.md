@@ -2,7 +2,7 @@
 
 On-device GGUF inference for CodeOnTheGo's AI plugins. Registers itself as the
 `local` backend with [`ai-core`](../ai-core/)'s `LlmInferenceService`, which is
-what `ai-assistant`, `code-suggestions-plugin`, `speech-to-text-plugin` and
+what `ai-core`'s Agent chat, `code-suggestions-plugin`, `speech-to-text-plugin` and
 `vector-search-plugin` actually talk to.
 
 Runs `.gguf` models through a bundled, prebuilt **llama.cpp** AAR. Declares no
@@ -44,7 +44,7 @@ register with. Order does not matter: this plugin re-registers when it sees
 ai-core activate. Copy `build/plugin/ai-backend-local.cgp` to the device, install
 via CodeOnTheGo's Plugin Manager, then restart the IDE.
 
-The model file itself is chosen in **AI Assistant → AI Settings**; this backend
+The model file itself is chosen in **AI Core → Agent settings**; this backend
 reads that setting at request time.
 
 ## Key classes

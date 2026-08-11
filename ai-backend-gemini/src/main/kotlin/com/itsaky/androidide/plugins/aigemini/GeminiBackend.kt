@@ -50,10 +50,10 @@ class GeminiBackend(private val context: PluginContext) : LlmBackend, Cancellabl
         /** Current default model. gemini-1.5-* is retired on v1beta and now 404s. */
         const val DEFAULT_MODEL = "gemini-2.5-flash"
 
-        /** Pref key holding the (encrypted) Gemini API key, written by ai-assistant. */
+        /** Pref key holding the (encrypted) Gemini API key, written by the Agent settings screen. */
         private const val KEY_API_KEY = "gemini_api_key"
 
-        /** Pref key holding the selected model name, written by ai-assistant. */
+        /** Pref key holding the selected model name, written by the Agent settings screen. */
         private const val KEY_MODEL = "gemini_model"
 
         /** Base URL for the v1beta models API (ListModels, generateContent, streaming). */
@@ -67,7 +67,7 @@ class GeminiBackend(private val context: PluginContext) : LlmBackend, Cancellabl
         private const val METHOD_STREAM_GENERATE_CONTENT = "streamGenerateContent"
     }
 
-    /** ai-assistant's shared prefs, where the Gemini settings live, or null if unreachable. */
+    /** AI Core's shared prefs, where the Gemini settings live, or null if unreachable. */
     private fun agentPrefs(): SharedPreferences? = try {
         SharedServices.get(PluginContext::class.java)
             ?.getPluginSharedPreferences("AgentSettings")
@@ -83,7 +83,7 @@ class GeminiBackend(private val context: PluginContext) : LlmBackend, Cancellabl
         agentPrefs()?.getString(KEY_MODEL, DEFAULT_MODEL) ?: DEFAULT_MODEL
 
     /**
-     * Read the saved Gemini API key from ai-assistant's shared prefs, or null.
+     * Read the saved Gemini API key from AI Core's shared prefs, or null.
      *
      * Decryption is Keystore IPC + AES/GCM and must not run on the main thread. Every caller
      * today reaches this from [Dispatchers.IO], but [LlmBackend.isAvailable] is a synchronous
@@ -148,7 +148,7 @@ class GeminiBackend(private val context: PluginContext) : LlmBackend, Cancellabl
     override fun getName(): String = "Gemini API"
 
     /**
-     * The settings a caller must collect to use this backend. The keys are the ones ai-assistant
+     * The settings a caller must collect to use this backend. The keys are the ones AI Core
      * already writes into `AgentSettings`, so a UI driven by this spec stores them where
      * [agentPrefs] reads them.
      */
@@ -445,7 +445,7 @@ class GeminiBackend(private val context: PluginContext) : LlmBackend, Cancellabl
     /**
      * List the models a caller-supplied [apiKey] can use, instead of the one saved on disk.
      *
-     * Lets ai-assistant check a just-typed key *before* it is persisted; the no-arg [listModels]
+     * Lets the settings pane check a just-typed key *before* it is persisted; the no-arg [listModels]
      * reads the stored key. Nothing here touches the stored key or [keyCache].
      *
      * @param apiKey the candidate key to authenticate the request with; never logged

@@ -154,7 +154,7 @@ class LocalLlmSettingsViewModel(
     /**
      * The settings store this backend's engine reads at request time.
      *
-     * Namespaced to the AI Assistant plugin rather than to this one, so it is reached through that
+     * Namespaced to the AI Core plugin rather than to this one, so it is reached through that
      * plugin's `PluginContext` — the same lookup `LocalLlmBackend` makes. Writing anywhere else
      * would leave the engine reading a model path this screen never set.
      */
