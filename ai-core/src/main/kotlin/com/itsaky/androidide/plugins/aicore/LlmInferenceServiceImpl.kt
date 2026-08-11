@@ -1,6 +1,7 @@
 package com.itsaky.androidide.plugins.aicore
 
 import com.itsaky.androidide.plugins.PluginContext
+import com.itsaky.androidide.plugins.PluginLogger
 import com.itsaky.androidide.plugins.services.LlmInferenceService
 import com.itsaky.androidide.plugins.services.LlmInferenceService.*
 import com.itsaky.androidide.plugins.services.SharedServices
@@ -9,9 +10,15 @@ import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Implementation of LlmInferenceService.
- * Manages LLM backends and delegates generation requests to registered backends.
+ *
+ * Backend-agnostic: it knows no concrete backend type. Backends are contributed by separate plugins
+ * (ai-backend-local, ai-backend-gemini, …) that call [registerBackend] on activation, and optional
+ * behaviour is declared through the plugin API — [CancellableBackend] and the defaulted
+ * [LlmBackend.generateStreamingWithTools] — rather than by casting.
+ *
+ * @param logger the owning plugin's log, or null in unit tests
  */
-class LlmInferenceServiceImpl : LlmInferenceService {
+class LlmInferenceServiceImpl(private val logger: PluginLogger? = null) : LlmInferenceService {
 
     private val backends = ConcurrentHashMap<String, LlmBackend>()
     @Volatile private var currentGeneration: CompletableFuture<LlmResponse>? = null
@@ -114,24 +121,14 @@ class LlmInferenceServiceImpl : LlmInferenceService {
             return
         }
 
-        // Check if backend supports tool calling (only Gemini for now)
-        if (backend !is GeminiBackend) {
-            // Fallback to streaming without tools for non-Gemini backends
-            val streamCallback = object : StreamCallback {
-                override fun onToken(token: String) = callback.onToken(token)
-                override fun onComplete(response: LlmResponse) = callback.onComplete(response)
-                override fun onError(error: String) = callback.onError(error)
-            }
-            if (backend is LocalLlmBackend) {
-                backend.generateStreamingWithHistory(history, prompt, config, streamCallback)
-            } else {
-                backend.generateStreaming(prompt, config, streamCallback)
-            }
-            return
+        // How much of this a backend actually supports is its own business: LlmBackend's default
+        // degrades to plain streaming, and each backend overrides as far as it can go.
+        try {
+            backend.generateStreamingWithTools(prompt, history, config, tools, callback)
+        } catch (e: Throwable) {
+            logger?.error("Backend '$effectiveId' failed to start a tool generation", e)
+            callback.onError("Backend '$effectiveId' could not start generation: ${e.message}")
         }
-
-        // Delegate to Gemini backend with tool support (smart-cast by the guard above)
-        backend.generateStreamingWithTools(prompt, history, config, tools, callback)
     }
 
     override fun getEmbeddings(text: String, backendId: String): CompletableFuture<FloatArray> {
@@ -151,10 +148,10 @@ class LlmInferenceServiceImpl : LlmInferenceService {
      */
     private fun effectiveBackendId(requestedId: String): String {
         if (requestedId != AiBackend.AUTO) return requestedId
-        val preferred = AiBackend.fromPreference(readSelectedBackendPreference())
-        return backends[preferred.id]?.takeIf { it.isAvailable() }?.getId()
+        val preferredId = AiBackend.idFromPreference(readSelectedBackendPreference())
+        return backends[preferredId]?.takeIf { it.isAvailable() }?.getId()
             ?: backends.values.firstOrNull { it.isAvailable() }?.getId()
-            ?: preferred.id
+            ?: preferredId
     }
 
     /**
@@ -173,7 +170,13 @@ class LlmInferenceServiceImpl : LlmInferenceService {
         currentGeneration?.cancel(true)
         currentGeneration = null
 
-        backends.values.filterIsInstance<CancellableBackend>()
-            .forEach { it.cancelStreaming() }
+        // One backend refusing to cancel must not leave the others generating.
+        backends.values.filterIsInstance<CancellableBackend>().forEach { backend ->
+            try {
+                backend.cancelStreaming()
+            } catch (e: Throwable) {
+                logger?.error("A backend failed to cancel its generation", e)
+            }
+        }
     }
 }

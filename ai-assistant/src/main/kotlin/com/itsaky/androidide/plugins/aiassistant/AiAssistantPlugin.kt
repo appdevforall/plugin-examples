@@ -59,16 +59,6 @@ class AiAssistantPlugin : IPlugin, UIExtension, DocumentationExtension, Settings
         // Tags for the interactive controls on the AI Settings screen (see AiSettingsFragment).
         const val TOOLTIP_TAG_SETTINGS_BACK = "ai_settings_back"
         const val TOOLTIP_TAG_SETTINGS_BACKEND = "ai_settings_backend"
-        const val TOOLTIP_TAG_SETTINGS_LOCAL_MODEL = "ai_settings_local_model"
-        const val TOOLTIP_TAG_SETTINGS_LOCAL_SHA = "ai_settings_local_model_sha"
-        const val TOOLTIP_TAG_SETTINGS_SIMPLE_PROMPT = "ai_settings_simple_prompt"
-        const val TOOLTIP_TAG_SETTINGS_GEMINI_KEY = "ai_settings_gemini_key"
-        const val TOOLTIP_TAG_SETTINGS_GEMINI_MODEL = "ai_settings_gemini_model"
-        const val TOOLTIP_TAG_SETTINGS_GET_KEY = "ai_settings_get_free_key"
-
-        // Tags for the memory pre-flight warning (see MemoryWarningDialogFragment).
-        const val TOOLTIP_TAG_MEMORY_PROCEED = "agent_memory_warning_proceed"
-        const val TOOLTIP_TAG_MEMORY_CANCEL = "agent_memory_warning_cancel"
 
         @Volatile
         private var pluginContext: PluginContext? = null
@@ -80,7 +70,7 @@ class AiAssistantPlugin : IPlugin, UIExtension, DocumentationExtension, Settings
         this.context = context
         pluginContext = context  // Store for ChatFragment access
 
-        // Also store in SharedServices so ai-core can access preferences
+        // Also store in SharedServices so the backend plugins can access preferences
         SharedServices.register(PluginContext::class.java, context)
 
         context.logger.info("AI Assistant Plugin initializing...")
@@ -92,8 +82,8 @@ class AiAssistantPlugin : IPlugin, UIExtension, DocumentationExtension, Settings
         llmService = SharedServices.get(LlmInferenceService::class.java)
 
         if (llmService == null) {
-            context.logger.warn("LlmInferenceService not available - LOCAL_LLM backend disabled")
-            context.logger.warn("Install AI Core plugin to enable local LLM support")
+            context.logger.warn("LlmInferenceService not available - no backend can be reached")
+            context.logger.warn("Install the AI Core plugin, plus at least one AI backend plugin")
         } else {
             context.logger.info("LlmInferenceService available from SharedServices")
         }
@@ -437,168 +427,20 @@ class AiAssistantPlugin : IPlugin, UIExtension, DocumentationExtension, Settings
         ),
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_SETTINGS_BACKEND,
-            summary = "Choose which model powers the Agent: on-device Local (llama.cpp) or cloud Gemini.",
+            summary = "Choose which installed backend powers the Agent.",
             detail = """
-                <p>Selects the active inference backend:</p>
-                <ul>
-                  <li><b>Local</b> — runs a <code>.gguf</code> model entirely on
-                      the device; nothing leaves the phone.</li>
-                  <li><b>Gemini</b> — calls Google's cloud API over HTTPS; needs
-                      an API key.</li>
-                </ul>
-                <p>The choice below changes which settings appear.</p>
+                <p>Lists every AI backend plugin installed and registered with
+                <b>AI Core</b> — for example <b>AI Local Backend</b> for
+                on-device <code>.gguf</code> models, or <b>AI Gemini Backend</b>
+                for Google's cloud API.</p>
+                <p>Each backend supplies its own settings, so the panel below
+                changes with the choice. If the list is empty, no backend is
+                installed: add one from the Plugin Manager.</p>
             """.trimIndent(),
             buttons = listOf(
                 PluginTooltipButton(description = "AI Assistant guide", uri = "index.html", order = 0)
             )
         ),
-        PluginTooltipEntry(
-            tag = TOOLTIP_TAG_SETTINGS_LOCAL_MODEL,
-            summary = "Pick a local .gguf chat model to run on-device.",
-            detail = """
-                <p>Browse for a <code>.gguf</code> model file to load with
-                llama.cpp. Use a <b>chat/instruct</b> model — embedding-only
-                models can't generate replies. Larger models are slower and use
-                more memory; the file is copied into the app's private storage on
-                first use.</p>
-                <p>The model is measured against this device's free memory before it
-                is accepted. If it looks too large you get the figures and a choice
-                to cancel or continue.</p>
-            """.trimIndent(),
-            buttons = listOf(
-                PluginTooltipButton(description = "AI Assistant guide", uri = "index.html", order = 0)
-            )
-        ),
-        PluginTooltipEntry(
-            tag = TOOLTIP_TAG_MEMORY_PROCEED,
-            summary = "Load this model anyway, accepting that it may fail or slow the device.",
-            detail = """
-                <p>The model's weights plus its working memory look larger than the
-                RAM free right now. Weights are memory-mapped, so a load can still
-                succeed by paging — which is why the outcome is a risk rather than a
-                certainty: it may work, fail quickly, or stall for minutes first.</p>
-                <p>Use this when you know the numbers are wrong for your situation,
-                for example because you are about to close other apps.</p>
-            """.trimIndent(),
-            buttons = listOf(
-                PluginTooltipButton(description = "AI Assistant guide", uri = "index.html", order = 0)
-            )
-        ),
-        PluginTooltipEntry(
-            tag = TOOLTIP_TAG_MEMORY_CANCEL,
-            summary = "Abandon this model; the previously selected one is left untouched.",
-            detail = """
-                <p>Nothing is saved and nothing is loaded, so the model you had
-                selected before stays in use. This is the safe choice, and also what
-                happens if you dismiss the warning with Back.</p>
-                <p>To fit a large model, close other apps and pick it again, or
-                choose a smaller or more heavily quantized build — a Q4_K_M
-                quantization of a 1–3B model is the most likely to run.</p>
-            """.trimIndent(),
-            buttons = listOf(
-                PluginTooltipButton(description = "AI Assistant guide", uri = "index.html", order = 0)
-            )
-        ),
-        PluginTooltipEntry(
-            tag = TOOLTIP_TAG_SETTINGS_LOCAL_SHA,
-            summary = "Optional SHA-256 of your .gguf file, checked when the model is loaded.",
-            detail = """
-                <p>Paste the expected SHA-256 hash of the model file. It is stored
-                with the model path and compared on load, so a truncated download
-                or a swapped file is reported instead of failing deep inside
-                llama.cpp.</p>
-                <p>Leave it empty to skip the check. The value is saved when the
-                field loses focus.</p>
-            """.trimIndent(),
-            buttons = listOf(
-                PluginTooltipButton(description = "AI Assistant guide", uri = "index.html", order = 0)
-            )
-        ),
-        PluginTooltipEntry(
-            tag = TOOLTIP_TAG_SETTINGS_SIMPLE_PROMPT,
-            summary = "Send small local models a plainer prompt with no tool instructions.",
-            detail = """
-                <p>Small on-device models (roughly 1B parameters and under) tend to
-                ramble or echo the prompt when handed the full tool-calling system
-                prompt. With this on they get a short, plain instruction instead.</p>
-                <p>The trade-off: the model won't emit tool calls, so it answers
-                questions but won't edit your project. The direct
-                <i>open/read/list/search</i> commands still work either way. Turn
-                it off for a larger instruct model.</p>
-            """.trimIndent(),
-            buttons = listOf(
-                PluginTooltipButton(description = "AI Assistant guide", uri = "index.html", order = 0)
-            )
-        ),
-        PluginTooltipEntry(
-            tag = TOOLTIP_TAG_SETTINGS_GEMINI_MODEL,
-            summary = "Pick which Gemini model to call; Refresh lists the ones your key can access.",
-            detail = """
-                <p><b>Refresh Models</b> asks Google which models your API key can
-                actually use and fills the list from the response. Until then the
-                list shows a small built-in set of known-good defaults.</p>
-                <p>Selecting a model saves it immediately. If a previously saved
-                model has since been retired, refreshing moves you to the first
-                model in the live list rather than leaving a name that returns
-                404.</p>
-            """.trimIndent(),
-            buttons = listOf(
-                PluginTooltipButton(description = "AI Assistant guide", uri = "index.html", order = 0)
-            )
-        ),
-        PluginTooltipEntry(
-            tag = TOOLTIP_TAG_SETTINGS_GEMINI_KEY,
-            summary = "Enter your Google Gemini API key. It is stored only on this device.",
-            detail = """
-                <p>Paste a Gemini API key to enable the cloud backend. Keys are
-                created at <b>aistudio.google.com/apikey</b> — tap <b>Get API
-                Key</b> to go straight there. Google AI Studio sets up the
-                underlying Cloud project for you, so there is no Cloud console and
-                no billing setup involved.</p>
-                <p>The key is encrypted with a key held in this device's
-                hardware-backed Android Keystore before it is written to this
-                plugin's private preferences, and is sent only to Google's API over
-                HTTPS. Requests (your prompts and project context) leave the device
-                when Gemini is selected.</p>
-                <p><b>Save</b> checks the key with Google before storing it, so a
-                key that doesn't work is reported straight away instead of failing
-                later mid-chat — a key Google rejects is not saved at all. If the
-                check can't be completed (no network, or the AI Core plugin is
-                disabled or out of date) you are asked whether to keep the key
-                anyway.</p>
-                <p>Use the eye button to check what you typed, <b>Edit</b> to change
-                the key later and <b>Clear</b> to remove it from the device.</p>
-                <p>If the Keystore entry is ever lost — clearing the app's data,
-                for instance — the stored key can no longer be decrypted and must
-                be re-entered here.</p>
-            """.trimIndent(),
-            buttons = listOf(
-                PluginTooltipButton(description = "AI Assistant guide", uri = "index.html", order = 0)
-            )
-        ),
-        PluginTooltipEntry(
-            tag = TOOLTIP_TAG_SETTINGS_GET_KEY,
-            summary = "Open Google AI Studio in your browser to create a Gemini API key.",
-            detail = """
-                <p>Opens <b>aistudio.google.com/apikey</b> in your normal browser,
-                where you sign in with your Google account and tap <i>Create API
-                key</i>. AI Studio creates the Cloud project behind the scenes — the
-                Google Cloud console is not part of this.</p>
-                <p>Sign-in happens in the browser, so this plugin never sees your
-                Google password. Copy the key Google shows you, come back here and
-                paste it into the key field, then tap <b>Save Key</b>.</p>
-                <p>Gemini has a free tier. Note that on the free tier Google may use
-                prompts and responses to improve its products — and this plugin
-                sends your prompts and any file contents the agent reads. If that
-                matters for your project, use the on-device <b>Local</b> backend
-                instead: nothing leaves the device.</p>
-                <p>If no browser is installed the link is copied to the clipboard
-                so you can open it elsewhere.</p>
-            """.trimIndent(),
-            buttons = listOf(
-                PluginTooltipButton(description = "AI Assistant guide", uri = "index.html", order = 0)
-            )
-        )
     )
 
     /** Subdirectory under src/main/assets/ holding the Tier 3 offline docs. */

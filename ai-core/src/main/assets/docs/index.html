@@ -34,48 +34,51 @@
 </style>
 </head>
 <body>
-  <h1>AI Core — Inference Backend</h1>
+  <h1>AI Core — Inference Router</h1>
 
   <p><b>AI Core</b> is a headless plugin: it has no screens of its own. It
   provides the shared <b>LLM inference service</b> that the other AI plugins
   (<b>AI Assistant</b>, <b>Code Suggestions</b>, <b>Speech to Text</b>,
-  <b>Vector Search</b>) call at runtime. Install <b>AI Core first</b>, then any
-  of the plugins that depend on it.</p>
+  <b>Vector Search</b>) call at runtime.</p>
 
-  <h2>Backends</h2>
+  <div class="note">
+    AI Core provides <b>no models of its own</b>. Install at least one backend
+    plugin alongside it, or every request fails with "Backend not found".
+    Install order does not matter — a backend registers itself as soon as AI Core
+    is active.
+  </div>
+
+  <h2>Backend plugins</h2>
   <ul>
-    <li><b>Local (on-device)</b> — runs a <code>.gguf</code> model through a
+    <li><b>AI Local Backend</b> — runs a <code>.gguf</code> model through a
       bundled, prebuilt llama.cpp library. Nothing leaves the device.</li>
-    <li><b>Gemini (cloud)</b> — calls Google's Gemini API over HTTPS. Requires a
+    <li><b>AI Gemini Backend</b> — calls Google's Gemini API over HTTPS. Requires a
       Gemini API key, entered in <b>AI Assistant → AI Settings</b>. The key is
       sent as an <code>x-goog-api-key</code> header, never in a URL.</li>
   </ul>
 
   <h2>Choosing / configuring a model</h2>
-  <p>AI Core has no settings screen of its own — the model file, backend
-  choice, and Gemini API key are all configured from <b>AI Assistant → AI
-  Settings</b>. AI Core reads that configuration at request time.</p>
-
-  <div class="note">
-    Embedding-only <code>.gguf</code> files cannot serve chat requests. If you
-    select an embedding model for chat, requests are rejected with a clear error
-    instead of crashing.
-  </div>
+  <p>AI Core has no settings screen of its own — the backend choice, model file,
+  and Gemini API key are all configured from <b>AI Assistant → AI Settings</b>.
+  AI Core reads that configuration at request time and routes to whichever
+  backend is registered under it.</p>
 
   <h2>Privacy</h2>
-  <ul>
-    <li><b>Local backend</b> — prompts and code never leave the device.</li>
-    <li><b>Gemini backend</b> — prompts and any file contents a plugin sends are
-      transmitted to Google over HTTPS.</li>
-  </ul>
+  <p>AI Core itself declares no permissions and opens no connections; it only
+  hands requests to a backend. What happens to your prompt depends on which
+  backend serves it — see that plugin's own help page.</p>
 
   <h2>Troubleshooting</h2>
   <ul>
     <li><b>"LlmInferenceService not available"</b> in another plugin — AI Core
       isn't installed/activated, or the IDE needs a restart.</li>
+    <li><b>"Backend '…' not found"</b> — no backend plugin is installed, or the one
+      selected in AI Settings isn't. Install AI Local Backend or AI Gemini Backend
+      and restart the IDE.</li>
     <li><b>"No model configured"</b> — pick a <code>.gguf</code> file (Local) or
       set an API key (Gemini) in AI Assistant's settings.</li>
-    <li><b>Gemini errors</b> — verify the API key, network connection, and quota.</li>
+    <li><b>Backend-specific errors</b> — open that backend plugin's help page;
+      AI Core passes its message through unchanged.</li>
   </ul>
 </body>
 </html>

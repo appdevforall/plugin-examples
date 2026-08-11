@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aiassistant.R
+import com.itsaky.androidide.plugins.aiassistant.backends.BackendRegistry
 import com.itsaky.androidide.plugins.aiassistant.models.AgentState
 import com.itsaky.androidide.plugins.aiassistant.models.ChatMessage
 import com.itsaky.androidide.plugins.aiassistant.models.ChatSession
@@ -66,7 +67,7 @@ class ChatViewModel(
         const val RESPOND_TOOL = "respond"
 
         /**
-         * [LlmConfig.extraParams] key for the local-backend GBNF; must match ai-core's
+         * [LlmConfig.extraParams] key for the local-backend GBNF; must match ai-backend-local's
          * `LocalLlmBackend.EXTRA_PARAM_GRAMMAR`.
          */
         private const val EXTRA_PARAM_GRAMMAR = "grammar"
@@ -74,8 +75,16 @@ class ChatViewModel(
         /** Per-argument cap in the tool badge shown in the transcript. */
         private const val TOOL_BADGE_ARG_LIMIT = 80
 
-        /** Near-greedy sampling for local models, whose tool arguments must be copied, not invented. */
-        private const val LOCAL_TEMPERATURE = 0.15f
+        /**
+         * The call envelope this side parses back (see [ToolCallExtractor]) and constrains local
+         * sampling to (see [buildLocalToolCallGrammar]). Handed to every backend composing a system
+         * prompt, so all three can never drift apart.
+         */
+        const val TOOL_CALL_SYNTAX =
+            """<tool_call>{"tool":"TOOL_NAME","args":{"arg":"value"}}</tool_call>"""
+
+        /** Sampling temperature for a backend that declares no preference of its own. */
+        private const val DEFAULT_TEMPERATURE = 0.2f
 
         /** Max open files named in the prompt's IDE-context block. */
         private const val MAX_CONTEXT_OPEN_FILES = 8
@@ -156,12 +165,14 @@ class ChatViewModel(
     val activeBackendLabel: StateFlow<String> = _activeBackendLabel.asStateFlow()
 
     private fun selectedBackendLabel(): String {
-        val pref = getContext()?.getPluginSharedPreferences("AgentSettings")
-            ?.getString("ai_backend_preference", "LOCAL_LLM")
-        return when (pref) {
-            "GEMINI" -> "Gemini API"
-            else -> "Local LLM"
-        }
+        val backends = BackendRegistry.options()
+        val selectedId = BackendRegistry.selectedId()
+        // Falls back to the first installed backend, matching how the settings screen resolves a
+        // selection whose backend was uninstalled.
+        val selected = backends.firstOrNull { it.id == selectedId } ?: backends.firstOrNull()
+        return selected?.displayName
+            ?: getContext()?.androidContext?.getString(R.string.backend_none_installed_short)
+            ?: ""
     }
 
     /** Re-read the selected backend and update [activeBackendLabel]; call when returning to chat. */
@@ -336,18 +347,106 @@ class ChatViewModel(
     }
 
     /**
-     * Build appropriate system prompt based on LLM backend.
+     * Builds the system prompt for the active backend.
+     *
+     * The wording comes from the backend, which knows its own model; this side supplies the tool
+     * contract and appends the IDE context. A backend with no prompt of its own gets
+     * [buildDefaultSystemPrompt], so a third-party `.cgp` works without shipping prompt text.
      */
     private suspend fun buildSystemPrompt(): String {
         // One editor read serves both the IDE CONTEXT block and the paths in the examples.
         val ide = readIdeSnapshot()
         val examplePath = ide.exampleFilePath()
-        val base = if (currentBackendId == "gemini") {
-            buildSystemPromptGemini(examplePath)
-        } else {
-            buildSystemPromptLocal(examplePath)
-        }
+        val base = backendSystemPrompt(examplePath) ?: buildDefaultSystemPrompt(examplePath)
         return base + ide.contextBlock()
+    }
+
+    /**
+     * Asks the active backend for its system prompt.
+     *
+     * @return the backend's prompt, or null when it has none, is unreachable, or throws — one bad
+     *   backend must degrade to the default prompt, not break every message
+     */
+    private fun backendSystemPrompt(examplePath: String): String? {
+        val backend = try {
+            getLlmService()?.getBackend(currentBackendId)
+        } catch (e: Throwable) {
+            android.util.Log.w("ChatViewModel", "Could not resolve backend '$currentBackendId'", e)
+            null
+        } ?: return null
+
+        return try {
+            backend.getSystemPrompt(
+                LlmInferenceService.SystemPromptRequest(
+                    promptToolDefinitions(),
+                    TOOL_CALL_SYNTAX,
+                    examplePath,
+                )
+            )?.takeIf { it.isNotBlank() }
+        } catch (e: Throwable) {
+            android.util.Log.w(
+                "ChatViewModel",
+                "Backend '$currentBackendId' failed to supply a system prompt; using the default",
+                e
+            )
+            null
+        }
+    }
+
+    /**
+     * The sampling temperature the active backend asks for.
+     *
+     * @return the backend's preference, or null when it declares none or cannot be reached
+     */
+    private fun backendTemperature(): Float? = try {
+        getLlmService()?.getBackend(currentBackendId)?.defaultTemperature
+    } catch (e: Throwable) {
+        android.util.Log.w("ChatViewModel", "Backend '$currentBackendId' failed to supply a temperature", e)
+        null
+    }
+
+    /**
+     * The tools to present in the system prompt: every registered handler, plus [RESPOND_TOOL],
+     * which is not a handler but is how the model addresses the user.
+     */
+    private fun promptToolDefinitions(): List<LlmInferenceService.ToolDefinition> =
+        toolRouter.getAllHandlers().map { handler ->
+            LlmInferenceService.ToolDefinition(handler.toolName, handler.description, emptyMap())
+        } + LlmInferenceService.ToolDefinition(
+            RESPOND_TOOL,
+            "Send the user your reply or final answer. It MUST carry a \"message\" holding the " +
+                "text itself — a respond call with no \"message\" shows the user nothing.",
+            emptyMap(),
+        )
+
+    /**
+     * Prompt used for a backend that supplies none of its own.
+     *
+     * Deliberately short: it states the protocol this side parses and nothing about model
+     * behaviour, which is the part only the backend can know. A backend that needs more should
+     * override `getSystemPrompt`.
+     */
+    private fun buildDefaultSystemPrompt(examplePath: String): String {
+        val toolDescriptions = promptToolDefinitions()
+            .joinToString("\n") { "- ${it.name}: ${it.description}" }
+
+        return """
+        You are a coding assistant inside CodeOnTheGo.
+
+        Reply with exactly ONE tool call and nothing else. After a tool call, stop and wait — the
+        real result arrives next turn. Never invent tool output, and never claim an action you did
+        not perform through a tool. For a greeting or a question you can answer directly, use
+        "$RESPOND_TOOL".
+
+        Tools:
+        $toolDescriptions
+
+        TOOL CALL FORMAT — emit a single line in EXACTLY this format and nothing after it:
+        $TOOL_CALL_SYNTAX
+
+        Example:
+        <tool_call>{"tool":"open_file","args":{"file_path":"$examplePath"}}</tool_call>
+        """.trimIndent()
     }
 
     /**
@@ -413,131 +512,6 @@ class ChatViewModel(
                     "guess a different folder or extension."
             )
         }
-    }
-
-    /**
-     * System prompt for Gemini (high autonomy, structured tool calling via native functions).
-     * @param examplePath path shown in the tool-call examples — this project's own open file when
-     *   there is one, so the examples never imply a language or layout the project doesn't have.
-     */
-    private fun buildSystemPromptGemini(examplePath: String): String {
-        val toolDescriptions = toolRouter.getAllHandlers().joinToString("\n") { handler ->
-            "- ${handler.toolName}: ${handler.description}"
-        }
-
-        val prompt = """
-        You are a senior Android developer integrated into CodeOnTheGo. Your goal is to build complete, working Android apps from user descriptions.
-
-        AVAILABLE TOOLS:
-        $toolDescriptions
-        - respond: Send the user your reply or final answer. It MUST carry a "message" holding the
-          text itself — a respond call with no "message" shows the user nothing.
-
-        BEHAVIOR:
-        - Create complete, production-ready code
-        - Call tools proactively to build, test, and verify your work
-        - Read files to understand project structure before making changes
-        - After each file modification, verify the build compiles
-        - Generate apps that actually run and work as described
-
-        RULES:
-        - Emit ONE tool call per reply, then stop and wait. Do NOT plan a batch: a tool whose arguments depend on another tool's result (editing a file you just searched for) cannot use a result you have not received yet.
-        - To locate a file, call search_project ONCE with its name — it searches the whole project. Never walk the tree with repeated list_files calls; you have a limited number of turns and each level wastes one.
-        - Renaming a symbol everywhere in a file is ONE edit_file with replace_all set to true and old_string set to just the symbol — not one edit per line.
-        - To change an existing file, use edit_file (find/replace an exact snippet), not update_file — a whole-file rewrite gets truncated before it reaches disk.
-        - Before edit_file, read the exact file you are about to edit with read_file, and copy old_string byte-for-byte from that output, including indentation. Never edit a path you have not confirmed exists.
-        - old_string must be the text currently in the file and new_string what it should become. If they are identical the edit is rejected.
-        - Never fabricate tool output. Emit a tool call, then wait for the real result before continuing.
-        - Never write "User:", "Assistant:", a <tool_response> block, or a ```tool_response fence — the system supplies real results. Any tool output you write yourself is a hallucination and will be ignored.
-        - Paths are relative to the project root and must be complete. If you don't know a file's exact path, find it with search_project or list_files first, then act on the real path — don't guess.
-        - For plain chat (e.g. "Hi"), just reply briefly with no tool call. When the task is done, either give a short summary with no tool call, or end with a single respond call carrying that summary in its "message" — never an empty respond.
-
-        TOOL CALL FORMAT — to run a tool, emit a single line in EXACTLY this format and nothing after it:
-        <tool_call>{"tool":"TOOL_NAME","args":{"arg":"value"}}</tool_call>
-        Do NOT describe the action in prose (e.g. "Okay, I'll open the file…") — narrating does nothing.
-        The tool only runs when you emit the <tool_call> line itself.
-
-        FORMAT EXAMPLES (the tool call is the entire reply; the paths are this project's — reuse a path
-        only when it is the file you actually mean):
-        Report the finished task (the summary goes in "message"):
-        <tool_call>{"tool":"respond","args":{"message":"Renamed count to itemCount."}}</tool_call>
-        Open a file once you know its path:
-        <tool_call>{"tool":"open_file","args":{"file_path":"$examplePath"}}</tool_call>
-        Find a file by name:
-        <tool_call>{"tool":"search_project","args":{"query":"${exampleFileStem(examplePath)}"}}</tool_call>
-        List the project's top-level files (an empty directory means the project root):
-        <tool_call>{"tool":"list_files","args":{"directory":""}}</tool_call>
-        Change part of a file (line breaks inside a value MUST be written as \n):
-        <tool_call>{"tool":"edit_file","args":{"file_path":"$examplePath","old_string":"count = 0","new_string":"count = 1"}}</tool_call>
-
-        WORKFLOW:
-        1. Understand the user's request
-        2. List files to understand the project structure
-        3. Create/modify files with complete implementations
-        4. Add dependencies if needed
-        5. Sync gradle and verify compilation
-        6. Run the app to confirm it works
-        7. Report success and what was built
-        """.trimIndent()
-
-        android.util.Log.d("ChatViewModel", "Using Gemini system prompt (high autonomy mode) with ${toolRouter.getAllHandlers().size} tools")
-        return prompt
-    }
-
-    /**
-     * File name without its extension, for a `search_project` example that matches [examplePath].
-     * @param examplePath the example path.
-     * @return the bare stem (e.g. "MainActivity").
-     */
-    private fun exampleFileStem(examplePath: String): String =
-        examplePath.substringAfterLast('/').substringBeforeLast('.')
-
-    /**
-     * System prompt for local LLMs (guided step-by-step with text-based tool calling).
-     * @param examplePath path shown in the tool-call examples — this project's own open file when
-     *   there is one, so the examples never imply a language or layout the project doesn't have.
-     */
-    private fun buildSystemPromptLocal(examplePath: String): String {
-        val toolDescriptions = toolRouter.getAllHandlers().joinToString("\n") { handler ->
-            "- ${handler.toolName}: ${handler.description}"
-        }
-
-        val prompt = """
-        You are a coding assistant inside CodeOnTheGo.
-
-        Rules:
-        - Reply with exactly ONE tool call, nothing else.
-        - Use a file/project tool only when the user asks about files, code, or the project; for a greeting, small talk, or a question you can answer, use "respond".
-        - Never invent tool output or claim an action you didn't perform via a tool. After a tool call, stop; the real result returns next turn.
-        - "respond" must carry a "message" — your reply or final answer.
-        - read_file and open_file accept a bare file name (the project is searched for it). Never invent deep paths.
-        - To change a file, use edit_file, not update_file. Call read_file FIRST, then copy the text to replace into "old_string" EXACTLY as it appears in that output (same spelling, same indentation). It must appear only once — include the line above or below if it doesn't.
-        - "old_string" is the text that is in the file NOW; "new_string" is what it should become. They must differ. To rename x to y: old_string has x, new_string has y.
-        - Never put a real line break inside an argument value: write it as \n. Keep old_string/new_string to a few lines; make several small edits rather than one big one.
-        - edit_file needs a real path, not a bare name, and never a path you invented. If you don't know it, call search_project with the file name FIRST and use the path it returns — don't guess the folders, and don't guess the extension (.kt vs .java).
-        - To rename something everywhere in a file, make ONE edit_file call with old_string set to just the old name and "replace_all":"true".
-
-        Tools:
-        $toolDescriptions
-        - respond: Send the user a message or your final answer.
-
-        Examples (pick the tool that matches; copy the FORMAT, not the values):
-        Greeting / question you can answer -> respond:
-        <tool_call>{"tool":"respond","args":{"message":"Hi! What would you like to build?"}}</tool_call>
-        Open a file (a bare name is fine here) -> open_file:
-        <tool_call>{"tool":"open_file","args":{"file_path":"${examplePath.substringAfterLast('/')}"}}</tool_call>
-        Change one line of a file -> edit_file:
-        <tool_call>{"tool":"edit_file","args":{"file_path":"$examplePath","old_string":"setTitle(\"Old\")","new_string":"setTitle(\"New\")"}}</tool_call>
-        Change two lines (note the \n, never a real line break) -> edit_file:
-        <tool_call>{"tool":"edit_file","args":{"file_path":"$examplePath","old_string":"a = 1\nb = 2","new_string":"a = 10\nb = 20"}}</tool_call>
-        Rename every use of one name in a file -> ONE edit_file with replace_all (NOT one call per line):
-        <tool_call>{"tool":"edit_file","args":{"file_path":"$examplePath","old_string":"oldName","new_string":"newName","replace_all":"true"}}</tool_call>
-        Find where a file actually lives before editing it -> search_project:
-        <tool_call>{"tool":"search_project","args":{"query":"${exampleFileStem(examplePath)}"}}</tool_call>
-        """.trimIndent()
-
-        android.util.Log.d("ChatViewModel", "Using Local LLM system prompt (guided mode) with ${toolRouter.getAllHandlers().size} tools")
-        return prompt
     }
 
     /**
@@ -608,15 +582,11 @@ class ChatViewModel(
                         val backends = llmService.availableBackends
                         android.util.Log.d("ChatViewModel", "checkBackendAvailability: Found ${backends.size} backends")
 
-                        // Read backend preference from settings
-                        val prefs = getContext()?.getPluginSharedPreferences("AgentSettings")
-                        val preferredBackendName = prefs?.getString("ai_backend_preference", "LOCAL_LLM")
-                        android.util.Log.d("ChatViewModel", "checkBackendAvailability: Preferred backend = $preferredBackendName")
-                        val preferredBackendId = when (preferredBackendName) {
-                            "GEMINI" -> "gemini"
-                            "LOCAL_LLM" -> "local"
-                            else -> "local"
-                        }
+                        // The selection is stored as the backend's own id, so it needs no mapping:
+                        // a backend this plugin has never heard of resolves like any other.
+                        val preferredBackendId = BackendRegistry.selectedId()
+                            ?: backends.firstOrNull()?.id
+                        android.util.Log.d("ChatViewModel", "checkBackendAvailability: Preferred backend = $preferredBackendId")
 
                         // First try to use the preferred backend
                         var foundAvailable = false
@@ -676,8 +646,8 @@ class ChatViewModel(
         if (!_isBackendAvailable.value) {
             android.util.Log.d("ChatViewModel", "sendMessage: Backend not available")
             emitSystemError(
-                "No LLM backend is set up yet. Open Settings to select a local .gguf model, " +
-                    "or add a Gemini API key."
+                "No LLM backend is set up yet. Open Settings to choose an installed " +
+                    "backend and finish configuring it."
             )
             return
         }
@@ -715,7 +685,7 @@ class ChatViewModel(
 
                 val config = LlmInferenceService.LlmConfig(currentBackendId).apply {
                     // The grammar shapes a local tool call but not its values, so paths get sampled.
-                    temperature = if (currentBackendId == "gemini") 0.7f else LOCAL_TEMPERATURE
+                    temperature = backendTemperature() ?: DEFAULT_TEMPERATURE
                     maxTokens = 4096  // headroom for complete tool calls
                     systemPrompt = buildSystemPrompt()
                     // Local backend constrains generation to this grammar; cloud ignores it.
@@ -943,23 +913,22 @@ class ChatViewModel(
             }
 
         try {
-            if (currentBackendId == "gemini") {
-                llmService.generateStreaming(agentLoop.renderTranscript(turns), config, streamCallback)
-            } else {
-                llmService.generateStreamingWithTools(
-                    turns.lastOrNull()?.content.orEmpty(),
-                    turns.dropLast(1),
-                    config,
-                    emptyList(),
-                    object : LlmInferenceService.ToolStreamCallback {
-                        override fun onToken(token: String) = streamCallback.onToken(token)
-                        override fun onToolCall(request: LlmInferenceService.ToolCallRequest) = Unit
-                        override fun onComplete(response: LlmInferenceService.LlmResponse) =
-                            streamCallback.onComplete(response)
-                        override fun onError(error: String) = streamCallback.onError(error)
-                    }
-                )
-            }
+            // Every backend takes the structured form: the last turn as the prompt, the rest as
+            // history. Tools are empty because tool calls travel in the reply text (TOOL_CALL_SYNTAX),
+            // not through native function calling.
+            llmService.generateStreamingWithTools(
+                turns.lastOrNull()?.content.orEmpty(),
+                turns.dropLast(1),
+                config,
+                emptyList(),
+                object : LlmInferenceService.ToolStreamCallback {
+                    override fun onToken(token: String) = streamCallback.onToken(token)
+                    override fun onToolCall(request: LlmInferenceService.ToolCallRequest) = Unit
+                    override fun onComplete(response: LlmInferenceService.LlmResponse) =
+                        streamCallback.onComplete(response)
+                    override fun onError(error: String) = streamCallback.onError(error)
+                }
+            )
         } catch (e: Exception) {
             // A synchronous throw fires no callback; complete deferred so await() doesn't hang.
             android.util.Log.e("ChatViewModel", "generateStreaming threw synchronously", e)

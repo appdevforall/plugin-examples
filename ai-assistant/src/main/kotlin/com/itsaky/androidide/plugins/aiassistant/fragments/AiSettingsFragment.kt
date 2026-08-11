@@ -1,72 +1,64 @@
 package com.itsaky.androidide.plugins.aiassistant.fragments
 
-import android.annotation.SuppressLint
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import android.os.Bundle
-import android.text.method.HideReturnsTransformationMethod
-import android.text.method.PasswordTransformationMethod
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.view.WindowManager
-import android.widget.*
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.annotation.DrawableRes
+import android.widget.AdapterView
+import android.widget.ArrayAdapter
+import android.widget.FrameLayout
+import android.widget.ImageButton
+import android.widget.LinearLayout
+import android.widget.Spinner
+import android.widget.TextView
 import androidx.fragment.app.Fragment
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.lifecycleScope
-import androidx.lifecycle.repeatOnLifecycle
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import com.itsaky.androidide.plugins.PluginContext
+import androidx.fragment.app.commit
 import com.itsaky.androidide.plugins.aiassistant.AiAssistantPlugin
 import com.itsaky.androidide.plugins.aiassistant.R
-import com.itsaky.androidide.plugins.aiassistant.gemini.GeminiKeyOnboarding
-import com.itsaky.androidide.plugins.aiassistant.gemini.KeyVerification
+import com.itsaky.androidide.plugins.aiassistant.backends.BackendFragmentFactory
+import com.itsaky.androidide.plugins.aiassistant.backends.BackendOption
+import com.itsaky.androidide.plugins.aiassistant.backends.BackendRegistry
 import com.itsaky.androidide.plugins.base.PluginFragmentHelper
 import com.itsaky.androidide.plugins.services.IdeTooltipService
-import com.itsaky.androidide.plugins.aiassistant.viewmodel.AiBackend
-import com.itsaky.androidide.plugins.aiassistant.viewmodel.AiSettingsViewModel
-import com.itsaky.androidide.plugins.aiassistant.viewmodel.EngineState
-import com.itsaky.androidide.plugins.aiassistant.viewmodel.ModelLoadingState
-import com.itsaky.androidide.plugins.aiassistant.viewmodel.ModelMemoryWarning
-import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 import kotlin.math.roundToInt
 
 /**
  * The Agent settings screen, reached from Preferences → Configuration → Agent and from the Agent
  * chat's own shortcuts. The host mounts it full-screen in PluginScreenActivity, which provides no
  * toolbar, so this fragment brings its own app bar and closes by finishing that activity.
+ *
+ * Deliberately knows no backend. It offers whichever backends registered themselves with AI Core
+ * and mounts, below the selector, the settings pane the selected backend contributes — so adding a
+ * provider means shipping a `.cgp`, not editing this screen.
  */
-class AiSettingsFragment : Fragment(), MemoryWarningDialogFragment.Host {
+class AiSettingsFragment : Fragment() {
 
-    private lateinit var viewModel: AiSettingsViewModel
     private lateinit var settingsToolbar: LinearLayout
     private lateinit var backButton: ImageButton
     private lateinit var backendSpinner: Spinner
     private lateinit var backendSpecificContainer: FrameLayout
     private var tooltipService: IdeTooltipService? = null
 
-    /**
-     * Set while the Gemini pane is on screen, so [onResume] can nudge the user towards **Paste
-     * key** after they come back from AI Studio. Cleared when the pane is replaced or the view is
-     * destroyed — it captures views, so holding it any longer would leak them.
-     */
-    private var onGeminiPaneResume: (() -> Unit)? = null
+    /** Backends as of [onViewCreated], so the spinner's positions stay valid while it is on screen. */
+    private var backends: List<BackendOption> = emptyList()
+
+    /** Backend whose pane is currently mounted, so re-selecting it does not rebuild it. */
+    private var shownBackendId: String? = null
+
+    companion object {
+        /** Tag for the mounted backend pane, so it can be found across a configuration change. */
+        private const val TAG_BACKEND_PANE = "backend_settings_pane"
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Installed before super.onCreate, which is where a saved child-fragment state is restored:
+        // the backend pane lives in another plugin's classloader and the default factory cannot see
+        // it, so without this a rotation would silently replace the pane with a blank fragment.
+        childFragmentManager.fragmentFactory = BackendFragmentFactory(
+            childFragmentManager.fragmentFactory,
+            BackendRegistry::classLoaderFor,
+        )
         super.onCreate(savedInstanceState)
-        // Disable Material transitions to avoid resource loading issues
-        // Plugin uses compileOnly dependencies, so Material transition resources aren't bundled
-        enterTransition = null
-        exitTransition = null
 
         // Resolve the IDE tooltip service so the settings controls can offer in-app help.
         try {
@@ -88,30 +80,13 @@ class AiSettingsFragment : Fragment(), MemoryWarningDialogFragment.Host {
         }
     }
 
-    private val filePickerLauncher =
-        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
-            uri?.let {
-                try {
-                    val takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION
-                    requireContext().contentResolver.takePersistableUriPermission(it, takeFlags)
-
-                    val uriString = it.toString()
-                    viewModel.loadModelFromUri(uriString, requireContext())
-                    Toast.makeText(requireContext(), getString(R.string.model_loading_toast), Toast.LENGTH_SHORT).show()
-                } catch (e: Exception) {
-                    Toast.makeText(requireContext(), getString(R.string.state_error, e.message), Toast.LENGTH_LONG).show()
-                }
-            }
-        }
-
     /**
      * Route inflation through the host so this screen's views resolve against a Context whose
      * Configuration tracks the IDE's day/night setting (DayNight PluginTheme + values-night/
      * colors); the raw fragment inflater pins the screen to light mode.
      *
-     * Overridden here rather than applied inside [onCreateView] so that `layoutInflater` itself is
-     * the themed one — the backend panes swapped into [backendSpecificContainer] and anything else
-     * reaching for it get the theme for free. Same shape as ChatFragment.
+     * Only this screen's own views: a backend pane inflates against *its* plugin's resources and
+     * overrides this for itself.
      */
     override fun onGetLayoutInflater(savedInstanceState: Bundle?): LayoutInflater {
         val inflater = super.onGetLayoutInflater(savedInstanceState)
@@ -129,84 +104,9 @@ class AiSettingsFragment : Fragment(), MemoryWarningDialogFragment.Host {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        initializeViewModel()
         initializeViews(view)
         setupToolbar()
-        setupBackendSelector()
-        observeMemoryWarnings()
-    }
-
-    /**
-     * Puts a "this model may not fit" question to the user. Collected under STARTED so the dialog is
-     * never shown to a stopped fragment; the event waits in the ViewModel until then.
-     */
-    private fun observeMemoryWarnings() {
-        dropStaleMemoryWarning()
-        viewLifecycleOwner.lifecycleScope.launch {
-            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                viewModel.modelMemoryWarnings.collect(::showMemoryWarning)
-            }
-        }
-    }
-
-    /**
-     * Dismiss a warning dialog the framework restored around a question that no longer exists.
-     * After process death the load that raised it is gone, so every button on it would be a silent
-     * no-op — better to take it away than to leave the user pressing a dialog that decides nothing.
-     */
-    private fun dropStaleMemoryWarning() {
-        if (viewModel.hasPendingMemoryWarning) return
-        val restored = childFragmentManager.findFragmentByTag(MemoryWarningDialogFragment.TAG)
-        (restored as? MemoryWarningDialogFragment)?.dismissAllowingStateLoss()
-    }
-
-    /**
-     * Shown as a child fragment, so it survives rotation and can still reach this host. Must stay
-     * idempotent: an unanswered question is re-published to every new collector by
-     * [com.itsaky.androidide.plugins.aiassistant.viewmodel.UserConfirmation].
-     *
-     * @param warning the model and the figures to put to the user
-     */
-    private fun showMemoryWarning(warning: ModelMemoryWarning) {
-        if (childFragmentManager.findFragmentByTag(MemoryWarningDialogFragment.TAG) != null) return
-        MemoryWarningDialogFragment.newInstance(warning)
-            .show(childFragmentManager, MemoryWarningDialogFragment.TAG)
-    }
-
-    override fun onModelMemoryDecision(proceed: Boolean) {
-        viewModel.onMemoryWarningDecision(proceed)
-        // Not requireContext(): onCancel can reach us as the fragment is going away.
-        val ctx = context ?: return
-        if (!proceed) {
-            Toast.makeText(
-                ctx,
-                getString(R.string.llm_memory_warning_declined),
-                Toast.LENGTH_LONG,
-            ).show()
-        }
-    }
-
-    override fun onResume() {
-        super.onResume()
-        onGeminiPaneResume?.invoke()
-    }
-
-    override fun onDestroyView() {
-        // Drops the captured Gemini pane views along with the callback.
-        onGeminiPaneResume = null
-        setSecureWindow(false)
-        super.onDestroyView()
-    }
-
-    private fun initializeViewModel() {
-        viewModel = ViewModelProvider(
-            this,
-            AiSettingsViewModelFactory { getPluginContext() }
-        )[AiSettingsViewModel::class.java]
-    }
-
-    private fun getPluginContext(): PluginContext? {
-        return com.itsaky.androidide.plugins.aiassistant.AiAssistantPlugin.getContext()
+        setupBackendSelector(restoring = savedInstanceState != null)
     }
 
     private fun initializeViews(view: View) {
@@ -224,667 +124,139 @@ class AiSettingsFragment : Fragment(), MemoryWarningDialogFragment.Host {
         wireTooltip(backButton, AiAssistantPlugin.TOOLTIP_TAG_SETTINGS_BACK)
     }
 
-    private fun setupBackendSelector() {
-        val backends = viewModel.getAvailableBackends()
-        val backendNames = backends.map { it.displayName }
+    /**
+     * Fills the selector from the live backend registry and mounts the selected backend's pane.
+     *
+     * @param restoring true when the framework already rebuilt the pane from saved state, in which
+     *   case the initial selection must not replace it and lose whatever the user had typed
+     */
+    private fun setupBackendSelector(restoring: Boolean) {
+        backends = BackendRegistry.options()
+
+        if (backends.isEmpty()) {
+            backendSpinner.visibility = View.GONE
+            showPlaceholder(getString(R.string.backend_none_installed))
+            return
+        }
+
+        backendSpinner.visibility = View.VISIBLE
         val adapter = ArrayAdapter(
             requireContext(),
             android.R.layout.simple_spinner_item,
-            backendNames
+            backends.map { it.displayName }
         )
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         backendSpinner.adapter = adapter
 
         wireTooltip(backendSpinner, AiAssistantPlugin.TOOLTIP_TAG_SETTINGS_BACKEND)
 
-        val currentBackend = viewModel.getCurrentBackend()
-        backendSpinner.setSelection(backends.indexOf(currentBackend))
-        updateBackendSpecificUi(currentBackend)
+        // A stored selection whose backend was uninstalled falls back to the first one offered,
+        // rather than leaving the screen describing a backend that cannot run.
+        val storedId = BackendRegistry.selectedId()
+        val selected = backends.firstOrNull { it.id == storedId } ?: backends.first()
+        if (selected.id != storedId) {
+            BackendRegistry.select(selected.id)
+        }
+
+        if (restoring && childFragmentManager.findFragmentByTag(TAG_BACKEND_PANE) != null) {
+            shownBackendId = selected.id
+        }
+
+        backendSpinner.setSelection(backends.indexOf(selected))
+        showBackendPane(selected)
 
         backendSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                val selectedBackend = backends[position]
-                viewModel.saveBackend(selectedBackend)
-                updateBackendSpecificUi(selectedBackend)
+                val backend = backends.getOrNull(position) ?: return
+                BackendRegistry.select(backend.id)
+                showBackendPane(backend)
             }
 
             override fun onNothingSelected(parent: AdapterView<*>?) {}
         }
     }
 
-    private fun updateBackendSpecificUi(backend: AiBackend) {
+    /**
+     * Mounts [backend]'s own settings pane in the container below the selector.
+     *
+     * The pane is a Fragment packaged in the backend's `.cgp`; it is loaded by that plugin's
+     * classloader (see [BackendFragmentFactory]) and inflates against that plugin's resources, so
+     * nothing about the provider is known here beyond the class name it declared.
+     */
+    private fun showBackendPane(backend: BackendOption) {
+        if (shownBackendId == backend.id) return
+        shownBackendId = backend.id
+
+        val className = backend.settingsFragmentClassName
+        if (className == null) {
+            // A backend configured entirely from its own defaults is legitimate, so this is a
+            // statement about that backend rather than an error.
+            clearPane()
+            showPlaceholder(getString(R.string.backend_no_settings, backend.displayName))
+            return
+        }
+
+        val paneClass = loadPaneClass(backend, className)
+        if (paneClass == null) {
+            clearPane()
+            showPlaceholder(getString(R.string.backend_pane_unavailable))
+            return
+        }
+
         backendSpecificContainer.removeAllViews()
-        // The Gemini pane's views are about to go; its resume callback must not outlive them.
-        onGeminiPaneResume = null
-
-        // layoutInflater is the theme-aware one (see onGetLayoutInflater), so these sub-layouts
-        // follow the IDE day/night theme like the rest of the screen.
-        when (backend) {
-            AiBackend.LOCAL_LLM -> {
-                val localLlmView = layoutInflater
-                    .inflate(R.layout.layout_settings_local_llm, backendSpecificContainer, false)
-                backendSpecificContainer.addView(localLlmView)
-                setupLocalLlmUi(localLlmView)
-            }
-            AiBackend.GEMINI -> {
-                val geminiApiView = layoutInflater
-                    .inflate(R.layout.layout_settings_gemini_api, backendSpecificContainer, false)
-                backendSpecificContainer.addView(geminiApiView)
-                setupGeminiApiUi(geminiApiView)
-            }
-        }
-    }
-
-    private fun setupLocalLlmUi(view: View) {
-        val modelPathTextView = view.findViewById<TextView>(R.id.selected_model_path)
-        val browseButton = view.findViewById<Button>(R.id.btn_browse_model)
-        val loadSavedButton = view.findViewById<Button>(R.id.loadSavedButton)
-        val modelStatusTextView = view.findViewById<TextView>(R.id.model_status_text_view)
-        val engineStatusTextView = view.findViewById<TextView>(R.id.engine_status_text)
-        val simplePromptCheckbox = view.findViewById<CheckBox>(R.id.switch_simple_local_prompt)
-        val shaInput = view.findViewById<EditText>(R.id.local_model_sha_input)
-
-        browseButton.setOnClickListener {
-            filePickerLauncher.launch(arrayOf("*/*"))
-        }
-        wireTooltip(browseButton, AiAssistantPlugin.TOOLTIP_TAG_SETTINGS_LOCAL_MODEL)
-
-        loadSavedButton.setOnClickListener {
-            val savedPath = viewModel.savedModelPath.value
-            if (savedPath != null) {
-                viewModel.loadModelFromUri(savedPath, requireContext())
-            }
-        }
-        // Same concept as Browse — choosing which local model to run.
-        wireTooltip(loadSavedButton, AiAssistantPlugin.TOOLTIP_TAG_SETTINGS_LOCAL_MODEL)
-
-        shaInput?.apply {
-            setText(viewModel.getLocalModelSha256().orEmpty())
-            setOnFocusChangeListener { _, hasFocus ->
-                if (!hasFocus) {
-                    viewModel.saveLocalModelSha256(text?.toString())
-                }
-            }
-        }
-        // On the labelled wrapper, not the field: long-press there is the paste menu.
-        view.findViewById<View>(R.id.local_model_sha_layout)
-            ?.let { wireTooltip(it, AiAssistantPlugin.TOOLTIP_TAG_SETTINGS_LOCAL_SHA) }
-
-        simplePromptCheckbox?.apply {
-            isChecked = viewModel.isUseSimpleLocalPromptEnabled()
-            setOnCheckedChangeListener { _, isChecked ->
-                viewModel.setUseSimpleLocalPrompt(isChecked)
-            }
-            wireTooltip(this, AiAssistantPlugin.TOOLTIP_TAG_SETTINGS_SIMPLE_PROMPT)
-        }
-
-        // Observe engine state
-        viewModel.engineState.observe(viewLifecycleOwner) { state ->
-            when (state) {
-                is EngineState.Initializing, EngineState.Uninitialized -> {
-                    engineStatusTextView.text = getString(R.string.engine_initializing)
-                    browseButton.isEnabled = false
-                    loadSavedButton.isEnabled = false
-                }
-                is EngineState.Initialized -> {
-                    engineStatusTextView.text = getString(R.string.engine_ready)
-                    browseButton.isEnabled = true
-                    loadSavedButton.isEnabled = viewModel.savedModelPath.value != null
-                }
-                is EngineState.Error -> {
-                    engineStatusTextView.text = state.message
-                    browseButton.isEnabled = false
-                    loadSavedButton.isEnabled = false
-                }
-            }
-        }
-
-        // Observe saved model path
-        viewModel.savedModelPath.observe(viewLifecycleOwner) { path ->
-            loadSavedButton.isEnabled = path != null && viewModel.engineState.value is EngineState.Initialized
-
-            if (path != null) {
-                modelPathTextView.visibility = View.VISIBLE
-                val fileName = viewModel.getSavedModelName() ?: viewModel.fallbackDisplayName(path)
-                modelPathTextView.text = getString(R.string.model_saved_path, fileName)
-            } else {
-                modelPathTextView.visibility = View.GONE
-            }
-        }
-
-        // Observe model loading state
-        viewModel.modelLoadingState.observe(viewLifecycleOwner) { state ->
-            when (state) {
-                is ModelLoadingState.Idle -> {
-                    modelStatusTextView.visibility = View.VISIBLE
-                    modelStatusTextView.text = getString(R.string.model_none_loaded)
-                }
-                is ModelLoadingState.Loading -> {
-                    modelStatusTextView.visibility = View.VISIBLE
-                    modelStatusTextView.text = getString(R.string.model_loading_wait)
-                }
-                is ModelLoadingState.Loaded -> {
-                    modelStatusTextView.visibility = View.VISIBLE
-                    modelStatusTextView.text = getString(R.string.model_loaded, state.modelName)
-                }
-                is ModelLoadingState.Error -> {
-                    modelStatusTextView.visibility = View.VISIBLE
-                    modelStatusTextView.text = getString(R.string.model_load_error, state.message)
-                }
-            }
-        }
-    }
-
-    @SuppressLint("SetTextI18n")
-    private fun setupGeminiApiUi(view: View) {
-        val apiKeyLayout = view.findViewById<LinearLayout>(R.id.gemini_api_key_layout)
-        val apiKeyInput = view.findViewById<EditText>(R.id.gemini_api_key_input)
-        val toggleVisibilityButton = view.findViewById<ImageButton>(R.id.btn_toggle_api_key_visibility)
-        val saveButton = view.findViewById<Button>(R.id.btn_save_api_key)
-        val editButton = view.findViewById<Button>(R.id.btn_edit_api_key)
-        val clearButton = view.findViewById<Button>(R.id.btn_clear_api_key)
-        val statusTextView = view.findViewById<TextView>(R.id.gemini_api_key_status_text)
-        val getKeyButton = view.findViewById<Button>(R.id.btn_get_free_key)
-        val verificationText = view.findViewById<TextView>(R.id.gemini_key_verification_text)
-
-        // Not on apiKeyInput: long-press there is the paste menu, and a key is pasted.
-        listOf(
-            toggleVisibilityButton, saveButton, editButton, clearButton, statusTextView,
-            verificationText
-        ).forEach { wireTooltip(it, AiAssistantPlugin.TOOLTIP_TAG_SETTINGS_GEMINI_KEY) }
-        wireTooltip(getKeyButton, AiAssistantPlugin.TOOLTIP_TAG_SETTINGS_GET_KEY)
-
-        // Create model selection container
-        val modelContainer = createModelSelectionUi(view)
-
-        /**
-         * Show the outcome of (or progress of) the live key check.
-         *
-         * @param message the user-facing line; carries no status glyph of its own
-         * @param icon leading status drawable, or 0 for the states that don't warrant one
-         *   (in-progress, and the hints shown on returning from AI Studio)
-         */
-        fun showVerification(message: String, @DrawableRes icon: Int = 0) {
-            verificationText.text = message
-            // Relative (not left/right) so the icon follows the layout direction in RTL locales.
-            verificationText.setCompoundDrawablesRelativeWithIntrinsicBounds(icon, 0, 0, 0)
-            verificationText.visibility = View.VISIBLE
-        }
-
-        /** Drop a verdict that no longer describes what is in the field. */
-        fun hideVerification() {
-            verificationText.visibility = View.GONE
-            verificationText.text = ""
-            verificationText.setCompoundDrawablesRelativeWithIntrinsicBounds(0, 0, 0, 0)
-        }
-
-        // "Get API Key" is absent here on purpose: it stays visible while Gemini is selected.
-        fun updateUiState(isEditing: Boolean) {
-            if (isEditing) {
-                statusTextView.visibility = View.GONE
-                apiKeyLayout.visibility = View.VISIBLE
-                saveButton.visibility = View.VISIBLE
-                editButton.visibility = View.GONE
-                clearButton.visibility = View.GONE
-            } else {
-                statusTextView.visibility = View.VISIBLE
-                apiKeyLayout.visibility = View.GONE
-                saveButton.visibility = View.GONE
-                editButton.visibility = View.VISIBLE
-                clearButton.visibility = View.VISIBLE
-            }
-        }
-
-        viewLifecycleOwner.lifecycleScope.launch {
-            val savedApiKey = viewModel.getGeminiApiKey()
-            val hasKey = !savedApiKey.isNullOrBlank()
-            updateUiState(isEditing = !hasKey)
-            if (hasKey) {
-                statusTextView.text = savedApiKeyStatusText()
-            } else {
-                apiKeyInput.setText("")
-                // A stored-but-undecryptable key also reads as null; warn as the Edit path does.
-                if (viewModel.hasStoredGeminiApiKey()) {
-                    Toast.makeText(
-                        requireContext(),
-                        getString(R.string.msg_api_key_unreadable),
-                        Toast.LENGTH_LONG
-                    ).show()
-                }
-            }
-        }
-
-        toggleVisibilityButton.setColorFilter(apiKeyInput.currentHintTextColor)
-
-        var isKeyVisible = false
-
-        fun applyKeyVisibility() {
-            apiKeyInput.transformationMethod = if (isKeyVisible) {
-                HideReturnsTransformationMethod.getInstance()
-            } else {
-                PasswordTransformationMethod.getInstance()
-            }
-            toggleVisibilityButton.setImageResource(
-                if (isKeyVisible) R.drawable.ic_visibility_off else R.drawable.ic_visibility
-            )
-            toggleVisibilityButton.contentDescription = getString(
-                if (isKeyVisible) R.string.cd_hide_api_key else R.string.cd_show_api_key
-            )
-            toggleVisibilityButton.setColorFilter(apiKeyInput.currentHintTextColor)
-            apiKeyInput.setSelection(apiKeyInput.text?.length ?: 0)
-            setSecureWindow(isKeyVisible)
-        }
-
-        applyKeyVisibility()
-
-        toggleVisibilityButton.setOnClickListener {
-            isKeyVisible = !isKeyVisible
-            applyKeyVisibility()
-        }
-
-        getKeyButton.setOnClickListener { openAiStudio() }
-
-        // Coming back from AI Studio, point at the next step; the clipboard is never read.
-        onGeminiPaneResume = {
-            // Kept on the ViewModel so a rotation while AI Studio is in front doesn't lose the hint.
-            if (viewModel.sentUserToAiStudio) {
-                viewModel.sentUserToAiStudio = false
-                // With a key already stored the field is hidden, so the next tap is Edit.
-                showVerification(
-                    if (apiKeyLayout.visibility == View.VISIBLE) {
-                        getString(R.string.msg_key_hint_paste_into_field)
-                    } else {
-                        getString(R.string.msg_key_hint_edit_first)
-                    }
-                )
-            }
-        }
-
-        /** Enable or disable everything that would race the in-flight key check. */
-        fun setKeyEntryEnabled(enabled: Boolean) {
-            saveButton.isEnabled = enabled
-            getKeyButton.isEnabled = enabled
-            apiKeyInput.isEnabled = enabled
-        }
-
-        /**
-         * Encrypt and store [apiKey], then reflect the outcome. Only ever reached for a key Google
-         * confirmed, or one the user chose to keep after an inconclusive check.
-         */
-        suspend fun persistKey(
-            apiKey: String,
-            verified: Boolean,
-            resultText: String,
-            @DrawableRes resultIcon: Int
-        ) {
-            if (!viewModel.saveGeminiApiKey(apiKey, verified)) {
-                Toast.makeText(
-                    requireContext(),
-                    getString(R.string.msg_api_key_save_failed),
-                    Toast.LENGTH_LONG
-                ).show()
-                return
-            }
-            Toast.makeText(
-                requireContext(),
-                getString(R.string.msg_api_key_saved),
-                Toast.LENGTH_SHORT
-            ).show()
-            updateUiState(isEditing = false)
-            statusTextView.text = savedApiKeyStatusText()
-            showVerification(resultText, resultIcon)
-            // A different key can reach a different set of models, so the picker is re-fetched.
-            viewModel.fetchGeminiModels()
-        }
-
-        /**
-         * Offer to keep a key that could not be checked. Distinct from a rejection: refusing a good
-         * key because the device is offline would leave the plugin unconfigurable, so this gets the
-         * muted "unchecked" icon and a key Google actually refused never reaches here.
-         */
-        fun confirmSaveUnverified(apiKey: String, reason: String) {
-            showVerification(reason, R.drawable.ic_key_unchecked)
-            MaterialAlertDialogBuilder(requireContext())
-                .setTitle(R.string.title_save_unverified_key)
-                .setMessage(getString(R.string.msg_save_unverified_key, reason))
-                .setNegativeButton(R.string.action_cancel, null)
-                .setPositiveButton(R.string.action_save_anyway) { _, _ ->
-                    viewLifecycleOwner.lifecycleScope.launch {
-                        persistKey(
-                            apiKey,
-                            verified = false,
-                            resultText = reason,
-                            resultIcon = R.drawable.ic_key_unchecked
-                        )
-                    }
-                }
-                .show()
-        }
-
-        saveButton.setOnClickListener {
-            val apiKey = apiKeyInput.text.toString().trim()
-            // Blankness is the only shape rule: AI Studio keys need not match the AIza… form.
-            if (apiKey.isBlank()) {
-                Toast.makeText(requireContext(), getString(R.string.msg_api_key_empty), Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
-            setKeyEntryEnabled(false)
-            showVerification(getString(R.string.msg_verifying_key))
-            viewLifecycleOwner.lifecycleScope.launch {
-                val verdict = try {
-                    viewModel.verifyGeminiKey(apiKey)
-                } finally {
-                    setKeyEntryEnabled(true)
-                }
-                when (verdict) {
-                    // Model count omitted: the user saved a key, not asked for a catalog.
-                    is KeyVerification.Verified -> persistKey(
-                        apiKey,
-                        verified = true,
-                        resultText = getString(R.string.msg_key_verified),
-                        resultIcon = R.drawable.ic_key_verified
-                    )
-
-                    // A rate-limited key is a working key, so it gets the same icon as a clean pass.
-                    KeyVerification.RateLimited -> persistKey(
-                        apiKey,
-                        verified = true,
-                        resultText = getString(R.string.msg_key_verified_rate_limited),
-                        resultIcon = R.drawable.ic_key_verified
-                    )
-
-                    // Nothing is written: a definitive refusal would only resurface mid-chat.
-                    KeyVerification.Rejected -> {
-                        showVerification(
-                            getString(R.string.msg_key_rejected),
-                            R.drawable.ic_key_rejected
-                        )
-                        apiKeyInput.requestFocus()
-                    }
-
-                    KeyVerification.Unreachable ->
-                        confirmSaveUnverified(apiKey, getString(R.string.msg_key_unreachable))
-
-                    KeyVerification.Unknown ->
-                        confirmSaveUnverified(apiKey, getString(R.string.msg_key_uncheckable))
-                }
-            }
-        }
-
-        // Reveal the (already-fetched) key in an editable, focused field.
-        fun revealEditMode(apiKey: String) {
-            apiKeyInput.setText(apiKey)
-            apiKeyInput.setSelection(apiKey.length)
-            // The old verdict described the stored key, which is about to change.
-            hideVerification()
-            updateUiState(isEditing = true)
-            isKeyVisible = false
-            applyKeyVisibility()
-            apiKeyInput.requestFocus()
-        }
-
-        editButton.setOnClickListener {
-            editButton.isEnabled = false
-            viewLifecycleOwner.lifecycleScope.launch {
-                val apiKey = try {
-                    viewModel.getGeminiApiKey()
-                } finally {
-                    editButton.isEnabled = true
-                }
-                // null = a key IS stored but won't decrypt; an empty box alone looks like data loss.
-                if (apiKey == null) {
-                    Toast.makeText(
-                        requireContext(),
-                        getString(R.string.msg_api_key_unreadable),
-                        Toast.LENGTH_LONG
-                    ).show()
-                }
-                revealEditMode(apiKey.orEmpty())
-            }
-        }
-
-        clearButton.setOnClickListener {
-            viewModel.clearGeminiApiKey()
-            Toast.makeText(requireContext(), getString(R.string.msg_api_key_cleared), Toast.LENGTH_SHORT).show()
-            hideVerification()
-            updateUiState(isEditing = true)
-            apiKeyInput.setText("")
-        }
-
-        // Setup model selection
-        setupGeminiModelSelection(modelContainer)
-    }
-
-    /**
-     * Add or clear [WindowManager.LayoutParams.FLAG_SECURE] on the host activity's window.
-     *
-     * Set while the key is in clear text, or screenshots and the recents thumbnail would capture
-     * it. Cleared in [onDestroyView], since the window outlives this fragment's view.
-     *
-     * @param secure true to block capture, false to allow it again
-     */
-    private fun setSecureWindow(secure: Boolean) {
-        val window = activity?.window ?: return
-        if (secure) {
-            window.setFlags(
-                WindowManager.LayoutParams.FLAG_SECURE,
-                WindowManager.LayoutParams.FLAG_SECURE
-            )
-        } else {
-            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        childFragmentManager.commit {
+            setReorderingAllowed(true)
+            replace(R.id.backend_specific_settings_container, paneClass, null, TAG_BACKEND_PANE)
         }
     }
 
     /**
-     * Status line for a stored key: dated when the save time is known, generic otherwise, and
-     * saying "verified" only for a key Google actually confirmed — a key kept through the
-     * save-anyway path was never checked and must not claim otherwise.
-     */
-    private fun savedApiKeyStatusText(): String {
-        val timestamp = viewModel.getGeminiApiKeySaveTimestamp()
-        val verified = viewModel.isGeminiKeyVerified()
-        if (timestamp <= 0) return getString(R.string.msg_api_key_is_saved)
-        val savedDate = SimpleDateFormat("MMMM d, yyyy", Locale.getDefault()).format(Date(timestamp))
-        return if (verified) {
-            getString(R.string.msg_api_key_verified_on, savedDate)
-        } else {
-            getString(R.string.msg_api_key_saved_on, savedDate)
-        }
-    }
-
-    /**
-     * Open Google AI Studio's key page in the *system* browser.
+     * Loads the pane class with the backend plugin's own loader.
      *
-     * A real browser, not a WebView: Google blocks sign-in in embedded WebViews, and the user
-     * should see Google's own URL bar. With no browser at all, the URL is copied instead.
+     * @return the class, or null when the backend named a class its own plugin does not contain or
+     *   that is not a Fragment — a broken backend, reported rather than crashing this screen
      */
-    private fun openAiStudio() {
-        val url = GeminiKeyOnboarding.AI_STUDIO_URL
-        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-        runCatching { startActivity(intent) }
-            .onSuccess { viewModel.sentUserToAiStudio = true }
-            .onFailure { error ->
-                AiAssistantPlugin.getContext()?.logger
-                    ?.warn("AiSettingsFragment: no browser could open AI Studio", error)
-                val message = if (copyToClipboard(url)) {
-                    R.string.msg_no_browser_for_key
-                } else {
-                    R.string.msg_key_link_copy_failed
-                }
-                Toast.makeText(requireContext(), getString(message, url), Toast.LENGTH_LONG).show()
-            }
-    }
-
-    /**
-     * Put [text] on the clipboard.
-     *
-     * Only ever used for the public AI Studio URL — never for a key, which would put the secret
-     * somewhere every app on the device can read it.
-     *
-     * @return true when the clipboard accepted the value
-     */
-    private fun copyToClipboard(text: String): Boolean {
-        val clipboard = requireContext()
-            .getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return false
-        return runCatching {
-            clipboard.setPrimaryClip(ClipData.newPlainText(getString(R.string.app_name), text))
-        }.isSuccess
-    }
-
-    /**
-     * Density-independent [dp] as whole pixels, for the views this screen builds in code. The
-     * `setPadding` family takes raw pixels, so a literal shrinks as screen density rises.
-     *
-     * @param dp the density-independent size to convert
-     * @return the equivalent size in device pixels
-     */
-    private fun dp(dp: Int): Int = (dp * resources.displayMetrics.density).roundToInt()
-
-    private fun createModelSelectionUi(parent: View): LinearLayout {
-        val context = requireContext()
-        val container = LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(0, dp(32), 0, 0)
-        }
-
-        // Add title
-        val titleText = TextView(context).apply {
-            text = getString(R.string.label_gemini_model)
-            textSize = 16f
-            setPadding(0, 0, 0, dp(16))
-        }
-        container.addView(titleText)
-
-        // Add current model display
-        val currentModelText = TextView(context).apply {
-            id = View.generateViewId()
-            text = getString(R.string.current_model, viewModel.getGeminiModel())
-            setPadding(0, 0, 0, dp(8))
-        }
-        container.addView(currentModelText)
-
-        // Add model spinner
-        val modelSpinner = Spinner(context).apply {
-            id = View.generateViewId()
-        }
-        container.addView(modelSpinner)
-
-        // Add refresh button
-        val refreshButton = Button(context).apply {
-            id = View.generateViewId()
-            text = getString(R.string.refresh_models)
-        }
-        container.addView(refreshButton)
-
-        // Find the parent container and add this
-        if (parent is ViewGroup) {
-            parent.addView(container)
-        }
-
-        // Tag the views for later reference
-        container.tag = "model_container"
-        currentModelText.tag = "current_model_text"
-        modelSpinner.tag = "model_spinner"
-        refreshButton.tag = "refresh_button"
-
-        return container
-    }
-
-    @SuppressLint("ClickableViewAccessibility")
-    private fun setupGeminiModelSelection(container: View) {
-        val currentModelText = container.findViewWithTag<TextView>("current_model_text")
-        val modelSpinner = container.findViewWithTag<Spinner>("model_spinner")
-        val refreshButton = container.findViewWithTag<Button>("refresh_button")
-
-        if (modelSpinner == null || refreshButton == null) return
-
-        wireTooltip(modelSpinner, AiAssistantPlugin.TOOLTIP_TAG_SETTINGS_GEMINI_MODEL)
-        wireTooltip(refreshButton, AiAssistantPlugin.TOOLTIP_TAG_SETTINGS_GEMINI_MODEL)
-
-        // Track real user taps so programmatic selection changes never persist a model.
-        var userTouchedSpinner = false
-
-        // Setup spinner
-        fun updateModelSpinner(models: List<String>, isLive: Boolean) {
-            val adapter = ArrayAdapter(
-                requireContext(),
-                android.R.layout.simple_spinner_item,
-                models
-            )
-            adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-            modelSpinner.adapter = adapter
-
-            // Migrate off a retired saved model only for a live catalog, never for the fallback.
-            val currentModel = viewModel.getGeminiModel()
-            val currentIndex = models.indexOf(currentModel)
-            when {
-                currentIndex >= 0 -> modelSpinner.setSelection(currentIndex)
-                isLive && models.isNotEmpty() -> {
-                    modelSpinner.setSelection(0)
-                    val migrated = models[0]
-                    viewModel.saveGeminiModel(migrated)
-                    currentModelText?.text = getString(R.string.current_model, migrated)
-                }
-            }
-        }
-
-        // Observe models
-        viewModel.geminiModels.observe(viewLifecycleOwner) { options ->
-            if (options.models.isNotEmpty()) {
-                updateModelSpinner(options.models, options.isLive)
-            }
-        }
-
-        // Observe loading state
-        viewModel.geminiModelsLoading.observe(viewLifecycleOwner) { isLoading ->
-            refreshButton.isEnabled = !isLoading
-            refreshButton.text = if (isLoading) getString(R.string.loading) else getString(R.string.refresh_models)
-        }
-
-        modelSpinner.setOnTouchListener { _, _ ->
-            userTouchedSpinner = true
-            false
-        }
-
-        // Handle model selection
-        modelSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                // Ignore programmatic selections; only a real user pick persists the model.
-                if (!userTouchedSpinner) return
-                val selectedModel = parent?.getItemAtPosition(position) as? String
-                if (selectedModel != null && selectedModel != viewModel.getGeminiModel()) {
-                    viewModel.saveGeminiModel(selectedModel)
-                    currentModelText?.text = getString(R.string.current_model, selectedModel)
-                    Toast.makeText(requireContext(), getString(R.string.model_changed, selectedModel), Toast.LENGTH_SHORT).show()
-                }
-            }
-
-            override fun onNothingSelected(parent: AdapterView<*>?) {}
-        }
-
-        // Handle refresh button
-        refreshButton.setOnClickListener {
-            viewModel.fetchGeminiModels()
-        }
-
-        // Initial fetch
-        if (viewModel.geminiModels.value?.models.isNullOrEmpty()) {
-            viewModel.fetchGeminiModels()
-        }
-    }
-}
-
-/**
- * Factory for creating AiSettingsViewModel with PluginContext dependency.
- */
-class AiSettingsViewModelFactory(
-    private val getContext: () -> PluginContext?
-) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
-    override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-        if (modelClass.isAssignableFrom(AiSettingsViewModel::class.java)) {
-            return AiSettingsViewModel(getContext) as T
+    private fun loadPaneClass(backend: BackendOption, className: String): Class<out Fragment>? {
+        val loader = backend.classLoader ?: return null
+        return try {
+            val loaded = loader.loadClass(className)
+            if (!Fragment::class.java.isAssignableFrom(loaded)) {
+                AiAssistantPlugin.getContext()?.logger?.error(
+                    "AiSettingsFragment: backend '${backend.id}' declared '$className', " +
+                        "which is not a Fragment"
+                )
+                return null
+            }
+            loaded as Class<out Fragment>
+        } catch (e: Throwable) {
+            AiAssistantPlugin.getContext()?.logger?.error(
+                "AiSettingsFragment: backend '${backend.id}' declared '$className', " +
+                    "which its plugin does not contain",
+                e
+            )
+            null
         }
-        throw IllegalArgumentException("Unknown ViewModel class")
+    }
+
+    /** Removes a mounted pane, so a placeholder is not drawn behind the previous backend's UI. */
+    private fun clearPane() {
+        val pane = childFragmentManager.findFragmentByTag(TAG_BACKEND_PANE) ?: return
+        childFragmentManager.commit {
+            setReorderingAllowed(true)
+            remove(pane)
+        }
+    }
+
+    /** Puts [message] in the pane container, for the states where there is no pane to show. */
+    private fun showPlaceholder(message: String) {
+        val padding = (16 * resources.displayMetrics.density).roundToInt()
+        backendSpecificContainer.removeAllViews()
+        backendSpecificContainer.addView(
+            TextView(requireContext()).apply {
+                text = message
+                setPadding(padding, padding, padding, padding)
+            }
+        )
     }
 }

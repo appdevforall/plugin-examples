@@ -64,16 +64,15 @@ class AiCorePluginTest {
     }
 
     @Test
-    fun testLocalBackendRegistration() {
+    fun givenActivated_whenInspectingBackends_thenNoneAreOwnedByAiCore() {
         val plugin = AiCorePlugin()
         plugin.initialize(mockContext)
         plugin.activate()
 
+        // AI Core contributes no backend of its own; ai-backend-local and ai-backend-gemini
+        // register themselves. A backend appearing here means that split regressed.
         val service = SharedServices.get(LlmInferenceService::class.java)
         assertNotNull(service)
-
-        val backend = service!!.getBackend("local")
-        assertNotNull(backend)
-        assertEquals("local", backend!!.getId())
+        assertTrue(service!!.getAvailableBackends().isEmpty())
     }
 }

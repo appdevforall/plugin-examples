@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- ai-core makes live HTTPS calls to the Gemini REST API (GeminiBackend, raw HttpURLConnection) -->
-    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- No permissions: ai-core only routes requests. Network access, filesystem access and
+         native code belong to the backend plugins that register with it. -->
 
     <application
         android:label="AI Core Plugin"
@@ -23,7 +23,7 @@
 
         <meta-data
             android:name="plugin.description"
-            android:value="AI Core Plugin providing LLM inference capabilities through local and remote backends" />
+            android:value="AI Core Plugin routing LLM inference to the backend plugins you install (AI Local Backend, AI Gemini Backend)" />
 
         <meta-data
             android:name="plugin.author"
@@ -37,9 +37,7 @@
             android:name="plugin.max_ide_version"
             android:value="26.99" />
 
-        <meta-data
-            android:name="plugin.permissions"
-            android:value="filesystem.read,filesystem.write,native.code,network.access" />
+        <!-- plugin.permissions is deliberately absent: the router itself needs none. -->
 
         <meta-data
             android:name="plugin.main_class"

@@ -10,13 +10,5 @@
     public <methods>;
 }
 
-# Keep LocalLlmBackend
--keep public class com.itsaky.androidide.plugins.aicore.LocalLlmBackend {
-    public <methods>;
-}
-
 # Keep plugin-api interfaces
 -keep interface com.itsaky.androidide.plugins.** { *; }
-
-# Keep llama-impl classes (if needed)
--keep class com.itsaky.llama.** { *; }

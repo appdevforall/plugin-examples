@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application
+        android:label="AI Local Backend Plugin"
+        android:theme="@style/PluginTheme">
+
+        <!-- Plugin metadata -->
+        <meta-data
+            android:name="plugin.id"
+            android:value="com.itsaky.androidide.plugins.ailocal" />
+
+        <meta-data
+            android:name="plugin.name"
+            android:value="AI Local Backend" />
+
+        <meta-data
+            android:name="plugin.version"
+            android:value="${pluginVersion}" />
+
+        <meta-data
+            android:name="plugin.description"
+            android:value="On-device .gguf inference backend for AI Core, powered by a bundled llama.cpp build. Nothing leaves the device." />
+
+        <meta-data
+            android:name="plugin.author"
+            android:value="App Dev for All" />
+
+        <meta-data
+            android:name="plugin.min_ide_version"
+            android:value="26.17" />
+
+        <meta-data
+            android:name="plugin.max_ide_version"
+            android:value="26.99" />
+
+        <!-- filesystem.*: reads the selected .gguf and caches a copy under the plugin's
+             files dir. native.code: bundles the prebuilt llama.cpp .so libraries. -->
+        <meta-data
+            android:name="plugin.permissions"
+            android:value="filesystem.read,filesystem.write,native.code" />
+
+        <meta-data
+            android:name="plugin.main_class"
+            android:value="com.itsaky.androidide.plugins.ailocal.LocalLlmPlugin" />
+
+        <meta-data
+            android:name="plugin.icon_day"
+            android:value="assets/icon_day.png" />
+
+        <meta-data
+            android:name="plugin.icon_night"
+            android:value="assets/icon_night.png" />
+
+    </application>
+
+</manifest>

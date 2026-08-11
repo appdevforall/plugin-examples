@@ -146,4 +146,106 @@ class LlmInferenceServiceImplTest {
 
         assertFalse(response.success)
     }
+
+    @Test
+    fun givenToolCapableBackend_whenStreamingWithTools_thenTheRequestReachesItIntact() {
+        // Routing used to depend on `backend is GeminiBackend`. ai-core must hand the whole
+        // request — history and tools included — to the backend and decide nothing itself.
+        val backend = ToolRecordingBackend()
+        service.registerBackend(backend)
+
+        val history = List(2) { ChatMessage(ChatMessage.Role.USER, "turn $it") }
+        val tools = listOf(ToolDefinition("read_file", "reads a file", emptyMap()))
+        service.generateStreamingWithTools(
+            "prompt", history, LlmConfig(backend.getId()), tools, toolCallbackSink()
+        )
+
+        assertEquals(listOf(2), backend.historySizes)
+        assertEquals(listOf(1), backend.toolCounts)
+        assertTrue("ai-core must not pre-empt the backend's own path", backend.streamedPrompts.isEmpty())
+    }
+
+    @Test
+    fun givenACancellableBackend_whenCancelling_thenItIsCancelled() {
+        val backend = CancellableRecordingBackend("cancellable")
+        service.registerBackend(backend)
+
+        service.cancelGeneration()
+
+        assertEquals(1, backend.cancelCount)
+    }
+
+    @Test
+    fun givenOneBackendThatThrowsOnCancel_whenCancelling_thenTheOthersStillCancel() {
+        // A wedged backend must not leave every other backend generating.
+        service.registerBackend(object : RecordingBackend("throws"), CancellableBackend {
+            override fun cancelStreaming(): Unit = throw IllegalStateException("wedged")
+        })
+        val healthy = CancellableRecordingBackend("healthy")
+        service.registerBackend(healthy)
+
+        service.cancelGeneration()
+
+        assertEquals(1, healthy.cancelCount)
+    }
+
+    /** A backend implementing only what [LlmBackend] declares as abstract. */
+    private open class RecordingBackend(private val backendId: String) : LlmBackend {
+
+        val streamedPrompts = mutableListOf<String>()
+
+        override fun getId(): String = backendId
+        override fun getName(): String = backendId
+        override fun isAvailable(): Boolean = true
+
+        override fun generate(prompt: String, config: LlmConfig): CompletableFuture<LlmResponse> =
+            CompletableFuture.completedFuture(LlmResponse.success("", 0, 0))
+
+        override fun generateStreaming(prompt: String, config: LlmConfig, callback: StreamCallback) {
+            streamedPrompts.add(prompt)
+        }
+
+        override fun generateWithHistory(
+            history: List<ChatMessage>,
+            prompt: String,
+            config: LlmConfig
+        ): CompletableFuture<LlmResponse> =
+            CompletableFuture.completedFuture(LlmResponse.success("", 0, 0))
+    }
+
+    /** Mirrors a backend with native tool calling, e.g. GeminiBackend. */
+    private class ToolRecordingBackend : RecordingBackend("tools") {
+
+        val historySizes = mutableListOf<Int>()
+        val toolCounts = mutableListOf<Int>()
+
+        override fun generateStreamingWithTools(
+            prompt: String,
+            history: List<ChatMessage>,
+            config: LlmConfig,
+            tools: List<ToolDefinition>,
+            callback: ToolStreamCallback
+        ) {
+            historySizes.add(history.size)
+            toolCounts.add(tools.size)
+        }
+    }
+
+    private class CancellableRecordingBackend(backendId: String) :
+        RecordingBackend(backendId), CancellableBackend {
+
+        var cancelCount = 0
+
+        override fun cancelStreaming() {
+            cancelCount++
+        }
+    }
+
+    /** A [ToolStreamCallback] that records nothing; these tests assert on the backend instead. */
+    private fun toolCallbackSink() = object : ToolStreamCallback {
+        override fun onToken(token: String) = Unit
+        override fun onToolCall(toolCall: ToolCallRequest) = Unit
+        override fun onComplete(response: LlmResponse) = Unit
+        override fun onError(error: String) = Unit
+    }
 }

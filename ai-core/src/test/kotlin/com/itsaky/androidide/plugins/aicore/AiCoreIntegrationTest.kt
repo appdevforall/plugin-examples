@@ -11,9 +11,11 @@ import org.junit.Test
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.After
+import java.util.concurrent.CompletableFuture
 
 /**
- * Integration test demonstrating the complete AI Core Plugin workflow.
+ * Integration test for the AI Core Plugin workflow: publish the router, let a backend plugin
+ * register into it, route a request, and tear everything down.
  */
 class AiCoreIntegrationTest {
 
@@ -34,9 +36,17 @@ class AiCoreIntegrationTest {
 
     @After
     fun teardown() {
-        // Avoid plugin.dispose() here: it tears down the native run loop, which is not
-        // available in a JVM unit test. Clearing SharedServices is enough for isolation.
         SharedServices.clear()
+    }
+
+    /** Stands in for a backend plugin's backend, which is what registers with AI Core now. */
+    private fun unavailableBackend(backendId: String) = mockk<LlmBackend> {
+        every { getId() } returns backendId
+        every { getName() } returns backendId
+        every { isAvailable() } returns false
+        every { generate(any(), any()) } returns CompletableFuture.completedFuture(
+            LlmResponse.success("unreachable", 0, 0)
+        )
     }
 
     @Test
@@ -45,7 +55,7 @@ class AiCoreIntegrationTest {
         val initSuccess = plugin.initialize(context)
         assertTrue("Plugin initialization should succeed", initSuccess)
 
-        // Step 2: Activate plugin (registers service and backends)
+        // Step 2: Activate plugin (publishes the router; contributes no backend)
         val activateSuccess = plugin.activate()
         assertTrue("Plugin activation should succeed", activateSuccess)
 
@@ -53,14 +63,13 @@ class AiCoreIntegrationTest {
         val service = SharedServices.get(LlmInferenceService::class.java)
         assertNotNull("LlmInferenceService should be registered", service)
 
-        // Step 4: Verify both backends (local + gemini) are registered
-        val backends = service!!.getAvailableBackends()
-        assertEquals("Should have 2 backends", 2, backends.size)
-        val backendIds = backends.map { it.getId() }.toSet()
-        assertTrue("Local backend should be registered", backendIds.contains("local"))
-        assertTrue("Gemini backend should be registered", backendIds.contains("gemini"))
+        // Step 4: AI Core owns no backend of its own
+        assertTrue("AI Core should register no backends", service!!.getAvailableBackends().isEmpty())
 
-        // Step 5: Check backend availability (no model loaded / no API key)
+        // Step 5: A backend plugin registers itself, exactly as ai-backend-local does
+        service.registerBackend(unavailableBackend("local"))
+        assertEquals("Backend should be registered", 1, service.getAvailableBackends().size)
+        assertNotNull("Registered backend should be resolvable", service.getBackend("local"))
         assertFalse("Local backend should not be available", service.isBackendAvailable("local"))
 
         // Step 6: Attempt generation with an unavailable backend
@@ -68,20 +77,20 @@ class AiCoreIntegrationTest {
         config.temperature = 0.7f
         config.maxTokens = 100
 
-        val future = service.generateCompletion("Write a hello world function", config)
-        val response = future.get()
+        val response = service.generateCompletion("Write a hello world function", config).get()
 
         assertFalse("Response should fail (backend unavailable)", response.success)
         assertNotNull("Error message should be present", response.error)
-        assertTrue("Error should mention availability",
-            response.error!!.contains("not available"))
+        assertTrue("Error should mention availability", response.error!!.contains("not available"))
 
         // Step 7: Deactivate plugin
         val deactivateSuccess = plugin.deactivate()
         assertTrue("Plugin deactivation should succeed", deactivateSuccess)
 
-        // Step 8: Verify backends unregistered after deactivation
-        assertNull("Local backend should be unregistered", service.getBackend("local"))
-        assertNull("Gemini backend should be unregistered", service.getBackend("gemini"))
+        // Step 8: The router is withdrawn, so nothing can reach a backend through it
+        assertNull(
+            "LlmInferenceService should be unregistered",
+            SharedServices.get(LlmInferenceService::class.java)
+        )
     }
 }
