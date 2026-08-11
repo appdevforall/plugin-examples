@@ -31,7 +31,9 @@ import java.util.concurrent.CompletableFuture
  * OkHttp (no such overload) — that mismatch crashed generation with a NoSuchMethodError.
  * HttpURLConnection has no third-party dependency, so it works regardless of the host's OkHttp.
  */
-class GeminiBackend(private val context: PluginContext) : LlmBackend, CancellableBackend {
+class GeminiBackend(
+    private val context: PluginContext
+) : LlmBackend, CancellableBackend, ConfigurableBackend {
 
     private val scope = CoroutineScope(Dispatchers.IO)
 
@@ -50,12 +52,6 @@ class GeminiBackend(private val context: PluginContext) : LlmBackend, Cancellabl
         /** Current default model. gemini-1.5-* is retired on v1beta and now 404s. */
         const val DEFAULT_MODEL = "gemini-2.5-flash"
 
-        /** Pref key holding the (encrypted) Gemini API key, written by the Agent settings screen. */
-        private const val KEY_API_KEY = "gemini_api_key"
-
-        /** Pref key holding the selected model name, written by the Agent settings screen. */
-        private const val KEY_MODEL = "gemini_model"
-
         /** Base URL for the v1beta models API (ListModels, generateContent, streaming). */
         private const val MODELS_BASE_URL =
             "https://generativelanguage.googleapis.com/v1beta/models"
@@ -67,10 +63,9 @@ class GeminiBackend(private val context: PluginContext) : LlmBackend, Cancellabl
         private const val METHOD_STREAM_GENERATE_CONTENT = "streamGenerateContent"
     }
 
-    /** AI Core's shared prefs, where the Gemini settings live, or null if unreachable. */
+    /** This plugin's own settings, written by its settings pane and read here at request time. */
     private fun agentPrefs(): SharedPreferences? = try {
-        SharedServices.get(PluginContext::class.java)
-            ?.getPluginSharedPreferences("AgentSettings")
+        GeminiPreferences.of(context)
     } catch (e: Exception) {
         context.logger.error("GeminiBackend: Error getting preferences", e)
         null
@@ -80,7 +75,7 @@ class GeminiBackend(private val context: PluginContext) : LlmBackend, Cancellabl
      * Get the model name from preferences, or use the current default.
      */
     private fun getModelName(): String =
-        agentPrefs()?.getString(KEY_MODEL, DEFAULT_MODEL) ?: DEFAULT_MODEL
+        agentPrefs()?.getString(GeminiPreferences.KEY_MODEL, DEFAULT_MODEL) ?: DEFAULT_MODEL
 
     /**
      * Read the saved Gemini API key from AI Core's shared prefs, or null.
@@ -92,7 +87,7 @@ class GeminiBackend(private val context: PluginContext) : LlmBackend, Cancellabl
      * rather than blocking; [warmKeyCache] fills the cache first so that never reports "no key".
      */
     private fun readGeminiApiKey(): String? {
-        val stored = agentPrefs()?.getString(KEY_API_KEY, null)
+        val stored = agentPrefs()?.getString(GeminiPreferences.KEY_API_KEY, null)
         if (stored.isNullOrBlank()) {
             keyCache = null
             return null
@@ -117,9 +112,9 @@ class GeminiBackend(private val context: PluginContext) : LlmBackend, Cancellabl
      */
     private fun refreshKeyCache(): String? {
         val prefs = agentPrefs()
-        val plain = SecureApiKeyStore.readAndMigrate(prefs, KEY_API_KEY)
+        val plain = SecureApiKeyStore.readAndMigrate(prefs, GeminiPreferences.KEY_API_KEY)
             ?.trim()?.takeIf { it.isNotBlank() }
-        val raw = prefs?.getString(KEY_API_KEY, null)
+        val raw = prefs?.getString(GeminiPreferences.KEY_API_KEY, null)
         keyCache = raw?.let { it to plain }
         return plain
     }
@@ -154,7 +149,7 @@ class GeminiBackend(private val context: PluginContext) : LlmBackend, Cancellabl
      */
     override fun getConfigSpecs(): List<ConfigFieldSpec> = listOf(
         ConfigFieldSpec(
-            KEY_API_KEY,
+            GeminiPreferences.KEY_API_KEY,
             configLabel(R.string.gemini_config_api_key),
             ConfigFieldType.PASSWORD,
             true,
@@ -164,7 +159,7 @@ class GeminiBackend(private val context: PluginContext) : LlmBackend, Cancellabl
         // TEXT, not DROPDOWN: the usable model list is fetched live per key by listModels(), so a
         // static option list here is exactly the stale-model bug that live lookup prevents.
         ConfigFieldSpec(
-            KEY_MODEL,
+            GeminiPreferences.KEY_MODEL,
             configLabel(R.string.gemini_config_model),
             ConfigFieldType.TEXT,
             false,
@@ -550,8 +545,17 @@ User: $userPrompt"""
     }
 
     /**
-     * Generate streaming response with native Gemini function calling.
-     * This method replaces text-based tool call parsing with structured function calling.
+     * False despite [generateStreamingWithTools] being overridden: that override ignores its
+     * `tools` and never calls `onToolCall`, so a caller that trusted a `true` here would wait on
+     * a structured tool call this backend cannot make. Flip it only alongside real function calling.
+     */
+    override fun supportsTools(): Boolean = false
+
+    /**
+     * Streams a tool-enabled request without native function calling, honouring [history] only.
+     *
+     * Overridden purely to keep multi-turn context: the interface default now throws, and routing
+     * to single-turn streaming would drop [history]. See [supportsTools] for why `tools` is unused.
      */
     override fun generateStreamingWithTools(
         prompt: String,
@@ -574,6 +578,9 @@ User: $userPrompt"""
         }
         generateStreamingWithHistory(history, prompt, config, streamCallback)
     }
+
+    /** [generateStreamingWithHistory] sends every turn as its own `contents[]` entry. */
+    override fun supportsHistory(): Boolean = true
 
     /**
      * Streams a reply for a multi-turn conversation, sending [history] as real `contents[]` turns.

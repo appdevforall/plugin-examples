@@ -13,8 +13,8 @@ import java.util.concurrent.ConcurrentHashMap
  *
  * Backend-agnostic: it knows no concrete backend type. Backends are contributed by separate plugins
  * (ai-backend-local, ai-backend-gemini, …) that call [registerBackend] on activation, and optional
- * behaviour is declared through the plugin API — [CancellableBackend] and the defaulted
- * [LlmBackend.generateStreamingWithTools] — rather than by casting.
+ * behaviour is declared through the plugin API — [CancellableBackend], [ConfigurableBackend] and
+ * the [LlmBackend.supportsTools] / [LlmBackend.supportsHistory] predicates — rather than by casting.
  *
  * @param logger the owning plugin's log, or null in unit tests
  */
@@ -122,7 +122,7 @@ class LlmInferenceServiceImpl(private val logger: PluginLogger? = null) : LlmInf
         }
 
         // How much of this a backend actually supports is its own business: LlmBackend's default
-        // degrades to plain streaming, and each backend overrides as far as it can go.
+        // now throws rather than degrading, so the catch below turns that into an onError.
         try {
             backend.generateStreamingWithTools(prompt, history, config, tools, callback)
         } catch (e: Throwable) {
@@ -155,14 +155,23 @@ class LlmInferenceServiceImpl(private val logger: PluginLogger? = null) : LlmInf
     }
 
     /**
-     * Reads the backend the user selected in the AI Assistant settings. The preference is
-     * namespaced to the AI Assistant plugin, so it is only reachable through that plugin's
-     * [PluginContext], which it publishes to [SharedServices].
+     * The backend the user selected on the Agent settings screen.
      *
-     * @return the stored preference value, or null when AI Assistant is absent or unset
+     * Published so a backend can find out whether it is the active one without reading this
+     * plugin's preferences — see [LlmInferenceService.getPreferredBackendId].
+     *
+     * @return the selected backend id, or null when nothing has been chosen yet
+     */
+    override fun getPreferredBackendId(): String? =
+        readSelectedBackendPreference()?.let(AiBackend::idFromPreference)
+
+    /**
+     * Reads the raw stored selection from this plugin's own preferences.
+     *
+     * @return the stored preference value, or null when unset or before initialization
      */
     private fun readSelectedBackendPreference(): String? =
-        SharedServices.get(PluginContext::class.java)
+        AiCorePlugin.getContext()
             ?.getPluginSharedPreferences(AiBackend.PREFERENCE_FILE)
             ?.getString(AiBackend.PREFERENCE_KEY, null)
 

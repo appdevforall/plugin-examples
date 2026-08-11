@@ -96,6 +96,13 @@ class GeminiPlugin : IPlugin, DocumentationExtension {
         context.logger.info("GeminiPlugin: Activating plugin")
 
         return try {
+            // Before the backend can read anything: takes this plugin's settings out of the agent
+            // plugin's shared file, where they lived until each backend owned its own.
+            GeminiPreferences.migrateIfNeeded(context)
+
+            // A half-failed activation can leave a backend behind; keep at most one live.
+            releaseBackend()
+
             val gemini = GeminiBackend(context)
             backend = gemini
             activeBackend = gemini
@@ -170,6 +177,9 @@ class GeminiPlugin : IPlugin, DocumentationExtension {
                 context.logger.info("GeminiPlugin: Unregistered '${gemini.getId()}' backend")
             }
 
+            // A disabled plugin must not keep the decrypted key on the host heap.
+            releaseBackend()
+
             true
         } catch (e: Exception) {
             context.logger.error("GeminiPlugin: Deactivation failed", e)
@@ -177,14 +187,21 @@ class GeminiPlugin : IPlugin, DocumentationExtension {
         }
     }
 
-    override fun dispose() {
-        context.logger.info("GeminiPlugin: Disposing plugin")
-
-        // Cancels in-flight requests and drops the decrypted key from the heap.
+    /**
+     * Cancels in-flight requests, drops the decrypted key from the heap, and clears the published
+     * backend. Idempotent, so a [deactivate] followed by [dispose] closes nothing twice.
+     */
+    private fun releaseBackend() {
         backend?.close()
         backend = null
         activeBackend = null
         registered = false
+    }
+
+    override fun dispose() {
+        context.logger.info("GeminiPlugin: Disposing plugin")
+
+        releaseBackend()
         pluginContext = null
         context.logger.info("GeminiPlugin: Released Gemini backend")
     }

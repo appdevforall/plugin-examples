@@ -82,10 +82,6 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
         this.context = context
         pluginContext = context  // Store for ChatFragment access
 
-        // Also store in SharedServices so the backend plugins can reach these preferences, which
-        // are where they read their own model path and API key from.
-        SharedServices.register(PluginContext::class.java, context)
-
         context.logger.info("AI Core Plugin initializing...")
         return true
     }
@@ -131,8 +127,6 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
         // dispose(); this only stops whatever this plugin still has in flight.
         llmService?.cancelGeneration()
 
-        // Releases initialize()'s shared references so the PluginContext can be collected.
-        SharedServices.unregister(PluginContext::class.java)
         PathGuard.setProjectRootProvider(null)
         pluginContext = null
         llmService = null
@@ -595,42 +589,18 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
             val pluginPrefs = context.getPluginSharedPreferences("AgentSettings")
 
             val PREF_KEY_AI_BACKEND = "ai_backend_preference"
-            val PREF_KEY_LOCAL_MODEL_PATH = "local_llm_model_path"
-            val PREF_KEY_LOCAL_MODEL_SHA256 = "local_llm_model_sha256"
 
-            var migratedCount = 0
-
-            // Migrate backend preference
-            if (!pluginPrefs.contains(PREF_KEY_AI_BACKEND)) {
-                val backend = appPrefs.getString(PREF_KEY_AI_BACKEND, null)
-                if (backend != null) {
-                    pluginPrefs.edit().putString(PREF_KEY_AI_BACKEND, backend).apply()
-                    migratedCount++
-                }
-            }
-
-            // Migrate model path
-            if (!pluginPrefs.contains(PREF_KEY_LOCAL_MODEL_PATH)) {
-                val modelPath = appPrefs.getString(PREF_KEY_LOCAL_MODEL_PATH, null)
-                if (modelPath != null) {
-                    pluginPrefs.edit().putString(PREF_KEY_LOCAL_MODEL_PATH, modelPath).apply()
-                    migratedCount++
-                }
-            }
-
-            // Migrate model SHA256
-            if (!pluginPrefs.contains(PREF_KEY_LOCAL_MODEL_SHA256)) {
-                val sha256 = appPrefs.getString(PREF_KEY_LOCAL_MODEL_SHA256, null)
-                if (sha256 != null) {
-                    pluginPrefs.edit().putString(PREF_KEY_LOCAL_MODEL_SHA256, sha256).apply()
-                    migratedCount++
-                }
-            }
-
-            if (migratedCount > 0) {
-                context.logger.info("Migrated $migratedCount settings from app to plugin")
-            } else {
+            // Only the router's own choice. Each backend adopts its keys from this file itself,
+            // so nothing here depends on which plugin activates first.
+            if (pluginPrefs.contains(PREF_KEY_AI_BACKEND)) {
                 context.logger.info("Settings already migrated")
+                return
+            }
+
+            val backend = appPrefs.getString(PREF_KEY_AI_BACKEND, null)
+            if (backend != null) {
+                pluginPrefs.edit().putString(PREF_KEY_AI_BACKEND, backend).apply()
+                context.logger.info("Migrated backend preference from app to plugin")
             }
         } catch (e: Exception) {
             context.logger.error("Failed to migrate settings", e)

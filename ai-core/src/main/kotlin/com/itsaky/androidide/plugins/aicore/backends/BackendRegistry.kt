@@ -1,5 +1,6 @@
 package com.itsaky.androidide.plugins.aicore.backends
 
+import com.itsaky.androidide.plugins.aicore.AiBackend
 import com.itsaky.androidide.plugins.aicore.AiCorePlugin
 import com.itsaky.androidide.plugins.services.LlmInferenceService
 import com.itsaky.androidide.plugins.services.SharedServices
@@ -29,23 +30,7 @@ data class BackendOption(
  */
 object BackendRegistry {
 
-    /** SharedPreferences file holding the selection; AI Core reads the same file and key. */
-    const val PREFERENCE_FILE = "AgentSettings"
-
-    /** Key under which the selected backend id is stored in [PREFERENCE_FILE]. */
-    const val PREFERENCE_KEY = "ai_backend_preference"
-
     private const val TAG = "BackendRegistry"
-
-    /**
-     * Selections written before the stored value *was* the backend id. Additive-only: dropping an
-     * entry strands every device that stored it. Mirrors AI Core's own legacy map, which cannot be
-     * shared across the plugin classloader boundary.
-     */
-    private val LEGACY_IDS = mapOf(
-        "LOCAL_LLM" to "local",
-        "GEMINI" to "gemini",
-    )
 
     /**
      * Every registered backend, sorted by label so the selector's order is stable across restarts
@@ -78,9 +63,10 @@ object BackendRegistry {
      * @return the stored id, migrating a legacy value in passing; null when nothing is stored
      */
     fun selectedId(): String? {
-        val stored = prefs()?.getString(PREFERENCE_KEY, null)?.trim()
+        val stored = prefs()?.getString(AiBackend.PREFERENCE_KEY, null)?.trim()
         if (stored.isNullOrEmpty()) return null
-        return LEGACY_IDS[stored] ?: stored
+        // Migrates a value written before the stored form *was* the backend id.
+        return AiBackend.idFromPreference(stored)
     }
 
     /**
@@ -88,7 +74,7 @@ object BackendRegistry {
      * never heard of routes correctly without anything mapping it.
      */
     fun select(backendId: String) {
-        prefs()?.edit()?.putString(PREFERENCE_KEY, backendId)?.apply()
+        prefs()?.edit()?.putString(AiBackend.PREFERENCE_KEY, backendId)?.apply()
     }
 
     /**
@@ -99,7 +85,9 @@ object BackendRegistry {
         BackendOption(
             id = backend.id,
             displayName = backend.name,
-            settingsFragmentClassName = backend.settingsFragmentClassName?.takeIf { it.isNotBlank() },
+            // Only a ConfigurableBackend names a pane; anything else simply has no settings screen.
+            settingsFragmentClassName = (backend as? LlmInferenceService.ConfigurableBackend)
+                ?.settingsFragmentClassName?.takeIf { it.isNotBlank() },
             // The backend object is constructed by its own plugin, so its loader is by construction
             // the one that can see the pane it names.
             classLoader = backend.javaClass.classLoader,
@@ -113,7 +101,7 @@ object BackendRegistry {
         SharedServices.get(LlmInferenceService::class.java)
 
     private fun prefs() =
-        AiCorePlugin.getContext()?.getPluginSharedPreferences(PREFERENCE_FILE)
+        AiCorePlugin.getContext()?.getPluginSharedPreferences(AiBackend.PREFERENCE_FILE)
 
     private fun logError(message: String, error: Throwable) {
         AiCorePlugin.getContext()?.logger?.error("$TAG: $message", error)

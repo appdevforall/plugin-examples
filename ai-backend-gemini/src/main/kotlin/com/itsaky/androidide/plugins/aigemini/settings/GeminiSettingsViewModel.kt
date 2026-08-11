@@ -8,8 +8,8 @@ import androidx.lifecycle.viewModelScope
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.PluginLogger
 import com.itsaky.androidide.plugins.aigemini.GeminiBackend
+import com.itsaky.androidide.plugins.aigemini.GeminiPreferences
 import com.itsaky.androidide.plugins.aigemini.SecureApiKeyStore
-import com.itsaky.androidide.plugins.services.SharedServices
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -38,13 +38,10 @@ class GeminiSettingsViewModel(
     companion object {
         private const val TAG = "GeminiSettingsViewModel"
 
-        /** Settings file the Gemini backend reads its key and model from. */
-        private const val PREFERENCE_FILE = "AgentSettings"
-
-        private const val KEY_API_KEY = "gemini_api_key"
-        private const val KEY_API_KEY_TIMESTAMP = "gemini_api_key_timestamp"
-        private const val KEY_API_KEY_VERIFIED = "gemini_api_key_verified"
-        private const val KEY_MODEL = "gemini_model"
+        private val KEY_API_KEY = GeminiPreferences.KEY_API_KEY
+        private val KEY_API_KEY_TIMESTAMP = GeminiPreferences.KEY_API_KEY_TIMESTAMP
+        private val KEY_API_KEY_VERIFIED = GeminiPreferences.KEY_API_KEY_VERIFIED
+        private val KEY_MODEL = GeminiPreferences.KEY_MODEL
 
         /** Shown only when the live catalog can't be fetched — current models, no retired ones. */
         private val FALLBACK_MODELS = listOf(
@@ -68,19 +65,11 @@ class GeminiSettingsViewModel(
     val geminiModelsLoading: LiveData<Boolean> get() = _geminiModelsLoading
 
     /**
-     * The settings store this backend's transport reads at request time.
-     *
-     * Namespaced to the AI Core plugin rather than to this one, so it is reached through that
-     * plugin's `PluginContext` — the same lookup [GeminiBackend] makes. Writing anywhere else would
-     * leave the transport reading a key this pane never set.
+     * This plugin's own settings store — the same one [GeminiBackend] reads at request time, so a
+     * key saved here is the key that gets used.
      */
-    private fun prefs(): SharedPreferences? = try {
-        SharedServices.get(PluginContext::class.java)
-            ?.getPluginSharedPreferences(PREFERENCE_FILE)
-    } catch (e: Exception) {
-        logger?.error("$TAG: could not reach the shared settings store", e)
-        null
-    }
+    private fun prefs(): SharedPreferences? =
+        getContext()?.let(GeminiPreferences::of)
 
     /**
      * This plugin's IDE-surfaced log, so settings diagnostics land in the IDE's own log view rather

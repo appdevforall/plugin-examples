@@ -35,14 +35,25 @@ class AiCorePluginTest {
     }
 
     @Test
-    fun givenAContext_whenInitializing_thenItSucceedsAndPublishesThatContext() {
+    fun givenAContext_whenInitializing_thenItSucceedsAndKeepsThatContext() {
         val plugin = AiCorePlugin()
         val result = plugin.initialize(mockContext)
 
         assertTrue(result)
-        // The backend plugins read their own settings through this; without it they report
-        // themselves unavailable and no inference happens anywhere.
-        assertSame(mockContext, SharedServices.get(PluginContext::class.java))
+        // Held for this plugin's own fragments to reach.
+        assertSame(mockContext, AiCorePlugin.getContext())
+    }
+
+    @Test
+    fun givenInitialized_whenInspectingSharedServices_thenNoPluginContextIsPublished() {
+        val plugin = AiCorePlugin()
+        plugin.initialize(mockContext)
+
+        // Backends used to read their own settings out of this plugin's preferences, reached
+        // through a globally published PluginContext — a registry keyed by type, so whichever
+        // plugin registered last won. Each backend now owns its settings; publishing this again
+        // would re-create that coupling.
+        assertNull(SharedServices.get(PluginContext::class.java))
     }
 
     @Test

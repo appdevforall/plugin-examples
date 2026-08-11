@@ -9,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.PluginLogger
 import com.itsaky.androidide.plugins.ailocal.ByteSize
+import com.itsaky.androidide.plugins.ailocal.LocalLlmPreferences
 import com.itsaky.androidide.plugins.ailocal.R
 import com.itsaky.androidide.plugins.ailocal.model.ContentModelFileSource
 import com.itsaky.androidide.plugins.ailocal.model.DeviceMemory
@@ -19,7 +20,6 @@ import com.itsaky.androidide.plugins.ailocal.model.ModelFileSource
 import com.itsaky.androidide.plugins.ailocal.model.ModelMemoryEstimator
 import com.itsaky.androidide.plugins.ailocal.model.ModelMemoryGate
 import com.itsaky.androidide.plugins.ailocal.model.SystemDeviceMemory
-import com.itsaky.androidide.plugins.services.SharedServices
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -91,13 +91,10 @@ class LocalLlmSettingsViewModel(
     companion object {
         private const val TAG = "LocalLlmSettingsViewModel"
 
-        /** Settings file the local backend reads its model selection from. */
-        private const val PREFERENCE_FILE = "AgentSettings"
-
-        private const val KEY_MODEL_PATH = "local_llm_model_path"
-        private const val KEY_MODEL_NAME = "local_llm_model_name"
-        private const val KEY_MODEL_SHA256 = "local_llm_model_sha256"
-        private const val KEY_SIMPLE_PROMPT = "use_simple_local_prompt"
+        private val KEY_MODEL_PATH = LocalLlmPreferences.KEY_MODEL_PATH
+        private val KEY_MODEL_NAME = LocalLlmPreferences.KEY_MODEL_NAME
+        private val KEY_MODEL_SHA256 = LocalLlmPreferences.KEY_MODEL_SHA256
+        private val KEY_SIMPLE_PROMPT = LocalLlmPreferences.KEY_SIMPLE_PROMPT
     }
 
     private val _savedModelPath = MutableLiveData<String?>(null)
@@ -152,19 +149,11 @@ class LocalLlmSettingsViewModel(
         }
 
     /**
-     * The settings store this backend's engine reads at request time.
-     *
-     * Namespaced to the AI Core plugin rather than to this one, so it is reached through that
-     * plugin's `PluginContext` — the same lookup `LocalLlmBackend` makes. Writing anywhere else
-     * would leave the engine reading a model path this screen never set.
+     * This plugin's own settings store — the same one `LocalLlmBackend` reads at request time, so
+     * a model chosen here is the model that gets loaded.
      */
-    private fun prefs(): SharedPreferences? = try {
-        SharedServices.get(PluginContext::class.java)
-            ?.getPluginSharedPreferences(PREFERENCE_FILE)
-    } catch (e: Exception) {
-        logger?.error("$TAG: could not reach the shared settings store", e)
-        null
-    }
+    private fun prefs(): SharedPreferences? =
+        getContext()?.let(LocalLlmPreferences::of)
 
     /**
      * This plugin's IDE-surfaced log, so settings diagnostics land in the IDE's own log view rather

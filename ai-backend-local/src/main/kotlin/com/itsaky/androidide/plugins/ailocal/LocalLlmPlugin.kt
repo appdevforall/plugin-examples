@@ -91,6 +91,13 @@ class LocalLlmPlugin : IPlugin, DocumentationExtension {
         context.logger.info("LocalLlmPlugin: Activating plugin")
 
         return try {
+            // Before the backend can read anything: takes this plugin's settings out of the agent
+            // plugin's shared file, where they lived until each backend owned its own.
+            LocalLlmPreferences.migrateIfNeeded(context)
+
+            // A half-failed activation can leave a backend behind; keep at most one live.
+            releaseBackend()
+
             backend = LocalLlmBackend(context)
 
             // Listen first, then try: a listener added after a successful attempt would still be
@@ -160,6 +167,9 @@ class LocalLlmPlugin : IPlugin, DocumentationExtension {
                 context.logger.info("LocalLlmPlugin: Unregistered '${local.getId()}' backend")
             }
 
+            // A disabled plugin must not keep the loaded model resident in host RAM.
+            releaseBackend()
+
             true
         } catch (e: Exception) {
             context.logger.error("LocalLlmPlugin: Deactivation failed", e)
@@ -167,13 +177,21 @@ class LocalLlmPlugin : IPlugin, DocumentationExtension {
         }
     }
 
-    override fun dispose() {
-        context.logger.info("LocalLlmPlugin: Disposing plugin")
-
-        // Frees the native model and stops the run loop so nothing leaks when the plugin unloads.
+    /**
+     * Frees the native model and stops the run loop. Idempotent, so a [deactivate] followed by
+     * [dispose] closes nothing twice; `LLamaAndroid` recreates the run loop on the next use, so a
+     * re-enable still infers.
+     */
+    private fun releaseBackend() {
         backend?.close()
         backend = null
         registered = false
+    }
+
+    override fun dispose() {
+        context.logger.info("LocalLlmPlugin: Disposing plugin")
+
+        releaseBackend()
         pluginContext = null
         context.logger.info("LocalLlmPlugin: Released local LLM backend")
     }

@@ -5,6 +5,7 @@ import android.content.Context
 import android.llama.cpp.LLamaAndroid
 import android.net.Uri
 import android.provider.OpenableColumns
+import com.itsaky.androidide.plugins.services.LlmInferenceService
 import com.itsaky.androidide.plugins.services.LlmInferenceService.*
 import com.itsaky.androidide.plugins.services.SharedServices
 import com.itsaky.androidide.plugins.PluginContext
@@ -27,7 +28,9 @@ import java.util.concurrent.atomic.AtomicBoolean
  * Local LLM backend using llama-impl for on-device inference.
  * Wraps llama-impl APIs and implements LlmBackend interface.
  */
-class LocalLlmBackend(private val context: PluginContext) : LlmBackend, CancellableBackend {
+class LocalLlmBackend(
+    private val context: PluginContext
+) : LlmBackend, CancellableBackend, ConfigurableBackend {
 
     companion object {
         /**
@@ -37,8 +40,6 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend, Cancella
          */
         const val EXTRA_PARAM_GRAMMAR = "grammar"
 
-        /** Pref key holding the selected model path or content URI, written by the Agent settings screen. */
-        private const val KEY_MODEL_PATH = "local_llm_model_path"
 
         /**
          * Belt-and-braces guard: `<|im_end|>` is an EOG control token, so the native loop
@@ -86,7 +87,7 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend, Cancella
      */
     override fun getConfigSpecs(): List<ConfigFieldSpec> = listOf(
         ConfigFieldSpec(
-            KEY_MODEL_PATH,
+            LocalLlmPreferences.KEY_MODEL_PATH,
             try {
                 context.androidContext.getString(R.string.local_config_model_path)
             } catch (e: Exception) {
@@ -101,18 +102,23 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend, Cancella
     )
 
     /**
-     * Whether the stored selection names this backend.
+     * Whether the user's current selection names this backend.
      *
-     * Accepts both the backend id written today and the legacy `LOCAL_LLM` value still on existing
-     * devices. Unset counts as selected: this was the default before a selection was ever stored,
-     * and warming a model the user goes on to pick costs nothing but time.
+     * Asked of the router, which owns the selection — this backend's own preferences say nothing
+     * about which backend is active, and reading the router's would be the cross-plugin coupling
+     * this store exists to remove.
      *
-     * @param backendPreference the stored preference value, or null when unset
+     * No selection, or no router yet, counts as selected: that was the default before a selection
+     * was ever stored, and preparing a model the user goes on to pick costs only time.
      */
-    private fun isSelectedBackend(backendPreference: String?): Boolean {
-        val stored = backendPreference?.trim()
-        if (stored.isNullOrEmpty()) return true
-        return stored == getId() || stored == "LOCAL_LLM"
+    private fun isSelectedBackend(): Boolean {
+        val selected = try {
+            SharedServices.get(LlmInferenceService::class.java)?.preferredBackendId
+        } catch (e: Exception) {
+            context.logger.warn("LocalLlmBackend: could not read the selected backend", e)
+            null
+        }
+        return selected.isNullOrBlank() || selected == getId()
     }
 
     /**
@@ -138,20 +144,14 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend, Cancella
 
     override fun isAvailable(): Boolean {
         // Check if model is actually configured
-        val prefs = try {
-            // Try to get AI Core plugin's preferences
-            val aiCoreContext = SharedServices.get(PluginContext::class.java)
-            aiCoreContext?.getPluginSharedPreferences("AgentSettings")
-        } catch (e: Exception) {
-            null
-        }
+        val prefs = LocalLlmPreferences.of(context)
 
-        val configuredPath = prefs?.getString(KEY_MODEL_PATH, null)
+        val configuredPath = prefs?.getString(LocalLlmPreferences.KEY_MODEL_PATH, null)
 
         context.logger.debug("LocalLlmBackend.isAvailable() - configured path: $configuredPath, modelLoaded: $modelLoaded")
 
         // Chat-open hits this; start loading now so the first message isn't gated on a cold load.
-        maybeWarmUp(configuredPath, prefs?.getString("ai_backend_preference", null))
+        maybeWarmUp(configuredPath)
 
         // Available if model is loaded OR if a path is configured
         return modelLoaded || !configuredPath.isNullOrBlank()
@@ -163,12 +163,10 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend, Cancella
      * multi-gigabyte model for a user who picked a cloud backend would be pure waste.
      *
      * @param configuredPath the configured model path/URI, or null/blank if unset.
-     * @param backendPreference the stored `ai_backend_preference`: a backend id, or one of the
-     *   legacy `LOCAL_LLM`/`GEMINI` values still on existing devices, or null when unset.
      */
-    private fun maybeWarmUp(configuredPath: String?, backendPreference: String?) {
+    private fun maybeWarmUp(configuredPath: String?) {
         if (configuredPath.isNullOrBlank() || modelLoaded) return
-        if (!isSelectedBackend(backendPreference)) return
+        if (!isSelectedBackend()) return
         if (!warmUpStarted.compareAndSet(false, true)) return
 
         scope.launch {
@@ -405,14 +403,9 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend, Cancella
      */
     private fun runGeneration(fullPrompt: String, config: LlmConfig): CompletableFuture<LlmResponse> {
         // Check if model is configured
-        val prefs = try {
-            val aiCoreContext = SharedServices.get(PluginContext::class.java)
-            aiCoreContext?.getPluginSharedPreferences("AgentSettings")
-        } catch (e: Exception) {
-            null
-        }
+        val prefs = LocalLlmPreferences.of(context)
 
-        val configuredPath = prefs?.getString(KEY_MODEL_PATH, null)
+        val configuredPath = prefs?.getString(LocalLlmPreferences.KEY_MODEL_PATH, null)
         context.logger.info("LocalLlmBackend: configured model path = $configuredPath")
 
         if (configuredPath.isNullOrBlank()) {
@@ -486,6 +479,9 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend, Cancella
         streamGeneration(buildPrompt(config.systemPrompt, prompt), config, callback)
     }
 
+    /** [generateStreamingWithHistory] renders every earlier turn as its own ChatML turn. */
+    override fun supportsHistory(): Boolean = true
+
     /**
      * Streams a reply for a multi-turn conversation, rendering each earlier turn as its own
      * ChatML turn.
@@ -506,12 +502,18 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend, Cancella
     }
 
     /**
+     * False despite [generateStreamingWithTools] being overridden: that override ignores its
+     * `tools` and never calls `onToolCall`, so a caller that trusted a `true` here would wait on
+     * a structured tool call this backend cannot make. Flip it only alongside real function calling.
+     */
+    override fun supportsTools(): Boolean = false
+
+    /**
      * Serves a tool-enabled request with this backend's multi-turn streaming.
      *
      * There is no native function calling here — the caller drives tools through a GBNF grammar in
-     * [LlmConfig.extraParams] (see [EXTRA_PARAM_GRAMMAR]). The override exists because
-     * [LlmBackend]'s default routes to single-turn [generateStreaming] and would silently drop
-     * [history], turning a conversation into a one-shot prompt with no error to explain it.
+     * [LlmConfig.extraParams] (see [EXTRA_PARAM_GRAMMAR]). The override exists to keep [history]:
+     * the interface default now throws, and single-turn streaming would drop the conversation.
      */
     override fun generateStreamingWithTools(
         prompt: String,
@@ -540,14 +542,9 @@ class LocalLlmBackend(private val context: PluginContext) : LlmBackend, Cancella
      */
     private fun streamGeneration(fullPrompt: String, config: LlmConfig, callback: StreamCallback) {
         // Check if model is configured
-        val prefs = try {
-            val aiCoreContext = SharedServices.get(PluginContext::class.java)
-            aiCoreContext?.getPluginSharedPreferences("AgentSettings")
-        } catch (e: Exception) {
-            null
-        }
+        val prefs = LocalLlmPreferences.of(context)
 
-        val configuredPath = prefs?.getString(KEY_MODEL_PATH, null)
+        val configuredPath = prefs?.getString(LocalLlmPreferences.KEY_MODEL_PATH, null)
 
         if (configuredPath.isNullOrBlank()) {
             callback.onError("No model configured. Please go to Settings and select a .gguf model file.")
