@@ -4,6 +4,7 @@ import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.Typography
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -101,24 +102,27 @@ internal fun buildPluginTextStyles(
 }
 
 internal fun buildPluginTypography(styles: PluginTextStyles): Typography {
+    // Typography must stay colorless: Material3 components provide per-slot content colors
+    // (e.g. onPrimary inside a filled Button), and a color baked into the style overrides them.
+    fun TextStyle.colorless() = copy(color = Color.Unspecified)
     return Typography(
-        displayLarge = styles.display,
-        displayMedium = styles.display,
-        displaySmall = styles.display,
-        headlineLarge = styles.title,
-        headlineMedium = styles.title,
-        headlineSmall = styles.title,
-        titleLarge = styles.title,
-        titleMedium = styles.subtitle,
-        titleSmall = styles.subtitle,
-        bodyLarge = styles.body,
-        bodyMedium = styles.body,
-        bodySmall = styles.small,
+        displayLarge = styles.display.colorless(),
+        displayMedium = styles.display.colorless(),
+        displaySmall = styles.display.colorless(),
+        headlineLarge = styles.title.colorless(),
+        headlineMedium = styles.title.colorless(),
+        headlineSmall = styles.title.colorless(),
+        titleLarge = styles.title.colorless(),
+        titleMedium = styles.subtitle.colorless(),
+        titleSmall = styles.subtitle.colorless(),
+        bodyLarge = styles.body.colorless(),
+        bodyMedium = styles.body.colorless(),
+        bodySmall = styles.small.colorless(),
         // labelLarge drives button text — keep it at the Material3 default size so the plugin's
         // buttons match the host app's buttons rather than rendering oversized.
-        labelLarge = styles.body.copy(fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium),
-        labelMedium = styles.label,
-        labelSmall = styles.label,
+        labelLarge = styles.body.colorless().copy(fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium),
+        labelMedium = styles.label.colorless(),
+        labelSmall = styles.label.colorless(),
     )
 }
 

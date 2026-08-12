@@ -7,11 +7,11 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -48,49 +48,50 @@ fun PairContent(
     onIntent: (PairIntent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.surface),
+    Surface(
+        modifier = modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.surface,
     ) {
-        AnimatedContent(
-            targetState = state.session.role,
-            transitionSpec = {
-                (fadeIn(tween(200)) + slideInVertically(tween(200)) { it / 4 }) togetherWith
-                    (fadeOut(tween(200)) + slideOutVertically(tween(200)) { -it / 4 })
-            },
-            label = "pair-root-role-transition",
-        ) { role ->
-            when (role) {
-                SessionRole.IDLE -> HomeScreen(state = state, onIntent = onIntent)
-                SessionRole.HOST -> HostSessionScreen(
-                    session = state.session,
-                    discoverable = state.discoverable,
-                    onIntent = onIntent,
-                )
-                SessionRole.GUEST -> GuestSessionScreen(session = state.session, onIntent = onIntent)
+        Box(modifier = Modifier.fillMaxSize()) {
+            AnimatedContent(
+                targetState = state.session.role,
+                transitionSpec = {
+                    (fadeIn(tween(200)) + slideInVertically(tween(200)) { it / 4 }) togetherWith
+                        (fadeOut(tween(200)) + slideOutVertically(tween(200)) { -it / 4 })
+                },
+                label = "pair-root-role-transition",
+            ) { role ->
+                when (role) {
+                    SessionRole.IDLE -> HomeScreen(state = state, onIntent = onIntent)
+                    SessionRole.HOST -> HostSessionScreen(
+                        session = state.session,
+                        discoverable = state.discoverable,
+                        onIntent = onIntent,
+                    )
+                    SessionRole.GUEST -> GuestSessionScreen(session = state.session, onIntent = onIntent)
+                }
             }
-        }
 
-        state.session.pendingProjectPath?.let { path ->
-            val projectName = path.substringAfterLast('/').ifBlank { path }
-            AlertDialog(
-                onDismissRequest = { onIntent(PairIntent.DismissOpenPulledProject) },
-                title = { Text("Open shared project?") },
-                text = {
-                    Text("This closes your current project and opens “$projectName” synced from the host.")
-                },
-                confirmButton = {
-                    TextButton(onClick = { onIntent(PairIntent.ConfirmOpenPulledProject) }) {
-                        Text("Open")
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { onIntent(PairIntent.DismissOpenPulledProject) }) {
-                        Text("Not now")
-                    }
-                },
-            )
+            state.session.pendingProjectPath?.let { path ->
+                val projectName = path.substringAfterLast('/').ifBlank { path }
+                AlertDialog(
+                    onDismissRequest = { onIntent(PairIntent.DismissOpenPulledProject) },
+                    title = { Text("Open shared project?") },
+                    text = {
+                        Text("This closes your current project and opens “$projectName” synced from the host.")
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { onIntent(PairIntent.ConfirmOpenPulledProject) }) {
+                            Text("Open")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { onIntent(PairIntent.DismissOpenPulledProject) }) {
+                            Text("Not now")
+                        }
+                    },
+                )
+            }
         }
     }
 }
