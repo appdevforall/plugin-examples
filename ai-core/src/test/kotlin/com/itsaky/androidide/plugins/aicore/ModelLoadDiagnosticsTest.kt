@@ -3,6 +3,7 @@ package com.itsaky.androidide.plugins.aicore
 import com.itsaky.androidide.plugins.aicore.ModelLoadDiagnostics.Diagnosis
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -124,6 +125,32 @@ class ModelLoadDiagnosticsTest {
             nativeError = "something unexpected",
         )
         assertEquals(Diagnosis.UnsupportedOrCorrupt, d)
+    }
+
+    @Test
+    fun givenMemoryBelowTheComputeBuffers_whenRefuseBeforeLoad_thenRefused() {
+        val refusal = ModelLoadDiagnostics.refuseBeforeLoad(availableMemoryBytes = 128L shl 20)
+        assertEquals(Diagnosis.LowMemory(256L shl 20, 128L shl 20), refusal)
+    }
+
+    @Test
+    fun givenZeroFreeMemory_whenRefuseBeforeLoad_thenRefused() {
+        // 0 free bytes is a genuine out-of-memory reading, not an unreadable one.
+        assertEquals(0L, ModelLoadDiagnostics.refuseBeforeLoad(0L)?.availableBytes)
+    }
+
+    @Test
+    fun givenUnknownMemory_whenRefuseBeforeLoad_thenAllowed() {
+        // availMem < 0 (unreadable) must fail open, like the pre-flight it defers to.
+        assertNull(ModelLoadDiagnostics.refuseBeforeLoad(-1L))
+    }
+
+    @Test
+    fun givenMemoryTheAiAssistantPreflightCallsTight_whenRefuseBeforeLoad_thenAllowed() {
+        // The gate must never refuse what "Proceed anyway" authorized: an 8.5 GB model with
+        // 1.5 GB free is TIGHT there (free RAM clears its 768 MB run cost), so the load proceeds
+        // even though diagnose()'s size/4 attribution headroom would be 2.1 GB. See ADFA-1798.
+        assertNull(ModelLoadDiagnostics.refuseBeforeLoad(availableMemoryBytes = 1536L shl 20))
     }
 
     @Test

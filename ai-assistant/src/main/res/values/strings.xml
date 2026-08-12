@@ -199,4 +199,12 @@
 
     <!-- Local model selection -->
     <string name="error_model_not_gguf">\"%1$s\" isn\'t a valid .gguf model (it may be the wrong file or a corrupt or partial download). Select a .gguf chat model.</string>
+
+    <!-- Local model selection: memory pre-flight warning -->
+    <string name="llm_memory_warning_title">This model may be too large</string>
+    <string name="llm_memory_warning_tight">\"%1$s\" needs about %2$s of memory to load, plus about %3$s more to run. This device has about %4$s available right now, which may not be enough. It might work, or fail quickly, or fail after several minutes.\n\nClose other apps to free memory, or choose a smaller or more heavily quantized model (for example a Q4_K_M build of a 1–3B model).</string>
+    <string name="llm_memory_warning_insufficient">\"%1$s\" needs about %2$s of memory to load, plus about %3$s more to run. This device has about %4$s available right now, which is not enough. Loading it will most likely fail, and may make the IDE unresponsive first.\n\nClose other apps to free memory, or choose a smaller or more heavily quantized model (for example a Q4_K_M build of a 1–3B model).</string>
+    <string name="llm_memory_warning_proceed">Proceed anyway</string>
+    <string name="llm_memory_warning_cancel">Cancel</string>
+    <string name="llm_memory_warning_declined">Model not selected. The previously selected model, if any, is unchanged.</string>
 </resources>
