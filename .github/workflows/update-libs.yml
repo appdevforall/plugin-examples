@@ -93,31 +93,48 @@ jobs:
       - name: Stage .cgp files with website filenames
         run: |
           mkdir -p deploy-staging
-          declare -A MAP=(
-            ["apk-viewer"]="apk-analyzer.cgp"
-            ["Beepy"]="beepy.cgp"
-            ["bookshelf"]="bookshelf.cgp"
-            ["keystore-generator"]="keystore-generator.cgp"
-            ["markdown-preview"]="markdown-previewer.cgp"
-            ["ndk-installer-plugin"]="ndk-installer.cgp"
-            ["random-xkcd"]="random-xkcd.cgp"
-            ["snippets"]="snippets.cgp"
-            ["icons-repository"]="icons-repository.cgp"
-            ["rainbow-on-the-go"]="rainbow-on-the-go.cgp"
-            ["ai-literacy-course"]="ai-literacy-course.cgp"
-            ["flutter-template"]="flutter-template.cgp"
-            ["get-ai-models"]="get-ai-models.cgp"
-            ["project-to-template"]="project-to-template.cgp"
-          )
-          for module in "${!MAP[@]}"; do
-            src=$(ls "${module}/build/plugin/"*.cgp 2>/dev/null | head -n1)
+
+          # Discover every plugin module the same way scripts/update-libs.sh does
+          # (a sibling dir whose build.gradle.kts applies the plugin-builder Gradle
+          # plugin) so new plugins deploy to the website automatically. The website
+          # filename is the lowercased module name with any trailing "-plugin"
+          # stripped; the case arms hold the legacy filenames the website already
+          # links that don't follow that rule — never change an existing name.
+          # Keep in sync with SKIP_PLUGINS in scripts/update-libs.sh.
+          SKIP_PLUGINS=(pebble-custom-function-template-installer)
+
+          staged=0
+          for build_file in */build.gradle.kts; do
+            [ -f "$build_file" ] || continue
+            grep -qF "com.itsaky.androidide.plugins.build" "$build_file" || continue
+            module="$(dirname "$build_file")"
+            skip=0
+            for s in "${SKIP_PLUGINS[@]}"; do
+              [ "$s" = "$module" ] && skip=1 && break
+            done
+            if [ "$skip" -eq 1 ]; then
+              echo "Skipping $module (in SKIP_PLUGINS)"
+              continue
+            fi
+            case "$module" in
+              apk-viewer) name="apk-analyzer" ;;
+              markdown-preview) name="markdown-previewer" ;;
+              *) name="$(echo "${module%-plugin}" | tr '[:upper:]' '[:lower:]')" ;;
+            esac
+            src="$(ls "${module}/build/plugin/"*.cgp 2>/dev/null | grep -v -- '-debug\.cgp$' | head -n1)"
             if [ -z "$src" ]; then
-              echo "ERROR: no .cgp found under ${module}/build/plugin/"
+              echo "ERROR: no release .cgp found under ${module}/build/plugin/ (did assemblePlugin run?)"
               exit 1
             fi
-            cp "$src" "deploy-staging/${MAP[$module]}"
-            echo "Staged $src -> deploy-staging/${MAP[$module]}"
+            cp "$src" "deploy-staging/${name}.cgp"
+            echo "Staged $src -> deploy-staging/${name}.cgp"
+            staged=$((staged + 1))
           done
+
+          if [ "$staged" -eq 0 ]; then
+            echo "ERROR: no plugin modules discovered under */build.gradle.kts"
+            exit 1
+          fi
           ls -la deploy-staging/
 
       - name: Upload .cgp artifacts for deploy job
