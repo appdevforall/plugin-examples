@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The input group's fill plus the 1dp top border the composer tab couples into. Without this line
+  the tab's side strokes end in mid-air and it reads as a chip hovering over the group.
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@color/plugin_outline_variant" />
+        </shape>
+    </item>
+    <item android:top="1dp">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/plugin_surface_variant" />
+        </shape>
+    </item>
+</layer-list>

@@ -7,8 +7,13 @@
     <string name="chat_title">AI Chat</string>
     <string name="hint_enter_message">Enter your message…</string>
     <string name="btn_send">Send</string>
-    <string name="btn_stop">Stop</string>
     <string name="btn_clear_chat">Clear chat</string>
+    <string name="desc_attach_context_file">Attach a file as context</string>
+    <string name="desc_send_message">Send message</string>
+    <string name="desc_stop_agent">Stop the agent</string>
+    <string name="desc_show_composer">Show the message box</string>
+    <string name="desc_hide_composer">Hide the message box</string>
+    <string name="desc_overflow_menu">More options</string>
 
     <!-- Menu Items -->
     <string name="menu_clear_chat">Clear chat</string>
@@ -154,7 +159,6 @@
     <string name="type_a_message_or_prompt">Type a message or prompt…</string>
     <string name="experimental_ai_use_at_your_own_risk">⚠️ Experimental AI. Use at your own risk.</string>
     <string name="current_ai_backend">Current AI backend</string>
-    <string name="send">Send</string>
 
     <!-- File picker -->
     <string name="file_picker_title">Select Files</string>

@@ -1,4 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Every fixed-height element here is a direct tax on chat_recycler_view: LinearLayout gives a
+  weighted child only the leftover space, so once the chrome exceeds the container the history is
+  measured at zero and stops scrolling (ADFA-3070, seen in the bottom sheet in landscape). Keep the
+  chrome bounded — a minHeight on the list would not help, weighted children are measured EXACTLY.
+-->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -9,7 +15,7 @@
     <LinearLayout
         android:id="@+id/chat_toolbar"
         android:layout_width="match_parent"
-        android:layout_height="56dp"
+        android:layout_height="@dimen/chat_toolbar_height"
         android:background="@color/plugin_surface_variant"
         android:gravity="center_vertical"
         android:orientation="horizontal"
@@ -20,31 +26,55 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="AI Agent"
+            android:text="@string/ai_agent"
             android:textColor="@color/plugin_on_surface"
-            android:textSize="20sp"
+            android:textSize="@dimen/chat_title_text_size"
             android:textStyle="bold" />
 
-        <Button
+        <ImageButton
             android:id="@+id/btn_overflow_menu"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:text="⋮"
-            android:textSize="24sp"
-            android:textColor="@color/plugin_on_surface"
-            android:background="?android:attr/selectableItemBackground"
-            android:padding="0dp" />
+            android:layout_width="@dimen/chat_composer_button_size"
+            android:layout_height="@dimen/chat_composer_button_size"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/desc_overflow_menu"
+            android:padding="@dimen/chat_composer_icon_padding"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_more_vert"
+            android:tint="@color/plugin_on_surface" />
     </LinearLayout>
 
-    <!-- RecyclerView for messages -->
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/chat_recycler_view"
+    <!-- The toggle floats over the list rather than taking a row of its own, so hiding the
+         composer hands its full height to the history instead of trading most of it back. -->
+    <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1"
-        android:background="@color/plugin_surface" />
+        android:layout_weight="1">
 
-    <!-- Hidden views that code expects -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/chat_recycler_view"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@color/plugin_surface" />
+
+        <!-- Taller than it looks: the drawn tab is the bottom 16dp, the rest is a transparent
+             finger target. Costs the list no height — it overlays, it is not a row. -->
+        <ImageButton
+            android:id="@+id/btn_show_composer"
+            android:layout_width="@dimen/chat_composer_toggle_width"
+            android:layout_height="@dimen/chat_composer_toggle_touch_height"
+            android:layout_gravity="bottom|center_horizontal"
+            android:background="@drawable/bg_composer_tab_up"
+            android:contentDescription="@string/desc_show_composer"
+            android:paddingStart="@dimen/chat_composer_tab_padding_horizontal"
+            android:paddingEnd="@dimen/chat_composer_tab_padding_horizontal"
+            android:paddingTop="@dimen/chat_composer_tab_padding_top"
+            android:paddingBottom="@dimen/chat_composer_tab_padding_vertical"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_expand_less"
+            android:tint="@color/plugin_on_surface_variant"
+            android:visibility="gone" />
+    </FrameLayout>
+
     <TextView
         android:id="@+id/empty_chat_view"
         android:layout_width="wrap_content"
@@ -72,60 +102,105 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:background="@color/plugin_surface_variant"
-        android:elevation="8dp"
-        android:padding="12dp">
+        android:background="@drawable/bg_input_bar"
+        android:clipToPadding="false"
+        android:padding="@dimen/chat_input_bar_padding">
 
-        <LinearLayout
+        <!-- Hangs off the group's top border, below it, so it never reaches into the chat text.
+             Its height doubles as the group's top padding. -->
+        <ImageButton
+            android:id="@+id/btn_hide_composer"
+            android:layout_width="@dimen/chat_composer_toggle_width"
+            android:layout_height="@dimen/chat_composer_toggle_height"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="@dimen/chat_input_bar_padding_negative"
+            android:layout_marginBottom="@dimen/chat_composer_tab_spacing"
+            android:background="@drawable/bg_composer_tab_down"
+            android:contentDescription="@string/desc_hide_composer"
+            android:paddingStart="@dimen/chat_composer_tab_padding_horizontal"
+            android:paddingEnd="@dimen/chat_composer_tab_padding_horizontal"
+            android:paddingTop="@dimen/chat_composer_tab_padding_vertical"
+            android:paddingBottom="@dimen/chat_composer_tab_padding_vertical"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_expand_more"
+            android:tint="@color/plugin_on_surface_variant"
+            android:visibility="gone" />
+
+        <!-- Costs a row only while context files are attached; ChatFragment toggles it. -->
+        <HorizontalScrollView
+            android:id="@+id/context_chip_scroll"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal">
-
-            <Button
-                android:id="@+id/btn_add_context"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="\@" />
+            android:scrollbars="none"
+            android:visibility="gone">
 
             <LinearLayout
                 android:id="@+id/context_chip_group"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:orientation="horizontal" />
-        </LinearLayout>
-
-        <EditText
-            android:id="@+id/prompt_input_edittext"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="Type a message..."
-            android:minHeight="56dp" />
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal">
-
-            <TextView
-                android:id="@+id/backend_status_text"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="Gemini" />
-
-            <Button
-                android:id="@+id/send_button"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:enabled="false"
-                android:text="Send" />
-        </LinearLayout>
-    </LinearLayout>
+                android:orientation="horizontal" />
+        </HorizontalScrollView>
 
-    <View
-        android:id="@+id/keyboard_spacer"
-        android:layout_width="match_parent"
-        android:layout_height="0dp" />
+        <!-- Attach, input and send share one bordered field so they read as a single control,
+             with both icons centred against the input however tall it has grown. -->
+        <LinearLayout
+            android:id="@+id/composer_box"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bg_chat_composer"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="2dp"
+            android:paddingEnd="2dp">
+
+            <ImageButton
+                android:id="@+id/btn_add_context"
+                android:layout_width="@dimen/chat_composer_button_size"
+                android:layout_height="@dimen/chat_composer_button_size"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/desc_attach_context_file"
+                android:padding="@dimen/chat_composer_icon_padding"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_attach_file"
+                android:tint="@color/plugin_on_surface_variant" />
+
+            <EditText
+                android:id="@+id/prompt_input_edittext"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:background="@null"
+                android:gravity="center_vertical|start"
+                android:hint="@string/hint_enter_message"
+                android:inputType="textMultiLine|textCapSentences"
+                android:maxLines="@integer/chat_input_max_lines"
+                android:minHeight="@dimen/chat_input_min_height"
+                android:paddingTop="10dp"
+                android:paddingBottom="10dp"
+                android:scrollbars="vertical"
+                android:textColor="@color/plugin_on_surface"
+                android:textColorHint="@color/plugin_text_muted" />
+
+            <ImageButton
+                android:id="@+id/send_button"
+                android:layout_width="@dimen/chat_composer_button_size"
+                android:layout_height="@dimen/chat_composer_button_size"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/desc_send_message"
+                android:padding="@dimen/chat_composer_icon_padding"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_send"
+                android:tint="@color/chat_send_tint" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/backend_status_text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="@dimen/chat_caption_spacing"
+            android:textColor="@color/plugin_text_muted"
+            android:textSize="@dimen/chat_caption_text_size" />
+    </LinearLayout>
 
 </LinearLayout>
