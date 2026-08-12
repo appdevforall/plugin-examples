@@ -14,9 +14,9 @@ import java.util.concurrent.ConcurrentHashMap
  * Implementation of LlmInferenceService.
  *
  * Backend-agnostic: it knows no concrete backend type. Backends are contributed by separate plugins
- * (ai-agent-local, ai-agent-gemini, …) that call [registerBackend] on activation, and optional
- * behaviour is declared through the plugin API — [CancellableBackend], [ConfigurableBackend] and
- * the [LlmBackend.supportsTools] / [LlmBackend.supportsHistory] predicates — rather than by casting.
+ * (ai-agent-local, ai-agent-gemini, …) that call [registerBackend] on activation, and each optional
+ * behaviour — [ToolCallingBackend], [HistoryCapableBackend], [CancellableBackend] — is declared by
+ * the interface a backend implements, which this asks for by type before calling.
  *
  * @param logger the owning plugin's log, or null in unit tests
  */
@@ -123,14 +123,28 @@ class LlmInferenceServiceImpl(private val logger: PluginLogger? = null) : LlmInf
             return
         }
 
-        // How much of this a backend actually supports is its own business: LlmBackend's default
-        // now throws rather than degrading, so the catch below turns that into an onError.
-        try {
-            backend.generateStreamingWithTools(prompt, history, config, tools, callback)
-        } catch (e: Throwable) {
-            logger?.error("Backend '$effectiveId' failed to start a tool generation", e)
-            callback.onError("Backend '$effectiveId' could not start generation: ${e.message}")
+        // Route by what the backend declares it can do, degrading one capability at a time.
+        when (backend) {
+            is ToolCallingBackend ->
+                backend.generateStreamingWithTools(prompt, history, config, tools, callback)
+
+            is HistoryCapableBackend ->
+                backend.generateStreamingWithHistory(history, prompt, config, callback.asStream())
+
+            else ->
+                backend.generateStreaming(prompt, config, callback.asStream())
         }
+    }
+
+    /**
+     * Adapts a tool callback to the plain streaming one, for a backend that reports no tool calls.
+     *
+     * @return a [StreamCallback] forwarding every event to this callback
+     */
+    private fun ToolStreamCallback.asStream(): StreamCallback = object : StreamCallback {
+        override fun onToken(token: String) = this@asStream.onToken(token)
+        override fun onComplete(response: LlmResponse) = this@asStream.onComplete(response)
+        override fun onError(error: String) = this@asStream.onError(error)
     }
 
     override fun getEmbeddings(text: String, backendId: String): CompletableFuture<FloatArray> {

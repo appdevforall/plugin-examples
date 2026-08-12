@@ -14,19 +14,25 @@ import com.itsaky.androidide.plugins.services.LlmInferenceService.SystemPromptRe
 internal object GeminiSystemPrompt {
 
     /**
+     * Path used in the examples when the caller names none, so they still show a concrete shape.
+     */
+    private const val FALLBACK_EXAMPLE_PATH = "app/src/main/java/com/example/MainActivity.kt"
+
+    /**
      * Builds the prompt for [request].
      *
-     * [SystemPromptRequest.toolCallSyntax] is reproduced verbatim — it is the envelope the caller
-     * parses back, and a paraphrase here would produce replies nothing reads.
+     * [SystemPromptRequest.toolCallSyntax] is reproduced verbatim — a paraphrase would produce
+     * replies nothing reads — and a null one means the caller parses no envelope, so the format
+     * section and its examples are left out rather than taught in a syntax nothing reads back.
      *
      * @return the system prompt, without the caller's IDE-context block
      */
     fun build(request: SystemPromptRequest): String {
         val toolDescriptions = request.tools.joinToString("\n") { "- ${it.name}: ${it.description}" }
-        val examplePath = request.exampleFilePath
+        val examplePath = request.exampleFilePath ?: FALLBACK_EXAMPLE_PATH
         val exampleStem = examplePath.substringAfterLast('/').substringBeforeLast('.')
 
-        return """
+        val head = """
         You are a senior Android developer integrated into CodeOnTheGo. Your goal is to build complete, working Android apps from user descriptions.
 
         AVAILABLE TOOLS:
@@ -50,9 +56,24 @@ internal object GeminiSystemPrompt {
         - Never write "User:", "Assistant:", a <tool_response> block, or a ```tool_response fence — the system supplies real results. Any tool output you write yourself is a hallucination and will be ignored.
         - Paths are relative to the project root and must be complete. If you don't know a file's exact path, find it with search_project or list_files first, then act on the real path — don't guess.
         - For plain chat (e.g. "Hi"), just reply briefly with no tool call. When the task is done, either give a short summary with no tool call, or end with a single respond call carrying that summary in its "message" — never an empty respond.
+        """.trimIndent()
 
+        val workflow = """
+        WORKFLOW:
+        1. Understand the user's request
+        2. List files to understand the project structure
+        3. Create/modify files with complete implementations
+        4. Add dependencies if needed
+        5. Sync gradle and verify compilation
+        6. Run the app to confirm it works
+        7. Report success and what was built
+        """.trimIndent()
+
+        val syntax = request.toolCallSyntax ?: return head + "\n\n" + workflow
+
+        val callFormat = """
         TOOL CALL FORMAT — to run a tool, emit a single line in EXACTLY this format and nothing after it:
-        ${request.toolCallSyntax}
+        $syntax
         Do NOT describe the action in prose (e.g. "Okay, I'll open the file…") — narrating does nothing.
         The tool only runs when you emit the tool call line itself.
 
@@ -68,15 +89,8 @@ internal object GeminiSystemPrompt {
         <tool_call>{"tool":"list_files","args":{"directory":""}}</tool_call>
         Change part of a file (line breaks inside a value MUST be written as \n):
         <tool_call>{"tool":"edit_file","args":{"file_path":"$examplePath","old_string":"count = 0","new_string":"count = 1"}}</tool_call>
-
-        WORKFLOW:
-        1. Understand the user's request
-        2. List files to understand the project structure
-        3. Create/modify files with complete implementations
-        4. Add dependencies if needed
-        5. Sync gradle and verify compilation
-        6. Run the app to confirm it works
-        7. Report success and what was built
         """.trimIndent()
+
+        return head + "\n\n" + callFormat + "\n\n" + workflow
     }
 }

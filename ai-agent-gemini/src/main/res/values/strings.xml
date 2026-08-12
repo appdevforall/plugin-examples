@@ -1,10 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <!-- Labels for the settings this backend advertises via getConfigSpecs() -->
-    <string name="gemini_config_api_key">Gemini API key</string>
-    <string name="gemini_config_model">Model</string>
-
     <string name="gemini_error_model_unavailable">The model \"%1$s\" is no longer available to your API key. Open AI Settings, tap Refresh Models and choose another model.</string>
     <string name="gemini_error_quota">You have reached your Gemini rate limit or quota. Wait a moment and try again, or check your usage in Google AI Studio.</string>
     <string name="gemini_error_key_refused">Google refused your Gemini API key. Re-enter it in AI Settings.</string>

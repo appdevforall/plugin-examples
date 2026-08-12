@@ -81,9 +81,9 @@
     <tr><td><code>AiBackend</code></td><td>Maps the backend setting stored by AI
       Assistant onto a registered backend id, translating the two legacy values
       that predate the id-as-setting convention.</td></tr>
-    <tr><td><code>ConfigFieldSpec</code></td><td>Supplied by each backend via
-      <code>getConfigSpecs()</code>, describing the credentials or files it needs so
-      settings UI can be drawn without knowing the provider's API.</td></tr>
+    <tr><td><code>ConfigurableBackend</code></td><td>Implemented by a backend that
+      draws its own settings screen, so the credentials or files it needs are
+      collected without AI Core knowing the provider's API.</td></tr>
   </table>
   <p>AI Core declares <b>no Android permissions</b>: it opens no connections,
   reads no files, and loads no native code. Those belong to the backend plugin

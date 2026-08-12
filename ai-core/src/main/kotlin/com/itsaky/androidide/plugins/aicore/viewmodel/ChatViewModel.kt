@@ -839,19 +839,21 @@ class ChatViewModel(
                 }
 
                 override fun onComplete(response: LlmInferenceService.LlmResponse) {
+                    // Null text means a failed response, which arrives through onError instead.
+                    val text = response.text.orEmpty()
                     if (isStale()) {
                         // Already cancelled; the awaiting loop was unblocked by job cancel.
-                        deferred.complete(response.text)
+                        deferred.complete(text)
                         return
                     }
                     val durationMs = System.currentTimeMillis() - startTime
                     // Not from onModelTurn, which fires later and would order the trace wrongly.
                     AgentTrace.stage(
                         "LLM",
-                        "chars=${response.text.length} generateMs=$durationMs",
-                        AgentTrace.preview(response.text),
+                        "chars=${text.length} generateMs=$durationMs",
+                        AgentTrace.preview(text),
                     )
-                    val toolCalls = ToolCallExtractor.extractToolCalls(response.text)
+                    val toolCalls = ToolCallExtractor.extractToolCalls(text)
                     // Where a mis-escaped generation quietly becomes "the model said nothing".
                     if (toolCalls.isEmpty()) {
                         AgentTrace.detail("PARSE", "calls=0 generateMs=$durationMs (plain reply or unparsable)")
@@ -870,12 +872,12 @@ class ChatViewModel(
                         viewModelScope.launch(Dispatchers.Main) {
                             _messages.value = _messages.value.filter { it.id != agentMessageId }
                         }
-                        deferred.complete(response.text)
+                        deferred.complete(text)
                         return
                     }
 
                     val displayText = AgentReplyRenderer.render(
-                        rawText = response.text,
+                        rawText = text,
                         toolCalls = toolCalls,
                         terminalTool = RESPOND_TOOL,
                         lastToolFailed = lastToolFailed,
@@ -898,7 +900,7 @@ class ChatViewModel(
                         syncMessageToSession(finalMsg)
                     }
                     // Return the RAW text to the loop so extraction/stop logic is unaffected.
-                    deferred.complete(response.text)
+                    deferred.complete(text)
                 }
 
                 override fun onError(error: String) {

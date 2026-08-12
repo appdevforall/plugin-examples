@@ -33,43 +33,12 @@ class LocalLlmBackendTest {
     }
 
     @Test
-    fun givenTheToolsPath_whenChecked_thenThisBackendOverridesItRatherThanInheritingTheDefault() {
-        // LlmBackend's default generateStreamingWithTools routes to single-turn generateStreaming
-        // and DROPS the history. Losing this override turns chat into a one-shot prompt with no
-        // error to explain it, which no behavioural test notices — so assert the override exists.
-        val method = LocalLlmBackend::class.java.getMethod(
-            "generateStreamingWithTools",
-            String::class.java,
-            List::class.java,
-            LlmConfig::class.java,
-            List::class.java,
-            ToolStreamCallback::class.java,
-        )
+    fun givenTheBackend_whenAskedForItsCapabilities_thenItDeclaresHistoryButNotToolCalling() {
+        // Dropping HistoryCapableBackend compiles and silently turns chat into one-shot prompting.
+        val declared: LlmBackend = backend
 
-        assertEquals(LocalLlmBackend::class.java, method.declaringClass)
-    }
-
-    @Test
-    fun givenTheHistoryPath_whenChecked_thenThisBackendOverridesItRatherThanInheritingTheDefault() {
-        val method = LocalLlmBackend::class.java.getMethod(
-            "generateStreamingWithHistory",
-            List::class.java,
-            String::class.java,
-            LlmConfig::class.java,
-            StreamCallback::class.java,
-        )
-
-        assertEquals(LocalLlmBackend::class.java, method.declaringClass)
-    }
-
-    @Test
-    fun givenNoModelConfigured_whenAskedForConfigSpecs_thenItAdvertisesTheModelFilePicker() {
-        val specs = backend.getConfigSpecs()
-
-        assertEquals(1, specs.size)
-        assertEquals("local_llm_model_path", specs[0].key)
-        assertEquals(ConfigFieldType.FILE_PICKER, specs[0].type)
-        assertTrue(specs[0].required)
+        assertTrue(declared is HistoryCapableBackend)
+        assertFalse(declared is ToolCallingBackend)
     }
 
     @Test

@@ -9,9 +9,7 @@ import com.itsaky.androidide.plugins.aiagentgemini.errors.GeminiFailure
 import com.itsaky.androidide.plugins.aiagentgemini.preferences.GeminiPreferences
 import com.itsaky.androidide.plugins.aiagentgemini.prompt.GeminiSystemPrompt
 import com.itsaky.androidide.plugins.aiagentgemini.security.SecureApiKeyStore
-import com.itsaky.androidide.plugins.services.LlmInferenceService
 import com.itsaky.androidide.plugins.services.LlmInferenceService.*
-import com.itsaky.androidide.plugins.services.SharedServices
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
@@ -39,7 +37,7 @@ import org.json.JSONObject
  */
 class GeminiBackend(
     private val context: PluginContext
-) : LlmBackend, CancellableBackend, ConfigurableBackend {
+) : HistoryCapableBackend, CancellableBackend, ConfigurableBackend {
 
     private val scope = CoroutineScope(Dispatchers.IO)
 
@@ -149,43 +147,6 @@ class GeminiBackend(
     override fun getName(): String = "Gemini API"
 
     /**
-     * The settings a caller must collect to use this backend. The keys are the ones AI Core
-     * already writes into `AgentSettings`, so a UI driven by this spec stores them where
-     * [agentPrefs] reads them.
-     */
-    override fun getConfigSpecs(): List<ConfigFieldSpec> = listOf(
-        ConfigFieldSpec(
-            GeminiPreferences.KEY_API_KEY,
-            configLabel(R.string.gemini_config_api_key),
-            ConfigFieldType.PASSWORD,
-            true,
-            null,
-            null,
-        ),
-        // TEXT, not DROPDOWN: the usable model list is fetched live per key by listModels(), so a
-        // static option list here is exactly the stale-model bug that live lookup prevents.
-        ConfigFieldSpec(
-            GeminiPreferences.KEY_MODEL,
-            configLabel(R.string.gemini_config_model),
-            ConfigFieldType.TEXT,
-            false,
-            DEFAULT_MODEL,
-            null,
-        ),
-    )
-
-    /**
-     * Resolves a config label against this plugin's own resources, degrading to the key name rather
-     * than throwing — [getConfigSpecs] is called across the plugin boundary.
-     */
-    private fun configLabel(resId: Int): String = try {
-        context.androidContext.getString(resId)
-    } catch (e: Exception) {
-        context.logger.error("GeminiBackend: could not resolve config label $resId", e)
-        ""
-    }
-
-    /**
      * Written for a large cloud model; see [GeminiSystemPrompt] for why the wording belongs here
      * rather than with the caller.
      */
@@ -197,8 +158,7 @@ class GeminiBackend(
 
     /**
      * This backend draws its own settings, so the consumer needs no knowledge of API keys, AI
-     * Studio or Google's model catalog. Supersedes [getConfigSpecs], which stays for consumers too
-     * simple to mount a fragment.
+     * Studio or Google's model catalog.
      */
     override fun getSettingsFragmentClassName(): String =
         "com.itsaky.androidide.plugins.aiagentgemini.settings.GeminiSettingsFragment"
@@ -281,6 +241,8 @@ class GeminiBackend(
                 ChatMessage.Role.ASSISTANT -> "model"
                 // Gemini has no system role; a mid-conversation system note goes as a user turn.
                 ChatMessage.Role.SYSTEM -> "user"
+                // No native function calling here, so a tool result rides in as a user turn.
+                ChatMessage.Role.TOOL -> "user"
             }
             contents.put(contentJson(role, msg.content))
         }
@@ -549,44 +511,6 @@ class GeminiBackend(
 
 User: $userPrompt"""
     }
-
-    /**
-     * False despite [generateStreamingWithTools] being overridden: that override ignores its
-     * `tools` and never calls `onToolCall`, so a caller that trusted a `true` here would wait on
-     * a structured tool call this backend cannot make. Flip it only alongside real function calling.
-     */
-    override fun supportsTools(): Boolean = false
-
-    /**
-     * Streams a tool-enabled request without native function calling, honouring [history] only.
-     *
-     * Overridden purely to keep multi-turn context: the interface default now throws, and routing
-     * to single-turn streaming would drop [history]. See [supportsTools] for why `tools` is unused.
-     */
-    override fun generateStreamingWithTools(
-        prompt: String,
-        history: List<ChatMessage>,
-        config: LlmConfig,
-        tools: List<LlmInferenceService.ToolDefinition>,
-        callback: LlmInferenceService.ToolStreamCallback
-    ) {
-        context.logger.info("GeminiBackend: Streaming with ${history.size} prior turns")
-
-        // No native function calling: the caller drives tools through the text envelope in its
-        // system prompt, so `tools` is unused and onToolCall never fires. History, however, is
-        // carried as a real contents[] array — flattening it into one turn (which the interface
-        // default does) loses the role boundaries the model needs to tell its own replies from
-        // the user's, and does so with no error to explain the amnesia.
-        val streamCallback = object : StreamCallback {
-            override fun onToken(token: String) = callback.onToken(token)
-            override fun onComplete(response: LlmResponse) = callback.onComplete(response)
-            override fun onError(error: String) = callback.onError(error)
-        }
-        generateStreamingWithHistory(history, prompt, config, streamCallback)
-    }
-
-    /** [generateStreamingWithHistory] sends every turn as its own `contents[]` entry. */
-    override fun supportsHistory(): Boolean = true
 
     /**
      * Streams a reply for a multi-turn conversation, sending [history] as real `contents[]` turns.

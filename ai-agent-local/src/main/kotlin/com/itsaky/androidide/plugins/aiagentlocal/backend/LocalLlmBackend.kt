@@ -6,7 +6,6 @@ import android.llama.cpp.LLamaAndroid
 import android.net.Uri
 import android.provider.OpenableColumns
 import com.itsaky.androidide.plugins.PluginContext
-import com.itsaky.androidide.plugins.aiagentlocal.R
 import com.itsaky.androidide.plugins.aiagentlocal.feedback.IncompatibleModelException
 import com.itsaky.androidide.plugins.aiagentlocal.feedback.ModelLoadException
 import com.itsaky.androidide.plugins.aiagentlocal.feedback.ModelNotConfiguredException
@@ -41,7 +40,7 @@ import kotlinx.coroutines.sync.withLock
  */
 class LocalLlmBackend(
     private val context: PluginContext
-) : LlmBackend, CancellableBackend, ConfigurableBackend {
+) : HistoryCapableBackend, CancellableBackend, ConfigurableBackend {
 
     companion object {
         /**
@@ -92,27 +91,6 @@ class LocalLlmBackend(
     override fun getName(): String = "Local LLM"
 
     /**
-     * The settings a caller must collect to use this backend. The key is the one this plugin's own
-     * settings pane writes into `AgentSettings`, so a UI driven by this spec stores it where this
-     * backend reads it.
-     */
-    override fun getConfigSpecs(): List<ConfigFieldSpec> = listOf(
-        ConfigFieldSpec(
-            LocalLlmPreferences.KEY_MODEL_PATH,
-            try {
-                context.androidContext.getString(R.string.local_config_model_path)
-            } catch (e: Exception) {
-                context.logger.error("LocalLlmBackend: could not resolve the model-path label", e)
-                ""
-            },
-            ConfigFieldType.FILE_PICKER,
-            true,
-            null,
-            null,
-        ),
-    )
-
-    /**
      * Whether the user's current selection names this backend.
      *
      * Asked of the router, which owns the selection — this backend's own preferences say nothing
@@ -147,8 +125,7 @@ class LocalLlmBackend(
 
     /**
      * This backend draws its own settings, so the consumer needs no knowledge of `.gguf` files,
-     * engine state or memory headroom. Supersedes [getConfigSpecs], which stays for consumers too
-     * simple to mount a fragment.
+     * engine state or memory headroom.
      */
     override fun getSettingsFragmentClassName(): String =
         "com.itsaky.androidide.plugins.aiagentlocal.settings.LocalLlmSettingsFragment"
@@ -390,6 +367,8 @@ class LocalLlmBackend(
                 ChatMessage.Role.USER -> "user"
                 ChatMessage.Role.ASSISTANT -> "assistant"
                 ChatMessage.Role.SYSTEM -> "system"
+                // No native function calling here, so a tool result rides in as a user turn.
+                ChatMessage.Role.TOOL -> "user"
             }
             append("<|im_start|>").append(role).append("\n").append(msg.content).append("<|im_end|>\n")
         }
@@ -490,9 +469,6 @@ class LocalLlmBackend(
         streamGeneration(buildPrompt(config.systemPrompt, prompt), config, callback)
     }
 
-    /** [generateStreamingWithHistory] renders every earlier turn as its own ChatML turn. */
-    override fun supportsHistory(): Boolean = true
-
     /**
      * Streams a reply for a multi-turn conversation, rendering each earlier turn as its own
      * ChatML turn.
@@ -510,37 +486,6 @@ class LocalLlmBackend(
     ) {
         context.logger.info("LocalLlmBackend.generateStreamingWithHistory() called with ${history.size} messages")
         streamGeneration(buildPrompt(config.systemPrompt, prompt, history), config, callback)
-    }
-
-    /**
-     * False despite [generateStreamingWithTools] being overridden: that override ignores its
-     * `tools` and never calls `onToolCall`, so a caller that trusted a `true` here would wait on
-     * a structured tool call this backend cannot make. Flip it only alongside real function calling.
-     */
-    override fun supportsTools(): Boolean = false
-
-    /**
-     * Serves a tool-enabled request with this backend's multi-turn streaming.
-     *
-     * There is no native function calling here — the caller drives tools through a GBNF grammar in
-     * [LlmConfig.extraParams] (see [EXTRA_PARAM_GRAMMAR]). The override exists to keep [history]:
-     * the interface default now throws, and single-turn streaming would drop the conversation.
-     */
-    override fun generateStreamingWithTools(
-        prompt: String,
-        history: List<ChatMessage>,
-        config: LlmConfig,
-        tools: List<ToolDefinition>,
-        callback: ToolStreamCallback
-    ) {
-        // ToolStreamCallback does not extend StreamCallback, so it has to be adapted; onToolCall
-        // is never invoked from here because the grammar path yields tool calls as plain tokens.
-        val streamCallback = object : StreamCallback {
-            override fun onToken(token: String) = callback.onToken(token)
-            override fun onComplete(response: LlmResponse) = callback.onComplete(response)
-            override fun onError(error: String) = callback.onError(error)
-        }
-        generateStreamingWithHistory(history, prompt, config, streamCallback)
     }
 
     /**

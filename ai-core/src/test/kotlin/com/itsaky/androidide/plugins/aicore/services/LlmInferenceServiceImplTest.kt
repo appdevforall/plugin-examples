@@ -167,6 +167,38 @@ class LlmInferenceServiceImplTest {
     }
 
     @Test
+    fun givenAHistoryCapableBackend_whenStreamingWithTools_thenTheConversationIsKept() {
+        // It declares no tool calling, so it must still get the turns rather than the last one alone.
+        val backend = HistoryRecordingBackend()
+        service.registerBackend(backend)
+
+        val history = List(3) { ChatMessage(ChatMessage.Role.USER, "turn $it") }
+        service.generateStreamingWithTools(
+            "prompt", history, LlmConfig(backend.getId()), emptyList(), toolCallbackSink()
+        )
+
+        assertEquals(listOf(3), backend.historySizes)
+        assertEquals(listOf("prompt"), backend.prompts)
+        assertTrue("a history-capable backend must not be dropped to single-turn", backend.streamedPrompts.isEmpty())
+    }
+
+    @Test
+    fun givenABackendWithNeitherCapability_whenStreamingWithTools_thenItStreamsTheLastTurnAlone() {
+        val backend = RecordingBackend("plain")
+        service.registerBackend(backend)
+
+        service.generateStreamingWithTools(
+            "prompt",
+            listOf(ChatMessage(ChatMessage.Role.USER, "earlier")),
+            LlmConfig(backend.getId()),
+            emptyList(),
+            toolCallbackSink(),
+        )
+
+        assertEquals(listOf("prompt"), backend.streamedPrompts)
+    }
+
+    @Test
     fun givenACancellableBackend_whenCancelling_thenItIsCancelled() {
         val backend = CancellableRecordingBackend("cancellable")
         service.registerBackend(backend)
@@ -214,8 +246,8 @@ class LlmInferenceServiceImplTest {
             CompletableFuture.completedFuture(LlmResponse.success("", 0, 0))
     }
 
-    /** Mirrors a backend with native tool calling, e.g. GeminiBackend. */
-    private class ToolRecordingBackend : RecordingBackend("tools") {
+    /** Mirrors a backend with native tool calling, which no shipped backend has yet. */
+    private class ToolRecordingBackend : RecordingBackend("tools"), ToolCallingBackend {
 
         val historySizes = mutableListOf<Int>()
         val toolCounts = mutableListOf<Int>()
@@ -229,6 +261,23 @@ class LlmInferenceServiceImplTest {
         ) {
             historySizes.add(history.size)
             toolCounts.add(tools.size)
+        }
+    }
+
+    /** Mirrors the shipped backends: multi-turn, but with no tool calls of its own. */
+    private class HistoryRecordingBackend : RecordingBackend("history"), HistoryCapableBackend {
+
+        val historySizes = mutableListOf<Int>()
+        val prompts = mutableListOf<String>()
+
+        override fun generateStreamingWithHistory(
+            history: List<ChatMessage>,
+            prompt: String,
+            config: LlmConfig,
+            callback: StreamCallback
+        ) {
+            historySizes.add(history.size)
+            prompts.add(prompt)
         }
     }
 

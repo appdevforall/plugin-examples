@@ -50,17 +50,18 @@ matter; only "at least one backend is installed" does.
 
 ## Optional backend capabilities
 
-`LlmBackend` declares six abstract methods plus three defaulted ones
-(`generateStreamingWithTools`, `generateStreamingWithHistory`, `getConfigSpecs`),
-and `LlmInferenceService.CancellableBackend` marks a backend whose streaming can
-be stopped. AI Core uses those directly — it holds no per-backend branching.
+`LlmBackend` carries only what every backend can answer. Anything optional is a
+separate interface extending it — `HistoryCapableBackend`, `ToolCallingBackend`,
+`CancellableBackend`, `ConfigurableBackend` — and AI Core asks by type before it
+calls. It holds no per-backend branching.
 
-**A backend that wants multi-turn chat must override `generateStreamingWithTools`,
-not just `generateStreamingWithHistory`.** The plugin API's default for the tools
-method routes to single-turn `generateStreaming`, so inheriting it silently drops
-the conversation and produces a plausible one-shot reply with no error. That is
-why `LocalLlmBackend` overrides both, and why `LocalLlmBackendTest` asserts the
-overrides exist rather than trusting behaviour to catch it.
+**A backend that wants multi-turn chat must implement `HistoryCapableBackend`.**
+`generateStreamingWithTools` routes to `generateStreamingWithHistory` for one,
+and to single-turn `generateStreaming` for a backend that declares neither
+capability — so a missing declaration silently drops the conversation and
+produces a plausible one-shot reply with no error. That is why both shipped
+backends declare it, and why `LocalLlmBackendTest` asserts the declaration
+rather than trusting behaviour to catch it.
 
 ## Key classes
 

@@ -15,20 +15,26 @@ import com.itsaky.androidide.plugins.services.LlmInferenceService.SystemPromptRe
 internal object LocalSystemPrompt {
 
     /**
+     * Path used in the examples when the caller names none, so they still show a concrete shape.
+     */
+    private const val FALLBACK_EXAMPLE_PATH = "app/src/main/java/com/example/MainActivity.kt"
+
+    /**
      * Builds the prompt for [request].
      *
-     * [SystemPromptRequest.toolCallSyntax] is reproduced verbatim — it is the envelope the caller
-     * parses back, and a paraphrase here would produce replies nothing reads.
+     * [SystemPromptRequest.toolCallSyntax] is reproduced verbatim — a paraphrase would produce
+     * replies nothing reads — and a null one means the caller parses no envelope, so the format
+     * section and its examples are left out rather than taught in a syntax nothing reads back.
      *
      * @return the system prompt, without the caller's IDE-context block
      */
     fun build(request: SystemPromptRequest): String {
         val toolDescriptions = request.tools.joinToString("\n") { "- ${it.name}: ${it.description}" }
-        val examplePath = request.exampleFilePath
+        val examplePath = request.exampleFilePath ?: FALLBACK_EXAMPLE_PATH
         val exampleName = examplePath.substringAfterLast('/')
         val exampleStem = exampleName.substringBeforeLast('.')
 
-        return """
+        val rules = """
         You are a coding assistant inside CodeOnTheGo.
 
         Rules:
@@ -45,9 +51,13 @@ internal object LocalSystemPrompt {
 
         Tools:
         $toolDescriptions
+        """.trimIndent()
 
+        val syntax = request.toolCallSyntax ?: return rules
+
+        return rules + "\n\n" + """
         TOOL CALL FORMAT — emit a single line in EXACTLY this format and nothing after it:
-        ${request.toolCallSyntax}
+        $syntax
 
         Examples (pick the tool that matches; copy the FORMAT, not the values):
         Greeting / question you can answer -> respond:
