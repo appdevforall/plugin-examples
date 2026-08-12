@@ -1,0 +1,225 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical">
+
+    <!-- Server -->
+
+    <TextView
+        android:id="@+id/openai_server_label"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingBottom="4dp"
+        android:text="@string/label_openai_server"
+        android:textAppearance="?android:attr/textAppearanceSmall" />
+
+    <Spinner
+        android:id="@+id/openai_preset_spinner"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content" />
+
+    <EditText
+        android:id="@+id/openai_base_url_input"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:hint="@string/hint_openai_server"
+        android:imeOptions="actionDone"
+        android:inputType="textUri"
+        android:maxLines="1" />
+
+    <Button
+        android:id="@+id/btn_save_server"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="@string/btn_save_server" />
+
+    <TextView
+        android:id="@+id/openai_server_status_text"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:drawablePadding="6dp"
+        android:gravity="center_vertical"
+        android:textAppearance="?android:attr/textAppearanceSmall"
+        android:textColor="?android:attr/textColorSecondary"
+        android:visibility="gone" />
+
+    <!-- API key. The whole block collapses to openai_key_not_needed_text for a local server. -->
+
+    <TextView
+        android:id="@+id/openai_key_not_needed_text"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:text="@string/msg_key_not_needed"
+        android:textAppearance="?android:attr/textAppearanceSmall"
+        android:textColor="?android:attr/textColorSecondary"
+        android:visibility="gone" />
+
+    <LinearLayout
+        android:id="@+id/openai_key_section"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/openai_api_key_status_text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="8dp"
+            android:textAppearance="?android:attr/textAppearanceMedium"
+            android:textColor="?android:attr/textColorSecondary"
+            android:visibility="gone" />
+
+        <LinearLayout
+            android:id="@+id/openai_api_key_layout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/openai_api_key_label"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingBottom="4dp"
+                android:text="@string/label_openai_api_key"
+                android:textAppearance="?android:attr/textAppearanceSmall" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <EditText
+                    android:id="@+id/openai_api_key_input"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:hint="@string/hint_openai_api_key"
+                    android:inputType="textPassword"
+                    android:maxLines="1" />
+
+                <ImageButton
+                    android:id="@+id/btn_toggle_api_key_visibility"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/cd_show_api_key"
+                    android:minWidth="0dp"
+                    android:minHeight="0dp"
+                    android:padding="4dp"
+                    android:src="@drawable/ic_visibility" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/openai_key_verification_text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:drawablePadding="6dp"
+            android:gravity="center_vertical"
+            android:textAppearance="?android:attr/textAppearanceSmall"
+            android:textColor="?android:attr/textColorSecondary"
+            android:visibility="gone" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btn_clear_api_key"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/btn_clear_api_key"
+                android:visibility="gone" />
+
+            <Button
+                android:id="@+id/btn_edit_api_key"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:text="@string/btn_edit_api_key"
+                android:visibility="gone" />
+
+            <Button
+                android:id="@+id/btn_save_api_key"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/btn_save_api_key" />
+
+        </LinearLayout>
+
+        <!-- Hidden for a server with no keys to get, where the link means nothing. -->
+        <Button
+            android:id="@+id/btn_get_key"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="@string/btn_get_key" />
+
+    </LinearLayout>
+
+    <!-- Model. One editable dropdown: type any name, or pick one the server reported. -->
+
+    <TextView
+        android:id="@+id/openai_model_label"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:paddingBottom="4dp"
+        android:text="@string/label_openai_model"
+        android:textAppearance="?android:attr/textAppearanceSmall" />
+
+    <AutoCompleteTextView
+        android:id="@+id/openai_model_input"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:completionThreshold="0"
+        android:drawableEnd="@drawable/ic_dropdown"
+        android:hint="@string/hint_openai_model"
+        android:imeOptions="actionDone"
+        android:inputType="text"
+        android:maxLines="1" />
+
+    <TextView
+        android:id="@+id/openai_model_hint_text"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="@string/hint_openai_model_help"
+        android:textAppearance="?android:attr/textAppearanceSmall"
+        android:textColor="?android:attr/textColorSecondary" />
+
+    <!-- Connection test, which is also what fills the model dropdown: both are GET /v1/models. -->
+
+    <Button
+        android:id="@+id/btn_test_connection"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:text="@string/btn_test_connection" />
+
+    <TextView
+        android:id="@+id/openai_connection_status_text"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:drawablePadding="6dp"
+        android:gravity="center_vertical"
+        android:textAppearance="?android:attr/textAppearanceSmall"
+        android:textColor="?android:attr/textColorSecondary"
+        android:visibility="gone" />
+
+</LinearLayout>
