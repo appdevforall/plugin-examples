@@ -28,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.appdevforall.pair.plugin.PairTooltips
 import com.appdevforall.pair.plugin.data.SessionState
 import com.appdevforall.pair.plugin.ui.components.ConnectingLine
 import com.appdevforall.pair.plugin.ui.components.InviteCard
@@ -36,6 +37,7 @@ import com.appdevforall.pair.plugin.ui.components.OutOfSyncBanner
 import com.appdevforall.pair.plugin.ui.components.PluginButtonOutlined
 import com.appdevforall.pair.plugin.ui.components.PluginButtonText
 import com.appdevforall.pair.plugin.ui.components.StatusDot
+import com.appdevforall.pair.plugin.ui.components.longPressTooltip
 import com.appdevforall.pair.plugin.ui.preview.PluginPreview
 import com.appdevforall.pair.plugin.ui.preview.PreviewSamples
 import com.appdevforall.pair.plugin.ui.preview.ScreenThemePreviews
@@ -99,13 +101,17 @@ fun HostSessionScreen(
                     subtitle = "Nearby devices can join without scanning.",
                     checked = discoverable,
                     onCheckedChange = { onIntent(PairIntent.ToggleDiscoverable) },
-                    modifier = Modifier.padding(horizontal = dimens.spaceXl),
+                    modifier = Modifier
+                        .padding(horizontal = dimens.spaceXl)
+                        .longPressTooltip(PairTooltips.DISCOVERABLE),
                 )
             } else {
                 PluginButtonText(
                     text = "INVITE ANOTHER DEVICE",
                     onClick = { inviteExpanded = true },
-                    modifier = Modifier.padding(horizontal = dimens.spaceXl),
+                    modifier = Modifier
+                        .padding(horizontal = dimens.spaceXl)
+                        .longPressTooltip(PairTooltips.INVITE_CARD),
                 )
             }
 
@@ -116,7 +122,9 @@ fun HostSessionScreen(
                 subtitle = "Display each peer's caret in your editor.",
                 checked = session.showPeerCursors,
                 onCheckedChange = { onIntent(PairIntent.SetShowPeerCursors(it)) },
-                modifier = Modifier.padding(horizontal = dimens.spaceXl),
+                modifier = Modifier
+                    .padding(horizontal = dimens.spaceXl)
+                    .longPressTooltip(PairTooltips.PEER_CURSORS),
             )
 
             Spacer(Modifier.height(dimens.spaceXl))
@@ -169,7 +177,9 @@ fun HostSessionScreen(
                 text = "STOP SESSION",
                 onClick = { onIntent(PairIntent.StopSession) },
                 contentColor = MaterialTheme.colorScheme.error,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .longPressTooltip(PairTooltips.STOP_SESSION),
             )
         }
     }

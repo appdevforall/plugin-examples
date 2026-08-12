@@ -28,11 +28,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.appdevforall.pair.plugin.PairTooltips
 import com.appdevforall.pair.plugin.ui.components.PluginButtonFilled
 import com.appdevforall.pair.plugin.ui.components.PluginButtonOutlined
 import com.appdevforall.pair.plugin.ui.components.PluginButtonText
 import com.appdevforall.pair.plugin.ui.components.PluginButtonTonal
 import com.appdevforall.pair.plugin.ui.components.PluginTextField
+import com.appdevforall.pair.plugin.ui.components.longPressTooltip
 import com.appdevforall.pair.plugin.ui.preview.PluginPreview
 import com.appdevforall.pair.plugin.ui.preview.PreviewSamples
 import com.appdevforall.pair.plugin.ui.preview.ScreenThemePreviews
@@ -76,7 +78,9 @@ fun HomeScreen(
         PluginButtonFilled(
             text = "HOST A SESSION",
             onClick = { onIntent(PairIntent.StartHosting) },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .longPressTooltip(PairTooltips.HOST_SESSION),
         )
 
         Spacer(Modifier.height(dimens.spaceMd))
@@ -93,7 +97,9 @@ fun HomeScreen(
                     onValueChange = { onIntent(PairIntent.AddressChanged(it)) },
                     placeholder = "192.168.1.42:7050",
                     keyboardType = KeyboardType.Uri,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .longPressTooltip(PairTooltips.JOIN_ADDRESS),
                 )
                 Spacer(Modifier.height(dimens.spaceSm))
                 Row(
@@ -106,13 +112,16 @@ fun HomeScreen(
                         onValueChange = { onIntent(PairIntent.PasscodeChanged(it)) },
                         placeholder = "4-digit code",
                         keyboardType = KeyboardType.NumberPassword,
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier
+                            .weight(1f)
+                            .longPressTooltip(PairTooltips.JOIN_PASSCODE),
                     )
                     PluginButtonTonal(
                         text = "CONNECT",
                         onClick = { onIntent(PairIntent.SubmitJoin) },
                         enabled = state.addressInput.isNotBlank() &&
                             (state.addressInput.contains("?t=") || state.passcodeInput.isNotBlank()),
+                        modifier = Modifier.longPressTooltip(PairTooltips.JOIN_CONNECT),
                     )
                 }
                 Spacer(Modifier.height(dimens.spaceMd))
@@ -127,7 +136,9 @@ fun HomeScreen(
             PluginButtonOutlined(
                 text = if (state.joinMode) "CANCEL" else "JOIN A SESSION",
                 onClick = { onIntent(PairIntent.ToggleJoinMode) },
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .longPressTooltip(PairTooltips.JOIN_SESSION),
             )
         }
 
@@ -213,6 +224,7 @@ private fun IdentityRow(
             text = "EDIT",
             onClick = onEdit,
             contentColor = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.longPressTooltip(PairTooltips.DEVICE_NAME),
         )
     }
 }

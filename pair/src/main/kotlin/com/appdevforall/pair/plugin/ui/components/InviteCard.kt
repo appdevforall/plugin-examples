@@ -31,6 +31,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.appdevforall.pair.plugin.PairTooltips
 import com.appdevforall.pair.plugin.ui.preview.PluginPreview
 import com.appdevforall.pair.plugin.ui.preview.ThemePreviews
 import com.appdevforall.pair.plugin.ui.theme.LocalPluginDimens
@@ -48,7 +49,7 @@ fun InviteCard(
     val dimens = LocalPluginDimens.current
     val invite = if (token.isNullOrEmpty()) "ws://$address:$port" else NetUtil.buildInvite(address, port, token)
 
-    PluginCard(modifier = modifier.widthIn(max = 360.dp)) {
+    PluginCard(modifier = modifier.widthIn(max = 360.dp).longPressTooltip(PairTooltips.INVITE_CARD)) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()

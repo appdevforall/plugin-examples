@@ -21,6 +21,7 @@ import com.appdevforall.pair.plugin.ui.preview.ScreenThemePreviews
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.appdevforall.pair.plugin.PairTooltips
 import com.appdevforall.pair.plugin.data.SessionState
 import com.appdevforall.pair.plugin.ui.components.ConnectingLine
 import com.appdevforall.pair.plugin.ui.components.LabeledSwitchRow
@@ -28,6 +29,7 @@ import com.appdevforall.pair.plugin.ui.components.OutOfSyncBanner
 import com.appdevforall.pair.plugin.ui.components.PluginButtonOutlined
 import com.appdevforall.pair.plugin.ui.components.ProjectTransferCard
 import com.appdevforall.pair.plugin.ui.components.StatusDot
+import com.appdevforall.pair.plugin.ui.components.longPressTooltip
 import com.appdevforall.pair.plugin.ui.theme.LocalPluginDimens
 import com.appdevforall.pair.plugin.ui.theme.LocalPluginTextStyles
 
@@ -81,7 +83,9 @@ fun GuestSessionScreen(
                 subtitle = "Display each peer's caret in your editor.",
                 checked = session.showPeerCursors,
                 onCheckedChange = { onIntent(PairIntent.SetShowPeerCursors(it)) },
-                modifier = Modifier.padding(horizontal = dimens.spaceXl),
+                modifier = Modifier
+                    .padding(horizontal = dimens.spaceXl)
+                    .longPressTooltip(PairTooltips.PEER_CURSORS),
             )
 
             Spacer(Modifier.height(dimens.spaceLg))
@@ -118,7 +122,9 @@ fun GuestSessionScreen(
                 text = "DISCONNECT",
                 onClick = { onIntent(PairIntent.Disconnect) },
                 contentColor = MaterialTheme.colorScheme.error,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .longPressTooltip(PairTooltips.DISCONNECT),
             )
         }
     }

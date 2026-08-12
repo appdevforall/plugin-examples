@@ -7,7 +7,6 @@ import com.itsaky.androidide.plugins.extensions.DocumentationExtension
 import com.itsaky.androidide.plugins.extensions.EditorTabExtension
 import com.itsaky.androidide.plugins.extensions.EditorTabItem
 import com.itsaky.androidide.plugins.extensions.NavigationItem
-import com.itsaky.androidide.plugins.extensions.PluginTooltipButton
 import com.itsaky.androidide.plugins.extensions.PluginTooltipEntry
 import com.itsaky.androidide.plugins.extensions.UIExtension
 import com.itsaky.androidide.plugins.services.IdeEditorTabService
@@ -70,41 +69,14 @@ class PairPlugin : IPlugin, UIExtension, EditorTabExtension, DocumentationExtens
                 group = "tools",
                 order = 0,
                 action = { openPairTab() },
-                tooltipTag = TOOLTIP_TAG_SIDEBAR,
+                tooltipTag = PairTooltips.SIDEBAR,
             )
         )
     }
 
-    override fun getTooltipCategory(): String = "plugin_$PLUGIN_ID"
+    override fun getTooltipCategory(): String = PairTooltips.CATEGORY
 
-    override fun getTooltipEntries(): List<PluginTooltipEntry> = listOf(
-        PluginTooltipEntry(
-            tag = TOOLTIP_TAG_SIDEBAR,
-            summary = "Pair programming over local WiFi: one device hosts, others join, edits and cursors sync live.",
-            detail = """
-                <p>Opens the <b>Pair</b> tab, which runs a real-time collaboration
-                session between devices on the same network &mdash; no server,
-                no account.</p>
-                <ul>
-                  <li><b>Host session</b> &mdash; shows an invite card with your
-                  <code>ip:port</code> and a QR code.</li>
-                  <li><b>Join</b> &mdash; scan the host's QR code or type the address.</li>
-                  <li>Edits, cursor positions, and file opens flow between peers as
-                  they happen; each peer appears in the peer list with a colored
-                  cursor in the editor.</li>
-                  <li>Past sessions are listed on the Home screen to rename, delete,
-                  or reconnect.</li>
-                </ul>
-            """.trimIndent(),
-            buttons = listOf(
-                PluginTooltipButton(
-                    description = "User guide",
-                    uri = "index.html",
-                    order = 0,
-                )
-            ),
-        ),
-    )
+    override fun getTooltipEntries(): List<PluginTooltipEntry> = PairTooltips.entries()
 
     override fun getTier3DocsAssetPath(): String? = "docs"
 
@@ -124,6 +96,5 @@ class PairPlugin : IPlugin, UIExtension, EditorTabExtension, DocumentationExtens
     companion object {
         const val PLUGIN_ID: String = "com.appdevforall.pair.plugin"
         const val TAB_ID: String = "pair_main"
-        const val TOOLTIP_TAG_SIDEBAR: String = "pair.sidebar"
     }
 }

@@ -25,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
+import com.appdevforall.pair.plugin.PairTooltips
 import com.appdevforall.pair.plugin.ui.preview.PluginPreview
 import com.appdevforall.pair.plugin.ui.preview.ThemePreviews
 import com.appdevforall.pair.plugin.ui.theme.LocalPluginDimens
@@ -46,7 +47,7 @@ fun ProjectTransferCard(
         else -> TransferPhase.Active
     }
 
-    PluginCard(modifier = modifier.fillMaxWidth()) {
+    PluginCard(modifier = modifier.fillMaxWidth().longPressTooltip(PairTooltips.PULL_PROJECT)) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()

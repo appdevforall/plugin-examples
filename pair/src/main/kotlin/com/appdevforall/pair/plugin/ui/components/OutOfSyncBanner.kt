@@ -20,6 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.appdevforall.pair.plugin.PairTooltips
 import com.appdevforall.pair.plugin.ui.preview.PluginPreview
 import com.appdevforall.pair.plugin.ui.preview.ThemePreviews
 import com.appdevforall.pair.plugin.ui.theme.LocalPluginDimens
@@ -61,6 +62,7 @@ fun OutOfSyncBanner(
                     text = "RESYNC",
                     onClick = onResync,
                     contentColor = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.longPressTooltip(PairTooltips.RESYNC),
                 )
             }
         }

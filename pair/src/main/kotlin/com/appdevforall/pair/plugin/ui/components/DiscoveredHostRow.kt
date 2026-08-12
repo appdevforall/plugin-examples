@@ -11,6 +11,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.appdevforall.pair.plugin.PairTooltips
 import com.appdevforall.pair.plugin.data.DiscoveredHost
 import com.appdevforall.pair.plugin.ui.preview.PluginPreview
 import com.appdevforall.pair.plugin.ui.preview.PreviewSamples
@@ -30,7 +31,7 @@ fun DiscoveredHostRow(
     val styles = LocalPluginTextStyles.current
     val extras = LocalPluginExtraColors.current
 
-    PluginCard(onClick = onJoin, modifier = modifier) {
+    PluginCard(onClick = onJoin, modifier = modifier.longPressTooltip(PairTooltips.NEARBY_HOST)) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()

@@ -27,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import com.appdevforall.pair.plugin.PairTooltips
 import com.appdevforall.pair.plugin.R
 import com.appdevforall.pair.plugin.data.SessionRole
 import com.appdevforall.pair.plugin.data.StoredSession
@@ -54,7 +55,7 @@ fun HistoryRow(
         MaterialTheme.colorScheme.onSurfaceVariant
     }
 
-    PluginCard(onClick = onReconnect, modifier = modifier) {
+    PluginCard(onClick = onReconnect, modifier = modifier.longPressTooltip(PairTooltips.RECENT_SESSION)) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
