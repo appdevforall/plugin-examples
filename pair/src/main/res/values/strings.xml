@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="pair_plugin_label">Pair</string>
+    <string name="pair_plugin_label">Code Together</string>
     <string name="pair_title">Pair</string>
     <string name="sidebar_open_pair">Pair</string>
 
