@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Code Together User Guide</title>
+<style>
+  :root {
+    --bg: #fdfdfd;
+    --fg: #1a1a1a;
+    --muted: #555555;
+    --accent: #0f766e;
+    --accent-light: #e6f5f3;
+    --border: #d0d7de;
+    --code-bg: #f4f6f8;
+    --table-stripe: #f8fafb;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--fg);
+    background: var(--bg);
+    line-height: 1.65;
+    max-width: 44rem;
+    margin: 0 auto;
+    padding: 1.5rem 1.25rem 3rem;
+  }
+  header { border-bottom: 3px solid var(--accent); padding-bottom: 1rem; margin-bottom: 1.75rem; }
+  header h1 { font-size: 1.8rem; color: var(--accent); letter-spacing: -0.02em; }
+  header p { color: var(--muted); margin-top: 0.3rem; }
+  section { margin-bottom: 2.25rem; }
+  h2 { font-size: 1.25rem; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; margin-bottom: 0.9rem; letter-spacing: -0.01em; }
+  h3 { font-size: 1.02rem; margin: 1.1rem 0 0.4rem; }
+  p, li { margin-bottom: 0.5rem; }
+  ul, ol { padding-left: 1.4rem; }
+  code {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    background: var(--code-bg);
+    padding: 0.15em 0.35em;
+    border-radius: 3px;
+    font-size: 0.9em;
+  }
+  table { width: 100%; border-collapse: collapse; margin: 0.8rem 0 1rem; font-size: 0.95rem; }
+  th, td { text-align: left; padding: 0.5rem 0.7rem; border: 1px solid var(--border); }
+  th { background: var(--accent-light); font-weight: 600; }
+  tr:nth-child(even) td { background: var(--table-stripe); }
+  .invite-card {
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--accent);
+    border-radius: 0 6px 6px 0;
+    padding: 0.9rem 1.1rem;
+    margin: 1rem 0;
+    background: var(--accent-light);
+  }
+  .invite-card .address {
+    font-family: "SFMono-Regular", Consolas, Menlo, monospace;
+    font-size: 1.05rem;
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .invite-card .hint { font-size: 0.85rem; color: var(--muted); margin-top: 0.2rem; margin-bottom: 0; }
+  footer { margin-top: 2.5rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: 0.85rem; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Code Together</h1>
+  <p>Real-time pair programming between devices on the same WiFi: shared editing, live cursors, no server and no account.</p>
+</header>
+
+<section>
+  <h2>What Code Together does</h2>
+  <p>Code Together turns Code on the Go into a collaborative editor. One device
+  <strong>hosts</strong> a session, others <strong>join</strong>, and from then on
+  edits, cursor positions, and file opens flow between the devices as they happen.
+  The devices talk directly to each other over your local network. Nothing leaves
+  the WiFi you are on.</p>
+  <p>Everything lives in the <strong>Pair</strong> editor tab. Open it from the
+  tab bar or from <strong>Pair</strong> in the side menu.</p>
+</section>
+
+<section>
+  <h2>Host a session</h2>
+  <ol>
+    <li>Open the <strong>Pair</strong> tab.</li>
+    <li>Tap <strong>Host session</strong>.</li>
+    <li>An invite card appears with your address and a QR code:</li>
+  </ol>
+  <div class="invite-card">
+    <div class="address">192.168.1.23:9376</div>
+    <p class="hint">Your partner scans the QR code, or types this address on their device.</p>
+  </div>
+  <p>Keep the session running while your partner joins. Each connected peer shows
+  up in the peer list with their name, role, and color.</p>
+</section>
+
+<section>
+  <h2>Join a session</h2>
+  <ol>
+    <li>Make sure you are on the <strong>same WiFi network</strong> as the host.</li>
+    <li>Open the <strong>Pair</strong> tab and tap <strong>Join</strong>.</li>
+    <li>Scan the host's QR code, or type the <code>ip:port</code> address shown on
+    the host's invite card.</li>
+  </ol>
+  <p>Once connected, the file the host is working in opens on your device with the
+  exact same contents, and you start editing together immediately.</p>
+</section>
+
+<section>
+  <h2>During a session</h2>
+  <table>
+    <thead>
+      <tr><th>You see</th><th>What it means</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Text changes by itself</td><td>Your partner is typing. Their edits are applied to your file as they happen, and yours to theirs.</td></tr>
+      <tr><td>A colored caret in the editor</td><td>Your partner's live cursor, drawn in their peer color.</td></tr>
+      <tr><td>Peer list entry <code>Main.kt:41:8</code></td><td>The file, line, and column where that peer currently is.</td></tr>
+      <tr><td>A file opens on its own</td><td>The host switched files; your editor follows so you both look at the same code.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h2>Past sessions</h2>
+  <p>The Code Together Home screen lists your recent sessions, newest first. Tap one to
+  reconnect with the same address, or use its menu to rename or delete it.
+  Sessions are stored on your device only.</p>
+</section>
+
+<section>
+  <h2>Troubleshooting</h2>
+  <h3>The join fails or times out</h3>
+  <ul>
+    <li>Confirm both devices are on the same WiFi network; mobile data or a
+    guest network on one device breaks the connection.</li>
+    <li>Re-check the address: it must match the host's invite card exactly.</li>
+    <li>Restart the session on the host to get a fresh invite card.</li>
+  </ul>
+  <h3>"Version mismatch" when joining</h3>
+  <p>The two devices run different versions of the Code Together plugin. Update both to the
+  same version and host the session again.</p>
+  <h3>The files no longer match</h3>
+  <p>If a change cannot be applied cleanly, Code Together marks the file out of sync rather
+  than guessing. Have the host reopen the file; reopening sends a full snapshot
+  and both sides converge again.</p>
+</section>
+
+<footer>
+  Code Together plugin &middot; App Dev For All &middot; <code>com.appdevforall.pair.plugin</code>
+</footer>
+
+</body>
+</html>
