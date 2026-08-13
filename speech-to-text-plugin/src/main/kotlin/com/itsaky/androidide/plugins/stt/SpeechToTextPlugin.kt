@@ -314,7 +314,7 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
             val config = LlmInferenceService.LlmConfig(AUTO_BACKEND_ID)
             val response = service.generateCompletion(prompt, config).get()
             if (response.success) {
-                response.text.trim()
+                response.text?.trim()
             } else {
                 Log.w(TAG, "Code generation failed: ${response.error}")
                 null

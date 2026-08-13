@@ -83,7 +83,7 @@ class SuggestionProvider(private val llmService: LlmInferenceService) {
             // Cancellation-aware await so a superseding keystroke cancels the in-flight LLM call.
             val response = llmService.generateCompletion(prompt, config).await()
             if (response.success) {
-                val suggestion = sanitizeCompletion(response.text)
+                val suggestion = sanitizeCompletion(response.text.orEmpty())
 
                 if (suggestion.isNotEmpty()) {
                     cache[cacheKey] = suggestion
