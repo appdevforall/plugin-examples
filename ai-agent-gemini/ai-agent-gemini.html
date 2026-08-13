@@ -41,10 +41,11 @@
 
   <h2>Executive overview</h2>
   <p><b>AI Agent Gemini</b> adds Google's <b>Gemini</b> models to CodeOnTheGo's
-  AI features. It is a <b>headless</b> plugin with no screens of its own: it
-  registers itself as the <code>gemini</code> inference backend with <b>AI
-  Core</b>, which routes requests from <b>AI Assistant</b>, <b>Code
-  Suggestions</b>, <b>Speech to Text</b> and <b>Vector Search</b>.</p>
+  AI features. It registers itself as the <code>gemini</code> inference backend
+  with <b>AI Core</b>, which routes requests from the <b>Agent</b> chat, <b>Code
+  Suggestions</b>, <b>Speech to Text</b> and <b>Vector Search</b>. It also
+  contributes <b>its own settings pane</b> — the API key field and the model
+  picker — which AI Core mounts inside Agent settings.</p>
   <p>Install <b>AI Core</b> alongside it — without the router this plugin has
   nothing to register with. Install order does not matter.</p>
   <p>Using this backend sends prompts, and any file contents a plugin includes in
@@ -82,7 +83,11 @@
       (retired model, quota, refused key, outage, unreachable) so it can be
       reported as one translated sentence.</td></tr>
     <tr><td><code>SecureApiKeyStore</code></td><td>AES/GCM encryption of the API
-      key, keyed by an Android Keystore secret shared with AI Assistant.</td></tr>
+      key under a hardware-backed Android Keystore secret owned by this
+      plugin.</td></tr>
+    <tr><td><code>GeminiSettingsFragment</code></td><td>The settings pane AI Core
+      mounts: key entry and verification, visibility toggle, and the model picker
+      driven by the live catalog.</td></tr>
   </table>
   <p><b>No third-party HTTP SDK.</b> The google-genai SDK bundles OkHttp 4.x, but
   plugins run in the host IDE's classloader where <code>okhttp3</code> resolves to
@@ -95,9 +100,10 @@
     <li>Obtain a Gemini API key from Google AI Studio.</li>
     <li>Install <b>AI Core</b> and <b>AI Agent Gemini</b> via the Plugin
       Manager, then restart the IDE.</li>
-    <li>Install a consumer plugin (e.g. <b>AI Assistant</b>).</li>
-    <li>Open <b>AI Assistant &rarr; AI Settings</b>, enter the key (it is verified
-      before it is saved), and pick a model from the live list.</li>
+    <li>Open <b>Preferences &rarr; Configuration &rarr; Agent</b> and select the
+      <b>gemini</b> backend. This plugin's own pane appears below it.</li>
+    <li>Enter the key and tap <b>Save</b> — it is verified against the API before
+      it is stored — then pick a model from the live list.</li>
   </ol>
   <div class="note">
     The key is sent as an <code>x-goog-api-key</code> request header, never in a

@@ -211,7 +211,7 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
             """.trimIndent(),
             buttons = listOf(
                 PluginTooltipButton(
-                    description = "AI Assistant guide",
+                    description = "AI Core Agent guide",
                     uri = "index.html",  // resolves to plugin/<id>/index.html
                     order = 0
                 )
@@ -232,7 +232,7 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
                 they leave the device.</p>
             """.trimIndent(),
             buttons = listOf(
-                PluginTooltipButton(description = "AI Assistant guide", uri = "index.html", order = 0)
+                PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)
             )
         ),
         PluginTooltipEntry(
@@ -248,7 +248,7 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
                 first.</p>
             """.trimIndent(),
             buttons = listOf(
-                PluginTooltipButton(description = "AI Assistant guide", uri = "index.html", order = 0)
+                PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)
             )
         ),
         PluginTooltipEntry(
@@ -262,7 +262,7 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
                 in-progress reply and discards the remaining tool steps.</p>
             """.trimIndent(),
             buttons = listOf(
-                PluginTooltipButton(description = "AI Assistant guide", uri = "index.html", order = 0)
+                PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)
             )
         ),
         PluginTooltipEntry(
@@ -280,7 +280,7 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
                 </ul>
             """.trimIndent(),
             buttons = listOf(
-                PluginTooltipButton(description = "AI Assistant guide", uri = "index.html", order = 0)
+                PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)
             )
         ),
         PluginTooltipEntry(
@@ -303,7 +303,7 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
                 rest of your project.</p>
             """.trimIndent(),
             buttons = listOf(
-                PluginTooltipButton(description = "AI Assistant guide", uri = "index.html", order = 0)
+                PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)
             )
         ),
         PluginTooltipEntry(
@@ -320,7 +320,7 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
                 request.</p>
             """.trimIndent(),
             buttons = listOf(
-                PluginTooltipButton(description = "AI Assistant guide", uri = "index.html", order = 0)
+                PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)
             )
         ),
         PluginTooltipEntry(
@@ -336,7 +336,7 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
                 agent to revise the edit without saying how.</p>
             """.trimIndent(),
             buttons = listOf(
-                PluginTooltipButton(description = "AI Assistant guide", uri = "index.html", order = 0)
+                PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)
             )
         ),
         PluginTooltipEntry(
@@ -349,7 +349,7 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
                 want it to keep working on the task with different details.</p>
             """.trimIndent(),
             buttons = listOf(
-                PluginTooltipButton(description = "AI Assistant guide", uri = "index.html", order = 0)
+                PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)
             )
         ),
         PluginTooltipEntry(
@@ -363,7 +363,7 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
                 you choose <b>Always Allow</b>.</p>
             """.trimIndent(),
             buttons = listOf(
-                PluginTooltipButton(description = "AI Assistant guide", uri = "index.html", order = 0)
+                PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)
             )
         ),
         PluginTooltipEntry(
@@ -378,7 +378,7 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
                 re-confirmed every time, with the change on screen.</p>
             """.trimIndent(),
             buttons = listOf(
-                PluginTooltipButton(description = "AI Assistant guide", uri = "index.html", order = 0)
+                PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)
             )
         ),
         PluginTooltipEntry(
@@ -393,7 +393,7 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
                 <b>Preferences &rarr; Configuration &rarr; Agent</b>.</p>
             """.trimIndent(),
             buttons = listOf(
-                PluginTooltipButton(description = "AI Assistant guide", uri = "index.html", order = 0)
+                PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)
             )
         ),
         PluginTooltipEntry(
@@ -408,7 +408,7 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
                 then return and send your message again.</p>
             """.trimIndent(),
             buttons = listOf(
-                PluginTooltipButton(description = "AI Assistant guide", uri = "index.html", order = 0)
+                PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)
             )
         ),
         PluginTooltipEntry(
@@ -423,7 +423,7 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
                 session, not messages sent to the model.</p>
             """.trimIndent(),
             buttons = listOf(
-                PluginTooltipButton(description = "AI Assistant guide", uri = "index.html", order = 0)
+                PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)
             )
         ),
         PluginTooltipEntry(
@@ -436,7 +436,7 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
                 the new backend and model as soon as you return.</p>
             """.trimIndent(),
             buttons = listOf(
-                PluginTooltipButton(description = "AI Assistant guide", uri = "index.html", order = 0)
+                PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)
             )
         ),
         PluginTooltipEntry(
@@ -452,7 +452,7 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
                 installed: add one from the Plugin Manager.</p>
             """.trimIndent(),
             buttons = listOf(
-                PluginTooltipButton(description = "AI Assistant guide", uri = "index.html", order = 0)
+                PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)
             )
         ),
     )

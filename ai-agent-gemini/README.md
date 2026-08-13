@@ -27,11 +27,10 @@ The key is entered in **AI Core → Agent settings**, not here. It is stored
 encrypted (AES/GCM under a hardware-backed Android Keystore secret) and sent as
 an `x-goog-api-key` **header**, never in a URL query string.
 
-`SecureApiKeyStore.kt` is the only copy; the key written
-there decrypts here — both plugins share one Keystore because they run in the host
-app's process. The `verifySecureApiKeyStoreParity` task in `build.gradle.kts` fails
-the build if the crypto constants drift, because that failure would otherwise only
-surface on a device as "backend not available".
+`security/SecureApiKeyStore.kt` is the only copy of the crypto — this plugin owns
+both the write and the read, so there are no constants to keep in sync with
+another plugin. A key written under an earlier plugin id is adopted once by
+`preferences/GeminiPreferences.kt` and re-encrypted here.
 
 ## Installation
 
@@ -42,11 +41,13 @@ via CodeOnTheGo's Plugin Manager, then restart the IDE.
 
 ## Cross-plugin contract
 
-This plugin's own settings pane calls `GeminiBackend.listModels()` and `listModels(String)`
-reflectively (see its `ReflectiveGeminiCatalogGateway`) to populate the model
-picker and to verify a key before it is saved. Those two signatures, and the
-`ListModels HTTP <code>` message shape thrown by `fetchAvailableModels`, are a
-contract — `proguard-rules.pro` pins the methods.
+This plugin's own settings pane calls `GeminiBackend.listModels()` and
+`listModels(String)` directly (see `BackendGeminiCatalogGateway` in
+`settings/GeminiCatalogGateway.kt`) to populate the model picker and to verify a
+key before it is saved. Those two signatures, and the `ListModels HTTP <code>`
+message shape thrown by `fetchAvailableModels`, are a contract — the pane is
+mounted by ai-core across the plugin classloader boundary, so
+`proguard-rules.pro` pins the class and its public methods.
 
 ## Key classes
 

@@ -36,18 +36,20 @@
 <body>
   <h1>AI Agent Gemini — Cloud Inference</h1>
 
-  <p><b>AI Agent Gemini</b> is a headless plugin: it has no screens of its own.
-  It adds the <code>gemini</code> backend to <b>AI Core</b>, which routes requests
-  from <b>AI Assistant</b>, <b>Code Suggestions</b>, <b>Speech to Text</b> and
-  <b>Vector Search</b>. Install <b>AI Core</b> as well — without it this plugin
-  has nothing to register with.</p>
+  <p><b>AI Agent Gemini</b> adds the <code>gemini</code> backend to <b>AI
+  Core</b>, which routes requests from the <b>Agent</b> chat, <b>Code
+  Suggestions</b>, <b>Speech to Text</b> and <b>Vector Search</b>. Install <b>AI
+  Core</b> as well — without it this plugin has nothing to register with.</p>
 
   <h2>Setup</h2>
   <ul>
     <li>Get a Gemini API key from Google AI Studio.</li>
-    <li>Enter it in <b>AI Assistant → AI Settings</b>. The key is verified against
-      Google's model catalog before it is saved.</li>
-    <li>Pick a model in the same screen. The list is fetched live, so it never
+    <li>Open <b>Preferences → Configuration → Agent</b> and select the
+      <b>gemini</b> backend. This plugin's own pane appears below it.</li>
+    <li>Enter the key there and tap <b>Save</b>. It is verified against Google's
+      model catalog before it is stored, so a refused key is reported immediately
+      rather than at the first prompt.</li>
+    <li>Pick a model in the same pane. The list is fetched live, so it never
       offers a retired model.</li>
   </ul>
 

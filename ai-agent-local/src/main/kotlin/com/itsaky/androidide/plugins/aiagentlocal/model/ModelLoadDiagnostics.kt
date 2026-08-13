@@ -15,7 +15,7 @@ object ModelLoadDiagnostics {
 
     /**
      * Compute buffers every load allocates outright, whatever the model's shape. The floor for
-     * [refuseBeforeLoad], kept equal to ai-assistant's `COMPUTE_BUFFER_BYTES` allowance.
+     * [refuseBeforeLoad], kept equal to the pre-flight's `COMPUTE_BUFFER_BYTES` allowance.
      */
     private const val MIN_RUN_BYTES = 256L * 1024 * 1024
 
@@ -78,7 +78,7 @@ object ModelLoadDiagnostics {
     /**
      * Whether to refuse a load outright, before ggml aborts the process trying it. Weighs only the
      * compute buffers, so it stays far more permissive than [diagnose]'s attribution headroom:
-     * ai-assistant's pre-flight lets the user proceed, and a refusal here must not overrule that.
+     * the memory-warning dialog lets the user proceed, and a refusal here must not overrule that.
      *
      * @param availableMemoryBytes free RAM reported by the OS, or negative if unknown
      * @return the shortfall to refuse with, or null to attempt the load

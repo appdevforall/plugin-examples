@@ -41,10 +41,11 @@
 
   <h2>Executive overview</h2>
   <p><b>AI Agent Local</b> runs large-language models <b>entirely on the
-  device</b>. It is a <b>headless</b> plugin with no screens of its own: it
-  registers itself as the <code>local</code> inference backend with <b>AI
-  Core</b>, which routes requests from <b>AI Assistant</b>, <b>Code
-  Suggestions</b>, <b>Speech to Text</b> and <b>Vector Search</b>.</p>
+  device</b>. It registers itself as the <code>local</code> inference backend
+  with <b>AI Core</b>, which routes requests from the <b>Agent</b> chat, <b>Code
+  Suggestions</b>, <b>Speech to Text</b> and <b>Vector Search</b>. It also
+  contributes <b>its own settings pane</b> — the model picker and the checks
+  around it — which AI Core mounts inside Agent settings.</p>
   <p>Install <b>AI Core</b> alongside it — without the router this plugin has
   nothing to register with. Install order does not matter.</p>
   <p>This plugin declares <b>no INTERNET permission</b>. Prompts, code and
@@ -68,6 +69,11 @@
     <li><b>Storage-picker support</b> — a model chosen as a
       <code>content://</code> document is copied once into private storage so the
       native loader can open it, and only the current model is kept.</li>
+    <li><b>Its own settings pane</b> — browse for a <code>.gguf</code> file,
+      re-load a previously imported model, record the model's published SHA-256,
+      and choose between the short system prompt small models follow
+      reliably and the full tool-calling one. A model too large for the device's
+      free RAM raises a warning first.</li>
   </ul>
 
   <h2>Technical architecture</h2>
@@ -86,6 +92,9 @@
       that is unit-tested off-device.</td></tr>
     <tr><td><code>ModelLoadMessages</code></td><td>Renders a diagnosis as
       user-facing text, keeping string resources out of the engine.</td></tr>
+    <tr><td><code>LocalLlmSettingsFragment</code></td><td>The settings pane AI
+      Core mounts: model browser, load-from-saved, SHA-256 verification and the
+      prompt-format toggle, plus the low-memory warning dialog.</td></tr>
   </table>
   <p>The native library is committed prebuilt (four ABIs: arm64-v8a,
   armeabi-v7a, x86, x86_64), so a normal build needs no NDK, CMake, or the
@@ -95,10 +104,13 @@
   <ol>
     <li>Install <b>AI Core</b> and <b>AI Agent Local</b> via the Plugin
       Manager, then restart the IDE.</li>
-    <li>Install a consumer plugin (e.g. <b>AI Assistant</b>).</li>
-    <li>Open <b>AI Assistant &rarr; AI Settings</b>, select the local backend, and
-      pick a <code>.gguf</code> model file. This plugin has no settings screen of
-      its own; it reads that choice at request time.</li>
+    <li>Open <b>Preferences &rarr; Configuration &rarr; Agent</b> and select the
+      <b>local</b> backend. This plugin's own pane appears below it.</li>
+    <li>Tap <b>Browse</b> and pick a <code>.gguf</code> model file. The file is
+      copied once into private storage, then loaded; a model larger than the free
+      RAM asks you to confirm first.</li>
+    <li>Optionally record the model's published <b>SHA-256</b>, or use <b>Load
+      from saved</b> to return to a model you already imported.</li>
   </ol>
   <div class="note">
     Model choice drives whether this works at all on a given device. A Q4_K_M

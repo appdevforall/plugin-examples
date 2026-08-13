@@ -36,28 +36,44 @@
 <body>
   <h1>AI Agent Local — On-Device Inference</h1>
 
-  <p><b>AI Agent Local</b> is a headless plugin: it has no screens of its own.
-  It adds the <code>local</code> backend to <b>AI Core</b>, which routes requests
-  from <b>AI Assistant</b>, <b>Code Suggestions</b>, <b>Speech to Text</b> and
-  <b>Vector Search</b>. Install <b>AI Core</b> as well — without it this plugin
-  has nothing to register with.</p>
+  <p><b>AI Agent Local</b> adds the <code>local</code> backend to <b>AI
+  Core</b>, which routes requests from the <b>Agent</b> chat, <b>Code
+  Suggestions</b>, <b>Speech to Text</b> and <b>Vector Search</b>. Install <b>AI
+  Core</b> as well — without it this plugin has nothing to register with.</p>
 
   <h2>What it does</h2>
   <ul>
     <li>Runs a <code>.gguf</code> model through a bundled, prebuilt llama.cpp
-      library (arm64-v8a).</li>
+      library (arm64-v8a, armeabi-v7a, x86 and x86_64).</li>
     <li>Streams tokens as they are generated, and stops early when you press
       <b>Stop</b>.</li>
     <li>Needs <b>no network access</b> — this plugin declares no INTERNET
       permission at all.</li>
   </ul>
 
-  <h2>Choosing a model</h2>
-  <p>There is no settings screen here. Pick the model file in
-  <b>AI Assistant → AI Settings</b>; this backend reads that choice at request
-  time. A model selected as a <code>content://</code> document is copied once
-  into the plugin's private storage so the native loader can open it, and only
-  the current model is kept on disk.</p>
+  <h2>The settings pane</h2>
+  <p>Open <b>Preferences → Configuration → Agent</b> and select the
+  <b>local</b> backend. This plugin's own pane appears below it, with four
+  controls:</p>
+  <ul>
+    <li><b>Browse</b> — opens the system file picker to choose a
+      <code>.gguf</code> model. A model selected as a <code>content://</code>
+      document is copied once into the plugin's private storage so the native
+      loader can open it, and only the current model is kept on disk. If the file
+      is larger than the device's free RAM, a warning asks you to confirm before
+      loading.</li>
+    <li><b>Load from saved</b> — reloads the model already in private storage
+      without picking it again. Use this after restarting the IDE, or when a load
+      failed for a transient reason such as low memory.</li>
+    <li><b>SHA-256</b> — optional. Paste the checksum published alongside the
+      model download to keep a record of which exact file is configured. It is
+      stored as typed and never sent anywhere; the plugin does not compute or
+      compare it for you. Leave it empty if you don't need the record.</li>
+    <li><b>Use simple local prompt</b> — sends a shorter system prompt instead of
+      the full tool-calling one. On by default, because small on-device models
+      follow a short prompt far more reliably. Turn it off only if you are running
+      a larger model that handles the longer prompt.</li>
+  </ul>
 
   <div class="note">
     Embedding-only <code>.gguf</code> files cannot serve chat requests. Selecting
@@ -70,8 +86,8 @@
 
   <h2>Troubleshooting</h2>
   <ul>
-    <li><b>"No model configured"</b> — pick a <code>.gguf</code> file in AI
-      Assistant's settings.</li>
+    <li><b>"No model configured"</b> — pick a <code>.gguf</code> file with
+      <b>Browse</b> in the settings pane above.</li>
     <li><b>Load fails with a memory message</b> — close other apps, or choose a
       smaller or more heavily quantized model (a Q4_K_M build of a 1–3B model is
       the safest starting point).</li>

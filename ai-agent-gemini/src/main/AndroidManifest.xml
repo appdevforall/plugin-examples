@@ -23,22 +23,24 @@
 
         <meta-data
             android:name="plugin.description"
-            android:value="Google Gemini API inference backend for AI Core. Requires a Gemini API key, entered in AI Assistant's AI Settings." />
+            android:value="Google Gemini API inference backend for AI Core. Requires a Gemini API key, entered under Preferences &gt; Configuration &gt; Agent." />
 
         <meta-data
             android:name="plugin.author"
             android:value="App Dev for All" />
 
+        <!-- 26.32: this plugin calls getPluginService() and the plugin lifecycle listener API,
+             and pairs with ai-core, which requires the same release. -->
         <meta-data
             android:name="plugin.min_ide_version"
-            android:value="26.17" />
+            android:value="26.32" />
 
         <meta-data
             android:name="plugin.max_ide_version"
             android:value="26.99" />
 
         <!-- network.access: HTTPS calls to generativelanguage.googleapis.com. No filesystem
-             or native code — the API key lives in ai-assistant's SharedPreferences. -->
+             or native code — the API key lives in this plugin's own SharedPreferences. -->
         <meta-data
             android:name="plugin.permissions"
             android:value="network.access" />

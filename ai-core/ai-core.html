@@ -40,25 +40,32 @@
   <h1>AI Core Plugin</h1>
 
   <h2>Executive overview</h2>
-  <p><b>AI Core</b> is the shared large-language-model (LLM) inference
-  <b>router</b> for CodeOnTheGo's AI plugins. It is a <b>headless</b> plugin — it
-  has no screens of its own. It registers a single inference service that the
-  other AI plugins (<b>AI Assistant</b>, <b>Code Suggestions</b>, <b>Speech to
-  Text</b>, and <b>Vector Search</b>) call at runtime.</p>
+  <p><b>AI Core</b> is two things in one plugin: the <b>Agent chat</b> you code
+  with, and the shared large-language-model (LLM) inference <b>router</b> that
+  every other AI plugin in CodeOnTheGo calls at runtime. It contributes an
+  <b>Agent</b> tab to the editor and an <b>Agent</b> row to
+  <b>Preferences &rarr; Configuration</b>, and it registers a single inference
+  service that <b>Code Suggestions</b>, <b>Speech to Text</b> and <b>Vector
+  Search</b> share.</p>
   <p><b>AI Core provides no models itself.</b> Inference is supplied by separate
-  backend plugins — <b>AI Agent Local</b> for on-device models, <b>AI Gemini
-  Backend</b> for Google's API — which register with AI Core when they activate.
+  backend plugins — <b>AI Agent Local</b> for on-device models, <b>AI Agent
+  Gemini</b> for Google's API — which register with AI Core when they activate.
   Install AI Core <i>and at least one backend</i>; without a backend, requests
   fail with "Backend not found". Install order does not matter.</p>
 
   <h2>Core functionality</h2>
   <ul>
+    <li><b>Agent chat</b> — a conversational editor tab that can read and edit
+      project files, add dependencies, run a Gradle sync and launch the app, with
+      every file-changing action gated behind an approval dialog.</li>
+    <li><b>Agent settings</b> — one screen to pick the backend and configure it;
+      each backend contributes its own portion of that screen.</li>
     <li><b>Registers a shared inference service</b> so every AI plugin talks to
       one router instead of bundling its own engine.</li>
     <li><b>Dynamic backend registry</b> — backends are added and removed at
       runtime by their own plugins. AI Core hardcodes no backend list, so a new
       provider is a new plugin, not a change here.</li>
-    <li><b>Request routing</b> — resolves the backend selected in AI Assistant's
+    <li><b>Request routing</b> — resolves the backend selected in Agent
       settings, and falls back to any available backend when the selected one is
       not installed or not configured.</li>
     <li><b>Capability negotiation</b> — uses a backend's tool-calling, multi-turn
@@ -72,38 +79,49 @@
   <h2>Technical architecture</h2>
   <table>
     <tr><th>Component</th><th>Role</th></tr>
-    <tr><td><code>AiCorePlugin</code></td><td>Plugin entry point. Publishes the
-      inference service on activation and withdraws it on deactivation. Owns no
-      backend.</td></tr>
+    <tr><td><code>AiCorePlugin</code></td><td>Plugin entry point. Contributes the
+      Agent tab and the Agent settings row, publishes the inference service on
+      activation and withdraws it on deactivation. Owns no backend.</td></tr>
     <tr><td><code>LlmInferenceServiceImpl</code></td><td>The service exposed via
       <code>SharedServices</code>. Holds the backend registry and routes each
       request to the resolved backend.</td></tr>
-    <tr><td><code>AiBackend</code></td><td>Maps the backend setting stored by AI
-      Assistant onto a registered backend id, translating the two legacy values
-      that predate the id-as-setting convention.</td></tr>
+    <tr><td><code>ChatFragment</code> / <code>ChatViewModel</code></td><td>The
+      Agent tab: message history, streaming output, the Stop control, and the
+      approval dialog shown before any file is written.</td></tr>
+    <tr><td>Tool handlers + <code>PathGuard</code></td><td>The actions the agent
+      may take. Every path is canonicalised and confined to the project root, and
+      generated trees, <code>.git/</code>, build configuration and keystores are
+      refused outright.</td></tr>
+    <tr><td><code>AiBackend</code></td><td>Maps the backend setting stored in
+      Agent settings onto a registered backend id, translating the two legacy
+      values that predate the id-as-setting convention.</td></tr>
     <tr><td><code>ConfigurableBackend</code></td><td>Implemented by a backend that
       draws its own settings screen, so the credentials or files it needs are
       collected without AI Core knowing the provider's API.</td></tr>
   </table>
-  <p>AI Core declares <b>no Android permissions</b>: it opens no connections,
-  reads no files, and loads no native code. Those belong to the backend plugin
-  that serves a given request.</p>
+  <p>AI Core declares <b>filesystem.read</b>, <b>filesystem.write</b>,
+  <b>system.commands</b> and <b>project.structure</b> — the agent reads and edits
+  files in the open project, triggers Gradle sync and run through the IDE's own
+  build service, and inspects the project's module structure. It declares
+  <b>no network access and loads no native code</b>: those belong to the backend
+  plugin that serves a given request, so a device using only the local backend
+  never grants a network-capable AI plugin.</p>
 
   <h2>Usage</h2>
   <ol>
     <li>Install <b>AI Core</b> via the Plugin Manager.</li>
-    <li>Install at least one backend: <b>AI Agent Local</b>, <b>AI Gemini
-      Backend</b>, or both. Restart the IDE.</li>
-    <li>Install one or more consumer plugins (e.g. <b>AI Assistant</b>).</li>
-    <li>Open <b>AI Assistant &rarr; AI Settings</b> to choose a backend and
-      configure it — select a local <code>.gguf</code> model file, or enter a
-      Gemini API key. AI Core has no settings screen of its own; it reads this
-      configuration at request time.</li>
+    <li>Install at least one backend: <b>AI Agent Local</b>, <b>AI Agent
+      Gemini</b>, or both. Restart the IDE.</li>
+    <li>Open <b>Preferences &rarr; Configuration &rarr; Agent</b> to choose a
+      backend and configure it — select a local <code>.gguf</code> model file, or
+      enter a Gemini API key. The same screen is reachable from the Agent tab.</li>
+    <li>Open a project and switch to the <b>Agent</b> tab to start chatting. Any
+      action that changes a file asks for your approval first.</li>
   </ol>
   <div class="note">
     Installing both backends is supported and useful: pick the local one for
-    privacy and the Gemini one for capability, and switch between them in AI
-    Settings without reinstalling anything.
+    privacy and the Gemini one for capability, and switch between them in Agent
+    settings without reinstalling anything.
   </div>
 
   <h2>Key benefits</h2>

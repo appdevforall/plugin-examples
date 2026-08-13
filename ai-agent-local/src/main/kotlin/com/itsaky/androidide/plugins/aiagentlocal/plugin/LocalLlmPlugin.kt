@@ -193,6 +193,9 @@ class LocalLlmPlugin : IPlugin, DocumentationExtension {
     override fun dispose() {
         context.logger.info("LocalLlmPlugin: Disposing plugin")
 
+        // deactivate() removes this too; a dispose without one would leave the host holding this.
+        runCatching { context.removePluginLifecycleListener(aiCoreLifecycle) }
+
         releaseBackend()
         pluginContext = null
         context.logger.info("LocalLlmPlugin: Released local LLM backend")
@@ -205,12 +208,13 @@ class LocalLlmPlugin : IPlugin, DocumentationExtension {
             tag = TOOLTIP_TAG_PLUGIN,
             summary = "Runs .gguf models entirely on this device, with no network access.",
             detail = """
-                <p><b>AI Agent Local</b> is a headless plugin that adds the
-                on-device <code>local</code> backend to <b>AI Core</b>. It runs a
-                <code>.gguf</code> model through a bundled llama.cpp build, so
-                prompts and code never leave the device.</p>
-                <p>Install <b>AI Core</b> as well, then pick the model file from
-                <b>AI Core → Agent settings</b>.</p>
+                <p><b>AI Agent Local</b> adds the on-device <code>local</code>
+                backend to <b>AI Core</b>. It runs a <code>.gguf</code> model
+                through a bundled llama.cpp build, so prompts and code never leave
+                the device.</p>
+                <p>Install <b>AI Core</b> as well, then select the
+                <b>local</b> backend in <b>Agent settings</b> and pick the model
+                file in the pane this plugin adds there.</p>
             """.trimIndent(),
             buttons = listOf(
                 PluginTooltipButton(

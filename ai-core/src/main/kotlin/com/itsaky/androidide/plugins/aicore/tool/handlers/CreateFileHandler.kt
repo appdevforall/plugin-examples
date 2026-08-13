@@ -36,6 +36,12 @@ class CreateFileHandler(
 
             Log.d(TAG, "Resolved path: ${file.absolutePath}")
 
+            // In-root is not enough: build trees, .git and keystores are never legal targets.
+            PathGuard.writeDenialReason(file)?.let { reason ->
+                Log.w(TAG, "Refusing creation of protected path: ${file.path}")
+                return ToolResult.failure("Cannot create $reason")
+            }
+
             if (file.exists()) {
                 Log.w(TAG, "File already exists: ${file.absolutePath}")
                 return ToolResult.failure("File already exists: $filePath")

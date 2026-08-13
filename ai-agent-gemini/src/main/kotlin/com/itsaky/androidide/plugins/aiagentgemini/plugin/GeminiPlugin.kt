@@ -203,6 +203,9 @@ class GeminiPlugin : IPlugin, DocumentationExtension {
     override fun dispose() {
         context.logger.info("GeminiPlugin: Disposing plugin")
 
+        // deactivate() removes this too; a dispose without one would leave the host holding this.
+        runCatching { context.removePluginLifecycleListener(aiCoreLifecycle) }
+
         releaseBackend()
         pluginContext = null
         context.logger.info("GeminiPlugin: Released Gemini backend")
@@ -215,12 +218,13 @@ class GeminiPlugin : IPlugin, DocumentationExtension {
             tag = TOOLTIP_TAG_PLUGIN,
             summary = "Sends prompts to Google's Gemini API. Needs an API key and a network connection.",
             detail = """
-                <p><b>AI Agent Gemini</b> is a headless plugin that adds the
-                <code>gemini</code> backend to <b>AI Core</b>, calling Google's
-                Generative Language API over HTTPS.</p>
-                <p>Install <b>AI Core</b> as well, then enter your API key in
-                <b>AI Core → Agent settings</b>. Prompts and any file contents a
-                plugin sends are transmitted to Google.</p>
+                <p><b>AI Agent Gemini</b> adds the <code>gemini</code> backend to
+                <b>AI Core</b>, calling Google's Generative Language API over
+                HTTPS.</p>
+                <p>Install <b>AI Core</b> as well, then select the <b>gemini</b>
+                backend in <b>Agent settings</b> and enter your API key in the pane
+                this plugin adds there. Prompts and any file contents a plugin
+                sends are transmitted to Google.</p>
             """.trimIndent(),
             buttons = listOf(
                 PluginTooltipButton(

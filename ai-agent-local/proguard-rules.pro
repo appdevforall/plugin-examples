@@ -5,6 +5,11 @@
     public <methods>;
 }
 
+# Keep the settings fragment: it is instantiated by name from getSettingsFragmentClassName().
+-keep public class com.itsaky.androidide.plugins.aiagentlocal.settings.LocalLlmSettingsFragment {
+    public <init>(...);
+}
+
 # Keep plugin-api interfaces
 -keep interface com.itsaky.androidide.plugins.** { *; }
 

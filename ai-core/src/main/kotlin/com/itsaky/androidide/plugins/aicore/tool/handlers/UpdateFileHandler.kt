@@ -30,6 +30,13 @@ class UpdateFileHandler(
         return try {
             val file = PathGuard.resolveWithin(filePath)
                 ?: return ToolResult.failure("File path must be within project directory")
+
+            // In-root is not enough: build trees, .git and keystores are never legal targets.
+            PathGuard.writeDenialReason(file)?.let { reason ->
+                Log.w(TAG, "Refusing update of protected path: ${file.path}")
+                return ToolResult.failure("Cannot update $reason")
+            }
+
             if (!file.exists()) {
                 ToolResult.failure("File does not exist: $filePath")
             } else if (!file.isFile) {
