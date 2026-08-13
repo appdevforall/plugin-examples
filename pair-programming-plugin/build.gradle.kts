@@ -6,7 +6,7 @@ plugins {
 }
 
 pluginBuilder {
-    pluginName = "pair"
+    pluginName = "pair-programming-plugin"
 }
 
 android {
