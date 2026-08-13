@@ -10,12 +10,12 @@ pluginBuilder {
 
 android {
     namespace = "org.appdevforall.codeonthego.layouteditor"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "org.appdevforall.codeonthego.layouteditor"
         minSdk = 26
-        targetSdk = 34
+        targetSdk = 36
         versionCode = 1
         versionName = "1.0.0"
     }

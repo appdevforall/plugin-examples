@@ -1,21 +1,25 @@
 package com.itsaky.androidide.plugins.aiassistant
 
+import android.content.res.Resources
 import com.itsaky.androidide.plugins.IPlugin
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.extensions.UIExtension
 import com.itsaky.androidide.plugins.extensions.DocumentationExtension
 import com.itsaky.androidide.plugins.extensions.MenuItem
+import com.itsaky.androidide.plugins.extensions.PluginSettingsEntry
 import com.itsaky.androidide.plugins.extensions.PluginTooltipButton
 import com.itsaky.androidide.plugins.extensions.PluginTooltipEntry
+import com.itsaky.androidide.plugins.extensions.SettingsExtension
 import com.itsaky.androidide.plugins.extensions.TabItem
 import com.itsaky.androidide.plugins.services.IdeProjectService
 import com.itsaky.androidide.plugins.services.LlmInferenceService
 import com.itsaky.androidide.plugins.services.SharedServices
+import com.itsaky.androidide.plugins.aiassistant.fragments.AiSettingsFragment
 import com.itsaky.androidide.plugins.aiassistant.fragments.ChatFragment
 import com.itsaky.androidide.plugins.aiassistant.tool.handlers.PathGuard
 import java.io.File
 
-class AiAssistantPlugin : IPlugin, UIExtension, DocumentationExtension {
+class AiAssistantPlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExtension {
 
     private lateinit var context: PluginContext
     private var llmService: LlmInferenceService? = null
@@ -52,7 +56,7 @@ class AiAssistantPlugin : IPlugin, UIExtension, DocumentationExtension {
         const val TOOLTIP_TAG_MESSAGE_OPEN_SETTINGS = "agent_message_open_settings"
         const val TOOLTIP_TAG_SYSTEM_LOG = "agent_system_log"
 
-        // Tags for the interactive controls on the AI Settings dialog (see AiSettingsFragment).
+        // Tags for the interactive controls on the AI Settings screen (see AiSettingsFragment).
         const val TOOLTIP_TAG_SETTINGS_BACK = "ai_settings_back"
         const val TOOLTIP_TAG_SETTINGS_BACKEND = "ai_settings_backend"
         const val TOOLTIP_TAG_SETTINGS_LOCAL_MODEL = "ai_settings_local_model"
@@ -61,6 +65,10 @@ class AiAssistantPlugin : IPlugin, UIExtension, DocumentationExtension {
         const val TOOLTIP_TAG_SETTINGS_GEMINI_KEY = "ai_settings_gemini_key"
         const val TOOLTIP_TAG_SETTINGS_GEMINI_MODEL = "ai_settings_gemini_model"
         const val TOOLTIP_TAG_SETTINGS_GET_KEY = "ai_settings_get_free_key"
+
+        // Tags for the memory pre-flight warning (see MemoryWarningDialogFragment).
+        const val TOOLTIP_TAG_MEMORY_PROCEED = "agent_memory_warning_proceed"
+        const val TOOLTIP_TAG_MEMORY_CANCEL = "agent_memory_warning_cancel"
 
         @Volatile
         private var pluginContext: PluginContext? = null
@@ -139,6 +147,38 @@ class AiAssistantPlugin : IPlugin, UIExtension, DocumentationExtension {
 
     override fun getMainMenuItems(): List<MenuItem> = emptyList()
 
+    // --- SettingsExtension: the Agent row in Preferences -> Configuration ---
+
+    /**
+     * One row, opening the same [AiSettingsFragment] the Agent chat's own shortcuts open. The host
+     * calls this every time Preferences is built, so it stays cheap and free of side effects.
+     */
+    override fun getSettingsEntries(): List<PluginSettingsEntry> = listOf(
+        PluginSettingsEntry(
+            id = "agent_settings",
+            title = string(R.string.pref_agent_title, "Agent"),
+            summary = string(R.string.pref_agent_summary, "AI backend, model and API key"),
+            fragmentClassName = AiSettingsFragment::class.java.name
+        )
+    )
+
+    /**
+     * Resolve [resId] against this plugin's own resources — [PluginContext.androidContext] is
+     * plugin-scoped, so the plugin's strings.xml applies.
+     *
+     * @param fallback returned when the context is missing or the lookup fails; the host may build
+     *   Preferences either side of a lifecycle edge and must never see an exception from here
+     */
+    private fun string(resId: Int, fallback: String): String =
+        try {
+            pluginContext?.androidContext?.getString(resId) ?: fallback
+        } catch (e: Resources.NotFoundException) {
+            pluginContext?.logger?.warn("AiAssistantPlugin: settings row string $resId missing", e)
+            fallback
+        }
+
+    // --- DocumentationExtension: three-tier in-IDE help for the Agent tab ---
+
     /**
      * Three-tier in-IDE help: `summary` is Tier 1 (long-press one-liner), `detail` is Tier 2 (HTML
      * behind "See More") and `buttons[].uri` is Tier 3 (the offline page under assets/docs/).
@@ -157,9 +197,10 @@ class AiAssistantPlugin : IPlugin, UIExtension, DocumentationExtension {
                 <p>Backends:</p>
                 <ul>
                   <li><b>Local</b> — on-device inference via llama.cpp (select a
-                      <code>.gguf</code> model in Settings).</li>
-                  <li><b>Gemini</b> — Google's cloud API (needs an API key in
-                      Settings; requests leave the device over HTTPS).</li>
+                      <code>.gguf</code> model under <b>Preferences &rarr;
+                      Configuration &rarr; Agent</b>).</li>
+                  <li><b>Gemini</b> — Google's cloud API (needs an API key on the
+                      same screen; requests leave the device over HTTPS).</li>
                 </ul>
                 <p>File-editing tools are confined to the current project and
                 ask for approval before writing.</p>
@@ -222,12 +263,14 @@ class AiAssistantPlugin : IPlugin, UIExtension, DocumentationExtension {
         ),
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_CHAT_MENU,
-            summary = "Agent menu: open AI Settings or start a new chat session.",
+            summary = "Agent menu: open the Agent settings or start a new chat session.",
             detail = """
                 <p>Opens the Agent's overflow menu:</p>
                 <ul>
-                  <li><b>Settings</b> — choose the backend (Local or Gemini),
-                      pick a model and manage your Gemini API key.</li>
+                  <li><b>Settings</b> — a shortcut to the same screen as
+                      <b>Preferences &rarr; Configuration &rarr; Agent</b>: choose
+                      the backend (Local or Gemini), pick a model and manage your
+                      Gemini API key.</li>
                   <li><b>Clear chat</b> — starts a fresh session. The previous
                       conversation stays on disk in the plugin's own storage.</li>
                 </ul>
@@ -343,7 +386,7 @@ class AiAssistantPlugin : IPlugin, UIExtension, DocumentationExtension {
                 <p><b>Retry</b> re-sends the same prompt with the same attached
                 context files; it does not add a new message to the conversation.
                 If it keeps failing, check the backend and model under
-                <b>Settings</b>.</p>
+                <b>Preferences &rarr; Configuration &rarr; Agent</b>.</p>
             """.trimIndent(),
             buttons = listOf(
                 PluginTooltipButton(description = "AI Assistant guide", uri = "index.html", order = 0)
@@ -351,13 +394,14 @@ class AiAssistantPlugin : IPlugin, UIExtension, DocumentationExtension {
         ),
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_MESSAGE_OPEN_SETTINGS,
-            summary = "Jump to AI Settings to fix the problem this message reports.",
+            summary = "Jump to the Agent settings to fix the problem this message reports.",
             detail = """
                 <p>Shown when the agent could not run because it is not configured
                 yet — no local model selected, or no Gemini API key saved.</p>
-                <p>Opens <b>AI Settings</b> so you can choose a backend, pick a
-                <code>.gguf</code> model or enter a key, then return and send your
-                message again.</p>
+                <p>Opens the <b>Agent</b> settings screen — the same one under
+                <b>Preferences &rarr; Configuration &rarr; Agent</b> — so you can
+                choose a backend, pick a <code>.gguf</code> model or enter a key,
+                then return and send your message again.</p>
             """.trimIndent(),
             buttons = listOf(
                 PluginTooltipButton(description = "AI Assistant guide", uri = "index.html", order = 0)
@@ -380,11 +424,12 @@ class AiAssistantPlugin : IPlugin, UIExtension, DocumentationExtension {
         ),
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_SETTINGS_BACK,
-            summary = "Close AI Settings and return to the Agent chat.",
+            summary = "Close the Agent settings and go back where you came from.",
             detail = """
-                <p>Closes this dialog. Every setting here is saved as you change
-                it, so there is nothing to confirm — the Agent picks up the new
-                backend and model as soon as you return.</p>
+                <p>Closes this screen, returning to Preferences or to the Agent
+                chat depending on how you opened it. Every setting here is saved as
+                you change it, so there is nothing to confirm — the Agent picks up
+                the new backend and model as soon as you return.</p>
             """.trimIndent(),
             buttons = listOf(
                 PluginTooltipButton(description = "AI Assistant guide", uri = "index.html", order = 0)
@@ -416,6 +461,39 @@ class AiAssistantPlugin : IPlugin, UIExtension, DocumentationExtension {
                 models can't generate replies. Larger models are slower and use
                 more memory; the file is copied into the app's private storage on
                 first use.</p>
+                <p>The model is measured against this device's free memory before it
+                is accepted. If it looks too large you get the figures and a choice
+                to cancel or continue.</p>
+            """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(description = "AI Assistant guide", uri = "index.html", order = 0)
+            )
+        ),
+        PluginTooltipEntry(
+            tag = TOOLTIP_TAG_MEMORY_PROCEED,
+            summary = "Load this model anyway, accepting that it may fail or slow the device.",
+            detail = """
+                <p>The model's weights plus its working memory look larger than the
+                RAM free right now. Weights are memory-mapped, so a load can still
+                succeed by paging — which is why the outcome is a risk rather than a
+                certainty: it may work, fail quickly, or stall for minutes first.</p>
+                <p>Use this when you know the numbers are wrong for your situation,
+                for example because you are about to close other apps.</p>
+            """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(description = "AI Assistant guide", uri = "index.html", order = 0)
+            )
+        ),
+        PluginTooltipEntry(
+            tag = TOOLTIP_TAG_MEMORY_CANCEL,
+            summary = "Abandon this model; the previously selected one is left untouched.",
+            detail = """
+                <p>Nothing is saved and nothing is loaded, so the model you had
+                selected before stays in use. This is the safe choice, and also what
+                happens if you dismiss the warning with Back.</p>
+                <p>To fit a large model, close other apps and pick it again, or
+                choose a smaller or more heavily quantized build — a Q4_K_M
+                quantization of a 1–3B model is the most likely to run.</p>
             """.trimIndent(),
             buttons = listOf(
                 PluginTooltipButton(description = "AI Assistant guide", uri = "index.html", order = 0)

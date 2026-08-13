@@ -119,8 +119,9 @@ echo "Updated libs/ from CodeOnTheGo@$CODEONTHEGO_SHA"
 printf "  %-20s %s\n" "plugin-api.jar"    "$(du -h "$LIBS_DIR/plugin-api.jar" | cut -f1)"
 printf "  %-20s %s\n" "gradle-plugin.jar" "$(du -h "$LIBS_DIR/gradle-plugin.jar" | cut -f1)"
 
-# Plugins listed here are skipped by both the build loop below and the
-# staging loop in .github/workflows/build-plugins.yml. Keep the two in sync.
+# Plugins listed here are skipped by the build loop below and the staging
+# loops in .github/workflows/build-plugins.yml and
+# .github/workflows/update-libs.yml. Keep the three in sync.
 SKIP_PLUGINS=(pebble-custom-function-template-installer)
 
 PLUGINS=()

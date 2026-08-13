@@ -17,12 +17,12 @@ pluginBuilder {
 
 android {
     namespace = "org.appdevforall.ndkinstaller"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "org.appdevforall.ndkinstaller"
         minSdk = 26
-        targetSdk = 34
+        targetSdk = 36
         versionCode = 1
         versionName = "1.0.0"
     }
@@ -55,7 +55,7 @@ dependencies {
     compileOnly(files("../libs/plugin-api.jar"))
 
 
-    implementation("org.jetbrains.kotlin:kotlin-stdlib:2.1.21")
+    implementation("org.jetbrains.kotlin:kotlin-stdlib:2.3.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
 }
 

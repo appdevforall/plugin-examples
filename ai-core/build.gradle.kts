@@ -10,12 +10,12 @@ pluginBuilder {
 
 android {
     namespace = "com.itsaky.androidide.plugins.aicore"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.itsaky.androidide.plugins.aicore"
         minSdk = 33
-        targetSdk = 34
+        targetSdk = 36
         versionCode = 2
         versionName = "1.1.0"
     }
@@ -63,7 +63,7 @@ dependencies {
 
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("org.jetbrains.kotlin:kotlin-stdlib:2.3.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
     testImplementation(files("../libs/plugin-api.jar"))
     testImplementation("junit:junit:4.13.2")

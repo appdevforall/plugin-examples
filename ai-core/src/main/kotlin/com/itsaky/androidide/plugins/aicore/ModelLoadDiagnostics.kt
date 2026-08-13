@@ -13,6 +13,12 @@ object ModelLoadDiagnostics {
     /** Headroom floor: a small model still needs a KV cache, which scales with context, not size. */
     private const val MIN_HEADROOM_BYTES = 256L * 1024 * 1024
 
+    /**
+     * Compute buffers every load allocates outright, whatever the model's shape. The floor for
+     * [refuseBeforeLoad], kept equal to ai-assistant's `COMPUTE_BUFFER_BYTES` allowance.
+     */
+    private const val MIN_RUN_BYTES = 256L * 1024 * 1024
+
     /** Most likely cause of a load failure; the caller resolves each case to a user-facing string. */
     sealed interface Diagnosis {
         data object FileMissing : Diagnosis
@@ -68,6 +74,22 @@ object ModelLoadDiagnostics {
         return if (indicatesInitFailure(nativeError)) Diagnosis.InitializationFailed
         else Diagnosis.UnsupportedOrCorrupt
     }
+
+    /**
+     * Whether to refuse a load outright, before ggml aborts the process trying it. Weighs only the
+     * compute buffers, so it stays far more permissive than [diagnose]'s attribution headroom:
+     * ai-assistant's pre-flight lets the user proceed, and a refusal here must not overrule that.
+     *
+     * @param availableMemoryBytes free RAM reported by the OS, or negative if unknown
+     * @return the shortfall to refuse with, or null to attempt the load
+     */
+    fun refuseBeforeLoad(availableMemoryBytes: Long): Diagnosis.LowMemory? =
+        // Only a NEGATIVE reading means "unknown"; 0 is a genuine out-of-memory reading.
+        if (availableMemoryBytes in 0L until MIN_RUN_BYTES) {
+            Diagnosis.LowMemory(MIN_RUN_BYTES, availableMemoryBytes)
+        } else {
+            null
+        }
 
     // The markers below mirror the messages thrown by LLamaAndroid.load(); keep them in sync with
     // that file. Matching on text is best-effort — an unrecognized message falls back to

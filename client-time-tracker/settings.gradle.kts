@@ -15,7 +15,7 @@ buildscript {
     dependencies {
         classpath(files("../libs/plugin-api.jar"))
         classpath(files("../libs/gradle-plugin.jar"))
-        classpath("com.android.tools.build:gradle:8.8.2")
+        classpath("com.android.tools.build:gradle:8.11.0")
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.3.0")
     }
 }

@@ -10,12 +10,12 @@ pluginBuilder {
 
 android {
     namespace = "com.itsaky.androidide.plugins.aiassistant"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.itsaky.androidide.plugins.aiassistant"
         minSdk = 33
-        targetSdk = 34
+        targetSdk = 36
         versionCode = 2
         versionName = "1.1.0"
     }
@@ -71,7 +71,7 @@ dependencies {
     // resource attributes and resolve xmlns declarations. This is standard across all CoGo plugins
     // with XML layouts (random-xkcd, sketch-to-ui-plugin, Beepy). See investigation in Task 4.
     implementation("androidx.appcompat:appcompat:1.6.1")
-    implementation("androidx.fragment:fragment-ktx:1.6.2")
+    implementation("androidx.fragment:fragment-ktx:1.8.8")
     implementation("com.google.android.material:material:1.10.0")
     implementation("androidx.recyclerview:recyclerview:1.3.2")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
@@ -85,7 +85,7 @@ dependencies {
     testImplementation(files("../libs/plugin-api.jar"))
     testImplementation("junit:junit:4.13.2")
     testImplementation("io.mockk:mockk:1.13.8")
-    testImplementation("org.json:json:20231013")
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
+    testImplementation("org.json:json:20240303")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
     testImplementation("androidx.arch.core:core-testing:2.2.0")
 }

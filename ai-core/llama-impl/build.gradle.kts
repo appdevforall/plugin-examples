@@ -11,7 +11,7 @@ kotlin {
 
 android {
 	namespace = "android.llama.cpp"
-	compileSdk = 34
+	compileSdk = 36
 
 	defaultConfig {
 		minSdk = 33
@@ -65,7 +65,7 @@ android {
 
 dependencies {
 	implementation(project(":llama-api"))
-	implementation(libs.androidx.core.ktx.v1120)
-	implementation(libs.androidx.appcompat.v171)
-	implementation(libs.tooling.slf4j)
+	implementation(libs.androidx.core.ktx)
+	implementation(libs.androidx.appcompat)
+	implementation(libs.slf4j.api)
 }

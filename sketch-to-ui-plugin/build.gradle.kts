@@ -12,7 +12,7 @@ pluginBuilder {
 
 android {
     namespace = "com.appdevforall.sketchtoui.plugin"
-    compileSdk = 35
+    compileSdk = 36
 
     sourceSets {
         getByName("main") {
@@ -34,7 +34,7 @@ android {
     defaultConfig {
         applicationId = "com.appdevforall.sketchtoui.plugin"
         minSdk = 28
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 1
         versionName = "1.0.0"
     }
