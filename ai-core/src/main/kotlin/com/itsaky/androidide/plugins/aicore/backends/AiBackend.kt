@@ -48,4 +48,21 @@ object AiBackend {
         if (value.isNullOrEmpty()) return DEFAULT_ID
         return LEGACY_PREFERENCE_IDS[value] ?: value
     }
+
+    /**
+     * The backend to act on given what is installed, for every caller that has to answer that
+     * question: the settings selector, the chat's status line, and its availability check.
+     *
+     * They must agree, or one launch can route to one backend while the label names another. The
+     * order is deliberate — the stored choice first, then [DEFAULT_ID], and only then whatever came
+     * first, which is registration or sort order and so effectively arbitrary.
+     *
+     * @param storedId the persisted selection, or null when nothing has been chosen
+     * @param installedIds ids of the backends currently registered
+     * @return the id to act on, or null when nothing is installed
+     */
+    fun preferredId(storedId: String?, installedIds: Collection<String>): String? =
+        storedId?.takeIf { it in installedIds }
+            ?: DEFAULT_ID.takeIf { it in installedIds }
+            ?: installedIds.firstOrNull()
 }

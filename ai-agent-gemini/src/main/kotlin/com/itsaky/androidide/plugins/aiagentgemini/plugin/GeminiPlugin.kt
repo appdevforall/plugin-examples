@@ -21,7 +21,13 @@ import com.itsaky.androidide.plugins.services.SharedServices
 class GeminiPlugin : IPlugin, DocumentationExtension {
 
     private lateinit var context: PluginContext
-    private var backend: GeminiBackend? = null
+
+    /**
+     * Volatile because [activate] writes it on the loading thread while the host may deliver
+     * `onPluginActivated` on another: a plain field lets [registerBackend] read null and give up
+     * without scheduling a retry, leaving the selector permanently empty.
+     */
+    @Volatile private var backend: GeminiBackend? = null
 
     /** True once [backend] is registered with the router, so re-registration is idempotent. */
     @Volatile private var registered = false
@@ -32,7 +38,12 @@ class GeminiPlugin : IPlugin, DocumentationExtension {
         /** Provider of [LlmInferenceService]; this plugin is useless without it. */
         private const val AI_CORE_PLUGIN_ID = "com.itsaky.androidide.plugins.aicore"
 
-        private const val TOOLTIP_TAG_PLUGIN = "plugin_ai_backend_gemini"
+        /**
+         * The whole-plugin entry, and the only one carrying the Tier-3 guide button. Anchored to
+         * the key status line on this backend's settings pane — the one element this plugin always
+         * draws, and an entry no element long-presses is an entry nobody can read.
+         */
+        const val TOOLTIP_TAG_PLUGIN = "plugin_ai_agent_gemini"
 
         /**
          * Category the host registers this plugin's tooltips under. Must be `"plugin_"` + the full

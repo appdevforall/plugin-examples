@@ -69,6 +69,16 @@ internal object LocalLlmPreferences {
         context.getPluginSharedPreferences(FILE)
 
     /**
+     * Whether this backend offers its own short system prompt rather than letting the caller use
+     * its full tool-calling one. On by default: the small models this backend runs follow the short
+     * one far more reliably.
+     *
+     * @param context this plugin's own context
+     */
+    fun useSimplePrompt(context: PluginContext): Boolean =
+        of(context).getBoolean(KEY_SIMPLE_PROMPT, true)
+
+    /**
      * Copies this backend's settings out of every store in [LEGACY_FILES], once.
      *
      * Copies rather than moves: the old file is not this plugin's to prune, and leaving it intact

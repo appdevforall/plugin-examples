@@ -61,6 +61,12 @@ class LocalLlmSettingsFragment : Fragment(), MemoryWarningDialogFragment.Host {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // This pane is replaced in and out whenever the backend selector changes, so a theme-default
+        // Material transition would be resolved here. Plugin resources are compileOnly, so those
+        // transition resources aren't bundled; nulling them keeps the swap from touching them.
+        enterTransition = null
+        exitTransition = null
+
         try {
             tooltipService = PluginFragmentHelper.getServiceRegistry(LocalLlmPlugin.PLUGIN_ID)
                 ?.get(IdeTooltipService::class.java)
@@ -116,6 +122,10 @@ class LocalLlmSettingsFragment : Fragment(), MemoryWarningDialogFragment.Host {
         val engineStatusTextView = view.findViewById<TextView>(R.id.engine_status_text)
         val simplePromptCheckbox = view.findViewById<CheckBox>(R.id.switch_simple_local_prompt)
         val shaInput = view.findViewById<EditText>(R.id.local_model_sha_input)
+
+        // This pane is the only UI this plugin draws, so the whole-plugin entry — and the guide
+        // button that hangs off it — has to be reachable from somewhere on it.
+        wireTooltip(engineStatusTextView, LocalLlmPlugin.TOOLTIP_TAG_PLUGIN)
 
         browseButton.setOnClickListener { filePickerLauncher.launch(arrayOf("*/*")) }
         wireTooltip(browseButton, LocalLlmPlugin.TOOLTIP_TAG_SETTINGS_LOCAL_MODEL)

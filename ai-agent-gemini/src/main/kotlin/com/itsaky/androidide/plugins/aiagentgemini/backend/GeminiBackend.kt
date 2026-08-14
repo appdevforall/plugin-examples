@@ -380,6 +380,12 @@ class GeminiBackend(
      */
     fun listModels(): CompletableFuture<List<String>> {
         val future = CompletableFuture<List<String>>()
+        // close() cancels the scope, making launch a silent no-op; fail loudly instead, or the
+        // gateway's blocking get() would sit at "Loading" for its full 60-second timeout.
+        if (!scope.isActive) {
+            future.completeExceptionally(IllegalStateException("Gemini backend is closed"))
+            return future
+        }
 
         val job = scope.launch {
             try {

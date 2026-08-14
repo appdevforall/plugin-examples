@@ -39,7 +39,7 @@ class AiSettingsFragment : Fragment() {
     private lateinit var backendSpecificContainer: FrameLayout
     private var tooltipService: IdeTooltipService? = null
 
-    /** Backends as of [onViewCreated], so the spinner's positions stay valid while it is on screen. */
+    /** Backends as of [onCreate], so the spinner's positions stay valid while it is on screen. */
     private var backends: List<BackendOption> = emptyList()
 
     /** Backend whose pane is currently mounted, so re-selecting it does not rebuild it. */
@@ -51,14 +51,22 @@ class AiSettingsFragment : Fragment() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Read once for the whole screen: the factory below is consulted for every fragment the
+        // panes create or restore, and each lookup would otherwise re-walk the registry.
+        backends = BackendRegistry.options()
+
         // Installed before super.onCreate, which is where a saved child-fragment state is restored:
         // the backend pane lives in another plugin's classloader and the default factory cannot see
         // it, so without this a rotation would silently replace the pane with a blank fragment.
         childFragmentManager.fragmentFactory = BackendFragmentFactory(
             childFragmentManager.fragmentFactory,
-            BackendRegistry::classLoaderFor,
-        )
+        ) { className -> BackendRegistry.classLoaderFor(className, backends) }
         super.onCreate(savedInstanceState)
+
+        // Disable Material transitions to avoid resource loading issues
+        // Plugin uses compileOnly dependencies, so Material transition resources aren't bundled
+        enterTransition = null
+        exitTransition = null
 
         // Resolve the IDE tooltip service so the settings controls can offer in-app help.
         try {
@@ -131,8 +139,6 @@ class AiSettingsFragment : Fragment() {
      *   case the initial selection must not replace it and lose whatever the user had typed
      */
     private fun setupBackendSelector(restoring: Boolean) {
-        backends = BackendRegistry.options()
-
         if (backends.isEmpty()) {
             backendSpinner.visibility = View.GONE
             showPlaceholder(getString(R.string.backend_none_installed))
@@ -150,13 +156,10 @@ class AiSettingsFragment : Fragment() {
 
         wireTooltip(backendSpinner, AiCorePlugin.TOOLTIP_TAG_SETTINGS_BACKEND)
 
-        // A stored selection whose backend was uninstalled falls back to the first one offered,
-        // rather than leaving the screen describing a backend that cannot run.
-        val storedId = BackendRegistry.selectedId()
-        val selected = backends.firstOrNull { it.id == storedId } ?: backends.first()
-        if (selected.id != storedId) {
-            BackendRegistry.select(selected.id)
-        }
+        // Nothing stored, or a stored selection whose backend was uninstalled, resolves the same way
+        // the chat does — and without persisting anything, so opening this screen cannot enrol the
+        // user in a backend they never picked.
+        val selected = BackendRegistry.preferred(backends) ?: backends.first()
 
         if (restoring && childFragmentManager.findFragmentByTag(TAG_BACKEND_PANE) != null) {
             shownBackendId = selected.id
@@ -168,6 +171,10 @@ class AiSettingsFragment : Fragment() {
         backendSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
                 val backend = backends.getOrNull(position) ?: return
+                // With an accessibility service running, AdapterView posts the programmatic
+                // selection above and delivers it here once the listener exists; writing on that
+                // would persist a choice the user never made.
+                if (backend.id == shownBackendId) return
                 BackendRegistry.select(backend.id)
                 showBackendPane(backend)
             }

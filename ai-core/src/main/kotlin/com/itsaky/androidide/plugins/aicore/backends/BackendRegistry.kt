@@ -1,6 +1,5 @@
 package com.itsaky.androidide.plugins.aicore.backends
 
-import com.itsaky.androidide.plugins.aicore.backends.AiBackend
 import com.itsaky.androidide.plugins.aicore.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aicore.plugin.AiCorePlugin
 import com.itsaky.androidide.plugins.services.LlmInferenceService
@@ -50,13 +49,53 @@ object BackendRegistry {
     }
 
     /**
-     * The loader that can instantiate [fragmentClassName], found by asking each registered backend
-     * which pane it contributes. Used by [BackendFragmentFactory] to rebuild a restored pane.
+     * The backend to act on out of [options], resolved the same way everywhere — see
+     * [AiBackend.preferredId]. Reads the stored selection but never writes one, so merely opening a
+     * screen cannot opt the user into a backend they did not choose.
      *
-     * @return the owning backend plugin's loader, or null if no installed backend claims the class
+     * @param options the installed backends, normally from [options]
+     * @param storedId the persisted selection; defaults to the stored one
+     * @return the backend to act on, or null when nothing is installed
      */
-    fun classLoaderFor(fragmentClassName: String): ClassLoader? =
-        options().firstOrNull { it.settingsFragmentClassName == fragmentClassName }?.classLoader
+    fun preferred(options: List<BackendOption>, storedId: String? = selectedId()): BackendOption? {
+        val id = AiBackend.preferredId(storedId, options.map { it.id }) ?: return null
+        return options.firstOrNull { it.id == id }
+    }
+
+    /**
+     * The loader that can instantiate [fragmentClassName], found by asking each backend plugin's
+     * loader whether it can see the class. Used by [BackendFragmentFactory] to rebuild a restored
+     * fragment.
+     *
+     * Deliberately not keyed on [BackendOption.settingsFragmentClassName]: a pane shows dialogs and
+     * child fragments of its own, and those are restored through this same factory. Matching only
+     * the pane's own name would leave every sibling to fall through to the host loader, which
+     * cannot see it, and be silently replaced by a blank fragment.
+     *
+     * @param installed the backends to search; pass a snapshot to keep the FragmentManager, which
+     *   calls this once per fragment created *and* restored, off a fresh cross-classloader walk
+     * @return the owning backend plugin's loader, or null if no installed backend can see the class
+     */
+    @JvmOverloads
+    fun classLoaderFor(
+        fragmentClassName: String,
+        installed: List<BackendOption> = options(),
+    ): ClassLoader? =
+        installed.asSequence()
+            .mapNotNull { it.classLoader }
+            .distinct()
+            .firstOrNull { loader -> canSee(loader, fragmentClassName) }
+
+    /** Whether [loader] can resolve [className] without initializing it. */
+    private fun canSee(loader: ClassLoader, className: String): Boolean = try {
+        Class.forName(className, false, loader)
+        true
+    } catch (e: ClassNotFoundException) {
+        false
+    } catch (e: LinkageError) {
+        // Present but unloadable — still this plugin's class, so stop looking for another owner.
+        true
+    }
 
     /**
      * The backend the user selected, as a backend id.

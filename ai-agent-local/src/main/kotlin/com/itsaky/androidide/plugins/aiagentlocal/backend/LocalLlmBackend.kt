@@ -113,9 +113,12 @@ class LocalLlmBackend(
     /**
      * Written for small on-device models; see [LocalSystemPrompt] for why the wording belongs here
      * rather than with the caller.
+     *
+     * Null when the user turned the short prompt off, which is what hands them back the caller's
+     * own full tool-calling prompt — a larger model can follow it, and this backend can run one.
      */
-    override fun getSystemPrompt(request: SystemPromptRequest): String =
-        LocalSystemPrompt.build(request)
+    override fun getSystemPrompt(request: SystemPromptRequest): String? =
+        if (LocalLlmPreferences.useSimplePrompt(context)) LocalSystemPrompt.build(request) else null
 
     /**
      * Near-greedy: tool arguments must be copied out of earlier tool output verbatim, and a small

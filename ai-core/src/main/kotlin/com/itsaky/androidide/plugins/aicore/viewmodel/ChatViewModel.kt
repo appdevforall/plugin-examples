@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aicore.R
+import com.itsaky.androidide.plugins.aicore.backends.AiBackend
 import com.itsaky.androidide.plugins.aicore.backends.BackendRegistry
 import com.itsaky.androidide.plugins.aicore.logging.AgentTrace
 import com.itsaky.androidide.plugins.aicore.logging.LOG_PREFIX
@@ -157,7 +158,13 @@ class ChatViewModel(
         sessions.firstOrNull { it.id == id }
     }.stateIn(viewModelScope, SharingStarted.Lazily, null)
 
-    private var currentBackendId: String = "local" // Default to local backend
+    /**
+     * Backend the last availability check resolved. Volatile because that check runs on IO and
+     * [sendMessage] reads it on Main; a stale read would build the request for a different backend
+     * than the one just found.
+     */
+    @Volatile
+    private var currentBackendId: String = AiBackend.DEFAULT_ID
 
     /**
      * Label for the backend the user *selected* in settings, shown under the chat input. Tracks the
@@ -168,11 +175,9 @@ class ChatViewModel(
     val activeBackendLabel: StateFlow<String> = _activeBackendLabel.asStateFlow()
 
     private fun selectedBackendLabel(): String {
-        val backends = BackendRegistry.options()
-        val selectedId = BackendRegistry.selectedId()
-        // Falls back to the first installed backend, matching how the settings screen resolves a
-        // selection whose backend was uninstalled.
-        val selected = backends.firstOrNull { it.id == selectedId } ?: backends.firstOrNull()
+        // Resolved exactly as the settings screen and the availability check resolve it, so the
+        // three cannot name different backends on the same launch.
+        val selected = BackendRegistry.preferred(BackendRegistry.options())
         return selected?.displayName
             ?: getContext()?.androidContext?.getString(R.string.backend_none_installed_short)
             ?: ""
@@ -192,6 +197,9 @@ class ChatViewModel(
 
     /** The in-flight agent run (streaming + tool loop), so it can be cancelled. */
     private var generationJob: Job? = null
+
+    /** The in-flight backend availability check, so a resume can supersede the previous one. */
+    private var backendCheckJob: Job? = null
     private val generationEpoch = java.util.concurrent.atomic.AtomicInteger(0)
 
     /** True while a generation is admitted and its coroutine has not yet unwound; gates re-entry. */
@@ -570,10 +578,15 @@ class ChatViewModel(
      * Check if any LLM backend is available.
      * Should be called when the fragment becomes visible.
      * Retries with delays to handle plugin loading timing.
+     *
+     * The previous run is cancelled first: every resume starts one, and a run still inside its
+     * retry loop would otherwise write its stale verdict over a newer one — leaving the chat
+     * refusing to send with a backend that was configured in between.
      */
     fun checkBackendAvailability() {
         android.util.Log.d(TAG, "checkBackendAvailability: Starting check")
-        viewModelScope.launch(Dispatchers.IO) {
+        backendCheckJob?.cancel()
+        backendCheckJob = viewModelScope.launch(Dispatchers.IO) {
             // Retry up to 5 times with 500ms delays to handle plugin loading order
             repeat(5) { attempt ->
                 android.util.Log.d(TAG, "checkBackendAvailability: Attempt ${attempt + 1}")
@@ -585,9 +598,13 @@ class ChatViewModel(
                         android.util.Log.d(TAG, "checkBackendAvailability: Found ${backends.size} backends")
 
                         // The selection is stored as the backend's own id, so it needs no mapping:
-                        // a backend this plugin has never heard of resolves like any other.
-                        val preferredBackendId = BackendRegistry.selectedId()
-                            ?: backends.firstOrNull()?.id
+                        // a backend this plugin has never heard of resolves like any other. With
+                        // nothing stored this must not fall to registration order, which is a hash
+                        // map's and so differs from what the settings screen shows.
+                        val preferredBackendId = AiBackend.preferredId(
+                            BackendRegistry.selectedId(),
+                            backends.map { it.id },
+                        )
                         android.util.Log.d(TAG, "checkBackendAvailability: Preferred backend = $preferredBackendId")
 
                         // First try to use the preferred backend
@@ -595,6 +612,7 @@ class ChatViewModel(
                         val preferredBackend = backends.find { it.id == preferredBackendId }
                         android.util.Log.d(TAG, "checkBackendAvailability: Preferred backend (${preferredBackendId}) found=${preferredBackend != null}, available=${preferredBackend?.isAvailable}")
                         if (preferredBackend != null && preferredBackend.isAvailable) {
+                            if (!isActive) return@launch
                             _isBackendAvailable.value = true
                             currentBackendId = preferredBackend.id
                             android.util.Log.d(TAG, "checkBackendAvailability: Using preferred backend ${preferredBackend.id}")
@@ -605,6 +623,7 @@ class ChatViewModel(
                         for (backend in backends) {
                             android.util.Log.d(TAG, "checkBackendAvailability: Checking backend ${backend.id}, available=${backend.isAvailable}")
                             if (backend.isAvailable) {
+                                if (!isActive) return@launch
                                 _isBackendAvailable.value = true
                                 currentBackendId = backend.id
                                 foundAvailable = true
@@ -629,6 +648,7 @@ class ChatViewModel(
 
             // All retries failed
             android.util.Log.d(TAG, "checkBackendAvailability: All retries failed, no backend available")
+            if (!isActive) return@launch
             _isBackendAvailable.value = false
         }
     }

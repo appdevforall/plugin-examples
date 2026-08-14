@@ -60,6 +60,12 @@ class GeminiSettingsFragment : Fragment() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // This pane is replaced in and out whenever the backend selector changes, so a theme-default
+        // Material transition would be resolved here. Plugin resources are compileOnly, so those
+        // transition resources aren't bundled; nulling them keeps the swap from touching them.
+        enterTransition = null
+        exitTransition = null
+
         try {
             tooltipService = PluginFragmentHelper.getServiceRegistry(GeminiPlugin.PLUGIN_ID)
                 ?.get(IdeTooltipService::class.java)
@@ -132,10 +138,14 @@ class GeminiSettingsFragment : Fragment() {
 
         // Not on apiKeyInput: long-press there is the paste menu, and a key is pasted.
         listOf(
-            toggleVisibilityButton, saveButton, editButton, clearButton, statusTextView,
-            verificationText
+            toggleVisibilityButton, saveButton, editButton, clearButton, verificationText
         ).forEach { wireTooltip(it, GeminiPlugin.TOOLTIP_TAG_SETTINGS_GEMINI_KEY) }
         wireTooltip(getKeyButton, GeminiPlugin.TOOLTIP_TAG_SETTINGS_GET_KEY)
+
+        // The status line takes the whole-plugin entry rather than a sixth copy of the key one:
+        // this pane is the only UI this plugin draws, so the guide button that hangs off that entry
+        // is otherwise unreachable.
+        wireTooltip(statusTextView, GeminiPlugin.TOOLTIP_TAG_PLUGIN)
 
         // Create model selection container
         val modelContainer = createModelSelectionUi(view)
