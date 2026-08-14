@@ -26,6 +26,12 @@ register themselves with it on activation:
 Install AI Core **plus at least one backend**, or every request fails with
 `Backend '…' not found`.
 
+**Other plugins can add agent tools.** AI Core also publishes `ToolSourceRegistry`
+through `SharedServices`; any plugin may register a tool source and its tools join
+the agent's tool list. [`ai-agent-mcp`](../ai-agent-mcp/) uses it to offer the
+tools of remote Model Context Protocol servers. Unlike a backend, a tool provider
+is entirely optional — with none installed the agent has exactly its own tools.
+
 ## Building
 
 Prerequisites: Android SDK (API 33+), JDK 17. Create `local.properties` with
@@ -63,6 +69,43 @@ produces a plausible one-shot reply with no error. That is why both shipped
 backends declare it, and why `LocalLlmBackendTest` asserts the declaration
 rather than trusting behaviour to catch it.
 
+## Plugin-contributed tools
+
+A provider implements `ToolSourceRegistry.ToolSource` and registers it on
+activation. Because plugins load in parallel with no guaranteed order, a provider
+needs the same `PluginLifecycleListener` pattern the backends use, and AI Core
+clears the store on deactivation so a provider re-registers when it comes back.
+
+Only plain JDK types cross the boundary: each plugin has its own class loader, so
+the host's contract is the one type both sides can name. `ToolSourceRegistryImpl`
+is the single file that names it, and everything past it works in this plugin's
+own `ContributedToolSource` / `ContributedTool`, which is what lets the tool set
+be built and tested without the host.
+
+Four rules the store applies, each of which was a bug before it was a rule:
+
+- **Built-ins are reserved first**, so a contributed tool can never take over
+  `edit_file`. A tool whose own name is already taken is registered under a
+  provider-prefixed name rather than dropped — prefixing *everything*
+  unconditionally cost the model the one name a tool's own description talks about.
+- **Router, executor and grammar are rebuilt together**, behind one `@Volatile`
+  reference. Replacing the router alone leaves the local backend's token mask
+  forbidding every newly contributed tool — a green build whose only symptom is
+  "the model ignores the tools". A run in flight keeps the snapshot it started with.
+- **`PromptToolBudget` caps what reaches the prompt** — 12 contributed tools, 200
+  characters of description each, flattened to one line. One MCP server can
+  advertise ninety tools; the cap lives here because every backend renders the
+  tool list itself, including backends written elsewhere. Drops are logged.
+- **A provider's failure costs one tool call, never the run.** A source that
+  throws while listing is skipped whole; one that throws, hangs or completes with
+  nothing while invoking yields a failed `ToolResult`, and stopping the run
+  cancels through to the provider.
+
+Contributed tools run inside the contributing plugin, under *its* permissions, and
+outside the `PathGuard` containment that covers this plugin's own handlers — so the
+approval dialog names the source plugin, and `allowsSessionApproval` is false for
+every contributed tool: "Always Allow" is downgraded to a single approval.
+
 ## Key classes
 
 Every source file sits in a package named for its layer; nothing is loose at the
@@ -71,6 +114,11 @@ root of `com/itsaky/androidide/plugins/aicore/`.
 - `plugin/AiCorePlugin.kt` — plugin entry point; publishes the router, contributes
   the Agent tab and settings screen, and adopts a pre-merge install's data
 - `services/LlmInferenceServiceImpl.kt` — the SharedServices-exposed router
+- `services/ToolSourceRegistryImpl.kt` — the SharedServices-exposed tool registry;
+  the only file naming that host contract
+- `tool/sources/` — the contributed-tool layer: the store, the namespacing rules,
+  the prompt budget and the handler that isolates a provider's failures
+- `tool/AgentTools.kt` — router, executor and grammar as one swappable snapshot
 - `backends/AiBackend.kt` — maps a stored backend setting onto a backend id
 - `backends/BackendRegistry.kt` — the installed backends, as the settings
   selector sees them

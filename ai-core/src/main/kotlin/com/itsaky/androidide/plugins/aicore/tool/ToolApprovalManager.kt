@@ -35,11 +35,21 @@ class ToolApprovalManager {
     )
 
     /**
-     * Tools that can never be blanket-approved for the session, however the user answers. Session
-     * approval is keyed by tool name alone, so one tap would hand a small model unreviewed write
-     * access to the whole project; a destructive edit is re-confirmed every time.
+     * Built-in tools that can never be blanket-approved for the session, however the user answers.
+     * Session approval is keyed by tool name alone, so one tap would hand a small model unreviewed
+     * write access to the whole project; a destructive edit is re-confirmed every time.
      */
     private val neverSessionApproved = setOf("edit_file")
+
+    /**
+     * Whether a session grant may cover this call. A predicate rather than a name list because a
+     * plugin-contributed tool cannot be enumerated here and must be prompt-every-time.
+     * @param toolName the tool being approved.
+     * @param handler its handler.
+     * @return true when "Always Allow" must be downgraded to a single approval.
+     */
+    private fun isNeverSessionApproved(toolName: String, handler: ToolHandler): Boolean =
+        toolName in neverSessionApproved || !handler.allowsSessionApproval
 
     // Concurrent: written from the dialog's coroutine, read from the next tool call's thread.
     private val sessionApprovedTools: MutableSet<String> = ConcurrentHashMap.newKeySet()
@@ -94,6 +104,8 @@ class ToolApprovalManager {
 
             val request = ApprovalRequest(
                 toolName = toolName,
+                displayName = handler.displayName,
+                sourceLabel = handler.sourceLabel,
                 args = args,
                 description = handler.description
             )
@@ -122,7 +134,7 @@ class ToolApprovalManager {
                 ApprovalResponse(approved = true)
             }
             ApprovalResult.APPROVED_FOR_SESSION -> {
-                if (toolName in neverSessionApproved) {
+                if (isNeverSessionApproved(toolName, handler)) {
                     Log.d(TAG, "Approval granted (once; $toolName is never session-approved)")
                 } else {
                     Log.d(TAG, "Approval granted (session) for $toolName")
@@ -212,11 +224,19 @@ data class ApprovalResponse(
 
 /**
  * Pending approval request.
+ *
+ * @property toolName the registered name, which is what session approval is keyed by.
+ * @property displayName the name to put on screen; the same string for a built-in.
+ * @property sourceLabel the contributing plugin, or null for one of the agent's own tools.
+ * @property args the arguments the tool would run with.
+ * @property description what the tool does.
  */
 data class ApprovalRequest(
     val toolName: String,
     val args: Map<String, Any?>,
-    val description: String
+    val description: String,
+    val displayName: String = toolName,
+    val sourceLabel: String? = null
 )
 
 /**

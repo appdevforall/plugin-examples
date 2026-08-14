@@ -107,19 +107,29 @@ class Executor(
      * @return the tool's result, or the failure that stopped it short of running.
      */
     private suspend fun executeCall(call: ToolCall, executionMode: String): ToolResult {
-        val toolName = call.name
         val args = call.args
 
-        if (toolName.isBlank()) {
+        if (call.name.isBlank()) {
             Log.e(TAG, "($executionMode): Encountered unnamed function call.")
             return ToolResult.failure("Unnamed function call")
         }
 
-        val handler = toolRouter.getHandler(toolName)
+        val handler = toolRouter.getHandler(call.name)
         if (handler == null) {
-            Log.e(TAG, "($executionMode): Unknown function requested: $toolName")
-            return ToolResult.failure("Unknown function '$toolName'")
+            Log.e(TAG, "($executionMode): Unknown function requested: ${call.name}")
+            val suggestions = toolRouter.suggestionsFor(call.name)
+            val message = if (suggestions.isEmpty()) {
+                "Unknown function '${call.name}'"
+            } else {
+                "Unknown function '${call.name}'. Did you mean: ${suggestions.joinToString(", ")}?"
+            }
+            AgentTrace.refusal("ROUTE", "${call.name} unresolved", message)
+            return ToolResult.failure(message)
         }
+
+        // The registered name from here on: the model may have named the tool loosely, and every
+        // check, approval key and log line below has to mean the tool that will actually run.
+        val toolName = handler.toolName
 
         // Alias "path" → "file_path" for any tool that requires "file_path".
         val normalizedArgs = args.toMutableMap()

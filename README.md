@@ -26,6 +26,7 @@ See the official [plugin documentation](https://www.appdevforall.org/codeonthego
 | [`ai-agent-local/`](ai-agent-local/)               | On-device `.gguf` inference backend for `ai-core` (bundled llama.cpp AAR). Registers as `local`; needs no network. |
 | [`ai-agent-gemini/`](ai-agent-gemini/)             | Google Gemini API inference backend for `ai-core`. Registers as `gemini`; needs an API key and network access. |
 | [`ai-agent-openai/`](ai-agent-openai/)             | OpenAI-compatible inference backend for `ai-core`. Registers as `openai`; talks to OpenAI by default, or to Ollama / LM Studio / OpenRouter / `llama-server` by changing one URL. |
+| [`ai-agent-mcp/`](ai-agent-mcp/)                   | Connects the Agent to Model Context Protocol servers, contributing their tools through `ai-core`. Needs network access; tools are off until enabled. |
 | [`flutter-template/`](flutter-template/)           | Adds Flutter starter project templates (Basic, BLoC, Provider, GetX, Riverpod) to the New Project screen. |
 | [`code-suggestions-plugin/`](code-suggestions-plugin/) | Inline ghost-text code completions powered by AI. |
 | [`speech-to-text-plugin/`](speech-to-text-plugin/) | Voice-to-code: converts speech to code with AI generation. |

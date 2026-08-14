@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One tool a server advertises. Off by default: every enabled tool costs prompt space. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginBottom="4dp"
+    android:orientation="vertical">
+
+    <com.google.android.material.switchmaterial.SwitchMaterial
+        android:id="@+id/mcpToolSwitch"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="@color/plugin_on_surface"
+        android:textSize="15sp" />
+
+    <TextView
+        android:id="@+id/mcpToolDescription"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="@color/plugin_text_muted"
+        android:textSize="13sp" />
+
+</LinearLayout>

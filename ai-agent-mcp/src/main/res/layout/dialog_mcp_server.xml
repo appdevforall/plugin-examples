@@ -1,0 +1,223 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Add/edit one server: identity, credentials, and which of its tools the Agent may use.
+
+  The vertical inset lives on this wrapper rather than inside the ScrollView on purpose. Padding on
+  the scrolling content is part of what scrolls: the top of it shows at rest, while the bottom is
+  only reachable at the end of the scroll, so the content read as flush against the button bar. Out
+  here it is fixed chrome, and the gap under the title matches the gap above the buttons whatever
+  the form is scrolled to.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@color/plugin_surface"
+    android:orientation="vertical"
+    android:paddingTop="@dimen/mcp_dialog_padding_vertical"
+    android:paddingBottom="@dimen/mcp_dialog_padding_vertical">
+
+  <ScrollView
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content">
+
+    <!-- Horizontal inset matches the Material dialog's own, so the fields line up with the title
+         above and the buttons below. -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingStart="@dimen/mcp_dialog_padding_horizontal"
+        android:paddingEnd="@dimen/mcp_dialog_padding_horizontal">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/mcp_label_name"
+            android:textColor="@color/plugin_on_surface"
+            android:textSize="14sp" />
+
+        <EditText
+            android:id="@+id/mcpName"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:autofillHints="name"
+            android:hint="@string/mcp_hint_name"
+            android:inputType="text"
+            android:maxLines="1"
+            android:textColor="@color/plugin_on_surface"
+            android:textColorHint="@color/plugin_text_subtle" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="@string/mcp_label_url"
+            android:textColor="@color/plugin_on_surface"
+            android:textSize="14sp" />
+
+        <EditText
+            android:id="@+id/mcpUrl"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:autofillHints="none"
+            android:hint="@string/mcp_hint_url"
+            android:inputType="textUri"
+            android:maxLines="1"
+            android:textColor="@color/plugin_on_surface"
+            android:textColorHint="@color/plugin_text_subtle" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="@string/mcp_label_token"
+            android:textColor="@color/plugin_on_surface"
+            android:textSize="14sp" />
+
+        <EditText
+            android:id="@+id/mcpToken"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:autofillHints="password"
+            android:hint="@string/mcp_hint_token"
+            android:inputType="textPassword"
+            android:maxLines="1"
+            android:textColor="@color/plugin_on_surface"
+            android:textColorHint="@color/plugin_text_subtle" />
+
+        <!--
+          Extra headers: everything past the bearer token a server may require to route.
+
+          Section heading and its add control share one row, the way a list header does. The text
+          column is weighted rather than wrapped so it reflows against the button's edge instead of
+          running underneath it, whatever the translation or the font scale.
+        -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:baselineAligned="false"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/mcp_headers_header"
+                    android:textColor="@color/plugin_on_surface"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:text="@string/mcp_headers_summary"
+                    android:textColor="@color/plugin_text_muted"
+                    android:textSize="12sp" />
+
+            </LinearLayout>
+
+            <!--
+              Icon only, filled in the primary colour so it reads as the same kind of control as
+              Test connection, with the glyph in on-primary — white on the light theme's teal,
+              near-black on the dark theme's.
+
+              An ImageButton with platform attributes only, deliberately. A library `app:`
+              attribute such as MaterialButton's app:icon is compiled against this plugin's resource
+              ids but read by whichever copy of the Material classes the host process loaded, so it
+              silently resolves to nothing and the button draws empty. Nothing else here uses `app:`.
+            -->
+            <ImageButton
+                android:id="@+id/mcpAddHeader"
+                android:layout_width="48dp"
+                android:layout_height="40dp"
+                android:layout_marginStart="12dp"
+                android:background="@drawable/bg_mcp_icon_button"
+                android:contentDescription="@string/mcp_add_header"
+                android:padding="8dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_add"
+                android:tint="@color/plugin_on_primary" />
+
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/mcpHeadersEmpty"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/mcp_headers_none"
+            android:textColor="@color/plugin_text_muted"
+            android:textSize="13sp" />
+
+        <LinearLayout
+            android:id="@+id/mcpHeaderList"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/mcpTestConnection"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/mcp_test_connection" />
+
+            <Button
+                android:id="@+id/mcpRefreshTools"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="@string/mcp_refresh_tools" />
+
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/mcpStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:textColor="@color/plugin_on_surface_variant"
+            android:textSize="13sp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="@string/mcp_tools_header"
+            android:textColor="@color/plugin_on_surface"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/mcpToolsEmpty"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/mcp_tools_none"
+            android:textColor="@color/plugin_text_muted"
+            android:textSize="13sp" />
+
+        <LinearLayout
+            android:id="@+id/mcpToolList"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="vertical" />
+
+    </LinearLayout>
+
+  </ScrollView>
+
+</LinearLayout>

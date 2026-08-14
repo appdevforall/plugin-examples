@@ -26,11 +26,9 @@
             android:name="plugin.author"
             android:value="App Dev for All" />
 
-        <!-- 26.32: the release that carries the Agent chat's host requirements, inherited when
-             AI Assistant merged into this plugin. -->
         <meta-data
             android:name="plugin.min_ide_version"
-            android:value="26.32" />
+            android:value="26.33" />
 
         <meta-data
             android:name="plugin.max_ide_version"
