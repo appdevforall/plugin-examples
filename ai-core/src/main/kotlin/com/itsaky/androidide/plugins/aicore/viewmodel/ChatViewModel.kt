@@ -594,18 +594,18 @@ class ChatViewModel(
                 android.util.Log.d(TAG, "checkBackendAvailability: llmService = $llmService")
                 if (llmService != null) {
                     try {
-                        val backends = llmService.availableBackends
-                        android.util.Log.d(TAG, "checkBackendAvailability: Found ${backends.size} backends")
+                        // Resolved through the registry, exactly as the settings screen and the
+                        // status line resolve it. Going to the service's own list instead would
+                        // hand AiBackend.preferredId a hash-ordered collection, and with nothing
+                        // stored the two would answer differently on the same launch.
+                        val options = BackendRegistry.options()
+                        android.util.Log.d(TAG, "checkBackendAvailability: Found ${options.size} backends")
 
-                        // The selection is stored as the backend's own id, so it needs no mapping:
-                        // a backend this plugin has never heard of resolves like any other. With
-                        // nothing stored this must not fall to registration order, which is a hash
-                        // map's and so differs from what the settings screen shows.
-                        val preferredBackendId = AiBackend.preferredId(
-                            BackendRegistry.selectedId(),
-                            backends.map { it.id },
-                        )
+                        val preferredBackendId = BackendRegistry.preferred(options)?.id
                         android.util.Log.d(TAG, "checkBackendAvailability: Preferred backend = $preferredBackendId")
+
+                        // Same order as the selector, so the fallback below is reproducible too.
+                        val backends = options.mapNotNull { llmService.getBackend(it.id) }
 
                         // First try to use the preferred backend
                         var foundAvailable = false

@@ -13,11 +13,8 @@ object ModelLoadDiagnostics {
     /** Headroom floor: a small model still needs a KV cache, which scales with context, not size. */
     private const val MIN_HEADROOM_BYTES = 256L * 1024 * 1024
 
-    /**
-     * Compute buffers every load allocates outright, whatever the model's shape. The floor for
-     * [refuseBeforeLoad], kept equal to the pre-flight's `COMPUTE_BUFFER_BYTES` allowance.
-     */
-    private const val MIN_RUN_BYTES = 256L * 1024 * 1024
+    /** Floor for [refuseBeforeLoad]; the same allowance the pre-flight estimate budgets for. */
+    private const val MIN_RUN_BYTES = ModelMemory.RUN_BUFFER_BYTES
 
     /** Most likely cause of a load failure; the caller resolves each case to a user-facing string. */
     sealed interface Diagnosis {

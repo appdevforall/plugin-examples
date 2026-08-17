@@ -22,11 +22,17 @@ data class BackendOption(
 )
 
 /**
- * The backends currently installed, as this plugin sees them.
+ * AI Core's own view of the backends currently installed: the registry the settings selector, the
+ * chat's status line and its availability check all read.
  *
- * Everything here comes from AI Core's live registry, so no provider is named anywhere in this
- * plugin: a backend that is not installed is simply absent from [options], and one that ships in a
- * `.cgp` written by someone else appears without a line of code changing here.
+ * Everything here comes from the live registry backends register themselves with, so no provider is
+ * named in any of it: a backend that is not installed is simply absent from [options], and one that
+ * ships in a `.cgp` written by someone else appears without a line of code changing here.
+ *
+ * Two onboarding surfaces name the first-party pair on purpose, and are the only ones allowed to:
+ * the manifest's plugin description, which has to tell someone browsing the Plugin Manager what
+ * else to install, and the Tier-3 guide, whose API-key walkthrough cannot be written for a provider
+ * it does not know. Every runtime string — tooltips, selector states — stays provider-neutral.
  */
 object BackendRegistry {
 
@@ -36,7 +42,7 @@ object BackendRegistry {
      * Every registered backend, sorted by label so the selector's order is stable across restarts
      * (the underlying registry is a hash map).
      *
-     * @return the installed backends; empty when AI Core is absent or no backend registered
+     * @return the installed backends; empty when no backend has registered yet
      */
     fun options(): List<BackendOption> {
         val backends = try {

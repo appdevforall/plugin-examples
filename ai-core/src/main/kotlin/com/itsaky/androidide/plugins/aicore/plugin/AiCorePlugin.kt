@@ -19,7 +19,6 @@ import com.itsaky.androidide.plugins.extensions.UIExtension
 import com.itsaky.androidide.plugins.services.IdeProjectService
 import com.itsaky.androidide.plugins.services.LlmInferenceService
 import com.itsaky.androidide.plugins.services.SharedServices
-import java.io.File
 
 class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExtension {
 
@@ -70,9 +69,6 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
 
         /** Set once [adoptAiAssistantData] has run, so it never re-copies superseded values. */
         private const val PREF_KEY_ADOPTED_LEGACY = "adopted_ai_assistant_data"
-
-        /** Subdirectory of the plugin files dir holding saved conversations. */
-        private const val CHAT_SESSIONS_DIR = "chat_sessions"
 
         @Volatile
         private var pluginContext: PluginContext? = null
@@ -193,19 +189,16 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
     override fun getTooltipEntries(): List<PluginTooltipEntry> = listOf(
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_TAB,
-            summary = "AI Agent: chat with an on-device or Gemini model that can read, search and edit your project.",
+            summary = "AI Agent: chat with a model that can read, search and edit your project.",
             detail = """
                 <p>The <b>Agent</b> tab opens a chat assistant backed by the
                 <b>AI Core</b> plugin. It can answer questions and run an
                 agentic tool-loop over your project.</p>
-                <p>Backends:</p>
-                <ul>
-                  <li><b>Local</b> — on-device inference via llama.cpp (select a
-                      <code>.gguf</code> model under <b>Preferences &rarr;
-                      Configuration &rarr; Agent</b>).</li>
-                  <li><b>Gemini</b> — Google's cloud API (needs an API key on the
-                      same screen; requests leave the device over HTTPS).</li>
-                </ul>
+                <p>The model itself comes from a separate backend plugin. Install
+                one from the Plugin Manager, then pick it and configure it under
+                <b>Preferences &rarr; Configuration &rarr; Agent</b> — a backend
+                may run on the device or send requests to a network service, and
+                says which on its own settings panel.</p>
                 <p>File-editing tools are confined to the current project and
                 ask for approval before writing.</p>
             """.trimIndent(),
@@ -400,12 +393,12 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
             tag = TOOLTIP_TAG_MESSAGE_OPEN_SETTINGS,
             summary = "Jump to the Agent settings to fix the problem this message reports.",
             detail = """
-                <p>Shown when the agent could not run because it is not configured
-                yet — no local model selected, or no Gemini API key saved.</p>
+                <p>Shown when the agent could not run because no backend is
+                installed, or the selected one is not finished being set up.</p>
                 <p>Opens the <b>Agent</b> settings screen — the same one under
                 <b>Preferences &rarr; Configuration &rarr; Agent</b> — so you can
-                choose a backend, pick a <code>.gguf</code> model or enter a key,
-                then return and send your message again.</p>
+                choose a backend and complete whatever it asks for, then return
+                and send your message again.</p>
             """.trimIndent(),
             buttons = listOf(
                 PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)
@@ -444,12 +437,11 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
             summary = "Choose which installed backend powers the Agent.",
             detail = """
                 <p>Lists every AI backend plugin installed and registered with
-                <b>AI Core</b> — for example <b>AI Agent Local</b> for
-                on-device <code>.gguf</code> models, or <b>AI Agent Gemini</b>
-                for Google's cloud API.</p>
-                <p>Each backend supplies its own settings, so the panel below
-                changes with the choice. If the list is empty, no backend is
-                installed: add one from the Plugin Manager.</p>
+                <b>AI Core</b>. Each names itself, says whether it runs on the
+                device or over the network, and supplies its own settings — so
+                the panel below changes with the choice.</p>
+                <p>If the list is empty, no backend is installed: add one from
+                the Plugin Manager and come back.</p>
             """.trimIndent(),
             buttons = listOf(
                 PluginTooltipButton(description = "AI Core Agent guide", uri = "index.html", order = 0)
@@ -462,16 +454,16 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
 
     private fun migrateDataIfNeeded() {
         adoptAiAssistantData()
-        migrateChatHistory()
         migrateSettings()
     }
 
     /**
-     * Takes over the data of the AI Assistant plugin this one absorbed.
+     * Takes over the settings of the AI Assistant plugin this one absorbed.
      *
      * Both halves used to ship separately, and everything the user configured — API key, model
-     * path, chat history — was namespaced to *that* plugin's id. Without this, upgrading looks
-     * exactly like a factory reset: no key, no model, no conversations.
+     * path — was namespaced to *that* plugin's id. Without this, upgrading looks exactly like a
+     * factory reset. Conversations need no migration: `ChatStorageManager` keeps them in an
+     * app-level preferences file whose name did not change with the plugin id.
      *
      * Copies rather than moves, so a user who reinstalls the old plugin still finds its data, and
      * runs at most once: anything already present here wins, since it is newer by definition.
@@ -482,7 +474,6 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
             if (prefs.getBoolean(PREF_KEY_ADOPTED_LEGACY, false)) return
 
             adoptLegacySettings(prefs)
-            adoptLegacyChatSessions()
 
             prefs.edit().putBoolean(PREF_KEY_ADOPTED_LEGACY, true).apply()
         } catch (e: Exception) {
@@ -528,56 +519,6 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
         }
         editor.apply()
         context.logger.info("Adopted $adopted AI Assistant settings")
-    }
-
-    /** Copies the old plugin's saved conversations into this plugin's storage. */
-    private fun adoptLegacyChatSessions() {
-        val legacyDir = File(
-            File(context.getAppFilesDir(), "plugins/$LEGACY_ASSISTANT_PLUGIN_ID"),
-            CHAT_SESSIONS_DIR
-        )
-        if (!legacyDir.isDirectory) return
-
-        val targetDir = File(context.getPluginFilesDir(), CHAT_SESSIONS_DIR)
-        targetDir.mkdirs()
-
-        var adopted = 0
-        legacyDir.listFiles()?.forEach { file ->
-            val target = File(targetDir, file.name)
-            if (!target.exists()) {
-                file.copyTo(target, overwrite = false)
-                adopted++
-            }
-        }
-        context.logger.info("Adopted $adopted AI Assistant chat sessions")
-    }
-
-    private fun migrateChatHistory() {
-        try {
-            val appChatDir = File(context.getAppFilesDir(), "chat_sessions")
-            val pluginChatDir = File(context.getPluginFilesDir(), "chat_sessions")
-
-            if (appChatDir.exists() && !pluginChatDir.exists()) {
-                context.logger.info("Migrating chat history from app to plugin storage")
-                pluginChatDir.mkdirs()
-
-                var migratedCount = 0
-                appChatDir.listFiles()?.forEach { file ->
-                    val targetFile = File(pluginChatDir, file.name)
-                    if (!targetFile.exists()) {
-                        file.copyTo(targetFile, overwrite = false)
-                        migratedCount++
-                    }
-                }
-
-                context.logger.info("Migrated $migratedCount chat session files")
-                // Keep original files (don't delete)
-            } else if (pluginChatDir.exists()) {
-                context.logger.info("Chat history already migrated")
-            }
-        } catch (e: Exception) {
-            context.logger.error("Failed to migrate chat history", e)
-        }
     }
 
     private fun migrateSettings() {

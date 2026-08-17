@@ -154,7 +154,7 @@
     <!-- Local model selection: memory pre-flight warning -->
 
     <!-- Backend selector states; the panes themselves come from the backend plugins. -->
-    <string name="backend_none_installed">No AI backend is installed. Install a backend plugin, for example AI Agent Local for on-device models, or AI Agent Gemini for Google\'s API, from the Plugin Manager.</string>
+    <string name="backend_none_installed">No AI backend is installed. Install a backend plugin from the Plugin Manager, then return to this screen to choose it.</string>
     <string name="backend_none_installed_short">No backend</string>
     <string name="backend_no_settings">%1$s has no settings to configure.</string>
     <string name="backend_pane_unavailable">This backend\'s settings are unavailable. It may have been uninstalled or disabled.</string>

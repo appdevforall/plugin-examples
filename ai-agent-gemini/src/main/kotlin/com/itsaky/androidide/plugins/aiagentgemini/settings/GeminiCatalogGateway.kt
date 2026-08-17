@@ -98,8 +98,7 @@ class BackendGeminiCatalogGateway(
             // The API failure the backend reported; its message carries the HTTP status.
             CatalogResult.Failed(e.cause ?: e)
         } catch (e: CancellationException) {
-            logger?.warn("$TAG: listModels was cancelled by the backend", e)
-            CatalogResult.Failed(e)
+            throw e
         } catch (e: TimeoutException) {
             future.cancel(true)
             logger?.error(

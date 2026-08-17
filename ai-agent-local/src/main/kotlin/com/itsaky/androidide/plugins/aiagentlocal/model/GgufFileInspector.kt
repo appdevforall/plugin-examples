@@ -11,15 +11,13 @@ import java.io.InputStream
  *
  * Separate from `GgufModelInspector` because the two answer different questions: this screens a
  * `content://` document the user just picked, before any path is stored, so it must work from a
- * stream and never throw. Keep [GGUF_MAGIC] in step with `GgufModelInspector.GGUF_MAGIC` if the
- * format ever changes.
+ * stream and never throw. The magic itself comes from [GgufFormat], shared with the other readers.
  */
 internal object GgufFileInspector {
 
     private const val TAG = "$LOG_PREFIX.GgufFileInspector"
 
-    /** The GGUF magic: the four ASCII bytes a `.gguf` file starts with. */
-    private val GGUF_MAGIC = "GGUF".toByteArray(Charsets.US_ASCII)
+    private val GGUF_MAGIC = GgufFormat.MAGIC_BYTES
 
     /**
      * @param header first bytes of a candidate file

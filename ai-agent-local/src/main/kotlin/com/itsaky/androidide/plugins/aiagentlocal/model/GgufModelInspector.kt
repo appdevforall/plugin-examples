@@ -21,7 +21,7 @@ import java.io.FileInputStream
  */
 object GgufModelInspector {
 
-    private const val GGUF_MAGIC = 0x46554747 // "GGUF" little-endian
+    private const val GGUF_MAGIC = GgufFormat.MAGIC_LE_INT
 
     // GGUF metadata value types.
     private const val T_UINT8 = 0

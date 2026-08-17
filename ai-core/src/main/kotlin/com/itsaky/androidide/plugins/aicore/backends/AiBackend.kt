@@ -3,7 +3,7 @@ package com.itsaky.androidide.plugins.aicore.backends
 import com.itsaky.androidide.plugins.services.LlmInferenceService
 
 /**
- * How AI Core maps the AI Assistant backend *setting* onto a registered backend *id*.
+ * How the stored backend *setting* maps onto a registered backend *id*.
  *
  * Deliberately not an enum: backends are contributed by separate plugins now, so AI Core cannot
  * know the full set at compile time. A new backend plugin stores its own id as the preference
@@ -12,7 +12,10 @@ import com.itsaky.androidide.plugins.services.LlmInferenceService
  */
 object AiBackend {
 
-    /** SharedPreferences file, owned by the AI Assistant plugin, holding the backend selection. */
+    /**
+     * This plugin's SharedPreferences file holding the backend selection. Keeps the name the
+     * absorbed plugin used, so an upgraded device still finds the choice it stored.
+     */
     const val PREFERENCE_FILE = "AgentSettings"
 
     /** Key under which the selected backend is stored in [PREFERENCE_FILE]. */

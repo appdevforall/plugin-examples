@@ -33,12 +33,12 @@ data class GgufHeader(
 /**
  * Reads the metadata block at the front of a `.gguf` file — the shape values the KV-cache estimate
  * needs. Never reads the weights, and fails closed to null: an unreadable header must mean "no
- * estimate", never a wrong one. Mirrors ai-agent-local's `GgufModelInspector` — keep the two in sync.
+ * estimate", never a wrong one. Parses the same metadata block as [GgufModelInspector], which
+ * answers a different question — chat model or embedding model.
  */
 internal object GgufHeaderReader {
 
-    /** "GGUF", little-endian. */
-    private const val GGUF_MAGIC = 0x46554747
+    private const val GGUF_MAGIC = GgufFormat.MAGIC_LE_INT
 
     // GGUF metadata value types.
     private const val T_UINT8 = 0

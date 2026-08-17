@@ -32,26 +32,16 @@ internal object LocalLlmPreferences {
     /** The host's own store, from before any of this was a plugin. */
     private const val HOST_LEGACY_FILE = "LlamaPrefs"
 
-    /** This plugin's id before it was renamed from `ai-backend-local`; see [OWN_LEGACY_FILE]. */
-    private const val LEGACY_PLUGIN_ID = "com.itsaky.androidide.plugins.ailocal"
-
     /**
-     * This same file, under the plugin id this plugin had before the rename. The host namespaces a
-     * plugin's preferences by plugin id, so changing the id points [of] at an empty file and a
-     * configured device would look unconfigured.
-     */
-    private val OWN_LEGACY_FILE = "plugin_${LEGACY_PLUGIN_ID}_$FILE"
-
-    /**
-     * Files that may still hold this backend's values, newest first.
+     * Files that may still hold this backend's values, newest first. Only ids that have shipped:
+     * the pre-rename `…plugins.ailocal` id never reached a release, so no device stores anything
+     * under it.
      *
      * Every one is read because plugins load in parallel with no ordering: an older file may not
      * have been folded into a newer one yet, so stopping at the first that holds anything can miss
      * a value the next one still has.
      */
     private val LEGACY_FILES = listOf(
-        OWN_LEGACY_FILE,
-        legacyFileName(LEGACY_PLUGIN_ID),
         legacyFileName("com.itsaky.androidide.plugins.aicore"),
         legacyFileName("com.itsaky.androidide.plugins.aiassistant"),
         HOST_LEGACY_FILE,

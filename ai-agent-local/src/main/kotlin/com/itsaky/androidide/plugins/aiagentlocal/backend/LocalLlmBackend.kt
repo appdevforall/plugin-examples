@@ -137,7 +137,7 @@ class LocalLlmBackend(
         // Check if model is actually configured
         val prefs = LocalLlmPreferences.of(context)
 
-        val configuredPath = prefs?.getString(LocalLlmPreferences.KEY_MODEL_PATH, null)
+        val configuredPath = prefs.getString(LocalLlmPreferences.KEY_MODEL_PATH, null)
 
         context.logger.debug("LocalLlmBackend.isAvailable() - configured path: $configuredPath, modelLoaded: $modelLoaded")
 
@@ -398,7 +398,7 @@ class LocalLlmBackend(
         // Check if model is configured
         val prefs = LocalLlmPreferences.of(context)
 
-        val configuredPath = prefs?.getString(LocalLlmPreferences.KEY_MODEL_PATH, null)
+        val configuredPath = prefs.getString(LocalLlmPreferences.KEY_MODEL_PATH, null)
         context.logger.info("LocalLlmBackend: configured model path = $configuredPath")
 
         if (configuredPath.isNullOrBlank()) {
@@ -503,7 +503,7 @@ class LocalLlmBackend(
         // Check if model is configured
         val prefs = LocalLlmPreferences.of(context)
 
-        val configuredPath = prefs?.getString(LocalLlmPreferences.KEY_MODEL_PATH, null)
+        val configuredPath = prefs.getString(LocalLlmPreferences.KEY_MODEL_PATH, null)
 
         if (configuredPath.isNullOrBlank()) {
             callback.onError("No model configured. Please go to Settings and select a .gguf model file.")

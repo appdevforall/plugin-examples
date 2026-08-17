@@ -6,7 +6,6 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
-import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.Spinner
@@ -20,7 +19,6 @@ import com.itsaky.androidide.plugins.aicore.backends.BackendOption
 import com.itsaky.androidide.plugins.aicore.backends.BackendRegistry
 import com.itsaky.androidide.plugins.base.PluginFragmentHelper
 import com.itsaky.androidide.plugins.services.IdeTooltipService
-import kotlin.math.roundToInt
 
 /**
  * The Agent settings screen, reached from Preferences → Configuration → Agent and from the Agent
@@ -36,10 +34,15 @@ class AiSettingsFragment : Fragment() {
     private lateinit var settingsToolbar: LinearLayout
     private lateinit var backButton: ImageButton
     private lateinit var backendSpinner: Spinner
-    private lateinit var backendSpecificContainer: FrameLayout
+    private lateinit var backendPlaceholder: TextView
     private var tooltipService: IdeTooltipService? = null
 
-    /** Backends as of [onCreate], so the spinner's positions stay valid while it is on screen. */
+    /**
+     * Backends as of the last read, so the spinner's positions stay valid while it is on screen.
+     * Re-read in [onResume] rather than only in [onCreate]: plugins load in parallel, so a backend
+     * can register after this screen opened and would otherwise stay invisible until it is
+     * recreated.
+     */
     private var backends: List<BackendOption> = emptyList()
 
     /** Backend whose pane is currently mounted, so re-selecting it does not rebuild it. */
@@ -121,7 +124,22 @@ class AiSettingsFragment : Fragment() {
         settingsToolbar = view.findViewById(R.id.settings_toolbar)
         backButton = view.findViewById(R.id.toolbar_back_button)
         backendSpinner = view.findViewById(R.id.backend_autocomplete)
-        backendSpecificContainer = view.findViewById(R.id.backend_specific_settings_container)
+        // The pane container itself is addressed by id only; its children belong to the child
+        // FragmentManager, so nothing here holds a reference that could touch them.
+        backendPlaceholder = view.findViewById(R.id.backend_placeholder)
+    }
+
+    /**
+     * Picks up a backend that registered after this screen opened — the ordering this whole design
+     * assumes cannot happen. Only rebuilds when the installed set actually changed, so returning
+     * from a pane does not disturb a mounted one.
+     */
+    override fun onResume() {
+        super.onResume()
+        val current = BackendRegistry.options()
+        if (current.map { it.id } == backends.map { it.id }) return
+        backends = current
+        setupBackendSelector(restoring = false)
     }
 
     private fun setupToolbar() {
@@ -141,6 +159,9 @@ class AiSettingsFragment : Fragment() {
     private fun setupBackendSelector(restoring: Boolean) {
         if (backends.isEmpty()) {
             backendSpinner.visibility = View.GONE
+            // Reached on a refresh too, when the last backend was uninstalled under the screen.
+            clearPane()
+            shownBackendId = null
             showPlaceholder(getString(R.string.backend_none_installed))
             return
         }
@@ -210,9 +231,11 @@ class AiSettingsFragment : Fragment() {
             return
         }
 
-        backendSpecificContainer.removeAllViews()
+        hidePlaceholder()
         childFragmentManager.commit {
             setReorderingAllowed(true)
+            // replace() removes the outgoing pane's view itself; clearing the container by hand
+            // would only race that transaction and defeat the exit animation.
             replace(R.id.backend_specific_settings_container, paneClass, null, TAG_BACKEND_PANE)
         }
     }
@@ -255,15 +278,18 @@ class AiSettingsFragment : Fragment() {
         }
     }
 
-    /** Puts [message] in the pane container, for the states where there is no pane to show. */
+    /**
+     * Shows [message] for the states where there is no pane. A sibling of the pane container, so
+     * the child FragmentManager keeps sole ownership of that container's children and a pending
+     * `remove()` cannot run against a view something else already detached.
+     */
     private fun showPlaceholder(message: String) {
-        val padding = (16 * resources.displayMetrics.density).roundToInt()
-        backendSpecificContainer.removeAllViews()
-        backendSpecificContainer.addView(
-            TextView(requireContext()).apply {
-                text = message
-                setPadding(padding, padding, padding, padding)
-            }
-        )
+        backendPlaceholder.text = message
+        backendPlaceholder.visibility = View.VISIBLE
+    }
+
+    /** Hides the placeholder; a mounted pane speaks for itself. */
+    private fun hidePlaceholder() {
+        backendPlaceholder.visibility = View.GONE
     }
 }

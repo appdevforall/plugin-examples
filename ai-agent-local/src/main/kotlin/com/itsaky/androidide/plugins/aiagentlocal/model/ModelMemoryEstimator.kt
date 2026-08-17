@@ -37,18 +37,11 @@ object ModelMemoryEstimator {
     /** Two bytes per cached element: f16, the default KV type. */
     private const val KV_BYTES_PER_ELEMENT = 2L
 
-    /**
-     * Graph and compute buffers for the 2048-token batch ai-agent-local allocates (`new_batch` in
-     * `LLamaAndroid.load`). Not derivable from the header, so it is a flat allowance.
-     */
-    private const val COMPUTE_BUFFER_BYTES = 256L * 1024 * 1024
+    /** Graph and compute buffers every load allocates; see [ModelMemory.RUN_BUFFER_BYTES]. */
+    private const val COMPUTE_BUFFER_BYTES = ModelMemory.RUN_BUFFER_BYTES
 
-    /**
-     * Floor for the size-based fallback, matching `ModelLoadDiagnostics.MIN_RUN_BYTES` in
-     * ai-agent-local so this warning and the refusal that gates the load itself cannot
-     * contradict each other.
-     */
-    private const val MIN_FALLBACK_RUN_BYTES = 256L * 1024 * 1024
+    /** Floor for the size-based fallback; the same allowance the refusal itself uses. */
+    private const val MIN_FALLBACK_RUN_BYTES = ModelMemory.RUN_BUFFER_BYTES
 
     /**
      * Ceilings on the header's shape values, each far above the largest real model. They exist so a

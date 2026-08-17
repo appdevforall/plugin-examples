@@ -1,12 +1,10 @@
 package com.itsaky.androidide.plugins.aicore.services
 
-import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.PluginLogger
 import com.itsaky.androidide.plugins.aicore.backends.AiBackend
 import com.itsaky.androidide.plugins.aicore.plugin.AiCorePlugin
 import com.itsaky.androidide.plugins.services.LlmInferenceService
 import com.itsaky.androidide.plugins.services.LlmInferenceService.*
-import com.itsaky.androidide.plugins.services.SharedServices
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
 
@@ -47,7 +45,7 @@ class LlmInferenceServiceImpl(private val logger: PluginLogger? = null) : LlmInf
     }
 
     override fun generateCompletion(prompt: String, config: LlmConfig): CompletableFuture<LlmResponse> {
-        val effectiveId = effectiveBackendId(config.backendId)
+        val effectiveId = resolveAndStamp(config)
         val backend = backends[effectiveId]
             ?: return CompletableFuture.completedFuture(
                 LlmResponse.failure("Backend '$effectiveId' not found")
@@ -59,15 +57,13 @@ class LlmInferenceServiceImpl(private val logger: PluginLogger? = null) : LlmInf
             )
         }
 
-        config.backendId = effectiveId
-
         val future = backend.generate(prompt, config)
         currentGeneration = future
         return future
     }
 
     override fun generateStreaming(prompt: String, config: LlmConfig, callback: StreamCallback) {
-        val effectiveId = effectiveBackendId(config.backendId)
+        val effectiveId = resolveAndStamp(config)
         val backend = backends[effectiveId]
         if (backend == null) {
             callback.onError("Backend '$effectiveId' not found")
@@ -87,7 +83,7 @@ class LlmInferenceServiceImpl(private val logger: PluginLogger? = null) : LlmInf
         prompt: String,
         config: LlmConfig
     ): CompletableFuture<LlmResponse> {
-        val effectiveId = effectiveBackendId(config.backendId)
+        val effectiveId = resolveAndStamp(config)
         val backend = backends[effectiveId]
             ?: return CompletableFuture.completedFuture(
                 LlmResponse.failure("Backend '$effectiveId' not found")
@@ -111,7 +107,7 @@ class LlmInferenceServiceImpl(private val logger: PluginLogger? = null) : LlmInf
         tools: List<ToolDefinition>,
         callback: ToolStreamCallback
     ) {
-        val effectiveId = effectiveBackendId(config.backendId)
+        val effectiveId = resolveAndStamp(config)
         val backend = backends[effectiveId]
         if (backend == null) {
             callback.onError("Backend '$effectiveId' not found")
@@ -150,6 +146,19 @@ class LlmInferenceServiceImpl(private val logger: PluginLogger? = null) : LlmInf
     override fun getEmbeddings(text: String, backendId: String): CompletableFuture<FloatArray> {
         // Stub implementation - embeddings not needed for Phase 3
         return CompletableFuture.completedFuture(FloatArray(0))
+    }
+
+    /**
+     * Resolves where a request routes and writes that id back into [config], so every entry point
+     * hands the backend the id it actually ran on rather than the [AiBackend.AUTO] sentinel.
+     *
+     * @param config the request's config; its `backendId` is replaced by the resolved id
+     * @return the backend id to route to
+     */
+    private fun resolveAndStamp(config: LlmConfig): String {
+        val effectiveId = effectiveBackendId(config.backendId)
+        config.backendId = effectiveId
+        return effectiveId
     }
 
     /**
