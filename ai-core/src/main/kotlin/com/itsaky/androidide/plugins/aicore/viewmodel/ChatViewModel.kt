@@ -6,6 +6,7 @@ import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aicore.R
 import com.itsaky.androidide.plugins.aicore.backends.AiBackend
 import com.itsaky.androidide.plugins.aicore.backends.BackendRegistry
+import com.itsaky.androidide.plugins.aicore.backends.SelectedBackend
 import com.itsaky.androidide.plugins.aicore.logging.AgentTrace
 import com.itsaky.androidide.plugins.aicore.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aicore.managers.ChatStorageManager
@@ -51,6 +52,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -141,8 +143,10 @@ class ChatViewModel(
     private val _agentState = MutableStateFlow<AgentState>(AgentState.Idle)
     val agentState: StateFlow<AgentState> = _agentState.asStateFlow()
 
-    private val _isBackendAvailable = MutableStateFlow(false)
-    val isBackendAvailable: StateFlow<Boolean> = _isBackendAvailable.asStateFlow()
+    private val _backendStatus = MutableStateFlow(BackendStatus(AiBackend.DEFAULT_ID, false))
+    val isBackendAvailable: StateFlow<Boolean> = _backendStatus
+        .map { it.isAvailable }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     private val _sessions = MutableStateFlow<List<ChatSession>>(emptyList())
     val sessions: StateFlow<List<ChatSession>> = _sessions.asStateFlow()
@@ -159,12 +163,20 @@ class ChatViewModel(
     }.stateIn(viewModelScope, SharingStarted.Lazily, null)
 
     /**
-     * Backend the last availability check resolved. Volatile because that check runs on IO and
-     * [sendMessage] reads it on Main; a stale read would build the request for a different backend
-     * than the one just found.
+     * What the last availability check resolved: which backend to send to, and whether it is ready.
+     *
+     * One value, not two fields. The check runs on IO and [sendMessage] reads it on Main, and a
+     * superseded run writing one field after a newer run wrote both would leave the id naming one
+     * backend while the verdict describes another.
+     *
+     * @param id the backend the request must be built for
+     * @param isAvailable whether that backend is configured and ready
      */
-    @Volatile
-    private var currentBackendId: String = AiBackend.DEFAULT_ID
+    private data class BackendStatus(val id: String, val isAvailable: Boolean)
+
+    /** Backend the last availability check resolved; see [BackendStatus]. */
+    private val currentBackendId: String
+        get() = _backendStatus.value.id
 
     /**
      * Label for the backend the user *selected* in settings, shown under the chat input. Tracks the
@@ -174,14 +186,16 @@ class ChatViewModel(
     private val _activeBackendLabel = MutableStateFlow(selectedBackendLabel())
     val activeBackendLabel: StateFlow<String> = _activeBackendLabel.asStateFlow()
 
-    private fun selectedBackendLabel(): String {
+    private fun selectedBackendLabel(): String =
         // Resolved exactly as the settings screen and the availability check resolve it, so the
         // three cannot name different backends on the same launch.
-        val selected = BackendRegistry.preferred(BackendRegistry.options())
-        return selected?.displayName
-            ?: getContext()?.androidContext?.getString(R.string.backend_none_installed_short)
-            ?: ""
-    }
+        when (val selected = BackendRegistry.selected()) {
+            is SelectedBackend.Installed -> selected.option.displayName
+            // A stored selection resolving to nothing means its plugin is gone. Saying "no backend"
+            // there would read as "install one" when one is installed — just not the chosen one.
+            SelectedBackend.Missing -> str(R.string.backend_selected_missing_short)
+            SelectedBackend.None -> str(R.string.backend_none_installed_short)
+        }
 
     /** Re-read the selected backend and update [activeBackendLabel]; call when returning to chat. */
     fun refreshBackendLabel() {
@@ -200,6 +214,15 @@ class ChatViewModel(
 
     /** The in-flight backend availability check, so a resume can supersede the previous one. */
     private var backendCheckJob: Job? = null
+
+    /**
+     * Sequence number of the newest availability check, identifying which run may publish.
+     *
+     * Main-thread only: handed out in [checkBackendAvailability] and tested in
+     * [publishBackendStatus], both on Main, so a superseded run cannot slip a write past the test.
+     */
+    private var backendCheckSequence = 0
+
     private val generationEpoch = java.util.concurrent.atomic.AtomicInteger(0)
 
     /** True while a generation is admitted and its coroutine has not yet unwound; gates re-entry. */
@@ -575,9 +598,13 @@ class ChatViewModel(
     }
 
     /**
-     * Check if any LLM backend is available.
-     * Should be called when the fragment becomes visible.
-     * Retries with delays to handle plugin loading timing.
+     * Check whether the backend the user *selected* is available. The chat sends to that backend or
+     * to none: substituting whichever other backend happened to be configured would hand the
+     * prompt, and the source files with it, to a provider the user did not choose.
+     *
+     * Should be called when the fragment becomes visible. Retries with delays while the selection
+     * is not registered yet, to absorb plugin loading order, but settles at once once it is
+     * registered — "registered but unconfigured" is an answer, not a race.
      *
      * The previous run is cancelled first: every resume starts one, and a run still inside its
      * retry loop would otherwise write its stale verdict over a newer one — leaving the chat
@@ -586,6 +613,7 @@ class ChatViewModel(
     fun checkBackendAvailability() {
         android.util.Log.d(TAG, "checkBackendAvailability: Starting check")
         backendCheckJob?.cancel()
+        val sequence = ++backendCheckSequence
         backendCheckJob = viewModelScope.launch(Dispatchers.IO) {
             // Retry up to 5 times with 500ms delays to handle plugin loading order
             repeat(5) { attempt ->
@@ -598,42 +626,20 @@ class ChatViewModel(
                         // status line resolve it. Going to the service's own list instead would
                         // hand AiBackend.preferredId a hash-ordered collection, and with nothing
                         // stored the two would answer differently on the same launch.
-                        val options = BackendRegistry.options()
-                        android.util.Log.d(TAG, "checkBackendAvailability: Found ${options.size} backends")
+                        val selected = BackendRegistry.selected()
+                        android.util.Log.d(TAG, "checkBackendAvailability: Selection resolved to $selected")
 
-                        val preferredBackendId = BackendRegistry.preferred(options)?.id
-                        android.util.Log.d(TAG, "checkBackendAvailability: Preferred backend = $preferredBackendId")
-
-                        // Same order as the selector, so the fallback below is reproducible too.
-                        val backends = options.mapNotNull { llmService.getBackend(it.id) }
-
-                        // First try to use the preferred backend
-                        var foundAvailable = false
-                        val preferredBackend = backends.find { it.id == preferredBackendId }
-                        android.util.Log.d(TAG, "checkBackendAvailability: Preferred backend (${preferredBackendId}) found=${preferredBackend != null}, available=${preferredBackend?.isAvailable}")
-                        if (preferredBackend != null && preferredBackend.isAvailable) {
-                            if (!isActive) return@launch
-                            _isBackendAvailable.value = true
-                            currentBackendId = preferredBackend.id
-                            android.util.Log.d(TAG, "checkBackendAvailability: Using preferred backend ${preferredBackend.id}")
-                            return@launch // Success, exit retry loop
-                        }
-
-                        // If preferred backend not available, try any available backend as fallback
-                        for (backend in backends) {
-                            android.util.Log.d(TAG, "checkBackendAvailability: Checking backend ${backend.id}, available=${backend.isAvailable}")
-                            if (backend.isAvailable) {
-                                if (!isActive) return@launch
-                                _isBackendAvailable.value = true
-                                currentBackendId = backend.id
-                                foundAvailable = true
-                                android.util.Log.d(TAG, "checkBackendAvailability: Using fallback backend ${backend.id}")
-                                break
+                        val selectedId = (selected as? SelectedBackend.Installed)?.option?.id
+                        val backend = selectedId?.let { llmService.getBackend(it) }
+                        android.util.Log.d(TAG, "checkBackendAvailability: Preferred backend ($selectedId) found=${backend != null}, available=${backend?.isAvailable}")
+                        if (backend != null) {
+                            // Id set even when unavailable: a stale id from an earlier check would
+                            // otherwise build the next request for a backend since moved off.
+                            val published = publishBackendStatus(sequence) {
+                                BackendStatus(backend.id, backend.isAvailable)
                             }
-                        }
-
-                        if (foundAvailable) {
-                            return@launch // Success, exit retry loop
+                            android.util.Log.d(TAG, "checkBackendAvailability: Selected backend ${backend.id}, available=${backend.isAvailable}, published=$published")
+                            return@launch // Answered — available or not, there is no substitute
                         }
                     } catch (e: Exception) {
                         android.util.Log.e(TAG, "Error checking backends on attempt ${attempt + 1}: ${e.message}", e)
@@ -647,10 +653,33 @@ class ChatViewModel(
             }
 
             // All retries failed
-            android.util.Log.d(TAG, "checkBackendAvailability: All retries failed, no backend available")
-            if (!isActive) return@launch
-            _isBackendAvailable.value = false
+            android.util.Log.d(TAG, "checkBackendAvailability: No backend registered for the selection")
+            // Keeps whichever id is on record: nothing was resolved to replace it with.
+            publishBackendStatus(sequence) { it.copy(isAvailable = false) }
         }
+    }
+
+    /**
+     * Write this check's verdict, unless a newer check has started.
+     *
+     * Confined to the main thread, where [checkBackendAvailability] hands out sequence numbers: the
+     * test and the write then sit in one non-suspending block, so nothing can land between them.
+     * Cancelling the previous job is not enough on its own — cancellation is cooperative, so a run
+     * already past an `isActive` test still runs to its next suspension point and would write its
+     * stale verdict over the newer one, leaving the chat refusing to send with a backend that was
+     * configured in between.
+     *
+     * @param sequence the sequence number this run was started with
+     * @param transform builds the new status from the current one
+     * @return true if the verdict was written, false if a newer check had superseded this one
+     */
+    private suspend fun publishBackendStatus(
+        sequence: Int,
+        transform: (BackendStatus) -> BackendStatus,
+    ): Boolean = withContext(Dispatchers.Main.immediate) {
+        if (sequence != backendCheckSequence) return@withContext false
+        _backendStatus.value = transform(_backendStatus.value)
+        true
     }
 
     /**
@@ -661,15 +690,23 @@ class ChatViewModel(
         val llmService = getLlmService()
         if (llmService == null) {
             android.util.Log.d(TAG, "sendMessage: LLM service not available")
-            emitSystemError("LLM service not available. Install the AI Core plugin.")
+            emitSystemError(str(R.string.error_llm_service_not_available))
             return
         }
 
-        if (!_isBackendAvailable.value) {
+        if (!_backendStatus.value.isAvailable) {
             android.util.Log.d(TAG, "sendMessage: Backend not available")
+            // Names the selected backend: the point of stopping here is that the user learns which
+            // backend is not ready, instead of the request quietly going somewhere else.
             emitSystemError(
-                "No LLM backend is set up yet. Open Settings to choose an installed " +
-                    "backend and finish configuring it."
+                when (val selected = BackendRegistry.selected()) {
+                    is SelectedBackend.Installed ->
+                        str(R.string.error_backend_not_ready, selected.option.displayName)
+                    // Resolved to nothing with a selection stored: the chosen backend's plugin is
+                    // gone, which is a different fix from having installed no backend at all.
+                    SelectedBackend.Missing -> str(R.string.backend_selected_not_installed)
+                    SelectedBackend.None -> str(R.string.backend_none_installed)
+                }
             )
             return
         }
