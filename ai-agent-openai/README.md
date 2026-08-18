@@ -46,8 +46,10 @@ contributes: server URL (with presets), API key, model, and one **Test Connectio
 The pane adapts to the chosen server as it is picked, via
 `BaseUrlPolicy.keyRequirement()`: `REQUIRED` for OpenAI's own host, `EXPECTED` for
 another cloud provider, `NOT_NEEDED` for loopback or a private address — where the
-whole key section is hidden rather than showing an empty, mandatory-looking field
-for a server that wants no credential. Listing models and testing the connection
+key entry collapses to one muted line rather than showing an empty,
+mandatory-looking field for a server that wants no credential. That happens whether
+or not a key is already stored; a stored one leaves only **Remove**, so a key saved
+for another server can still be cleared from here. Listing models and testing the connection
 are the same `GET {baseUrl}/models`, so they are one control, and the model is a
 single editable dropdown rather than a field beside a spinner.
 
@@ -87,6 +89,13 @@ once on save. That is the "Ollama on my PC" case, and the host IDE's
 Stored encrypted (AES/GCM under a hardware-backed Android Keystore secret) and
 sent as an `Authorization: Bearer` **header**, never in a URL query string. With
 no key configured, no header is sent at all.
+
+**A key is bound to the server it was saved for.** The base URL is recorded next to
+the key (`KEY_API_KEY_URL`) and `readApiKeyOrBlank()` sends nothing when it does not
+match the configured server's origin, so pointing the URL at a local or LAN address
+after configuring OpenAI cannot put that bearer token on the network in the clear.
+A key stored before the origin was recorded is still sent, since it cannot be shown
+to belong elsewhere. The connection test applies the same rule.
 
 `security/SecureApiKeyStore.kt` is this plugin's **own copy**, under its own
 Keystore alias (`cotg_ai_openai_key_v1`). It is deliberately not shared with

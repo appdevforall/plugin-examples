@@ -1,5 +1,6 @@
 package com.itsaky.androidide.plugins.aicore.fragments
 
+import android.content.res.Configuration
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -10,6 +11,7 @@ import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.Spinner
 import android.widget.TextView
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.commit
 import com.itsaky.androidide.plugins.aicore.plugin.AiCorePlugin
@@ -52,6 +54,12 @@ class AiSettingsFragment : Fragment() {
         /** Tag for the mounted backend pane, so it can be found across a configuration change. */
         private const val TAG_BACKEND_PANE = "backend_settings_pane"
     }
+
+    /**
+     * The window's status-bar icon appearance as this screen found it, so leaving restores it.
+     * Null until [onStart] has run once.
+     */
+    private var hostLightStatusBars: Boolean? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // Read once for the whole screen: the factory below is consulted for every fragment the
@@ -140,6 +148,47 @@ class AiSettingsFragment : Fragment() {
         if (current.map { it.id } == backends.map { it.id }) return
         backends = current
         setupBackendSelector(restoring = false)
+    }
+
+    override fun onStart() {
+        super.onStart()
+        applySystemBarAppearance()
+    }
+
+    override fun onStop() {
+        // The window outlives this screen, so what was changed for it is handed back.
+        hostLightStatusBars?.let(::setLightSystemBars)
+        hostLightStatusBars = null
+        super.onStop()
+    }
+
+    /**
+     * Darkens the system bar icons while this screen is up in light mode.
+     *
+     * The screen fills the window with `colorSurface`, but the activity hosting a plugin screen
+     * never sets the light-appearance flag, so on a light theme the clock and the status icons stay
+     * white on a near-white bar and disappear (ADFA-3017 QA). Read from the fragment's own
+     * resources, which are the activity's and track the IDE's day/night setting.
+     */
+    private fun applySystemBarAppearance() {
+        val nightMode = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
+        val lightBackground = nightMode != Configuration.UI_MODE_NIGHT_YES
+        val controller = systemBarController() ?: return
+        if (hostLightStatusBars == null) {
+            hostLightStatusBars = controller.isAppearanceLightStatusBars
+        }
+        setLightSystemBars(lightBackground)
+    }
+
+    private fun setLightSystemBars(light: Boolean) {
+        val controller = systemBarController() ?: return
+        controller.isAppearanceLightStatusBars = light
+        controller.isAppearanceLightNavigationBars = light
+    }
+
+    private fun systemBarController(): WindowInsetsControllerCompat? {
+        val window = activity?.window ?: return null
+        return WindowInsetsControllerCompat(window, window.decorView)
     }
 
     private fun setupToolbar() {

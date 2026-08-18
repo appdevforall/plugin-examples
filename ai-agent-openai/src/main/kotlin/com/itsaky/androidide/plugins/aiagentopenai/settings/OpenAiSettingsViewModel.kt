@@ -271,6 +271,8 @@ class OpenAiSettingsViewModel(
                 .putString(OpenAiPreferences.KEY_API_KEY, encrypted)
                 .putLong(OpenAiPreferences.KEY_API_KEY_TIMESTAMP, System.currentTimeMillis())
                 .putBoolean(OpenAiPreferences.KEY_API_KEY_VERIFIED, verified)
+                // Written with the key so the backend can refuse to send it anywhere else.
+                .putString(OpenAiPreferences.KEY_API_KEY_URL, getBaseUrl())
                 .commit()
         }
 
@@ -292,6 +294,21 @@ class OpenAiSettingsViewModel(
     }
 
     /**
+     * The stored key, but only when it was saved for [baseUrl].
+     *
+     * What the connection test sends: testing a LAN server must not hand it the key the user
+     * entered for OpenAI. A key stored before the origin was recorded is returned, matching the
+     * backend's own rule.
+     *
+     * @return the plaintext key, or null when none is stored or it belongs to another server
+     */
+    suspend fun getApiKeyFor(baseUrl: String): String? {
+        val savedFor = prefs()?.getString(OpenAiPreferences.KEY_API_KEY_URL, null)
+        if (savedFor != null && !BaseUrlPolicy.sameOrigin(savedFor, baseUrl)) return null
+        return getApiKey()
+    }
+
+    /**
      * True when a key is present on disk, whether or not it can still be decrypted. Lets the UI
      * tell "nothing was saved" from "the Keystore entry is gone" — [getApiKey] is null for both.
      * Raw pref only, so no Keystore IPC and safe on the main thread.
@@ -308,6 +325,8 @@ class OpenAiSettingsViewModel(
             remove(OpenAiPreferences.KEY_API_KEY_TIMESTAMP)
             // Removed with the key, or the next saved key would inherit this one's verdict.
             remove(OpenAiPreferences.KEY_API_KEY_VERIFIED)
+            // Likewise its origin: a stale one would decide where the *next* key may be sent.
+            remove(OpenAiPreferences.KEY_API_KEY_URL)
             apply()
         }
     }

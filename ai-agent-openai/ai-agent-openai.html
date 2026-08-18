@@ -90,8 +90,10 @@
       <code>o</code> series take <code>max_completion_tokens</code> and may reject
       <code>temperature</code>; the right parameters are chosen from the model
       name, and a refused parameter is retried once without it.</li>
-    <li><b>Encrypted at rest</b> — the API key is stored as AES/GCM ciphertext
-      under a hardware-backed Android Keystore secret.</li>
+    <li><b>Encrypted at rest, and scoped to one server</b> — the API key is stored
+      as AES/GCM ciphertext under a hardware-backed Android Keystore secret, and
+      the server it was saved for is recorded with it: repointing the URL at a
+      local or LAN address never sends that key to the new server.</li>
     <li><b>Translated, safe error messages</b> — a failure becomes one
       user-facing sentence; the raw HTTP error body stays in the log and never
       reaches the chat transcript.</li>

@@ -27,6 +27,15 @@ internal object OpenAiPreferences {
     const val KEY_API_KEY_TIMESTAMP = "openai_api_key_timestamp"
     const val KEY_API_KEY_VERIFIED = "openai_api_key_verified"
 
+    /**
+     * The base URL [KEY_API_KEY] was saved for.
+     *
+     * Stored alongside so the key is only ever sent to the server it was issued by: pointing the
+     * URL at a private-range address afterwards would otherwise put an OpenAI bearer token on the
+     * local network in the clear.
+     */
+    const val KEY_API_KEY_URL = "openai_api_key_url"
+
     /** Model id to request, e.g. `gpt-5` or `qwen2.5-coder`. */
     const val KEY_MODEL = "openai_model"
 

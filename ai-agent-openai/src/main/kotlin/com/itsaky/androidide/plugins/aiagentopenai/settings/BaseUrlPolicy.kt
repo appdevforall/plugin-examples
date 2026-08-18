@@ -125,6 +125,27 @@ internal object BaseUrlPolicy {
     }
 
     /**
+     * True when [a] and [b] name the same server — same scheme, host and port.
+     *
+     * The path is ignored: `/v1` versus `/v1/` is the same endpoint, and a credential is issued by
+     * an origin rather than by a path.
+     *
+     * @return false when either URL is unusable, so an unparseable value never authorises a send
+     */
+    fun sameOrigin(a: String?, b: String?): Boolean {
+        val first = (normalize(a) as? BaseUrlResult.Accepted)?.url ?: return false
+        val second = (normalize(b) as? BaseUrlResult.Accepted)?.url ?: return false
+        return originOf(first) == originOf(second)
+    }
+
+    /** The `scheme://authority` part of an already-normalized URL. */
+    private fun originOf(url: String): String {
+        val scheme = url.substringBefore("://")
+        val authority = url.substringAfter("://").substringBefore('/')
+        return "$scheme://$authority"
+    }
+
+    /**
      * True when [url] points at OpenAI's own API, which has no anonymous access.
      *
      * This is the whole of the "when is a key mandatory" rule: everywhere else — Ollama, LM Studio,

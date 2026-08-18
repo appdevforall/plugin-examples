@@ -6,7 +6,7 @@
 
     <!-- Server presets (ServerPresets.ALL) -->
     <string name="preset_openai">OpenAI</string>
-    <string name="preset_ollama">Ollama (this device)</string>
+    <string name="preset_ollama">Ollama</string>
     <string name="preset_lm_studio">LM Studio</string>
     <string name="preset_llama_server">llama-server</string>
     <string name="preset_openrouter">OpenRouter</string>
@@ -34,6 +34,8 @@
 
     <!-- Settings pane: server -->
     <string name="label_openai_server">Server</string>
+    <string name="hint_openai_preset">Choose a server</string>
+    <string name="cd_show_presets">Show the server list</string>
     <string name="hint_openai_server">https://api.openai.com/v1</string>
     <string name="btn_save_server">Save Server</string>
     <string name="msg_server_saved">Server set to %1$s</string>
@@ -58,6 +60,9 @@
     <string name="btn_get_key">Get API Key</string>
     <string name="msg_api_key_required_for_openai">OpenAI needs an API key. Enter one, or change the server to a local model that needs none.</string>
     <string name="msg_key_not_needed">No API key needed — this server runs without one.</string>
+    <string name="msg_key_not_needed_but_saved">No API key needed — this server runs without one. Your saved key is kept for the servers that do.</string>
+    <string name="msg_api_key_needed_for_test">OpenAI needs an API key before this test can tell you anything. Enter one above, or choose a server that runs without a key.</string>
+    <string name="msg_key_left_empty">No key saved — this server will be called without one.</string>
     <string name="msg_api_key_saved">API Key saved</string>
     <string name="msg_api_key_cleared">API Key cleared</string>
     <string name="msg_api_key_is_saved">API Key is saved</string>
@@ -70,8 +75,8 @@
     <string name="msg_key_verified_rate_limited">Key accepted — the server is rate-limiting right now</string>
     <string name="msg_key_rejected">The server refused this key. It wasn\'t saved, check it and try again.</string>
     <string name="msg_key_uncheckable">Couldn\'t check this — make sure the AI Core plugin is installed, enabled and up to date.</string>
-    <string name="title_save_unverified_key">Save this key anyway?</string>
-    <string name="msg_save_unverified_key">%s\n\nThe key looks fine but couldn\'t be confirmed, so it may not work until the server is reachable.</string>
+    <string name="title_save_unverified_key">Save without checking?</string>
+    <string name="msg_save_unverified_key">%s\n\nYour key has not been checked, so there is no way to tell yet whether it works. Save it now and it will be used as soon as the server answers.</string>
     <string name="action_cancel">Cancel</string>
     <string name="action_save_anyway">Save anyway</string>
     <string name="msg_key_hint_paste_into_field">Copied your key? Paste it into the field above, then tap Save Key.</string>
@@ -83,6 +88,10 @@
     <!-- Settings pane: model. One editable dropdown; typing and picking both save. -->
     <string name="label_openai_model">Model</string>
     <string name="hint_openai_model">gpt-5, qwen2.5-coder, …</string>
+    <string name="cd_show_models">Show the model list</string>
+    <!-- One non-selectable row in the model dropdown when a search matches nothing. Typing a
+         name the list does not hold is still valid, which is what the field hint says. -->
+    <string name="msg_no_model_found">No model found</string>
     <string name="hint_openai_model_help">Type any name the server accepts. Test the connection below to list what it offers.</string>
     <string name="hint_openai_model_live">Tap to pick from the models this server reported, or type another name.</string>
     <string name="msg_model_switched">This server doesn\'t offer your previous model. Switched to %1$s — pick another if you prefer.</string>
@@ -91,9 +100,15 @@
     <!-- Settings pane: connection test, which also fills the model list -->
     <string name="btn_test_connection">Test Connection &amp; List Models</string>
     <string name="msg_testing_connection">Contacting the server…</string>
-    <string name="msg_connection_ok">Connected — the server offers %1$d models</string>
+    <!-- "found N" rather than "offers N": a bare count next to a key check reads as an HTTP
+         status, and OpenRouter's catalog really does come back as 401 chat models. -->
+    <plurals name="msg_connection_ok">
+        <item quantity="one">Connected — found %1$d model</item>
+        <item quantity="other">Connected — found %1$d models</item>
+    </plurals>
     <string name="msg_server_no_models">The server answered but has no models loaded. For Ollama, pull a model first.</string>
     <string name="msg_server_endpoint_404">The server answered 404. The URL is probably missing its /v1 at the end.</string>
     <string name="msg_server_unreachable">Nothing answered. Check the server is running and that this device can reach it.</string>
+    <string name="msg_server_needs_key">This server needs an API key. Enter one above, then test again.</string>
 
 </resources>

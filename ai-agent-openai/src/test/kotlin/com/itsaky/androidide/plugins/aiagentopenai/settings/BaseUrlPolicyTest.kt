@@ -208,4 +208,33 @@ class BaseUrlPolicyTest {
             )
         }
     }
+
+    @Test
+    fun givenTheSameServerWrittenTwoWays_whenComparingOrigins_thenTheyMatch() {
+        // The path is not part of an origin: a key issued by a host works on any path there.
+        assertTrue(
+            BaseUrlPolicy.sameOrigin("https://api.openai.com/v1", "https://api.openai.com/v1/")
+        )
+        assertTrue(BaseUrlPolicy.sameOrigin("https://API.OpenAI.com/v1", "https://api.openai.com"))
+    }
+
+    @Test
+    fun givenADifferentHostSchemeOrPort_whenComparingOrigins_thenTheyDiffer() {
+        assertFalse(
+            BaseUrlPolicy.sameOrigin("https://api.openai.com/v1", "http://localhost:11434/v1")
+        )
+        assertFalse(
+            BaseUrlPolicy.sameOrigin("http://localhost:11434/v1", "http://localhost:1234/v1")
+        )
+        assertFalse(
+            BaseUrlPolicy.sameOrigin("https://api.openai.com/v1", "http://api.openai.com/v1")
+        )
+    }
+
+    @Test
+    fun givenAnUnusableUrl_whenComparingOrigins_thenItDoesNotMatch() {
+        // Fails closed: an unparseable value must never authorise sending a key.
+        assertFalse(BaseUrlPolicy.sameOrigin(null, "https://api.openai.com/v1"))
+        assertFalse(BaseUrlPolicy.sameOrigin("nonsense", "nonsense"))
+    }
 }

@@ -153,9 +153,10 @@ class OpenAiBackend(
             context.logger.debug("OpenAiBackend.isAvailable() - custom server configured: $baseUrl")
             return true
         }
-        val apiKey = keyCache.read()
-        context.logger.debug("OpenAiBackend.isAvailable() - API key configured: ${!apiKey.isNullOrBlank()}")
-        return !apiKey.isNullOrBlank()
+        // Origin-checked, or the backend would report itself ready on a key it will not send.
+        val apiKey = readApiKeyOrBlank()
+        context.logger.debug("OpenAiBackend.isAvailable() - API key configured: ${apiKey.isNotBlank()}")
+        return apiKey.isNotBlank()
     }
 
     override fun generate(prompt: String, config: LlmConfig): CompletableFuture<LlmResponse> {
@@ -506,7 +507,22 @@ class OpenAiBackend(
     }
 
     /** The stored key as a possibly-empty string, for the calls that treat "no key" as valid. */
-    private fun readApiKeyOrBlank(): String = keyCache.read().orEmpty()
+    /**
+     * The saved key, but only for the server it was saved for.
+     *
+     * A key entered for OpenAI must not travel to whatever server the URL is pointed at next: a
+     * loopback or private-range server is reached over plain `http`, so the bearer token would
+     * cross the local network in the clear. A key stored before the origin was recorded is still
+     * sent — it cannot be shown to belong elsewhere, and dropping it would break an upgrade.
+     */
+    private fun readApiKeyOrBlank(): String {
+        val savedFor = openAiPrefs()?.getString(OpenAiPreferences.KEY_API_KEY_URL, null)
+        if (savedFor != null && !BaseUrlPolicy.sameOrigin(savedFor, getBaseUrl())) {
+            context.logger.debug("OpenAiBackend: saved key belongs to another server; sending none")
+            return ""
+        }
+        return keyCache.read().orEmpty()
+    }
 
     /** Fetch and filter `GET {baseUrl}/models`. Runs on the caller's (IO) coroutine. */
     private fun fetchAvailableModels(apiKey: String, baseUrl: String): List<String> {

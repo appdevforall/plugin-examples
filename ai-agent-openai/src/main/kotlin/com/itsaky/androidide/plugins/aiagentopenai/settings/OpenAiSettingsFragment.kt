@@ -13,22 +13,22 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
-import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.AutoCompleteTextView
 import android.widget.Button
 import android.widget.EditText
-import android.widget.ImageButton
+import android.widget.Filter
 import android.widget.LinearLayout
-import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
+import androidx.annotation.DimenRes
 import androidx.annotation.DrawableRes
 import androidx.core.widget.doAfterTextChanged
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.textfield.TextInputLayout
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aiagentopenai.R
 import com.itsaky.androidide.plugins.aiagentopenai.plugin.OpenAiPlugin
@@ -144,6 +144,15 @@ class OpenAiSettingsFragment : Fragment() {
         target.visibility = View.VISIBLE
     }
 
+    /** Sets [view]'s top margin to [dimenRes], for a gap that depends on what else is showing. */
+    private fun setTopMargin(view: View, @DimenRes dimenRes: Int) {
+        val params = view.layoutParams as? ViewGroup.MarginLayoutParams ?: return
+        val margin = resources.getDimensionPixelSize(dimenRes)
+        if (params.topMargin == margin) return
+        params.topMargin = margin
+        view.layoutParams = params
+    }
+
     /** Drop a status line that no longer describes what is on screen. */
     private fun hideStatus(target: TextView) {
         target.visibility = View.GONE
@@ -153,45 +162,53 @@ class OpenAiSettingsFragment : Fragment() {
 
     // --- Server -------------------------------------------------------------------------------
 
-    @SuppressLint("ClickableViewAccessibility")
     private fun setupServerUi(view: View) {
-        val presetSpinner = view.findViewById<Spinner>(R.id.openai_preset_spinner)
+        val presetBox = view.findViewById<TextInputLayout>(R.id.openai_preset_box)
+        val presetInput = view.findViewById<AutoCompleteTextView>(R.id.openai_preset_input)
         val urlInput = view.findViewById<EditText>(R.id.openai_base_url_input)
         val saveButton = view.findViewById<Button>(R.id.btn_save_server)
         val statusText = view.findViewById<TextView>(R.id.openai_server_status_text)
         val serverLabel = view.findViewById<TextView>(R.id.openai_server_label)
 
-        listOf<View>(urlInput, saveButton, serverLabel)
+        listOf<View>(urlInput, saveButton, serverLabel, statusText)
             .forEach { wireTooltip(it, OpenAiPlugin.TOOLTIP_TAG_SETTINGS_SERVER) }
-        wireTooltip(presetSpinner, OpenAiPlugin.TOOLTIP_TAG_SETTINGS_PRESET)
+        wireTooltip(presetBox, OpenAiPlugin.TOOLTIP_TAG_SETTINGS_PRESET)
 
         urlInput.setText(viewModel.getBaseUrl())
 
         val presetLabels = ServerPresets.ALL.map { getString(it.labelRes) }
-        val adapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_item, presetLabels)
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        presetSpinner.adapter = adapter
-        presetSpinner.setSelection(ServerPresets.indexOf(viewModel.getBaseUrl()), false)
+        // The field's own Context, not the activity's: the row layout is one of this plugin's
+        // resources, and it is the plugin Context that resolves those and tracks the IDE's theme.
+        presetInput.setAdapter(DropdownAdapter(presetInput.context, presetLabels))
+        // A picker, not a text field: the list is the only way to change it.
+        presetInput.keyListener = null
+        // Both dropdowns are repopulated from the saved settings on every view creation, so there is
+        // nothing for the framework to restore — and its replayed setText() is a filtering one,
+        // which is what left the list holding only the selected entry after a day/night switch.
+        presetInput.isSaveEnabled = false
 
-        // Track real taps so restoring the spinner's position never overwrites the URL field.
-        var userTouchedPresets = false
-        presetSpinner.setOnTouchListener { _, _ ->
-            userTouchedPresets = true
-            false
+        /** Shows [url]'s preset without announcing a pick, so restoring never fills the URL field. */
+        fun showPresetFor(url: String) {
+            val label = presetLabels.getOrNull(ServerPresets.indexOf(url)) ?: return
+            presetInput.setText(label, false)
         }
-        presetSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                if (!userTouchedPresets) return
-                // A preset only fills the field; the user still has to save it.
-                ServerPresets.ALL.getOrNull(position)?.url?.let { urlInput.setText(it) }
-            }
 
-            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        showPresetFor(viewModel.getBaseUrl())
+
+        // Tapping anywhere in the field opens the list; the end icon is only a second way in.
+        presetInput.setOnClickListener { presetInput.showDropDown() }
+        presetBox.setEndIconOnClickListener { presetInput.showDropDown() }
+        presetInput.setOnItemClickListener { _, _, position, _ ->
+            // A preset only fills the field; the user still has to save it.
+            ServerPresets.ALL.getOrNull(position)?.url?.let { urlInput.setText(it) }
         }
 
         // Re-dresses the key section as the URL is typed or a preset fills it, so picking Ollama
         // stops asking for a key immediately rather than after a save.
         urlInput.doAfterTextChanged { text ->
+            // The saved-server line described the previous URL, so it cannot stay under a
+            // different one — QA read a stale line as the state of the server now in the field.
+            hideStatus(statusText)
             onServerChanged?.invoke(text?.toString().orEmpty())
         }
 
@@ -199,7 +216,7 @@ class OpenAiSettingsFragment : Fragment() {
             when (val result = viewModel.saveBaseUrl(urlInput.text.toString())) {
                 is BaseUrlResult.Accepted -> {
                     urlInput.setText(result.url)
-                    presetSpinner.setSelection(ServerPresets.indexOf(result.url), false)
+                    showPresetFor(result.url)
                     showStatus(
                         statusText,
                         getString(R.string.msg_server_saved, result.url),
@@ -248,8 +265,8 @@ class OpenAiSettingsFragment : Fragment() {
     @SuppressLint("SetTextI18n")
     private fun setupApiKeyUi(view: View) {
         val apiKeyLayout = view.findViewById<LinearLayout>(R.id.openai_api_key_layout)
+        val apiKeyBox = view.findViewById<TextInputLayout>(R.id.openai_api_key_box)
         val apiKeyInput = view.findViewById<EditText>(R.id.openai_api_key_input)
-        val toggleVisibilityButton = view.findViewById<ImageButton>(R.id.btn_toggle_api_key_visibility)
         val saveButton = view.findViewById<Button>(R.id.btn_save_api_key)
         val editButton = view.findViewById<Button>(R.id.btn_edit_api_key)
         val clearButton = view.findViewById<Button>(R.id.btn_clear_api_key)
@@ -262,7 +279,7 @@ class OpenAiSettingsFragment : Fragment() {
 
         // Not on apiKeyInput: long-press there is the paste menu, and a key is pasted.
         listOf<View>(
-            toggleVisibilityButton, saveButton, editButton, clearButton, statusTextView,
+            apiKeyBox, saveButton, editButton, clearButton, statusTextView,
             verificationText, keyLabel
         ).forEach { wireTooltip(it, OpenAiPlugin.TOOLTIP_TAG_SETTINGS_KEY) }
         wireTooltip(getKeyButton, OpenAiPlugin.TOOLTIP_TAG_SETTINGS_GET_KEY)
@@ -271,20 +288,26 @@ class OpenAiSettingsFragment : Fragment() {
         // against the server the user is configuring rather than the one last saved.
         var keyRequirement = BaseUrlPolicy.keyRequirement(viewModel.getBaseUrl())
 
+        // Whether the field is open for a new key. Held here because the key section is re-dressed
+        // on every server change too, and both inputs decide the same set of visibilities.
+        var isEditingKey = true
+
         /**
-         * Dress the key section for [serverUrl].
+         * Applies [keyRequirement] and [isEditingKey] to the whole key block.
          *
-         * A local server collapses the whole block to one muted line: an empty, mandatory-looking
-         * key field is the single most confusing thing this pane can show, because a local Ollama
-         * needs no credential at all.
+         * A server that needs no credential collapses the block to one muted line, *whether or not
+         * a key happens to be stored*: an empty, mandatory-looking key field beside a local Ollama
+         * is the single most confusing thing this pane can show. Only Remove survives, so a key
+         * saved for another server can still be cleared from here.
          */
-        onServerChanged = { serverUrl ->
-            keyRequirement = BaseUrlPolicy.keyRequirement(serverUrl)
-            val needsKey = keyRequirement != KeyRequirement.NOT_NEEDED
-            // A key already stored still has to be reachable, or it could never be cleared.
-            val show = needsKey || viewModel.hasStoredApiKey()
-            keySection.visibility = if (show) View.VISIBLE else View.GONE
-            keyNotNeededText.visibility = if (show) View.GONE else View.VISIBLE
+        fun dressKeySection() {
+            val notNeeded = keyRequirement == KeyRequirement.NOT_NEEDED
+            val hasStoredKey = viewModel.hasStoredApiKey()
+            keySection.visibility = if (!notNeeded || hasStoredKey) View.VISIBLE else View.GONE
+            keyNotNeededText.visibility = if (notNeeded) View.VISIBLE else View.GONE
+            keyNotNeededText.setText(
+                if (hasStoredKey) R.string.msg_key_not_needed_but_saved else R.string.msg_key_not_needed
+            )
             keyLabel.setText(
                 if (keyRequirement == KeyRequirement.REQUIRED) {
                     R.string.label_openai_api_key_required
@@ -292,26 +315,35 @@ class OpenAiSettingsFragment : Fragment() {
                     R.string.label_openai_api_key_optional
                 }
             )
+            // Entering a key this server will never be asked for only invites the "couldn't check
+            // this key" dialog QA ran into, so the whole entry path goes away for it — including a
+            // field the user had already opened when they switched servers.
+            val editing = isEditingKey && !notNeeded
+            apiKeyLayout.visibility = if (editing) View.VISIBLE else View.GONE
+            saveButton.visibility = if (editing) View.VISIBLE else View.GONE
+            editButton.visibility = if (!editing && !notNeeded) View.VISIBLE else View.GONE
+            clearButton.visibility = if (!editing && hasStoredKey) View.VISIBLE else View.GONE
+            statusTextView.visibility = if (!editing && hasStoredKey) View.VISIBLE else View.GONE
             // Only OpenAI's own page is linked, so the button is meaningless elsewhere.
             getKeyButton.visibility =
                 if (keyRequirement == KeyRequirement.REQUIRED) View.VISIBLE else View.GONE
+            // The muted line already carries the section's gap when it is up, so the block tucks
+            // under it instead of stacking a second one.
+            setTopMargin(keySection, if (notNeeded) R.dimen.space_sm else R.dimen.space_xl)
         }
 
-        // "Get API key" visibility is owned by onServerChanged, not by the edit state.
+        /** Dress the key section for [serverUrl], which may not be saved yet. */
+        onServerChanged = { serverUrl ->
+            keyRequirement = BaseUrlPolicy.keyRequirement(serverUrl)
+            // The verdict described the previous server. Left up, it contradicts the new one —
+            // QA saw "No API key needed" under an OpenAI URL that requires one.
+            hideStatus(verificationText)
+            dressKeySection()
+        }
+
         fun updateUiState(isEditing: Boolean) {
-            if (isEditing) {
-                statusTextView.visibility = View.GONE
-                apiKeyLayout.visibility = View.VISIBLE
-                saveButton.visibility = View.VISIBLE
-                editButton.visibility = View.GONE
-                clearButton.visibility = View.GONE
-            } else {
-                statusTextView.visibility = View.VISIBLE
-                apiKeyLayout.visibility = View.GONE
-                saveButton.visibility = View.GONE
-                editButton.visibility = View.VISIBLE
-                clearButton.visibility = View.VISIBLE
-            }
+            isEditingKey = isEditing
+            dressKeySection()
         }
 
         viewLifecycleOwner.lifecycleScope.launch {
@@ -333,7 +365,9 @@ class OpenAiSettingsFragment : Fragment() {
             }
         }
 
-        toggleVisibilityButton.setColorFilter(apiKeyInput.currentHintTextColor)
+        // Not saved either, so a recreate cannot park a typed key in plain text in the state
+        // Bundle; a stored one is read back from the encrypted store above.
+        apiKeyInput.isSaveEnabled = false
 
         var isKeyVisible = false
 
@@ -343,20 +377,21 @@ class OpenAiSettingsFragment : Fragment() {
             } else {
                 PasswordTransformationMethod.getInstance()
             }
-            toggleVisibilityButton.setImageResource(
+            apiKeyBox.setEndIconDrawable(
                 if (isKeyVisible) R.drawable.ic_visibility_off else R.drawable.ic_visibility
             )
-            toggleVisibilityButton.contentDescription = getString(
+            apiKeyBox.setEndIconContentDescription(
                 if (isKeyVisible) R.string.cd_hide_api_key else R.string.cd_show_api_key
             )
-            toggleVisibilityButton.setColorFilter(apiKeyInput.currentHintTextColor)
             apiKeyInput.setSelection(apiKeyInput.text?.length ?: 0)
             setSecureWindow(isKeyVisible)
         }
 
         applyKeyVisibility()
 
-        toggleVisibilityButton.setOnClickListener {
+        // Not endIconMode="password_toggle": the window has to be flagged secure for as long as the
+        // key is legible, and the built-in toggle gives no hook for that.
+        apiKeyBox.setEndIconOnClickListener {
             isKeyVisible = !isKeyVisible
             applyKeyVisibility()
         }
@@ -444,16 +479,20 @@ class OpenAiSettingsFragment : Fragment() {
         saveButton.setOnClickListener {
             val apiKey = apiKeyInput.text.toString().trim()
             if (apiKey.isBlank()) {
-                // Blank is a legitimate configuration for a server that needs no credential.
                 if (keyRequirement == KeyRequirement.REQUIRED) {
-                    Toast.makeText(
-                        requireContext(),
+                    // Said on the pane, not in a toast: this is a rule about the field, so it
+                    // belongs beside the field and has to survive being read twice.
+                    showStatus(
+                        verificationText,
                         getString(R.string.msg_api_key_required_for_openai),
-                        Toast.LENGTH_LONG
-                    ).show()
+                        R.drawable.ic_key_rejected
+                    )
+                    apiKeyInput.requestFocus()
                 } else {
+                    // Blank is a legitimate configuration: the server is then called anonymously.
                     viewModel.clearApiKey()
-                    showStatus(verificationText, getString(R.string.msg_key_not_needed))
+                    dressKeySection()
+                    showStatus(verificationText, getString(R.string.msg_key_left_empty))
                 }
                 return@setOnClickListener
             }
@@ -585,6 +624,7 @@ class OpenAiSettingsFragment : Fragment() {
      * focus loss, so there is no Save button either.
      */
     private fun setupModelUi(view: View) {
+        val modelBox = view.findViewById<TextInputLayout>(R.id.openai_model_box)
         val modelInput = view.findViewById<AutoCompleteTextView>(R.id.openai_model_input)
         val modelLabel = view.findViewById<TextView>(R.id.openai_model_label)
         val modelHint = view.findViewById<TextView>(R.id.openai_model_hint_text)
@@ -592,7 +632,12 @@ class OpenAiSettingsFragment : Fragment() {
         listOf<View>(modelLabel, modelInput, modelHint)
             .forEach { wireTooltip(it, OpenAiPlugin.TOOLTIP_TAG_SETTINGS_MODEL) }
 
-        modelInput.setText(viewModel.getModel())
+        modelInput.isSaveEnabled = false
+        // Typing searches, so the first keystroke has to replace the model id already in the field
+        // rather than append to it — "gpt-4o-mini" + "claude" matches nothing, by construction.
+        modelInput.setSelectAllOnFocus(true)
+        // The suppressing overload throughout: a filtering write would narrow the list.
+        modelInput.setText(viewModel.getModel(), false)
 
         /** Persist what is typed, ignoring a blank field rather than storing an unusable model. */
         fun commitTypedModel() {
@@ -610,6 +655,7 @@ class OpenAiSettingsFragment : Fragment() {
         }
         // Tapping the field opens the list; completionThreshold=0 alone waits for a keystroke.
         modelInput.setOnClickListener { modelInput.showDropDown() }
+        modelBox.setEndIconOnClickListener { modelInput.showDropDown() }
         modelInput.setOnItemClickListener { _, _, _, _ -> commitTypedModel() }
 
         // A server that does not offer the saved model retires it; the field must show what will
@@ -617,7 +663,7 @@ class OpenAiSettingsFragment : Fragment() {
         viewModel.selectedModel.observe(viewLifecycleOwner) { model ->
             val shown = modelInput.text.toString()
             if (shown == model || modelInput.hasFocus()) return@observe
-            modelInput.setText(model)
+            modelInput.setText(model, false)
             if (shown.isNotBlank()) {
                 Toast.makeText(
                     requireContext(),
@@ -634,7 +680,11 @@ class OpenAiSettingsFragment : Fragment() {
                 if (options.models.isEmpty()) {
                     null
                 } else {
-                    ArrayAdapter(requireContext(), android.R.layout.simple_list_item_1, options.models)
+                    DropdownAdapter(
+                        modelInput.context,
+                        options.models,
+                        noMatchLabel = getString(R.string.msg_no_model_found),
+                    )
                 }
             )
             // Keyed on whether there is a list, not on whether it is live: a remembered list is
@@ -665,7 +715,8 @@ class OpenAiSettingsFragment : Fragment() {
         val apiKeyInput = view.findViewById<EditText>(R.id.openai_api_key_input)
         val apiKeyLayout = view.findViewById<LinearLayout>(R.id.openai_api_key_layout)
 
-        wireTooltip(testButton, OpenAiPlugin.TOOLTIP_TAG_SETTINGS_TEST)
+        listOf<View>(testButton, statusText)
+            .forEach { wireTooltip(it, OpenAiPlugin.TOOLTIP_TAG_SETTINGS_TEST) }
 
         viewModel.modelsLoading.observe(viewLifecycleOwner) { isLoading ->
             testButton.isEnabled = !isLoading
@@ -683,14 +734,29 @@ class OpenAiSettingsFragment : Fragment() {
                 val key = if (apiKeyLayout.visibility == View.VISIBLE && typedKey.isNotEmpty()) {
                     typedKey
                 } else {
-                    viewModel.getApiKey().orEmpty()
+                    // Scoped to the URL under test: probing a LAN server must not hand it the key
+                    // the user entered for OpenAI.
+                    viewModel.getApiKeyFor(url).orEmpty()
+                }
+                // A server with no anonymous access can only answer 401 without a key, and
+                // reporting that as "the server refused this key" when there is no key sends the
+                // user off to mint a replacement for a key they never entered.
+                if (key.isEmpty() && BaseUrlPolicy.keyRequirement(url) == KeyRequirement.REQUIRED) {
+                    showStatus(
+                        statusText,
+                        getString(R.string.msg_api_key_needed_for_test),
+                        R.drawable.ic_key_rejected
+                    )
+                    testButton.isEnabled = true
+                    apiKeyInput.requestFocus()
+                    return@launch
                 }
                 val verdict = try {
                     viewModel.verifyConnection(key, url)
                 } finally {
                     testButton.isEnabled = true
                 }
-                val (message, icon) = describe(verdict)
+                val (message, icon) = describe(verdict, keySent = key.isNotEmpty())
                 showStatus(statusText, message, icon)
                 // Same request either way, so a successful test has already earned the catalog.
                 if (verdict is ConnectionVerification.Verified) viewModel.fetchModels()
@@ -698,10 +764,16 @@ class OpenAiSettingsFragment : Fragment() {
         }
     }
 
-    /** One line and one icon for a connection verdict. */
-    private fun describe(verdict: ConnectionVerification): Pair<String, Int> = when (verdict) {
-        is ConnectionVerification.Verified -> getString(
-            R.string.msg_connection_ok,
+    /**
+     * One line and one icon for a connection verdict.
+     *
+     * @param keySent whether a credential actually accompanied the request, so a refusal is
+     *   reported as the wrong key only when there was one to be wrong
+     */
+    private fun describe(verdict: ConnectionVerification, keySent: Boolean): Pair<String, Int> = when (verdict) {
+        is ConnectionVerification.Verified -> resources.getQuantityString(
+            R.plurals.msg_connection_ok,
+            verdict.modelCount,
             verdict.modelCount
         ) to R.drawable.ic_key_verified
 
@@ -711,8 +783,11 @@ class OpenAiSettingsFragment : Fragment() {
         ConnectionVerification.NoModels ->
             getString(R.string.msg_server_no_models) to R.drawable.ic_key_unchecked
 
-        ConnectionVerification.Rejected ->
+        ConnectionVerification.Rejected -> if (keySent) {
             getString(R.string.msg_key_rejected) to R.drawable.ic_key_rejected
+        } else {
+            getString(R.string.msg_server_needs_key) to R.drawable.ic_key_rejected
+        }
 
         ConnectionVerification.EndpointNotFound ->
             getString(R.string.msg_server_endpoint_404) to R.drawable.ic_key_rejected
@@ -783,6 +858,78 @@ class OpenAiSettingsFragment : Fragment() {
         return runCatching {
             clipboard.setPrimaryClip(ClipData.newPlainText(getString(R.string.openai_clip_label), text))
         }.isSuccess
+    }
+}
+
+/**
+ * Dropdown adapter for the pane's two pickers.
+ *
+ * Matches on **substring**, case-insensitively, and offers everything for a blank query: an
+ * OpenRouter catalog is ~400 ids named `vendor/model`, where the stock prefix filter finds nothing
+ * for "claude" and a list that cannot be narrowed is unusable. So the model field doubles as a
+ * search box over what the server reported.
+ *
+ * Only user typing ever reaches the filter. Every programmatic write goes through
+ * `setText(value, false)`, and the fields do not save their own state, so the text the framework
+ * would otherwise replay on a day/night switch cannot narrow the list to the entry already selected.
+ *
+ * @param items the full list, kept so a query can always be re-run against it
+ * @param noMatchLabel row to show when a search matches nothing, or null to just close the popup —
+ *   only the searchable field needs it
+ */
+private class DropdownAdapter(
+    context: Context,
+    private val items: List<String>,
+    private val noMatchLabel: String? = null,
+) : ArrayAdapter<String>(context, R.layout.item_dropdown, items.toMutableList()) {
+
+    /** True while the only row is [noMatchLabel], which is a message rather than a choice. */
+    private var showingNoMatch = false
+
+    private val substringFilter = object : Filter() {
+        override fun performFiltering(constraint: CharSequence?): FilterResults {
+            val query = constraint?.toString()?.trim().orEmpty()
+            val matches = if (query.isEmpty()) {
+                items
+            } else {
+                items.filter { it.contains(query, ignoreCase = true) }
+            }
+            // The message needs a row of its own to be seen at all: a count of 0 dismisses the
+            // popup, which is indistinguishable from the dropdown being broken.
+            val rows = matches.ifEmpty { listOfNotNull(noMatchLabel) }
+            return FilterResults().apply {
+                values = rows
+                count = rows.size
+            }
+        }
+
+        @Suppress("UNCHECKED_CAST")
+        override fun publishResults(constraint: CharSequence?, results: FilterResults?) {
+            val rows = results?.values as? List<String> ?: items
+            // Identity, not equality: a server is free to offer a model called "No model found".
+            showingNoMatch = noMatchLabel != null && rows.size == 1 && rows[0] === noMatchLabel
+            clear()
+            addAll(rows)
+            notifyDataSetChanged()
+        }
+    }
+
+    override fun getFilter(): Filter = substringFilter
+
+    /** The message row is not a choice, so the list must not let it be clicked or selected. */
+    override fun isEnabled(position: Int): Boolean = !showingNoMatch
+
+    override fun areAllItemsEnabled(): Boolean = !showingNoMatch
+
+    override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+        val view = super.getView(position, convertView, parent)
+        // Set on every bind rather than only for the message: these rows are recycled.
+        (view as? TextView)?.setTextColor(
+            context.getColor(
+                if (showingNoMatch) R.color.plugin_text_muted else R.color.plugin_on_surface
+            )
+        )
+        return view
     }
 }
 
