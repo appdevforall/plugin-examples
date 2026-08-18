@@ -113,7 +113,7 @@ internal object SseChunk {
         return when {
             content.isNotEmpty() -> Event.Token(content.toString())
             reasoning.isNotEmpty() -> Event.Reasoning(reasoning.toString())
-            finishReason != null -> Event.Finish(finishReason!!)
+            finishReason != null -> Event.Finish(finishReason)
             else -> Event.Ignored
         }
     }
