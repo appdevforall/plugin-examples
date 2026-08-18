@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- Local model load failures (see ModelLoadDiagnostics) -->
+    <string name="llm_load_error_missing">The model file could not be found. Re-select the .gguf model in AI Settings.</string>
+    <string name="llm_load_error_empty">The model file is empty — the download may have been interrupted. Re-download the .gguf model and select it again.</string>
+    <string name="llm_load_error_not_gguf">This file isn\'t a valid .gguf model (it may be corrupt or only partially downloaded). Re-download the model and select it again.</string>
+    <string name="llm_load_error_low_memory">Loading this model needs at least %1$s of free memory, but only %2$s is available on this device. Close other apps and try again, or pick a smaller or more heavily quantized model (for example a Q4_K_M build of a 1–3B model).</string>
+    <string name="llm_load_error_runtime">The model couldn\'t be initialized, most likely because too little memory is free right now. Close other apps and try again, or pick a smaller or more heavily quantized model.</string>
+    <string name="llm_load_error_busy">Another model is still loading or in use. Wait a moment and try again.</string>
+    <string name="llm_load_error_unsupported">The model couldn\'t be loaded. It may use a format or quantization this build doesn\'t support, or the file may be corrupt. Try a different .gguf — a Q4_K_M quantization of a smaller model is most likely to work.</string>
+    <!-- Settings pane this backend contributes (see LocalLlmSettingsFragment) -->
+    <string name="state_error">Error: %s</string>
+    <string name="engine_initializing">Initializing engine…</string>
+    <string name="engine_ready">Engine ready</string>
+    <string name="model_saved_path">Saved: %s</string>
+    <string name="model_none_loaded">No model is currently loaded</string>
+    <string name="model_loading_wait">Loading model, please wait…</string>
+    <string name="model_loaded">✅ Model loaded: %s</string>
+    <string name="model_load_error">❌ Error: %s</string>
+    <string name="model_loading_toast">Loading model…</string>
+    <string name="model_none_selected">No model selected</string>
+    <string name="btn_browse_model">Browse for Model File</string>
+    <string name="btn_load_saved_model">Load from saved</string>
+    <string name="label_local_model_sha">Optional SHA-256 (for verification)</string>
+    <string name="hint_local_model_sha">SHA-256 hash</string>
+    <string name="label_use_simple_local_prompt">Use simple local prompt</string>
+    <string name="error_model_not_gguf">\"%1$s\" isn\'t a valid .gguf model (it may be the wrong file or a corrupt or partial download). Select a .gguf chat model.</string>
+    <string name="llm_memory_warning_title">This model may be too large</string>
+    <string name="llm_memory_warning_tight">\"%1$s\" needs about %2$s of memory to load, plus about %3$s more to run. This device has about %4$s available right now, which may not be enough. It might work, or fail quickly, or fail after several minutes.\n\nClose other apps to free memory, or choose a smaller or more heavily quantized model (for example a Q4_K_M build of a 1–3B model).</string>
+    <string name="llm_memory_warning_insufficient">\"%1$s\" needs about %2$s of memory to load, plus about %3$s more to run. This device has about %4$s available right now, which is not enough. Loading it will most likely fail, and may make the IDE unresponsive first.\n\nClose other apps to free memory, or choose a smaller or more heavily quantized model (for example a Q4_K_M build of a 1–3B model).</string>
+    <string name="llm_memory_warning_proceed">Proceed anyway</string>
+    <string name="llm_memory_warning_cancel">Cancel</string>
+    <string name="llm_memory_warning_declined">Model not selected. The previously selected model, if any, is unchanged.</string>
+    <string name="error_model_save_failed">Failed to save the model path: %1$s</string>
+</resources>

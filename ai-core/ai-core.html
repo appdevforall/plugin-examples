@@ -40,83 +40,102 @@
   <h1>AI Core Plugin</h1>
 
   <h2>Executive overview</h2>
-  <p><b>AI Core</b> is the shared large-language-model (LLM) inference backend
-  for CodeOnTheGo's AI plugins. It is a <b>headless</b> plugin — it has no
-  screens of its own. Instead it registers a single inference service that the
-  other AI plugins (<b>AI Assistant</b>, <b>Code Suggestions</b>, <b>Speech to
-  Text</b>, and <b>Vector Search</b>) call at runtime.</p>
-  <p><b>Install AI Core first</b>, then any of the plugins that depend on it.
-  Without AI Core installed and activated, those plugins have no LLM backend and
-  will report that the inference service is unavailable.</p>
+  <p><b>AI Core</b> is two things in one plugin: the <b>Agent chat</b> you code
+  with, and the shared large-language-model (LLM) inference <b>router</b> that
+  every other AI plugin in CodeOnTheGo calls at runtime. It contributes an
+  <b>Agent</b> tab to the editor and an <b>Agent</b> row to
+  <b>Preferences &rarr; Configuration</b>, and it registers a single inference
+  service that <b>Code Suggestions</b>, <b>Speech to Text</b> and <b>Vector
+  Search</b> share.</p>
+  <p><b>AI Core provides no models itself.</b> Inference is supplied by separate
+  backend plugins — <b>AI Agent Local</b> for on-device models, <b>AI Agent
+  Gemini</b> for Google's API — which register with AI Core when they activate.
+  Install AI Core <i>and at least one backend</i>; without a backend, requests
+  fail with "Backend not found". Install order does not matter.</p>
 
   <h2>Core functionality</h2>
   <ul>
+    <li><b>Agent chat</b> — a conversational editor tab that can read and edit
+      project files, add dependencies, run a Gradle sync and launch the app, with
+      every file-changing action gated behind an approval dialog.</li>
+    <li><b>Agent settings</b> — one screen to pick the backend and configure it;
+      each backend contributes its own portion of that screen.</li>
     <li><b>Registers a shared inference service</b> so every AI plugin talks to
-      one backend instead of bundling its own.</li>
-    <li><b>Local (on-device) backend</b> — runs a <code>.gguf</code> model
-      through a bundled, prebuilt llama.cpp library. Prompts and code never
-      leave the device.</li>
-    <li><b>Gemini (cloud) backend</b> — calls Google's Gemini API over HTTPS
-      using a user-supplied API key. Supports live model listing so retired
-      model names are never offered.</li>
-    <li><b>Model safety checks</b> — inspects a selected <code>.gguf</code>
-      header and refuses embedding-only models for chat, with a clear error
-      instead of a native crash.</li>
-    <li>Text completion, chat with history, and streaming responses. (Native
-      Gemini function calling is not yet wired up; tool-enabled requests fall
-      back to plain streaming.)</li>
+      one router instead of bundling its own engine.</li>
+    <li><b>Dynamic backend registry</b> — backends are added and removed at
+      runtime by their own plugins. AI Core hardcodes no backend list, so a new
+      provider is a new plugin, not a change here.</li>
+    <li><b>Request routing</b> — resolves the backend selected in Agent
+      settings, and falls back to any available backend when the selected one is
+      not installed or not configured.</li>
+    <li><b>Capability negotiation</b> — uses a backend's tool-calling, multi-turn
+      and cancellation support where it declares it, and degrades cleanly where it
+      does not.</li>
+    <li>Text completion, chat with history, and streaming responses, plus a
+      single cancellation path so <b>Stop</b> reaches whichever backend is
+      running.</li>
   </ul>
 
   <h2>Technical architecture</h2>
   <table>
     <tr><th>Component</th><th>Role</th></tr>
-    <tr><td><code>AiCorePlugin</code></td><td>Plugin entry point. Registers the
-      inference service and both backends on activation; unregisters and frees
-      resources on deactivation/dispose.</td></tr>
+    <tr><td><code>AiCorePlugin</code></td><td>Plugin entry point. Contributes the
+      Agent tab and the Agent settings row, publishes the inference service on
+      activation and withdraws it on deactivation. Owns no backend.</td></tr>
     <tr><td><code>LlmInferenceServiceImpl</code></td><td>The service exposed via
-      <code>SharedServices</code>. Routes each request to the selected
-      backend.</td></tr>
-    <tr><td><code>LocalLlmBackend</code></td><td>On-device inference over the
-      prebuilt llama.cpp AAR. Resolves the selected model (including SAF
-      <code>content://</code> URIs) to a real file path and manages loading.</td></tr>
-    <tr><td><code>GeminiBackend</code></td><td>Cloud inference via direct calls
-      to the Gemini REST API over <code>HttpURLConnection</code> (no third-party
-      SDK). Sends the API key as an <code>x-goog-api-key</code> header, never in
-      a URL.</td></tr>
-    <tr><td><code>GgufModelInspector</code></td><td>Minimal GGUF header reader
-      that classifies a model as chat- or embedding-only.</td></tr>
+      <code>SharedServices</code>. Holds the backend registry and routes each
+      request to the resolved backend.</td></tr>
+    <tr><td><code>ChatFragment</code> / <code>ChatViewModel</code></td><td>The
+      Agent tab: message history, streaming output, the Stop control, and the
+      approval dialog shown before any file is written.</td></tr>
+    <tr><td>Tool handlers + <code>PathGuard</code></td><td>The actions the agent
+      may take. Every path is canonicalised and confined to the project root, and
+      generated trees, <code>.git/</code>, build configuration and keystores are
+      refused outright.</td></tr>
+    <tr><td><code>AiBackend</code></td><td>Maps the backend setting stored in
+      Agent settings onto a registered backend id, translating the two legacy
+      values that predate the id-as-setting convention.</td></tr>
+    <tr><td><code>ConfigurableBackend</code></td><td>Implemented by a backend that
+      draws its own settings screen, so the credentials or files it needs are
+      collected without AI Core knowing the provider's API.</td></tr>
   </table>
-  <p>The native library is committed prebuilt (four ABIs: arm64-v8a,
-  armeabi-v7a, x86, x86_64), so a normal build needs no NDK, CMake, or the
-  llama.cpp submodule.</p>
+  <p>AI Core declares <b>filesystem.read</b>, <b>filesystem.write</b>,
+  <b>system.commands</b> and <b>project.structure</b> — the agent reads and edits
+  files in the open project, triggers Gradle sync and run through the IDE's own
+  build service, and inspects the project's module structure. It declares
+  <b>no network access and loads no native code</b>: those belong to the backend
+  plugin that serves a given request, so a device using only the local backend
+  never grants a network-capable AI plugin.</p>
 
   <h2>Usage</h2>
   <ol>
-    <li>Install <b>AI Core</b> via the Plugin Manager, then restart the IDE.</li>
-    <li>Install one or more consumer plugins (e.g. <b>AI Assistant</b>).</li>
-    <li>Open <b>AI Assistant → AI Settings</b> to choose a backend and configure
-      it — select a local <code>.gguf</code> model file, or enter a Gemini API
-      key. AI Core has no settings screen of its own; it reads this configuration
-      at request time.</li>
+    <li>Install <b>AI Core</b> via the Plugin Manager.</li>
+    <li>Install at least one backend: <b>AI Agent Local</b>, <b>AI Agent
+      Gemini</b>, or both. Restart the IDE.</li>
+    <li>Open <b>Preferences &rarr; Configuration &rarr; Agent</b> to choose a
+      backend and configure it — select a local <code>.gguf</code> model file, or
+      enter a Gemini API key. The same screen is reachable from the Agent tab.</li>
+    <li>Open a project and switch to the <b>Agent</b> tab to start chatting. Any
+      action that changes a file asks for your approval first.</li>
   </ol>
   <div class="note">
-    Embedding-only <code>.gguf</code> files cannot serve chat requests. If one is
-    selected for chat, the request is rejected with a clear message instead of
-    crashing the IDE.
+    Installing both backends is supported and useful: pick the local one for
+    privacy and the Gemini one for capability, and switch between them in Agent
+    settings without reinstalling anything.
   </div>
 
   <h2>Key benefits</h2>
   <ul>
-    <li><b>One backend, many plugins</b> — a single inference service shared
+    <li><b>One router, many plugins</b> — a single inference service shared
       across all AI features, so backend and model choice are configured once.</li>
-    <li><b>On-device privacy option</b> — the local backend keeps prompts and
-      code entirely on the device.</li>
-    <li><b>Cloud power option</b> — the Gemini backend adds a high-capability
-      model when connectivity and an API key are available.</li>
-    <li><b>Crash-resistant</b> — model classification and header bounds-checking
-      turn would-be native crashes into recoverable, user-visible errors.</li>
-    <li><b>Reproducible builds</b> — no NDK required; the native library ships
-      prebuilt.</li>
+    <li><b>Install only what you need</b> — a device that only ever uses the
+      cloud backend need not carry an 8&nbsp;MB native library, and one that never
+      goes online need not carry a network-capable plugin at all.</li>
+    <li><b>Least privilege</b> — network access, filesystem access and native
+      code are declared by the specific backend that needs them, so what a user
+      grants matches what they installed.</li>
+    <li><b>Extensible</b> — adding a provider means writing a new backend plugin;
+      neither AI Core nor any consumer plugin changes.</li>
   </ul>
 </body>
 </html>

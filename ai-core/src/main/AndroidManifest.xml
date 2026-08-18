@@ -1,9 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- ai-core makes live HTTPS calls to the Gemini REST API (GeminiBackend, raw HttpURLConnection) -->
-    <uses-permission android:name="android.permission.INTERNET" />
-
     <application
         android:label="AI Core Plugin"
         android:theme="@style/PluginTheme">
@@ -23,27 +20,36 @@
 
         <meta-data
             android:name="plugin.description"
-            android:value="AI Core Plugin providing LLM inference capabilities through local and remote backends" />
+            android:value="The Agent chat and the LLM inference router. Install it plus at least one backend plugin (AI Agent Local, AI Agent Gemini) to use any AI feature." />
 
         <meta-data
             android:name="plugin.author"
             android:value="App Dev for All" />
 
+        <!-- 26.32: the release that carries the Agent chat's host requirements, inherited when
+             AI Assistant merged into this plugin. -->
         <meta-data
             android:name="plugin.min_ide_version"
-            android:value="26.17" />
+            android:value="26.32" />
 
         <meta-data
             android:name="plugin.max_ide_version"
             android:value="26.99" />
 
+        <!-- Number of editor tabs contributed via getEditorTabs() (the "Agent" tab) -->
+        <meta-data
+            android:name="plugin.editor_tabs"
+            android:value="1" />
+
+        <!-- The agent's tools read and write project files, run Gradle and inspect project
+             structure. No network.access: the backend plugins make every outbound call. -->
         <meta-data
             android:name="plugin.permissions"
-            android:value="filesystem.read,filesystem.write,native.code,network.access" />
+            android:value="filesystem.read,filesystem.write,system.commands,project.structure" />
 
         <meta-data
             android:name="plugin.main_class"
-            android:value="com.itsaky.androidide.plugins.aicore.AiCorePlugin" />
+            android:value="com.itsaky.androidide.plugins.aicore.plugin.AiCorePlugin" />
 
         <meta-data
             android:name="plugin.icon_day"
