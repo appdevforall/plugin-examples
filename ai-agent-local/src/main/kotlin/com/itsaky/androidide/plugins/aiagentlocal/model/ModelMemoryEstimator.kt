@@ -23,16 +23,10 @@ data class MemoryEstimate(
 
 /**
  * Estimates the memory a `.gguf` model needs, from its size and its declared shape. Pure and
- * Android-free, so the arithmetic is unit-testable. The context and batch sizes below are ai-agent-local's,
- * fixed on its native side: an estimate has to model the loader that will actually run.
+ * Android-free, so the arithmetic is unit-testable. The context it measures at is the caller's —
+ * pass [ContextSizePolicy.choose]'s answer, or it describes an allocation nothing makes (ADFA-5187).
  */
 object ModelMemoryEstimator {
-
-    /**
-     * The context every load gets, hard-coded as `ctx_params.n_ctx` in ai-agent-local's `llama-android.cpp`.
-     * The KV cache is sized from it, so keep the two in step.
-     */
-    const val RUNTIME_CONTEXT_TOKENS = 4096L
 
     /** Two bytes per cached element: f16, the default KV type. */
     private const val KV_BYTES_PER_ELEMENT = 2L
@@ -55,11 +49,17 @@ object ModelMemoryEstimator {
     /**
      * @param fileSizeBytes the model file's size, or null when it is unknown
      * @param header the model's metadata, or null when it could not be read
+     * @param contextTokens the context the load will be given; required, because a default here
+     *   would silently describe an allocation nobody makes. [ModelContextResolver] supplies it.
      * @return the estimate, or null when there is nothing to base one on
      */
-    fun estimate(fileSizeBytes: Long?, header: GgufHeader?): MemoryEstimate? {
+    fun estimate(
+        fileSizeBytes: Long?,
+        header: GgufHeader?,
+        contextTokens: Int,
+    ): MemoryEstimate? {
         if (fileSizeBytes == null || fileSizeBytes <= 0L) return null
-        val kvCacheBytes = header?.let(::kvCacheBytes)
+        val kvCacheBytes = header?.let { kvCacheBytes(it, contextTokens) }
         return if (kvCacheBytes != null) {
             MemoryEstimate(fileSizeBytes, kvCacheBytes + COMPUTE_BUFFER_BYTES, fromHeader = true)
         } else {
@@ -73,17 +73,31 @@ object ModelMemoryEstimator {
     }
 
     /**
-     * KV cache size for a full context: one key and one value entry per kv head, per layer, per
-     * position. Null unless every value it needs is present and within its ceiling.
+     * KV cache size for a full context of [contextTokens]. Null unless every value it needs is
+     * present and within its ceiling, or the context is not positive.
      */
-    private fun kvCacheBytes(header: GgufHeader): Long? {
+    private fun kvCacheBytes(header: GgufHeader, contextTokens: Int): Long? {
+        if (contextTokens <= 0) return null
+        val perToken = kvBytesPerToken(header) ?: return null
+        return perToken * contextTokens
+    }
+
+    /**
+     * What one cached position costs: one key and one value entry per kv head, per layer. The
+     * factor [ContextSizePolicy] divides a RAM budget by, so sizing and estimate cannot drift apart.
+     * Stays under 2^44 within the ceilings below, so any context the policy returns fits a Long.
+     *
+     * @param header the model's metadata
+     * @return bytes of KV cache per token, or null if the header does not say enough
+     */
+    internal fun kvBytesPerToken(header: GgufHeader): Long? {
         val layers = header.blockCount?.within(MAX_LAYERS) ?: return null
         val heads = header.headCount?.within(MAX_HEADS) ?: return null
         // Grouped-query attention caches only the kv heads; absent means one per head (plain MHA).
         val kvHeads = (header.headCountKv ?: heads).within(MAX_HEADS) ?: return null
         val keyWidth = header.keyLength?.within(MAX_WIDTH) ?: defaultHeadWidth(header) ?: return null
         val valueWidth = header.valueLength?.within(MAX_WIDTH) ?: defaultHeadWidth(header) ?: return null
-        return KV_BYTES_PER_ELEMENT * layers * RUNTIME_CONTEXT_TOKENS * kvHeads * (keyWidth + valueWidth)
+        return KV_BYTES_PER_ELEMENT * layers * kvHeads * (keyWidth + valueWidth)
     }
 
     /** The value when it is positive and no larger than [ceiling]; null when it is neither. */
