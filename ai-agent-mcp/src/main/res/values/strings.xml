@@ -23,6 +23,7 @@
     <string name="mcp_label_token">Access token (optional)</string>
     <string name="mcp_hint_token">Leave empty if the server needs none</string>
     <string name="mcp_hint_token_stored">Stored — type to replace it</string>
+    <string name="mcp_hint_token_unreadable">Stored but unreadable — type it again</string>
     <string name="mcp_test_connection">Test connection</string>
     <string name="mcp_refresh_tools">Refresh tools</string>
     <string name="mcp_save">Save</string>
@@ -36,7 +37,9 @@
     <!-- Form validation and progress -->
     <string name="mcp_name_required">Give the server a name — it also prefixes its tool names.</string>
     <string name="mcp_url_required">Enter the server\'s endpoint URL.</string>
-    <string name="mcp_url_scheme_invalid">The URL must start with https:// (or http:// on a local network).</string>
+    <string name="mcp_url_scheme_invalid">The URL must start with https:// or http://.</string>
+    <string name="mcp_url_insecure_credentials">A token or extra header cannot be sent to an http:// URL — it would travel in the clear, readable by anyone on the same network. Use https://, or remove the credential.</string>
+    <string name="mcp_secrets_unreadable">The saved token or headers for this server can no longer be read on this device. Enter them again.</string>
     <string name="mcp_status_testing">Connecting…</string>
     <string name="mcp_status_refreshing">Asking the server for its tools…</string>
     <string name="mcp_status_connected">Connected to %1$s, which offers %2$d tools.</string>
@@ -60,6 +63,8 @@
     <string name="mcp_error_tls">The secure connection to %1$s failed. Check that the URL is https.</string>
     <string name="mcp_error_timeout">%1$s did not answer in time. It may be slow or offline.</string>
     <string name="mcp_error_cancelled">The call to %1$s was cancelled.</string>
+    <string name="mcp_error_redirect_refused">%1$s redirected the request to another address, so it was not sent — it carries your token. Check the endpoint URL.</string>
+    <string name="mcp_error_secret_unreadable">%1$s\'s saved token can no longer be read on this device. Open MCP server settings and enter it again.</string>
     <string name="mcp_error_failed">Could not reach %1$s.</string>
     <string name="mcp_error_failed_reason">Could not reach %1$s: %2$s</string>
     <string name="mcp_error_tool_gone">\'%1$s\' is no longer offered by any configured MCP server.</string>

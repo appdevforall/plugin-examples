@@ -56,6 +56,10 @@
     <li>Add an <b>access token</b> if the server needs one. It is encrypted with a
       key held in the Android Keystore, and sent only to that server, as an
       <code>Authorization: Bearer</code> header.</li>
+    <li>A token or an extra header requires an <b>https://</b> URL. Encryption at
+      rest does nothing for a credential put on the wire in the clear, and a phone
+      IDE runs on shared Wi-Fi by definition. A plain <code>http://</code> server
+      with no credential is still allowed.</li>
     <li>Tap <b>Test connection</b> to check it now, then <b>Refresh tools</b> to
       list what the server offers.</li>
   </ul>

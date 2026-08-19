@@ -3,7 +3,9 @@ package com.itsaky.androidide.plugins.aiagentmcp.errors
 import android.content.Context
 import com.itsaky.androidide.plugins.aiagentmcp.R
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpProtocolException
+import com.itsaky.androidide.plugins.aiagentmcp.security.UnreadableSecretException
 import com.itsaky.androidide.plugins.aiagentmcp.transport.McpHttpException
+import com.itsaky.androidide.plugins.aiagentmcp.transport.McpRedirectException
 import java.io.InterruptedIOException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
@@ -59,6 +61,12 @@ sealed interface McpFailure {
     /** The connection was dropped deliberately, to stop an agent run. */
     data object Cancelled : McpFailure
 
+    /** A stored credential cannot be decrypted on this device, so nothing was sent. */
+    data object SecretUnreadable : McpFailure
+
+    /** The server redirected somewhere the request cannot be repeated with its credentials. */
+    data object RedirectRefused : McpFailure
+
     /** Everything else, including failures that never reached the network. */
     data class Failed(val reason: String?) : McpFailure
 }
@@ -78,6 +86,9 @@ object McpErrorFormatter {
      * @return the classification.
      */
     fun classify(error: Throwable): McpFailure = when (error) {
+        // Before the IOException branches below, which it is one of.
+        is UnreadableSecretException -> McpFailure.SecretUnreadable
+        is McpRedirectException -> McpFailure.RedirectRefused
         is McpHttpException -> forStatus(error.statusCode)
         is McpProtocolException -> McpFailure.Rejected(error.message.orEmpty())
         is UnknownHostException -> McpFailure.UnknownHost
@@ -112,6 +123,10 @@ object McpErrorFormatter {
             McpFailure.TlsFailed -> context.getString(R.string.mcp_error_tls, serverName)
             McpFailure.TimedOut -> context.getString(R.string.mcp_error_timeout, serverName)
             McpFailure.Cancelled -> context.getString(R.string.mcp_error_cancelled, serverName)
+            McpFailure.SecretUnreadable ->
+                context.getString(R.string.mcp_error_secret_unreadable, serverName)
+            McpFailure.RedirectRefused ->
+                context.getString(R.string.mcp_error_redirect_refused, serverName)
             is McpFailure.ServerError ->
                 context.getString(R.string.mcp_error_server_error, serverName, failure.status)
             is McpFailure.Http -> context.getString(R.string.mcp_error_http, serverName, failure.status)

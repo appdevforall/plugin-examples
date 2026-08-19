@@ -5,6 +5,7 @@ import android.util.Log
 import com.itsaky.androidide.plugins.aiagentmcp.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aiagentmcp.plugin.McpPlugin
 import com.itsaky.androidide.plugins.aiagentmcp.security.SecureTokenStore
+import com.itsaky.androidide.plugins.aiagentmcp.security.UnreadableSecretException
 import com.itsaky.androidide.plugins.aiagentmcp.transport.McpHeaders
 import java.util.UUID
 import java.util.concurrent.CopyOnWriteArrayList
@@ -147,8 +148,13 @@ object McpServerStore {
      * @param token the token, or blank to remove it.
      * @return true when it was stored.
      */
-    fun setToken(id: String, token: String): Boolean =
-        SecureTokenStore.write(prefs(), KEY_TOKEN_PREFIX + id, token)
+    fun setToken(id: String, token: String): Boolean {
+        val stored = SecureTokenStore.write(prefs(), KEY_TOKEN_PREFIX + id, token)
+        // Like every other mutator: a new credential has to reach the agent, or it keeps calling
+        // with the old one until something else happens to touch the store.
+        fireChanged()
+        return stored
+    }
 
     /**
      * Reads a server's bearer token.
@@ -156,10 +162,10 @@ object McpServerStore {
      * Keystore work, so call this off the main thread.
      *
      * @param id the server.
-     * @return the token, or empty when the server needs none.
+     * @return what is stored: nothing, the token, or a token this device can no longer read.
      */
-    fun token(id: String): String =
-        SecureTokenStore.readAndMigrate(prefs(), KEY_TOKEN_PREFIX + id).orEmpty()
+    fun token(id: String): SecureTokenStore.Stored =
+        SecureTokenStore.readAndMigrate(prefs(), KEY_TOKEN_PREFIX + id)
 
     /** True when a token is stored for [id], without decrypting it. */
     fun hasToken(id: String): Boolean = prefs()?.contains(KEY_TOKEN_PREFIX + id) == true
@@ -176,7 +182,13 @@ object McpServerStore {
      * @return the headers in the order they were entered; empty when there are none.
      */
     fun headers(id: String): Map<String, String> {
-        val raw = SecureTokenStore.readAndMigrate(prefs(), KEY_HEADERS_PREFIX + id) ?: return emptyMap()
+        val stored = SecureTokenStore.readAndMigrate(prefs(), KEY_HEADERS_PREFIX + id)
+        if (stored is SecureTokenStore.Stored.Unreadable) {
+            // Same failure as an unreadable token, and reported the same way: sending the request
+            // without them would look like the server refusing a credential that is still correct.
+            throw UnreadableSecretException("The stored headers for '$id' cannot be decrypted.")
+        }
+        val raw = (stored as? SecureTokenStore.Stored.Value)?.plain ?: return emptyMap()
         return try {
             val json = JSONObject(raw)
             val parsed = LinkedHashMap<String, String>()

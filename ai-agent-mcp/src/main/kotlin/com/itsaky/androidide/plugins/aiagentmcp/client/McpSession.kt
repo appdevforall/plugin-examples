@@ -45,6 +45,9 @@ class McpSession(
          */
         private val DATED_VERSION = Regex("""\d{4}-\d{2}-\d{2}""")
 
+        /** The handshake method, named because the retry below has to exclude it. */
+        private const val METHOD_INITIALIZE = "initialize"
+
         private const val CLIENT_NAME = "CodeOnTheGo"
         private const val CLIENT_VERSION = "1.0.0"
 
@@ -91,7 +94,7 @@ class McpSession(
             )
         }
 
-        val result = call("initialize", params)
+        val result = call(METHOD_INITIALIZE, params)
         negotiatedVersion = result.optString("protocolVersion").takeIf { it.isNotBlank() }
             ?: PREFERRED_PROTOCOL_VERSION
         serverName = result.optJSONObject("serverInfo")?.optString("name")?.takeIf { it.isNotBlank() }
@@ -220,8 +223,10 @@ class McpSession(
         val response = try {
             send(envelope)
         } catch (e: McpHttpException) {
-            // 404 on an established session means the server dropped it; one clean retry.
-            if (e.statusCode == HttpURLConnection.HTTP_NOT_FOUND && sessionId != null) {
+            val retryable = e.statusCode == HttpURLConnection.HTTP_NOT_FOUND &&
+                sessionId != null &&
+                method != METHOD_INITIALIZE
+            if (retryable) {
                 Log.i(TAG, "Session expired; re-initializing before retrying $method")
                 sessionId = null
                 initialized = false

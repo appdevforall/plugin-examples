@@ -28,6 +28,25 @@ private const val TAG = "$LOG_PREFIX.SecureTokenStore"
  */
 object SecureTokenStore {
 
+    /**
+     * What was found under a preference key.
+     *
+     * Three outcomes rather than a nullable String: "nothing stored" and "stored but no longer
+     * readable on this device" lead to opposite advice, and collapsing them is what tells a user
+     * their token was refused when it was never sent.
+     */
+    sealed interface Stored {
+
+        /** Nothing is stored under the key. */
+        data object Absent : Stored
+
+        /** The stored value, decrypted. */
+        data class Value(val plain: String) : Stored
+
+        /** Something is stored, but this device's Keystore can no longer open it. */
+        data object Unreadable : Stored
+    }
+
     private const val KEYSTORE = "AndroidKeyStore"
     private const val ALIAS = "cotg_ai_mcp_token_v1"
     private const val TRANSFORM = "AES/GCM/NoPadding"
@@ -112,22 +131,27 @@ object SecureTokenStore {
 
     /**
      * Reads [key] from [prefs], upgrading a legacy plaintext value to ciphertext in place.
+     *
      * @param prefs where the value lives.
      * @param key the preference key.
-     * @return the trimmed plaintext, or null when nothing is stored or decryption failed.
+     * @return what was found: nothing, the plaintext, or a value that cannot be decrypted here.
      */
-    fun readAndMigrate(prefs: SharedPreferences?, key: String): String? {
-        val stored = prefs?.getString(key, null) ?: return null
-        if (stored.startsWith(ENC_PREFIX)) return decrypt(stored)
+    fun readAndMigrate(prefs: SharedPreferences?, key: String): Stored {
+        val stored = prefs?.getString(key, null) ?: return Stored.Absent
+        if (stored.startsWith(ENC_PREFIX)) {
+            // A lost Keystore alias — restore onto new hardware, an OEM reset, a re-enrolled screen
+            // lock — is not the same as an absent token, and must not be reported as one.
+            return decrypt(stored)?.let(Stored::Value) ?: Stored.Unreadable
+        }
         val plain = stored.trim()
-        if (plain.isEmpty()) return plain
+        if (plain.isEmpty()) return Stored.Value(plain)
         try {
             prefs.edit().putString(key, encrypt(plain)).apply()
             Log.i(TAG, "Upgraded a legacy plaintext token to ciphertext")
         } catch (e: Exception) {
             Log.w(TAG, "Could not upgrade a legacy plaintext token to ciphertext", e)
         }
-        return plain
+        return Stored.Value(plain)
     }
 
     private fun getOrCreateKey(): SecretKey {

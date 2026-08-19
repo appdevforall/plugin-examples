@@ -89,15 +89,29 @@ object JsonRpc {
             else -> json.get("id").toString()
         }
 
-        json.optJSONObject("error")?.let { error ->
+        // Branching on the member rather than on the cast succeeding: a server that answers
+        // `"error": "boom"` still failed, and reading it as an absent error would report an empty
+        // success — the model would be told the tool ran and produced nothing.
+        if (json.has("error") && !json.isNull("error")) {
+            val error = json.optJSONObject("error")
+            // A non-object error carries its own text; an object with no `message` has none worth
+            // showing, and its JSON is not a sentence.
+            val detail = when (error) {
+                null -> json.get("error").toString()
+                else -> error.optString("message")
+            }
             return Reply(
                 id = id,
                 result = null,
-                errorCode = error.optInt("code", 0),
-                errorMessage = error.optString("message").takeIf { it.isNotBlank() }
+                errorCode = error?.optInt("code", 0) ?: 0,
+                errorMessage = detail.takeIf { it.isNotBlank() }
                     ?: "the server reported an unspecified error",
             )
         }
+
+        // `"error": null` beside a result is common and means no error; on its own it is not a
+        // reply at all, and reporting it as one would hand the caller an empty success.
+        if (!json.has("result")) return null
 
         return Reply(id = id, result = json.optJSONObject("result") ?: JSONObject())
     }

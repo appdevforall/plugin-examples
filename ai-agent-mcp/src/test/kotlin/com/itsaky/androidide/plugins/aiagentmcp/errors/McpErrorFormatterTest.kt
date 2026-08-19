@@ -1,7 +1,9 @@
 package com.itsaky.androidide.plugins.aiagentmcp.errors
 
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpProtocolException
+import com.itsaky.androidide.plugins.aiagentmcp.security.UnreadableSecretException
 import com.itsaky.androidide.plugins.aiagentmcp.transport.McpHttpException
+import com.itsaky.androidide.plugins.aiagentmcp.transport.McpRedirectException
 import java.io.IOException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
@@ -15,6 +17,24 @@ import org.junit.Test
  * token or goes looking for a network problem that does not exist.
  */
 class McpErrorFormatterTest {
+
+    @Test
+    fun givenAnUndecryptableToken_whenClassified_thenItIsNotMistakenForARefusedOne() {
+        // The token never reached the wire, so "the server refused it" would send the user to
+        // re-check a token that is still stored and still correct.
+        val failure = McpErrorFormatter.classify(UnreadableSecretException("no key"))
+
+        assertEquals(McpFailure.SecretUnreadable, failure)
+    }
+
+    @Test
+    fun givenARefusedRedirect_whenClassified_thenItIsItsOwnFailureRatherThanAGenericOne() {
+        // "Could not reach X: <reason>" would read as a network problem; nothing was sent, and the
+        // endpoint URL is what the user has to look at.
+        val failure = McpErrorFormatter.classify(McpRedirectException("off origin"))
+
+        assertEquals(McpFailure.RedirectRefused, failure)
+    }
 
     @Test
     fun givenAnUnauthorizedStatus_whenClassified_thenItPointsAtTheToken() {

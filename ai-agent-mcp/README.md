@@ -84,5 +84,13 @@ Two dependencies were deliberately not taken:
   are reduced to `[a-z0-9_]` and to a single capped line before they can reach a
   system prompt assembled inside a backend plugin.
 - Tokens are encrypted with an AES/GCM key held in the Android Keystore under
-  this plugin's own alias; only ciphertext is written to disk.
+  this plugin's own alias; only ciphertext is written to disk. A token that can no
+  longer be decrypted — a restored backup, an OEM Keystore reset — is reported as
+  exactly that, never sent as an absent one, which would surface as the server
+  refusing a token that is still stored and still correct.
+- A token or a custom header is refused on an `http://` URL: encryption at rest
+  buys nothing for a credential sent in the clear.
+- Redirects are never followed automatically. A 3xx is repeated only when it
+  resolves to the same origin, so the bearer token and the user's own headers
+  cannot be replayed to another host in one hop.
 - Error bodies stay in logcat. The transcript gets one sentence.

@@ -2,6 +2,8 @@ package com.itsaky.androidide.plugins.aiagentmcp.client
 
 import android.util.Log
 import com.itsaky.androidide.plugins.aiagentmcp.logging.LOG_PREFIX
+import com.itsaky.androidide.plugins.aiagentmcp.security.SecureTokenStore
+import com.itsaky.androidide.plugins.aiagentmcp.security.UnreadableSecretException
 import com.itsaky.androidide.plugins.aiagentmcp.settings.McpServer
 import com.itsaky.androidide.plugins.aiagentmcp.settings.McpServerStore
 import java.security.MessageDigest
@@ -71,11 +73,6 @@ object McpConnections {
         sessions.remove(serverId)?.second?.let { runCatching { it.close() } }
     }
 
-    /** Cancels whatever every session has in flight, for a stopped agent run. */
-    fun cancelAll() {
-        sessions.values.forEach { (_, session) -> runCatching { session.cancel() } }
-    }
-
     /** Ends every session, for the plugin shutting down. */
     fun closeAll() {
         sessions.values.forEach { (_, session) -> runCatching { session.close() } }
@@ -90,9 +87,18 @@ object McpConnections {
      *
      * @param serverId the server being called.
      * @return its token and headers; either may be empty.
+     * @throws UnreadableSecretException when a stored credential cannot be decrypted here. Sending
+     *   the request without it would earn a 401 and tell the user their token was refused.
      */
-    private fun credentialsFor(serverId: String): McpCredentials =
-        McpCredentials(McpServerStore.token(serverId), McpServerStore.headers(serverId))
+    private fun credentialsFor(serverId: String): McpCredentials {
+        val token = when (val stored = McpServerStore.token(serverId)) {
+            is SecureTokenStore.Stored.Value -> stored.plain
+            SecureTokenStore.Stored.Absent -> ""
+            SecureTokenStore.Stored.Unreadable ->
+                throw UnreadableSecretException("The stored token for '$serverId' cannot be decrypted.")
+        }
+        return McpCredentials(token, McpServerStore.headers(serverId))
+    }
 
     /**
      * What [server]'s session was built from, credentials included as digests.

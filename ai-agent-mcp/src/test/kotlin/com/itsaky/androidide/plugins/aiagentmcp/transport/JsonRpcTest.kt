@@ -50,7 +50,10 @@ class JsonRpcTest {
         val reply = JsonRpc.parseReply("""{"jsonrpc":"2.0","id":"7","error":{"code":-32000}}""")
 
         assertTrue(reply!!.isError)
-        assertTrue(reply.errorMessage!!.isNotBlank())
+        val message = reply.errorMessage!!
+        assertTrue(message.isNotBlank())
+        // A sentence, not the envelope's own JSON.
+        assertFalse(message.contains("{"))
     }
 
     @Test
@@ -63,6 +66,32 @@ class JsonRpcTest {
 
         assertEquals("7", reply?.id)
         assertTrue(reply!!.result!!.getBoolean("ok"))
+    }
+
+    @Test
+    fun givenAnErrorThatIsNotAnObject_whenParsed_thenItIsStillReportedAsAnError() {
+        // Non-conforming but common; read as an absent error it would become an empty success,
+        // which tells the model the call worked and returned nothing.
+        val reply = JsonRpc.parseReply("""{"jsonrpc":"2.0","id":"7","error":"internal failure"}""")
+
+        assertTrue(reply!!.isError)
+        assertEquals("internal failure", reply.errorMessage)
+        assertNull(reply.result)
+    }
+
+    @Test
+    fun givenANullErrorBesideAResult_whenParsed_thenTheResultIsUsed() {
+        val reply = JsonRpc.parseReply("""{"jsonrpc":"2.0","id":"7","error":null,"result":{"ok":true}}""")
+
+        assertFalse(reply!!.isError)
+        assertTrue(reply.result!!.getBoolean("ok"))
+    }
+
+    @Test
+    fun givenANullErrorAndNoResult_whenParsed_thenItIsNotMistakenForAnEmptySuccess() {
+        val reply = JsonRpc.parseReply("""{"jsonrpc":"2.0","id":"7","error":null}""")
+
+        assertNull(reply)
     }
 
     @Test

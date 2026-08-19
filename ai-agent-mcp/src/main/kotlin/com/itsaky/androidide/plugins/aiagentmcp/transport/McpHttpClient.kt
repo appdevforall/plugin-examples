@@ -40,6 +40,9 @@ class McpHttpClient(
         const val HEADER_PROTOCOL_VERSION = "MCP-Protocol-Version"
 
         private const val CONTENT_TYPE_SSE = "text/event-stream"
+
+        /** Same-origin redirects followed before giving up, so a redirect loop cannot spin. */
+        private const val MAX_REDIRECTS = 5
     }
 
     /**
@@ -71,32 +74,48 @@ class McpHttpClient(
         extraHeaders: Map<String, String> = emptyMap(),
         onConnected: (HttpURLConnection) -> Unit = {},
     ): Response {
-        val conn = open(url, "POST", token, sessionId, protocolVersion, extraHeaders).apply {
-            readTimeout = readTimeoutMs
-            doOutput = true
-            setRequestProperty("Content-Type", "application/json")
-            // Both are advertised because the server picks, and a client that offers only one
-            // gets 406 from servers that stream by default.
-            setRequestProperty("Accept", "application/json, $CONTENT_TYPE_SSE")
-        }
-        onConnected(conn)
-        return try {
-            conn.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
-            conn.failIfNotOk()
+        var target = url
+        var hops = 0
+        while (true) {
+            val conn = open(target, "POST", token, sessionId, protocolVersion, extraHeaders).apply {
+                readTimeout = readTimeoutMs
+                doOutput = true
+                setRequestProperty("Content-Type", "application/json")
+                // Both are advertised because the server picks, and a client that offers only one
+                // gets 406 from servers that stream by default.
+                setRequestProperty("Accept", "application/json, $CONTENT_TYPE_SSE")
+            }
+            onConnected(conn)
+            val redirect = try {
+                conn.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
+                val next = conn.redirectTargetFrom(target)
+                if (next == null) {
+                    conn.failIfNotOk()
 
-            val assignedSession = conn.getHeaderField(HEADER_SESSION_ID)?.takeIf { it.isNotBlank() }
-            // 202 with no body is the correct answer to a notification; there is nothing to read.
-            if (conn.responseCode == HttpURLConnection.HTTP_ACCEPTED) {
-                return Response(null, assignedSession)
+                    val assignedSession =
+                        conn.getHeaderField(HEADER_SESSION_ID)?.takeIf { it.isNotBlank() }
+                    // 202 with no body is the correct answer to a notification; nothing to read.
+                    if (conn.responseCode == HttpURLConnection.HTTP_ACCEPTED) {
+                        return Response(null, assignedSession)
+                    }
+
+                    val streaming =
+                        conn.contentType.orEmpty().contains(CONTENT_TYPE_SSE, ignoreCase = true)
+                    val document = conn.inputStream.bufferedReader().use { reader ->
+                        if (streaming) readFirstSseDocument(reader) else reader.readText()
+                    }
+                    return Response(document, assignedSession)
+                }
+                next
+            } finally {
+                conn.disconnect()
             }
 
-            val streaming = conn.contentType.orEmpty().contains(CONTENT_TYPE_SSE, ignoreCase = true)
-            val document = conn.inputStream.bufferedReader().use { reader ->
-                if (streaming) readFirstSseDocument(reader) else reader.readText()
+            if (++hops > MAX_REDIRECTS) {
+                throw McpRedirectException("More than $MAX_REDIRECTS redirects from $url.")
             }
-            Response(document, assignedSession)
-        } finally {
-            conn.disconnect()
+            Log.d(TAG, "Following a same-origin redirect")
+            target = redirect
         }
     }
 
@@ -177,7 +196,7 @@ class McpHttpClient(
             requestMethod = method
             connectTimeout = connectTimeoutMs
             readTimeout = connectTimeoutMs
-            instanceFollowRedirects = true
+            instanceFollowRedirects = false
             if (token.isNotBlank()) setRequestProperty("Authorization", "Bearer $token")
             // Before the session and protocol headers, so a user cannot displace either; the
             // sanitiser already refuses those names, and this makes the order irrelevant.
@@ -188,6 +207,28 @@ class McpHttpClient(
             protocolVersion?.let { setRequestProperty(HEADER_PROTOCOL_VERSION, it) }
         }
     }
+
+    /**
+     * Where a 3xx wants this request to go, when repeating it there is safe.
+     *
+     * The method is kept rather than degraded to a GET as 301/302/303 prescribe: the body is the
+     * JSON-RPC call, and dropping it surfaces as "the server sent no reply" rather than as anything
+     * a reader could act on. Which destinations are safe is [McpRedirects]' decision.
+     *
+     * @param current the URL this request was sent to, for resolving a relative `Location`.
+     * @return the URL to repeat the request at, or null when this is not a redirect.
+     * @throws McpRedirectException when the redirect cannot be followed safely.
+     */
+    private fun HttpURLConnection.redirectTargetFrom(current: String): String? =
+        when (val verdict = McpRedirects.verdict(responseCode, current, getHeaderField("Location"))) {
+            McpRedirects.Verdict.NotARedirect -> null
+            is McpRedirects.Verdict.Follow -> verdict.url
+            McpRedirects.Verdict.OtherOrigin -> throw McpRedirectException(
+                "$current redirected off its own origin; the request carries credentials."
+            )
+            McpRedirects.Verdict.Unusable ->
+                throw McpRedirectException("$current sent a redirect with no usable destination.")
+        }
 
     /**
      * Fails with the server's error body attached, so the status reaches its readers as a number

@@ -161,6 +161,9 @@ class McpSettingsFragment : Fragment() {
         wireTooltip(tokenField, McpPlugin.TOOLTIP_TAG_SERVER_TOKEN)
 
         var server = existing ?: viewModel.newServer()
+        // A stored credential counts as one for the cleartext check below, even though the field
+        // showing it is empty: an empty field on an existing server means "keep what is stored".
+        var hasStoredCredential = false
         nameField.setText(server.name)
         urlField.setText(server.url)
 
@@ -175,10 +178,19 @@ class McpSettingsFragment : Fragment() {
         renderHeaders(view, emptyMap())
         if (existing != null) {
             viewModel.loadForm(server.id) { form ->
-                // The stored token is never shown: it is decrypted only to be sent. An empty field
-                // on an existing server means "leave it alone", which the placeholder says aloud.
-                if (form.hasToken) tokenField.hint = getString(R.string.mcp_hint_token_stored)
-                renderHeaders(view, form.headers)
+                hasStoredCredential = form.hasToken || form.headers.isNotEmpty()
+                whileDialogShown {
+                    // The stored token is never shown: it is decrypted only to be sent. An empty
+                    // field on an existing server means "leave it alone", which the placeholder
+                    // says aloud — unless nothing on this device can read it any more.
+                    if (form.secretsUnreadable) {
+                        tokenField.hint = getString(R.string.mcp_hint_token_unreadable)
+                        status.text = getString(R.string.mcp_secrets_unreadable)
+                    } else if (form.hasToken) {
+                        tokenField.hint = getString(R.string.mcp_hint_token_stored)
+                    }
+                    renderHeaders(view, form.headers)
+                }
             }
         }
 
@@ -189,22 +201,20 @@ class McpSettingsFragment : Fragment() {
                     name = nameField.text.toString().trim(),
                     url = urlField.text.toString().trim(),
                 )
-                val validation = validate(candidate, tokenField.text.toString())
-                if (validation != null) {
-                    status.text = validation
-                    return@setOnClickListener
-                }
                 val headers = collectHeaders(view)
                 if (headers == null) {
                     status.text = getString(R.string.mcp_headers_invalid)
                     return@setOnClickListener
                 }
+                val validation =
+                    validate(candidate, tokenField.text.toString(), hasStoredCredential, headers)
+                if (validation != null) {
+                    status.text = validation
+                    return@setOnClickListener
+                }
                 status.text = getString(R.string.mcp_status_testing)
-                viewLifecycleOwner.lifecycleScope.launch {
-                    val token = viewModel.tokenToSend(server.id, tokenField.text.toString())
-                    viewModel.testConnection(candidate, token, headers) { message ->
-                        status.text = message
-                    }
+                viewModel.testConnection(candidate, tokenField.text.toString(), headers) { message ->
+                    whileDialogShown { status.text = message }
                 }
             }
         }
@@ -216,14 +226,15 @@ class McpSettingsFragment : Fragment() {
                     name = nameField.text.toString().trim(),
                     url = urlField.text.toString().trim(),
                 )
-                val validation = validate(candidate, tokenField.text.toString())
-                if (validation != null) {
-                    status.text = validation
-                    return@setOnClickListener
-                }
                 val headers = collectHeaders(view)
                 if (headers == null) {
                     status.text = getString(R.string.mcp_headers_invalid)
+                    return@setOnClickListener
+                }
+                val validation =
+                    validate(candidate, tokenField.text.toString(), hasStoredCredential, headers)
+                if (validation != null) {
+                    status.text = validation
                     return@setOnClickListener
                 }
                 // Stored first: refreshing reads the token, headers and URL from the store, so an
@@ -235,9 +246,13 @@ class McpSettingsFragment : Fragment() {
                     headers,
                 ) { saved, _ ->
                     server = saved
+                    hasStoredCredential = hasStoredCredential ||
+                        tokenField.text.isNotBlank() || headers.isNotEmpty()
                     viewModel.refreshTools(saved) { message, tools ->
-                        status.text = message
-                        renderTools(view, saved.id, tools)
+                        whileDialogShown {
+                            status.text = message
+                            renderTools(view, saved.id, tools)
+                        }
                     }
                 }
             }
@@ -264,15 +279,16 @@ class McpSettingsFragment : Fragment() {
                     name = nameField.text.toString().trim(),
                     url = urlField.text.toString().trim(),
                 )
-                val problem = validate(candidate, tokenField.text.toString())
-                if (problem != null) {
-                    status.text = problem
-                    return@setOnClickListener
-                }
                 // A malformed header stops the save: storing it would drop it later in silence.
                 val headers = collectHeaders(view)
                 if (headers == null) {
                     status.text = getString(R.string.mcp_headers_invalid)
+                    return@setOnClickListener
+                }
+                val problem =
+                    validate(candidate, tokenField.text.toString(), hasStoredCredential, headers)
+                if (problem != null) {
+                    status.text = problem
                     return@setOnClickListener
                 }
                 viewModel.save(
@@ -451,17 +467,48 @@ class McpSettingsFragment : Fragment() {
      * stray line break, and the transport refuses to send one, so catching it on Save is the
      * difference between a marked field and a connection that fails for no visible reason.
      *
+     * A credential on a cleartext URL is refused outright. The token field's help promises the
+     * value is encrypted under the Android Keystore — true at rest, but `http://` hands it to
+     * anyone on the same Wi-Fi on the way out, and a phone IDE runs on shared Wi-Fi by definition.
+     * A local server with no credential is still allowed.
+     *
      * @param server the candidate.
      * @param typedToken the current contents of the token field.
+     * @param hasStoredCredential whether a token or header is already stored for this server, which
+     *   an empty token field keeps rather than clears.
+     * @param headers the header rows as they currently stand.
      * @return the message to show, or null when it is usable.
      */
-    private fun validate(server: McpServer, typedToken: String): String? = when {
+    private fun validate(
+        server: McpServer,
+        typedToken: String,
+        hasStoredCredential: Boolean,
+        headers: Map<String, String>,
+    ): String? = when {
         server.name.isBlank() -> getString(R.string.mcp_name_required)
         server.url.isBlank() -> getString(R.string.mcp_url_required)
         !server.url.startsWith("http://") && !server.url.startsWith("https://") ->
             getString(R.string.mcp_url_scheme_invalid)
         !McpHeaders.isSendableToken(typedToken.trim()) -> getString(R.string.mcp_token_illegal)
+        server.url.startsWith("http://") &&
+            (typedToken.isNotBlank() || hasStoredCredential || headers.isNotEmpty()) ->
+            getString(R.string.mcp_url_insecure_credentials)
         else -> null
+    }
+
+    /**
+     * Runs [action] only while the dialog it draws on is still on screen.
+     *
+     * The ViewModel's work is tied to the ViewModel, not to this view: a refresh can take up to the
+     * read timeout, and a rotation or a back press in the meantime destroys the view the queued
+     * callback was about to write to — `getString` and `layoutInflater` on a detached Fragment
+     * throw. Guarded here rather than by cancelling the work, because storing a token and a tool
+     * catalogue has to finish whether or not anyone is still looking.
+     *
+     * @param action the UI update to run, if there is still a UI to run it on.
+     */
+    private fun whileDialogShown(action: () -> Unit) {
+        if (isAdded && view != null && serverDialog?.isShowing == true) action()
     }
 
     /** Shows this plugin's tooltip for [tag] when [view] is long-pressed (Tier 1/2 + guide). */

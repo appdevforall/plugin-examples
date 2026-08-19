@@ -338,6 +338,9 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
                 <p>It is encrypted with a key held in the Android Keystore, so a
                 copy of the settings file is useless on another device. Leave it
                 empty for a server that needs no token.</p>
+                <p>A token needs an <code>https://</code> endpoint: encryption at
+                rest buys nothing for a credential sent in the clear over shared
+                Wi-Fi, so this plugin refuses that combination on Save.</p>
             """.trimIndent(),
             buttons = listOf(
                 PluginTooltipButton(description = "AI Agent MCP guide", uri = "index.html", order = 0)

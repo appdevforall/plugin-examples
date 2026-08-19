@@ -29,11 +29,9 @@
             android:name="plugin.author"
             android:value="App Dev for All" />
 
-        <!-- 26.33 ships ToolSourceRegistry (ADFA-2592), the contract this plugin contributes
-             through; it also pairs with ai-core, which requires the same release. -->
         <meta-data
             android:name="plugin.min_ide_version"
-            android:value="26.33" />
+            android:value="26.35" />
 
         <meta-data
             android:name="plugin.max_ide_version"

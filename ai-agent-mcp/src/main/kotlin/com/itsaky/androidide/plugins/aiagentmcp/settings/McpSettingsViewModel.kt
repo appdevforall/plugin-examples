@@ -10,6 +10,8 @@ import com.itsaky.androidide.plugins.aiagentmcp.client.McpCredentials
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpSession
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpTool
 import com.itsaky.androidide.plugins.aiagentmcp.errors.McpErrorFormatter
+import com.itsaky.androidide.plugins.aiagentmcp.security.SecureTokenStore
+import com.itsaky.androidide.plugins.aiagentmcp.security.UnreadableSecretException
 import com.itsaky.androidide.plugins.aiagentmcp.tools.McpToolCatalog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -42,10 +44,16 @@ class McpSettingsViewModel(
 
     /**
      * What the add/edit dialog needs from the store before it can show a server.
-     * @property hasToken whether a token is stored, so the field can say so without decrypting it.
+     * @property hasToken whether a token is stored, so the field can say so.
+     * @property secretsUnreadable whether a stored token or header cannot be decrypted on this
+     *   device, which the field has to say aloud: it looks stored, but nothing can send it.
      * @property headers the extra headers configured for the server.
      */
-    data class FormState(val hasToken: Boolean, val headers: Map<String, String>)
+    data class FormState(
+        val hasToken: Boolean,
+        val secretsUnreadable: Boolean,
+        val headers: Map<String, String>,
+    )
 
     /** A server with a fresh id, ready for the dialog to fill in. */
     fun newServer(): McpServer = McpServerStore.newServer("", "")
@@ -60,8 +68,9 @@ class McpSettingsViewModel(
     /**
      * Reads what the dialog needs about an existing server.
      *
-     * One load rather than two, and off the main thread: the headers are a Keystore decrypt, and
-     * the token check is a preferences read the dialog used to do on the UI thread.
+     * One load rather than two, and off the main thread: both are Keystore decrypts. The token is
+     * decrypted rather than merely counted, because "stored" and "stored but unreadable here" are
+     * what the field has to tell apart.
      *
      * @param id the server being edited.
      * @param onLoaded receives the state, on the main thread.
@@ -69,7 +78,18 @@ class McpSettingsViewModel(
     fun loadForm(id: String, onLoaded: (FormState) -> Unit) {
         viewModelScope.launch {
             val state = withContext(Dispatchers.IO) {
-                FormState(McpServerStore.hasToken(id), McpServerStore.headers(id))
+                val token = McpServerStore.token(id)
+                val headers = try {
+                    McpServerStore.headers(id)
+                } catch (e: UnreadableSecretException) {
+                    null
+                }
+                FormState(
+                    hasToken = McpServerStore.hasToken(id),
+                    secretsUnreadable =
+                        token is SecureTokenStore.Stored.Unreadable || headers == null,
+                    headers = headers.orEmpty(),
+                )
             }
             onLoaded(state)
         }
@@ -91,9 +111,17 @@ class McpSettingsViewModel(
      * @param id the server being tested.
      * @param typed the current contents of the token field.
      * @return the token to send, empty when the server needs none.
+     * @throws UnreadableSecretException when a token is stored but cannot be decrypted here.
      */
-    suspend fun tokenToSend(id: String, typed: String): String =
-        tokenToStore(typed) ?: withContext(Dispatchers.IO) { McpServerStore.token(id) }
+    private fun tokenToSend(id: String, typed: String): String {
+        tokenToStore(typed)?.let { return it }
+        return when (val stored = McpServerStore.token(id)) {
+            is SecureTokenStore.Stored.Value -> stored.plain
+            SecureTokenStore.Stored.Absent -> ""
+            SecureTokenStore.Stored.Unreadable ->
+                throw UnreadableSecretException("The stored token for '$id' cannot be decrypted.")
+        }
+    }
 
     /**
      * Stores the edited name and URL of a server and, when given, its token.
@@ -180,21 +208,28 @@ class McpSettingsViewModel(
      * expose only prompts or resources, which this plugin does not use.
      *
      * @param server the server to test, with the values currently in the form.
-     * @param token the token currently in the form.
+     * @param typedToken the current contents of the token field; empty means "use the stored one",
+     *   which is resolved here so the screen never holds a decrypted credential.
      * @param headers the extra headers currently in the form, so a test exercises what a real call
      *   would send rather than what was last saved.
      * @param onResult receives the sentence to show.
      */
     fun testConnection(
         server: McpServer,
-        token: String,
+        typedToken: String,
         headers: Map<String, String> = emptyMap(),
         onResult: (String) -> Unit,
     ) {
         viewModelScope.launch {
             val message = withContext(Dispatchers.IO) {
                 // The form's own values, not the store's: a test has to exercise the unsaved edit.
-                val typed = McpCredentials(token.trim(), headers)
+                val typed = try {
+                    McpCredentials(tokenToSend(server.id, typedToken), headers)
+                } catch (e: UnreadableSecretException) {
+                    return@withContext McpErrorFormatter.format(
+                        getContext()?.androidContext, server.name, e
+                    )
+                }
                 val session = McpSession(server.url.trim(), { typed })
                 try {
                     session.initialize()

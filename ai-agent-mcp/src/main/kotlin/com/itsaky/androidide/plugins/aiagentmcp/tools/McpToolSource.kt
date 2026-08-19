@@ -2,6 +2,7 @@ package com.itsaky.androidide.plugins.aiagentmcp.tools
 
 import android.util.Log
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpConnections
+import com.itsaky.androidide.plugins.aiagentmcp.client.McpSession
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpTool
 import com.itsaky.androidide.plugins.aiagentmcp.errors.McpErrorFormatter
 import com.itsaky.androidide.plugins.aiagentmcp.R
@@ -28,6 +29,15 @@ class McpToolSource : ToolSourceRegistry.ToolSource {
 
     /** Calls in flight, so a stopped agent run can drop the socket instead of waiting it out. */
     private val inFlight = ConcurrentHashMap<String, CompletableFuture<*>>()
+
+    /**
+     * The session each in-flight call is using.
+     *
+     * Per call rather than "every session there is": two tools can be in flight against different
+     * servers at once, and cancelling both would report the survivor to the model as a transport
+     * failure for a call nobody cancelled.
+     */
+    private val liveSessions = ConcurrentHashMap<String, McpSession>()
 
     /**
      * Remote calls run here rather than on the common pool: an MCP call blocks on a socket for as
@@ -58,7 +68,7 @@ class McpToolSource : ToolSourceRegistry.ToolSource {
             )
 
         val future = CompletableFuture.supplyAsync(
-            { runTool(target.first, target.second, invocation.arguments) },
+            { runTool(invocation.callId, target.first, target.second, invocation.arguments) },
             executor,
         )
         inFlight[invocation.callId] = future
@@ -68,29 +78,39 @@ class McpToolSource : ToolSourceRegistry.ToolSource {
     override fun cancel(callId: String) {
         inFlight.remove(callId)?.cancel(true)
         // The worker is blocked on a socket read, where an interrupt does nothing; dropping the
-        // connection is what actually ends it.
-        McpConnections.cancelAll()
+        // connection is what actually ends it. Only this call's, so a concurrent call against
+        // another server keeps its socket.
+        liveSessions.remove(callId)?.let { runCatching { it.cancel() } }
     }
 
     /** Ends the executor, for the plugin shutting down. */
     fun close() {
         executor.shutdownNow()
         inFlight.clear()
+        liveSessions.clear()
     }
 
     /**
      * Runs one remote tool.
+     * @param callId the agent's id for this call, so [cancel] can reach the session it is using.
      * @param server the server that owns it.
      * @param tool the tool, as the server described it.
      * @param arguments the agent's arguments.
      * @return the outcome; a failure carries one sentence, never the server's raw body.
      */
     private fun runTool(
+        callId: String,
         server: McpServer,
         tool: McpTool,
         arguments: Map<String, Any?>,
     ): ToolSourceRegistry.ToolOutcome = try {
-        val result = McpConnections.session(server).callTool(tool.name, arguments)
+        val session = McpConnections.session(server)
+        liveSessions[callId] = session
+        val result = try {
+            session.callTool(tool.name, arguments)
+        } finally {
+            liveSessions.remove(callId)
+        }
         Outcome(result.success, result.text, result.errorMessage)
     } catch (e: Throwable) {
         Log.w(TAG, "Tool '${tool.name}' on '${server.name}' failed", e)
