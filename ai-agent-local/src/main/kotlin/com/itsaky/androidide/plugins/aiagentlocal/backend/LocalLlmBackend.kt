@@ -12,6 +12,7 @@ import com.itsaky.androidide.plugins.aiagentlocal.feedback.ModelNotConfiguredExc
 import com.itsaky.androidide.plugins.aiagentlocal.feedback.UserActionableLlmException
 import com.itsaky.androidide.plugins.aiagentlocal.feedback.UserFeedback
 import com.itsaky.androidide.plugins.aiagentlocal.model.GgufModelInspector
+import com.itsaky.androidide.plugins.aiagentlocal.model.ModelContextResolver
 import com.itsaky.androidide.plugins.aiagentlocal.model.ModelLoadDiagnostics
 import com.itsaky.androidide.plugins.aiagentlocal.model.ModelLoadMessages
 import com.itsaky.androidide.plugins.aiagentlocal.preferences.LocalLlmPreferences
@@ -33,6 +34,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 /**
  * Local LLM backend using llama-impl for on-device inference.
@@ -307,13 +309,16 @@ class LocalLlmBackend(
         }
 
         // Measured after the unload: availMem excludes the context and batch it just released.
-        ModelLoadDiagnostics.refuseBeforeLoad(availableMemoryBytes())?.let { shortfall ->
+        val availableBytes = availableMemoryBytes()
+        ModelLoadDiagnostics.refuseBeforeLoad(availableBytes)?.let { shortfall ->
             throw ModelLoadException(loadMessages.describe(shortfall), shortfall)
         }
 
+        val contextTokens = resolveContextSize(resolvedPath, availableBytes)
+
         context.logger.info("Loading model: $resolvedPath")
         try {
-            llama.load(resolvedPath)
+            llama.load(resolvedPath, contextTokens)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -326,6 +331,30 @@ class LocalLlmBackend(
         modelLoaded = true
         currentModelPath = resolvedPath
         context.logger.info("Model loaded successfully")
+    }
+
+    /**
+     * Sizes the KV cache for this model on this device. Must run after any unload, so the freed
+     * context is counted as available, and the answer is passed to [LLamaAndroid.load] rather than
+     * stored anywhere. [ModelContextResolver] fails open, so this has no failure of its own.
+     *
+     * @param resolvedPath filesystem path to the model, already resolved from any content URI
+     * @param availableBytes free RAM as [availableMemoryBytes] reports it, negative if unknown
+     * @return the context size in tokens to load the model with
+     */
+    private suspend fun resolveContextSize(resolvedPath: String, availableBytes: Long): Int {
+        val resolved = withContext(Dispatchers.IO) {
+            ModelContextResolver.resolve(availableBytes.takeIf { it >= 0L }) {
+                File(resolvedPath).takeIf { it.isFile }?.inputStream()
+            }
+        }
+        // Unconditional: a wrongly sized context otherwise just reads as the assistant forgetting.
+        context.logger.info(
+            "Context size for $resolvedPath: ${resolved.contextTokens} tokens" +
+                " (model advertises ${resolved.advertisedTokens ?: "unknown"}," +
+                " ${if (availableBytes >= 0L) "$availableBytes bytes free" else "free RAM unknown"})"
+        )
+        return resolved.contextTokens
     }
 
     /**
