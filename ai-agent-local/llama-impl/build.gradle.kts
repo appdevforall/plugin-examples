@@ -25,6 +25,7 @@ android {
 				arguments += "-DLLAMA_BUILD_COMMON=ON"
 				arguments += "-DGGML_LLAMAFILE=OFF"
 				arguments += "-DCMAKE_BUILD_TYPE=Release"
+				arguments += "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON"
 				cppFlags += listOf()
 				arguments += listOf()
 

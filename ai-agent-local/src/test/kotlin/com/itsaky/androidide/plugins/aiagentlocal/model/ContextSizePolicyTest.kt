@@ -122,17 +122,54 @@ class ContextSizePolicyTest {
     }
 
     @Test
+    fun givenAQuantizableModel_whenChoosingTheCacheType_thenPicksQ8_0() {
+        assertEquals(KvCacheType.Q8_0, ContextSizePolicy.chooseKvCache(header()))
+    }
+
+    @Test
+    fun givenAHeadWidthQ8_0CannotHold_whenChoosingTheCacheType_thenFallsBackToF16() {
+        assertEquals(KvCacheType.F16, ContextSizePolicy.chooseKvCache(header(keyLength = 80L)))
+    }
+
+    @Test
+    fun givenNoHeader_whenChoosingTheCacheType_thenFallsBackToF16() {
+        assertEquals(KvCacheType.F16, ContextSizePolicy.chooseKvCache(null))
+    }
+
+    @Test
+    fun givenTheSameRam_whenChoosingUnderQ8_0_thenAffordsNearlyTwiceTheContext() {
+        // The RAM that buys 5_000 f16 tokens buys 9_411 q8_0 ones, rounded down to whole blocks.
+        val ram = ramAffording(5_000L)
+        assertEquals(4864, ContextSizePolicy.choose(header(), ram, KvCacheType.F16))
+        assertEquals(9216, ContextSizePolicy.choose(header(), ram, KvCacheType.Q8_0))
+    }
+
+    @Test
+    fun givenAModelContextBelowWhatQ8_0Affords_whenChoosing_thenTheModelStillCaps() {
+        val result = ContextSizePolicy.choose(header(contextLength = 8192L), ramAffording(5_000L), KvCacheType.Q8_0)
+        assertEquals(8192, result)
+    }
+
+    @Test
+    fun givenTightRamUnderQ8_0_whenChoosing_thenNeverGoesBelowTheFloor() {
+        val result = ContextSizePolicy.choose(header(), ramAffording(1_000L), KvCacheType.Q8_0)
+        assertEquals(DEFAULT_CONTEXT_TOKENS, result)
+    }
+
+    @Test
     fun givenAnyInputs_whenChoosing_thenResultStaysWithinTheDeclaredBounds() {
         val contexts = listOf(null, -1L, 0L, 512L, 4096L, 8192L, 32768L, Long.MAX_VALUE)
         val memories = listOf(null, 0L, 1L, ModelMemory.RUN_BUFFER_BYTES, ramAffording(50_000L), Long.MAX_VALUE)
         for (context in contexts) {
             for (memory in memories) {
-                val result = ContextSizePolicy.choose(header(contextLength = context), memory)
-                assertTrue(
-                    "context=$context memory=$memory gave $result",
-                    result in DEFAULT_CONTEXT_TOKENS..MAX_CONTEXT_TOKENS,
-                )
-                assertEquals("must be a whole number of 256-token blocks", 0, result % 256)
+                for (kvType in KvCacheType.entries) {
+                    val result = ContextSizePolicy.choose(header(contextLength = context), memory, kvType)
+                    assertTrue(
+                        "context=$context memory=$memory kv=$kvType gave $result",
+                        result in DEFAULT_CONTEXT_TOKENS..MAX_CONTEXT_TOKENS,
+                    )
+                    assertEquals("must be a whole number of 256-token blocks", 0, result % 256)
+                }
             }
         }
     }

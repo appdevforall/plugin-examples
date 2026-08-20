@@ -365,9 +365,27 @@ Java_android_llama_cpp_LLamaAndroid_free_1model(JNIEnv *, jobject, jlong model) 
     llama_model_free(reinterpret_cast<llama_model *>(model));
 }
 
+/**
+ * Backstops a context size Kotlin chose: a misparsed header must not ask for more than the model
+ * was trained for, and a non-positive argument falls back to the default.
+ *
+ * @param requested the context asked for, in tokens
+ * @param trained_ctx what the model was trained for, or 0 when it does not say
+ * @return the context to configure, never above trained_ctx when the model declares one
+ */
+static int clamp_context(int requested, int trained_ctx) {
+    int clamped = requested > 0 ? requested : DEFAULT_N_CTX;
+    if (trained_ctx > 0 && clamped > trained_ctx) {
+        LOGi("context: n_ctx %d exceeds the model's trained %d; clamping", clamped, trained_ctx);
+        clamped = trained_ctx;
+    }
+    return clamped;
+}
+
 extern "C"
 JNIEXPORT jlong JNICALL
-Java_android_llama_cpp_LLamaAndroid_new_1context(JNIEnv *env, jobject, jlong jmodel, jint jn_ctx) {
+Java_android_llama_cpp_LLamaAndroid_new_1context(JNIEnv *env, jobject, jlong jmodel, jint jn_ctx,
+                                                 jboolean jquantize_kv, jint jfallback_n_ctx) {
     auto model = reinterpret_cast<llama_model *>(jmodel);
 
     if (!model) {
@@ -389,20 +407,48 @@ Java_android_llama_cpp_LLamaAndroid_new_1context(JNIEnv *env, jobject, jlong jmo
 
     llama_context_params ctx_params = llama_context_default_params();
 
-    int requested_ctx = jn_ctx > 0 ? jn_ctx : DEFAULT_N_CTX;
-
-    // Backstop on Kotlin's number: a misparsed header must not exceed what the model was trained for.
     const int trained_ctx = llama_model_n_ctx_train(model);
-    if (trained_ctx > 0 && requested_ctx > trained_ctx) {
-        LOGi("context: requested n_ctx %d exceeds the model's trained %d; clamping", requested_ctx, trained_ctx);
-        requested_ctx = trained_ctx;
+    const int requested_ctx = clamp_context(jn_ctx, trained_ctx);
+    // Sized by Kotlin against f16, the type the fallback below drops to; the two sizes differ
+    // because f16 costs nearly twice as much per cached token.
+    const int fallback_ctx = clamp_context(jfallback_n_ctx, trained_ctx);
+    const bool quantize_kv = jquantize_kv == JNI_TRUE;
+
+    // AUTO rather than ENABLED: it is AUTO that makes llama.cpp validate a quantized cache against
+    // the model's head width and refuse it by returning null. ENABLED skips that check and aborts
+    // inside ggml instead, taking the IDE down with it.
+    ctx_params.flash_attn_type = LLAMA_FLASH_ATTN_TYPE_AUTO;
+    if (quantize_kv) {
+        // A quantized V cache is only defined with flash attention, which AUTO may still refuse.
+        ctx_params.type_k = GGML_TYPE_Q8_0;
+        ctx_params.type_v = GGML_TYPE_Q8_0;
     }
 
     ctx_params.n_ctx = requested_ctx;
     ctx_params.n_threads = n_threads;
     ctx_params.n_threads_batch = n_threads_batch;
 
+    LOGi("Creating context: n_ctx = %d (model trained for %d), kv cache = %s", requested_ctx,
+         trained_ctx, quantize_kv ? "q8_0" : "f16");
+
     llama_context *context = llama_init_from_model(model, ctx_params);
+    bool quantized_in_use = quantize_kv;
+
+    if (!context) {
+        // The safety fallback: f16 with flash attention off is the one configuration nothing here
+        // can refuse — no block-size constraint on the cache, and no graph for AUTO to fail to
+        // place. It costs the attention speed-up on a model whose only problem was the cache type,
+        // which is the cheaper mistake to make. Kotlin already screens the head width, so getting
+        // here at all means the header and llama.cpp disagreed.
+        LOGe("Context creation failed; retrying at f16 with flash attention off and n_ctx %d",
+             fallback_ctx);
+        ctx_params.type_k = GGML_TYPE_F16;
+        ctx_params.type_v = GGML_TYPE_F16;
+        ctx_params.flash_attn_type = LLAMA_FLASH_ATTN_TYPE_DISABLED;
+        ctx_params.n_ctx = fallback_ctx;
+        context = llama_init_from_model(model, ctx_params);
+        quantized_in_use = false;
+    }
 
     if (!context) {
         LOGe("context: llama_new_context_with_model() returned null");
@@ -411,9 +457,11 @@ Java_android_llama_cpp_LLamaAndroid_new_1context(JNIEnv *env, jobject, jlong jmo
         return 0;
     }
 
-    // n_ctx now varies per model and device, so a wrong size is invisible in a report without this.
-    LOGi("context: created with n_ctx = %u (requested %d, model trained for %d), n_batch = %u",
-         llama_n_ctx(context), requested_ctx, trained_ctx, llama_n_batch(context));
+    // n_ctx and the cache type now vary per model and device, so a wrong one is invisible in a
+    // report without this.
+    LOGi("Context created: n_ctx = %u (requested %d, model trained for %d), n_batch = %u, kv cache = %s",
+         llama_n_ctx(context), (int) jn_ctx, trained_ctx, llama_n_batch(context),
+         quantized_in_use ? "q8_0" : "f16");
 
     // A fresh context has an empty KV cache, so the prefix record must start empty too.
     {
