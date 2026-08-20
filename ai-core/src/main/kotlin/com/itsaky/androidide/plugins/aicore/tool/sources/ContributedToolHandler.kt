@@ -30,17 +30,31 @@ class ContributedToolHandler(
     override val toolName: String,
 ) : ToolHandler {
 
-    override val description: String = tool.description
+    /** Flattened here, at the boundary, so the prompt and the approval dialog both get one line. */
+    override val description: String =
+        ContributedText.label(tool.description, ContributedText.MAX_DETAIL_CHARS)
 
     override val parametersSchema: Map<String, Any> = tool.parametersSchema
 
-    /** The tool's own name, never the qualified form a collision may have forced on it. */
-    override val displayName: String = tool.name
+    /**
+     * The tool's own name, never the qualified form a collision may have forced on it.
+     *
+     * Flattened and capped: this is a remote string on a consent dialog, where a newline plus a
+     * copy of the dialog's own header is enough to forge structure the user then trusts.
+     */
+    override val displayName: String = ContributedText.label(tool.name)
 
     override val sourceLabel: String = source.displayName
 
-    /** Contributed by default, so the safe answer is to ask; a source may still opt out. */
-    override val requiresApproval: Boolean = tool.requiresApproval
+    /**
+     * Always true, whatever the source declared.
+     *
+     * A source's own `requiresApproval = false` would return from
+     * `ToolApprovalManager.ensureApproved` before [allowsSessionApproval] below is ever consulted,
+     * so a provider could opt out of the only control there is by asking. The declaration is kept
+     * on [ContributedTool] for a host-side allowlist to honour one day; nothing honours it now.
+     */
+    override val requiresApproval: Boolean = true
 
     /**
      * Never blanket-approved: a contributed tool runs outside the agent's path containment, so the
@@ -93,7 +107,7 @@ class ContributedToolHandler(
         return try {
             val outcome = await(callId, future)
             if (outcome.success) {
-                ToolResult.success("${tool.name} completed", outcome.output)
+                ToolResult.success("$displayName completed", outcome.output)
             } else {
                 ToolResult.failure(
                     outcome.errorMessage?.takeIf { it.isNotBlank() } ?: providerFailure("failed"),
@@ -151,5 +165,5 @@ class ContributedToolHandler(
 
     /** One model-facing sentence naming the provider, so a failure is attributable. */
     private fun providerFailure(what: String): String =
-        "Tool '${tool.name}' from ${source.displayName} $what"
+        "Tool '$displayName' from ${source.displayName} $what"
 }

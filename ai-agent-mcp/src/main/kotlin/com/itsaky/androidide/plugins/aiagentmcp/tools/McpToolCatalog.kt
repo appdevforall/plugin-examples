@@ -48,11 +48,23 @@ object McpToolCatalog {
 
     /**
      * Refreshes every enabled server, tolerating the ones that fail.
+     *
+     * [keepGoing] is checked before each server because [refresh] blocks on a socket with no
+     * suspension point in it: cancelling the caller's coroutine cannot interrupt a read already in
+     * flight, so between servers is the only place a deactivating plugin can be noticed. Without it
+     * a cancelled refresh carries on filling this cache and [McpConnections] after both were
+     * cleared, leaving sockets nothing can reach.
+     *
+     * @param keepGoing false once the caller has stopped caring; the walk stops there.
      * @return how many servers answered.
      */
-    fun refreshAll(): Int {
+    fun refreshAll(keepGoing: () -> Boolean = { true }): Int {
         var refreshed = 0
         for (server in McpServerStore.servers().filter { it.enabled }) {
+            if (!keepGoing()) {
+                Log.i(TAG, "Stopped refreshing tool lists; the caller is gone")
+                break
+            }
             try {
                 refresh(server)
                 refreshed++

@@ -85,17 +85,24 @@ be built and tested without the host.
 Four rules the store applies, each of which was a bug before it was a rule:
 
 - **Built-ins are reserved first**, so a contributed tool can never take over
-  `edit_file`. A tool whose own name is already taken is registered under a
-  provider-prefixed name rather than dropped — prefixing *everything*
-  unconditionally cost the model the one name a tool's own description talks about.
-- **Router, executor and grammar are rebuilt together**, behind one `@Volatile`
-  reference. Replacing the router alone leaves the local backend's token mask
-  forbidding every newly contributed tool — a green build whose only symptom is
-  "the model ignores the tools". A run in flight keeps the snapshot it started with.
+  `edit_file`. A tool colliding with a *reserved* name is dropped outright, never
+  qualified: published as `<alias>_respond` it stays reachable through the
+  router's suffix pass, which would hand a model's final answer to a remote
+  server. A tool colliding with another *contributed* tool is qualified rather
+  than dropped — prefixing *everything* unconditionally cost the model the one
+  name a tool's own description talks about.
+- **Router, executor, grammar and the prompt's tool list are rebuilt together**,
+  behind one `@Volatile` reference. Replacing the router alone leaves the local
+  backend's token mask forbidding every newly contributed tool — a green build
+  whose only symptom is "the model ignores the tools". The grammar is built from
+  the *budgeted* list for the same reason: a name the mask permits but the prompt
+  never mentioned is a name the model cannot use. A run in flight keeps the
+  snapshot it started with.
 - **`PromptToolBudget` caps what reaches the prompt** — 12 contributed tools, 200
   characters of description each, flattened to one line. One MCP server can
   advertise ninety tools; the cap lives here because every backend renders the
-  tool list itself, including backends written elsewhere. Drops are logged.
+  tool list itself, including backends written elsewhere. Drops are logged once
+  per rebuild.
 - **A provider's failure costs one tool call, never the run.** A source that
   throws while listing is skipped whole; one that throws, hangs or completes with
   nothing while invoking yields a failed `ToolResult`, and stopping the run
@@ -105,6 +112,14 @@ Contributed tools run inside the contributing plugin, under *its* permissions, a
 outside the `PathGuard` containment that covers this plugin's own handlers — so the
 approval dialog names the source plugin, and `allowsSessionApproval` is false for
 every contributed tool: "Always Allow" is downgraded to a single approval.
+
+For the same reason a source's own `requiresApproval = false` is ignored:
+`ensureApproved` returns early on it, before `allowsSessionApproval` is ever
+consulted, so honouring it would let a provider decline the only control there is
+by asking. The dialog's title is the *registered* name, and every provider-supplied
+string on it is flattened and capped first — a remote `displayName` carrying a
+newline and a copy of the dialog's own header could otherwise forge structure the
+user then trusts.
 
 ## Key classes
 

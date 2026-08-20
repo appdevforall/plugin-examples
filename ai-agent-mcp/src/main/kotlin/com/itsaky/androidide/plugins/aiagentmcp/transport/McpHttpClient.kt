@@ -86,6 +86,10 @@ class McpHttpClient(
                 setRequestProperty("Accept", "application/json, $CONTENT_TYPE_SSE")
             }
             onConnected(conn)
+            // Only a socket that cannot be reused is disconnected: `disconnect()` evicts it from
+            // the pool, so doing it on the success path made every call — initialize, each
+            // tools/list page, each tools/call — pay a fresh TCP and TLS handshake.
+            var reusable = false
             val redirect = try {
                 conn.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
                 val next = conn.redirectTargetFrom(target)
@@ -94,8 +98,11 @@ class McpHttpClient(
 
                     val assignedSession =
                         conn.getHeaderField(HEADER_SESSION_ID)?.takeIf { it.isNotBlank() }
-                    // 202 with no body is the correct answer to a notification; nothing to read.
+                    // 202 with no body is the correct answer to a notification; drained rather
+                    // than ignored, since a body left unread keeps the socket out of the pool.
                     if (conn.responseCode == HttpURLConnection.HTTP_ACCEPTED) {
+                        runCatching { conn.inputStream.use { it.readBytes() } }
+                        reusable = true
                         return Response(null, assignedSession)
                     }
 
@@ -104,11 +111,14 @@ class McpHttpClient(
                     val document = conn.inputStream.bufferedReader().use { reader ->
                         if (streaming) readFirstSseDocument(reader) else reader.readText()
                     }
+                    // A JSON reply was read to EOF and its socket can serve the next call; an SSE
+                    // stream is abandoned after its first event, so that one is never reusable.
+                    reusable = !streaming
                     return Response(document, assignedSession)
                 }
                 next
             } finally {
-                conn.disconnect()
+                if (!reusable) conn.disconnect()
             }
 
             if (++hops > MAX_REDIRECTS) {

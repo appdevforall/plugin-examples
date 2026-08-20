@@ -86,6 +86,19 @@
             android:textColorHint="@color/plugin_text_subtle" />
 
         <!--
+          Shown only while something is stored: an empty token field means "keep what is there", so
+          without this there is no way back to "no credential" short of deleting the server.
+        -->
+        <Button
+            android:id="@+id/mcpClearCredential"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="end"
+            android:text="@string/mcp_clear_credential"
+            android:visibility="gone" />
+
+        <!--
           Extra headers: everything past the bearer token a server may require to route.
 
           Section heading and its add control share one row, the way a list header does. The text

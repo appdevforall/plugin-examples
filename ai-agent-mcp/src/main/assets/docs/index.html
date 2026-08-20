@@ -60,6 +60,10 @@
       rest does nothing for a credential put on the wire in the clear, and a phone
       IDE runs on shared Wi-Fi by definition. A plain <code>http://</code> server
       with no credential is still allowed.</li>
+    <li><b>Clear stored credential</b> appears once something is stored. The token
+      field never shows what it holds and leaving it empty keeps it, so this is the
+      way back to a server that needs no credential at all — after pasting the
+      wrong token, or when a server stops requiring one.</li>
     <li>Tap <b>Test connection</b> to check it now, then <b>Refresh tools</b> to
       list what the server offers.</li>
   </ul>
@@ -84,8 +88,9 @@
     <li>Nothing else: this plugin has <b>network access and no other permission</b>.
       It cannot read your project or your files. Anything from your project reaches
       a server only if the model puts it in an argument and you approve the call.</li>
-    <li>Server names and tool descriptions are stripped to a single line before
-      they reach the model's prompt, so a server cannot forge instructions with
+    <li>Server and tool names are reduced here to the alphabet a tool name may
+      use, and the Agent flattens and caps every description a plugin contributes
+      before it reaches the prompt — so a server cannot forge instructions with
       formatting.</li>
   </ul>
 
@@ -102,7 +107,8 @@
     <li><b>"does not accept this request"</b> — the server is probably not a
       Streamable HTTP MCP server.</li>
     <li><b>"refused the token"</b> — re-enter it; the field shows
-      <i>Stored</i> rather than the value, so typing replaces it.</li>
+      <i>Stored</i> rather than the value, so typing replaces it. If the server
+      needs no token at all, use <b>Clear stored credential</b>.</li>
     <li><b>Tools do not appear in the Agent</b> — check the server is enabled, at
       least one tool is switched on, and AI Core is installed and active.</li>
     <li><b>Everything times out on mobile data</b> — some servers are slow to

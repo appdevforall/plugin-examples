@@ -1,6 +1,7 @@
 package com.itsaky.androidide.plugins.aicore.tool
 
 import com.itsaky.androidide.plugins.aicore.tool.sources.ContributedToolHandler
+import com.itsaky.androidide.plugins.aicore.tool.sources.PromptToolBudget
 import com.itsaky.androidide.plugins.aicore.tool.sources.ToolSourceStore
 
 /**
@@ -9,16 +10,20 @@ import com.itsaky.androidide.plugins.aicore.tool.sources.ToolSourceStore
  *
  * They are swapped together, behind a single reference, because a rebuild that replaced the router
  * without the grammar would leave a token mask that forbids every newly contributed tool — a green
- * build whose only symptom is "the model ignores the tools", visible on device alone.
+ * build whose only symptom is "the model ignores the tools", visible on device alone. For the same
+ * reason the prompt's tool list is built here rather than per message: grammar and prompt have to
+ * describe one tool set, and they only do if one snapshot holds both.
  *
  * @property router routes a tool call to its handler.
  * @property executor runs a batch of calls against [router].
- * @property grammar the local backend's GBNF for exactly these tools.
+ * @property grammar the local backend's GBNF for exactly the tools [promptTools] describes.
+ * @property promptTools the tool list as the prompt will see it, [PromptToolBudget] already applied.
  */
 class AgentTools private constructor(
     val router: ToolRouter,
     val executor: Executor,
     val grammar: String,
+    val promptTools: PromptToolBudget.Budgeted,
 ) {
 
     /** The handlers contributed by plugins, as opposed to this plugin's own. */
@@ -53,10 +58,18 @@ class AgentTools private constructor(
 
             val handlers = builtInHandlers + store.handlers(reserved)
             val router = ToolRouter(handlers)
+            // The grammar is built from the budgeted list, not from every handler: a name the
+            // token mask permits but the prompt never mentioned is a name the model cannot use,
+            // and one the prompt mentions but the mask forbids is a tool it cannot call.
+            val promptTools = PromptToolBudget.apply(handlers)
+            val grammar = ToolCallGrammar.build(
+                promptTools.definitions.map { it.name } + terminalTool
+            )
             return AgentTools(
                 router = router,
                 executor = Executor(router, approvalManager, toolExecutionTracker),
-                grammar = ToolCallGrammar.build(handlers.map { it.toolName } + terminalTool),
+                grammar = grammar,
+                promptTools = promptTools,
             )
         }
     }

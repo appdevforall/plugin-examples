@@ -161,9 +161,9 @@ class McpSettingsFragment : Fragment() {
         wireTooltip(tokenField, McpPlugin.TOOLTIP_TAG_SERVER_TOKEN)
 
         var server = existing ?: viewModel.newServer()
-        // A stored credential counts as one for the cleartext check below, even though the field
-        // showing it is empty: an empty field on an existing server means "keep what is stored".
-        var hasStoredCredential = false
+        // Unknown, never Absent, until the decrypt answers: guessing is what let an http:// URL
+        // be saved over a token that was still stored and still sent.
+        var credential = if (existing == null) Credential.ABSENT else Credential.UNKNOWN
         nameField.setText(server.name)
         urlField.setText(server.url)
 
@@ -174,11 +174,32 @@ class McpSettingsFragment : Fragment() {
             button.setOnClickListener { addHeaderRow(view) }
         }
 
+        val clearButton = view.findViewById<Button>(R.id.mcpClearCredential)
+        wireTooltip(clearButton, McpPlugin.TOOLTIP_TAG_CLEAR_CREDENTIAL)
+        clearButton.setOnClickListener {
+            clearButton.isEnabled = false
+            viewModel.clearCredential(server.id) { cleared ->
+                if (cleared) credential = Credential.ABSENT
+                whileDialogShown {
+                    clearButton.isEnabled = !cleared
+                    clearButton.visibility = if (cleared) View.GONE else View.VISIBLE
+                    if (cleared) {
+                        tokenField.text = null
+                        tokenField.hint = getString(R.string.mcp_hint_token)
+                        renderHeaders(view, emptyMap())
+                        status.text = getString(R.string.mcp_credential_cleared)
+                    }
+                }
+            }
+        }
+
         // Reading either costs a Keystore decrypt, so both arrive a moment after the dialog does.
         renderHeaders(view, emptyMap())
         if (existing != null) {
             viewModel.loadForm(server.id) { form ->
-                hasStoredCredential = form.hasToken || form.headers.isNotEmpty()
+                credential =
+                    if (form.hasToken || form.headers.isNotEmpty()) Credential.PRESENT
+                    else Credential.ABSENT
                 whileDialogShown {
                     // The stored token is never shown: it is decrypted only to be sent. An empty
                     // field on an existing server means "leave it alone", which the placeholder
@@ -189,6 +210,10 @@ class McpSettingsFragment : Fragment() {
                     } else if (form.hasToken) {
                         tokenField.hint = getString(R.string.mcp_hint_token_stored)
                     }
+                    // Offered only once something is known to be stored; there is nothing to
+                    // clear otherwise, and an unreadable secret is exactly what it is for.
+                    clearButton.visibility =
+                        if (credential == Credential.PRESENT) View.VISIBLE else View.GONE
                     renderHeaders(view, form.headers)
                 }
             }
@@ -207,7 +232,7 @@ class McpSettingsFragment : Fragment() {
                     return@setOnClickListener
                 }
                 val validation =
-                    validate(candidate, tokenField.text.toString(), hasStoredCredential, headers)
+                    validate(candidate, tokenField.text.toString(), credential, headers)
                 if (validation != null) {
                     status.text = validation
                     return@setOnClickListener
@@ -232,7 +257,7 @@ class McpSettingsFragment : Fragment() {
                     return@setOnClickListener
                 }
                 val validation =
-                    validate(candidate, tokenField.text.toString(), hasStoredCredential, headers)
+                    validate(candidate, tokenField.text.toString(), credential, headers)
                 if (validation != null) {
                     status.text = validation
                     return@setOnClickListener
@@ -246,8 +271,13 @@ class McpSettingsFragment : Fragment() {
                     headers,
                 ) { saved, _ ->
                     server = saved
-                    hasStoredCredential = hasStoredCredential ||
-                        tokenField.text.isNotBlank() || headers.isNotEmpty()
+                    if (tokenField.text.isNotBlank() || headers.isNotEmpty()) {
+                        credential = Credential.PRESENT
+                    }
+                    whileDialogShown {
+                        clearButton.visibility =
+                            if (credential == Credential.PRESENT) View.VISIBLE else View.GONE
+                    }
                     viewModel.refreshTools(saved) { message, tools ->
                         whileDialogShown {
                             status.text = message
@@ -286,7 +316,7 @@ class McpSettingsFragment : Fragment() {
                     return@setOnClickListener
                 }
                 val problem =
-                    validate(candidate, tokenField.text.toString(), hasStoredCredential, headers)
+                    validate(candidate, tokenField.text.toString(), credential, headers)
                 if (problem != null) {
                     status.text = problem
                     return@setOnClickListener
@@ -472,17 +502,22 @@ class McpSettingsFragment : Fragment() {
      * anyone on the same Wi-Fi on the way out, and a phone IDE runs on shared Wi-Fi by definition.
      * A local server with no credential is still allowed.
      *
+     * A cleartext URL is also refused while [credential] is still [Credential.UNKNOWN]: the stored
+     * token is read on a background thread and the dialog opens before that answers, so treating
+     * "not yet known" as "nothing stored" is what allowed an `http://` URL to be saved over a
+     * token that was still there and still sent. `https://` needs no such wait.
+     *
      * @param server the candidate.
      * @param typedToken the current contents of the token field.
-     * @param hasStoredCredential whether a token or header is already stored for this server, which
-     *   an empty token field keeps rather than clears.
+     * @param credential what is known about a stored token or header, which an empty token field
+     *   keeps rather than clears.
      * @param headers the header rows as they currently stand.
      * @return the message to show, or null when it is usable.
      */
     private fun validate(
         server: McpServer,
         typedToken: String,
-        hasStoredCredential: Boolean,
+        credential: Credential,
         headers: Map<String, String>,
     ): String? = when {
         server.name.isBlank() -> getString(R.string.mcp_name_required)
@@ -490,10 +525,30 @@ class McpSettingsFragment : Fragment() {
         !server.url.startsWith("http://") && !server.url.startsWith("https://") ->
             getString(R.string.mcp_url_scheme_invalid)
         !McpHeaders.isSendableToken(typedToken.trim()) -> getString(R.string.mcp_token_illegal)
+        server.url.startsWith("http://") && credential == Credential.UNKNOWN ->
+            getString(R.string.mcp_credentials_loading)
         server.url.startsWith("http://") &&
-            (typedToken.isNotBlank() || hasStoredCredential || headers.isNotEmpty()) ->
+            (typedToken.isNotBlank() || credential == Credential.PRESENT || headers.isNotEmpty()) ->
             getString(R.string.mcp_url_insecure_credentials)
         else -> null
+    }
+
+    /**
+     * What the dialog knows about the credential stored for the server it is showing.
+     *
+     * Three states rather than a flag: reading it is a Keystore decrypt on a background thread, and
+     * the gap before the answer arrives is real enough for a user to edit the URL and hit Save in.
+     */
+    private enum class Credential {
+
+        /** The decrypt has not answered yet. */
+        UNKNOWN,
+
+        /** A token, a header, or both are stored. */
+        PRESENT,
+
+        /** Nothing is stored — a new server, or one just cleared. */
+        ABSENT,
     }
 
     /**

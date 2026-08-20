@@ -160,6 +160,29 @@ class McpSettingsViewModel(
     }
 
     /**
+     * Forgets a server's stored credential: the token and every extra header.
+     *
+     * The token field never shows what is stored, and an empty field means "keep it", so this is
+     * the only way back to "this server needs no credential" — which is also what unblocks an
+     * `http://` URL for a server that once had one.
+     *
+     * @param id the server to strip.
+     * @param onDone receives true when nothing is stored any more, on the main thread.
+     */
+    fun clearCredential(id: String, onDone: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            val cleared = withContext(Dispatchers.IO) {
+                val tokenCleared = McpServerStore.setToken(id, "")
+                val headersCleared = McpServerStore.setHeaders(id, emptyMap())
+                // The session was keyed by the credential it no longer has.
+                McpConnections.invalidate(id)
+                tokenCleared && headersCleared
+            }
+            onDone(cleared)
+        }
+    }
+
+    /**
      * Removes a server, its token, its session and its cached tools.
      * @param id the server to remove.
      */

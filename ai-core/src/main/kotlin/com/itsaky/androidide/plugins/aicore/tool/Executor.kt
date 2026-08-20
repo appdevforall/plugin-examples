@@ -72,6 +72,11 @@ class Executor(
      * Executes a batch of tool calls, treating its order as a dependency graph: consecutive
      * read-only calls ([PARALLEL_SAFE_TOOLS]) run concurrently, every write runs alone between such
      * runs. Hoisting all reads broke `create_file` + `read_file`; mixing broke `search` + `edit`.
+     *
+     * Handlers are resolved once, up front, and parallel-safety is decided from the registered name
+     * rather than the emitted one: a model writing `Read_File` or `  read_file ` reaches the same
+     * read-only handler, and a batch of four reads must not go sequential over spelling.
+     *
      * @param toolCalls the calls to run, in the order the model emitted them.
      * @return one result per call, positionally aligned with [toolCalls].
      */
@@ -79,19 +84,23 @@ class Executor(
         Log.i(TAG, "Executing ${toolCalls.size} tool call(s)...")
 
         val results = arrayOfNulls<ToolResult>(toolCalls.size)
+        val handlers = toolCalls.map { call ->
+            call.name.takeIf { it.isNotBlank() }?.let { toolRouter.getHandler(it) }
+        }
+        val parallelSafe = handlers.map { it != null && it.toolName in PARALLEL_SAFE_TOOLS }
 
         var index = 0
         while (index < toolCalls.size) {
-            if (toolCalls[index].name !in PARALLEL_SAFE_TOOLS) {
-                results[index] = executeCall(toolCalls[index], "Sequential")
+            if (!parallelSafe[index]) {
+                results[index] = executeCall(toolCalls[index], handlers[index], "Sequential")
                 index++
                 continue
             }
             // Extend over every read-only call that follows, stopping at the first write.
             var end = index
-            while (end < toolCalls.size && toolCalls[end].name in PARALLEL_SAFE_TOOLS) end++
+            while (end < toolCalls.size && parallelSafe[end]) end++
             (index until end).map { i ->
-                async { results[i] = executeCall(toolCalls[i], "Parallel") }
+                async { results[i] = executeCall(toolCalls[i], handlers[i], "Parallel") }
             }.awaitAll()
             index = end
         }
@@ -103,10 +112,15 @@ class Executor(
      * Runs one call end to end: alias remapping, required-argument and containment checks,
      * pre-approval validation, the approval gate, then dispatch.
      * @param call the tool call to run.
+     * @param handler the handler [execute] resolved for it, or null when nothing matched.
      * @param executionMode "Parallel"/"Sequential", for logging.
      * @return the tool's result, or the failure that stopped it short of running.
      */
-    private suspend fun executeCall(call: ToolCall, executionMode: String): ToolResult {
+    private suspend fun executeCall(
+        call: ToolCall,
+        handler: ToolHandler?,
+        executionMode: String,
+    ): ToolResult {
         val args = call.args
 
         if (call.name.isBlank()) {
@@ -114,7 +128,6 @@ class Executor(
             return ToolResult.failure("Unnamed function call")
         }
 
-        val handler = toolRouter.getHandler(call.name)
         if (handler == null) {
             Log.e(TAG, "($executionMode): Unknown function requested: ${call.name}")
             val suggestions = toolRouter.suggestionsFor(call.name)

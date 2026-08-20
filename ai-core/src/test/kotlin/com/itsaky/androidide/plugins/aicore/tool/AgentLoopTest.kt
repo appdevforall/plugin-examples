@@ -104,6 +104,32 @@ class AgentLoopTest {
     }
 
     @Test
+    fun givenTheTerminalToolNamedInAnotherCase_whenTheLoopRuns_thenItStillEndsTheRun() = runTest {
+        // A cloud backend ignores the GBNF, so `Respond` and `  respond ` both arrive. Matched by
+        // equality they are ordinary tool calls, and an ordinary call gets routed — which is how a
+        // contributed tool ends up being handed the user's final answer instead of the user.
+        val model = ScriptedModel(
+            listOf("""<tool_call>{"tool":"Respond","args":{"message":"All set!"}}</tool_call>""")
+        )
+        val history = mutableListOf(ChatMessage(Role.USER, "hi"))
+        var toolsInvoked = 0
+        var finalMessage: String? = null
+
+        val result = AgentLoop(terminalTool = "respond").run(
+            history = history,
+            generate = model::generate,
+            executeTools = { toolsInvoked++; emptyList() },
+            events = object : AgentLoop.Events {
+                override suspend fun onFinalAnswer(turn: Int, message: String) { finalMessage = message }
+            }
+        )
+
+        assertTrue(result.completed)
+        assertEquals(0, toolsInvoked)
+        assertEquals("All set!", finalMessage)
+    }
+
+    @Test
     fun givenAModelThatCallsAToolThenAnswers_whenTheLoopRuns_thenItChainsTheToolAndFinishes() = runTest {
         // Turn 1: model calls a tool. Turn 2: sees results, gives final answer.
         val model = ScriptedModel(

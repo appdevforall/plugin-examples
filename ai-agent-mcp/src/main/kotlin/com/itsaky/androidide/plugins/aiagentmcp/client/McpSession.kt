@@ -186,15 +186,16 @@ class McpSession(
     /**
      * Whether the negotiated revision keeps no server-side session.
      *
-     * Two signals rather than one: the revision string says what the server implements, and an
-     * absent session header says what it actually did. Either is enough to skip the lifecycle
-     * notification, which a stateless server answers with a 4xx.
+     * The revision alone decides, never the presence of an `Mcp-Session-Id`: session management is
+     * *optional* in every revision this client asks for, while `notifications/initialized` is not.
+     * Reading an absent session header as "stateless" is what left a conforming server without the
+     * notification, so its next `tools/list` came back "not initialized" and the user saw an empty
+     * tool list with no error.
      *
-     * A server that reported an unorderable revision is judged on the session header alone, so a
-     * semantic version cannot be mistaken for a date old enough to look stateful.
+     * A server reporting an unorderable revision — a semantic version, its own label — is treated
+     * as stateful, which costs at worst one notification a stateless server answers with a 4xx.
      */
     private fun isStateless(): Boolean {
-        if (sessionId == null) return true
         val version = negotiatedVersion ?: return false
         return DATED_VERSION.matches(version) && version >= STATELESS_FROM_VERSION
     }

@@ -38,6 +38,15 @@ object McpServerStore {
 
     private val listeners = CopyOnWriteArrayList<() -> Unit>()
 
+    /**
+     * Serialises every read-modify-write of the server list.
+     *
+     * The list is one JSON blob, so each mutation reads it whole and puts it back whole: a refresh
+     * on `McpPlugin`'s scope and a toggle on the screen's dispatcher interleave, and the loser's
+     * write vanishes — the switch stays on while `enabledTools` on disk no longer holds it.
+     */
+    private val lock = Any()
+
     /** Registers [listener], called after any change to the servers or their toggles. */
     fun addChangeListener(listener: () -> Unit) {
         listeners.add(listener)
@@ -76,8 +85,11 @@ object McpServerStore {
      * @return the record as it now stands, for a caller holding a snapshot to refresh from.
      */
     fun saveDetails(server: McpServer): McpServer {
-        val merged = mergeDetails(servers().firstOrNull { it.id == server.id }, server)
-        upsert(merged)
+        val merged = synchronized(lock) {
+            mergeDetails(servers().firstOrNull { it.id == server.id }, server)
+                .also(::upsertLocked)
+        }
+        fireChanged()
         return merged
     }
 
@@ -101,8 +113,11 @@ object McpServerStore {
      * @param enabled whether it may contribute tools.
      */
     fun setEnabled(id: String, enabled: Boolean) {
-        val server = servers().firstOrNull { it.id == id } ?: return
-        upsert(server.copy(enabled = enabled))
+        synchronized(lock) {
+            val server = servers().firstOrNull { it.id == id } ?: return
+            upsertLocked(server.copy(enabled = enabled))
+        }
+        fireChanged()
     }
 
     /**
@@ -113,18 +128,18 @@ object McpServerStore {
     fun server(id: String): McpServer? = servers().firstOrNull { it.id == id }
 
     /**
-     * Adds or replaces [server], matched by [McpServer.id].
+     * Adds or replaces [server], matched by [McpServer.id]. Call holding [lock].
      *
      * Private on purpose: every field of the record is written, so a caller passing anything but a
      * record it just read back would revert whatever changed in between.
      *
      * @param server the server to store.
      */
-    private fun upsert(server: McpServer) {
+    private fun upsertLocked(server: McpServer) {
         val current = servers().toMutableList()
         val index = current.indexOfFirst { it.id == server.id }
         if (index >= 0) current[index] = server else current += server
-        write(current)
+        writeLocked(current)
     }
 
     /**
@@ -132,11 +147,14 @@ object McpServerStore {
      * @param id the server to remove.
      */
     fun remove(id: String) {
-        prefs()?.edit()
-            ?.remove(KEY_TOKEN_PREFIX + id)
-            ?.remove(KEY_HEADERS_PREFIX + id)
-            ?.apply()
-        write(servers().filterNot { it.id == id })
+        synchronized(lock) {
+            prefs()?.edit()
+                ?.remove(KEY_TOKEN_PREFIX + id)
+                ?.remove(KEY_HEADERS_PREFIX + id)
+                ?.apply()
+            writeLocked(servers().filterNot { it.id == id })
+        }
+        fireChanged()
     }
 
     /**
@@ -233,13 +251,16 @@ object McpServerStore {
      * @param toolNames the tools it just listed.
      */
     fun setKnownTools(id: String, toolNames: List<String>) {
-        val server = servers().firstOrNull { it.id == id } ?: return
-        upsert(
-            server.copy(
-                knownTools = toolNames,
-                enabledTools = server.enabledTools.filterTo(mutableSetOf()) { it in toolNames },
+        synchronized(lock) {
+            val server = servers().firstOrNull { it.id == id } ?: return
+            upsertLocked(
+                server.copy(
+                    knownTools = toolNames,
+                    enabledTools = server.enabledTools.filterTo(mutableSetOf()) { it in toolNames },
+                )
             )
-        )
+        }
+        fireChanged()
     }
 
     /**
@@ -249,21 +270,24 @@ object McpServerStore {
      * @param enabled whether the agent may see it.
      */
     fun setToolEnabled(id: String, toolName: String, enabled: Boolean) {
-        val server = servers().firstOrNull { it.id == id } ?: return
-        val tools = server.enabledTools.toMutableSet()
-        if (enabled) tools += toolName else tools -= toolName
-        upsert(server.copy(enabledTools = tools))
+        synchronized(lock) {
+            val server = servers().firstOrNull { it.id == id } ?: return
+            val tools = server.enabledTools.toMutableSet()
+            if (enabled) tools += toolName else tools -= toolName
+            upsertLocked(server.copy(enabledTools = tools))
+        }
+        fireChanged()
     }
 
     /** A server with a fresh id, ready to be edited and stored. */
     fun newServer(name: String, url: String): McpServer =
         McpServer(id = UUID.randomUUID().toString(), name = name, url = url)
 
-    private fun write(servers: List<McpServer>) {
+    /** Puts the whole list back. Call holding [lock]; the caller fires the listeners. */
+    private fun writeLocked(servers: List<McpServer>) {
         val array = JSONArray()
         servers.forEach { array.put(toJson(it)) }
         prefs()?.edit()?.putString(KEY_SERVERS, array.toString())?.apply()
-        fireChanged()
     }
 
     private fun toJson(server: McpServer): JSONObject = JSONObject().apply {

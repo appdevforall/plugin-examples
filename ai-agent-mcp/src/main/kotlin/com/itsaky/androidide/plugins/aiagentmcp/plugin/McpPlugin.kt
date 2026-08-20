@@ -20,6 +20,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
@@ -37,8 +38,14 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
     /** True once [toolSource] is registered with AI Core, so re-registration is idempotent. */
     @Volatile private var registered = false
 
-    /** Background work: listing tools is network work and never belongs on the main thread. */
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    /**
+     * Background work: listing tools is network work and never belongs on the main thread.
+     *
+     * Replaced on every [activate] rather than created once, because [deactivate] cancels it: a
+     * refresh left running would keep building sessions and registering them in
+     * [McpConnections] after `closeAll()` emptied the map, leaving sockets nothing can reach.
+     */
+    private var scope = newScope()
 
     companion object {
         /** Must match `plugin.id` in AndroidManifest.xml; also this source's provider id. */
@@ -65,6 +72,7 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
         const val TOOLTIP_TAG_SERVER_NAME = "mcp_server_name"
         const val TOOLTIP_TAG_SERVER_URL = "mcp_server_url"
         const val TOOLTIP_TAG_SERVER_TOKEN = "mcp_server_token"
+        const val TOOLTIP_TAG_CLEAR_CREDENTIAL = "mcp_clear_credential"
         const val TOOLTIP_TAG_ADD_HEADER = "mcp_add_header"
         const val TOOLTIP_TAG_HEADER_NAME = "mcp_header_name"
         const val TOOLTIP_TAG_HEADER_VALUE = "mcp_header_value"
@@ -110,6 +118,7 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
     }
 
     override fun activate(): Boolean = try {
+        scope = newScope()
         toolSource = McpToolSource()
         McpServerStore.addChangeListener(settingsChanged)
         context.addPluginLifecycleListener(aiCoreLifecycle)
@@ -121,8 +130,8 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
         // Tool lists are answered from cache, so the cache has to be filled before the user opens
         // the Agent — otherwise the first cold-start session sees no MCP tools at all.
         scope.launch {
-            val refreshed = McpToolCatalog.refreshAll()
-            if (refreshed > 0) settingsChanged()
+            val refreshed = McpToolCatalog.refreshAll { isActive }
+            if (refreshed > 0 && isActive) settingsChanged()
         }
         true
     } catch (e: Exception) {
@@ -134,6 +143,9 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
         context.removePluginLifecycleListener(aiCoreLifecycle)
         McpServerStore.removeChangeListener(settingsChanged)
         unregisterToolSource()
+        // Before the connections are closed: an in-flight refresh would otherwise repopulate the
+        // catalogue and the session map straight after they were cleared.
+        scope.cancel()
         releaseConnections()
         true
     } catch (e: Exception) {
@@ -145,11 +157,14 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
         runCatching { context.removePluginLifecycleListener(aiCoreLifecycle) }
         McpServerStore.removeChangeListener(settingsChanged)
         unregisterToolSource()
-        releaseConnections()
         scope.cancel()
+        releaseConnections()
         pluginContext = null
         context.logger.info("McpPlugin: disposed")
     }
+
+    /** A fresh scope for this activation; the previous one is cancelled, never reused. */
+    private fun newScope() = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /**
      * Registers this plugin's tools with AI Core, if the registry is reachable.
@@ -341,6 +356,23 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
                 <p>A token needs an <code>https://</code> endpoint: encryption at
                 rest buys nothing for a credential sent in the clear over shared
                 Wi-Fi, so this plugin refuses that combination on Save.</p>
+            """.trimIndent(),
+            buttons = listOf(
+                PluginTooltipButton(description = "AI Agent MCP guide", uri = "index.html", order = 0)
+            )
+        ),
+        PluginTooltipEntry(
+            tag = TOOLTIP_TAG_CLEAR_CREDENTIAL,
+            summary = "Forget the token and headers stored for this server.",
+            detail = """
+                <p>The token field never shows what is stored, and leaving it
+                empty means "keep it" — so this is the way back to a server
+                that needs no credential at all.</p>
+                <p>It removes the stored token <em>and</em> every extra header,
+                and drops the open connection that was using them. Use it after
+                pasting the wrong token, when a server stops requiring auth, or
+                when the stored value can no longer be decrypted on this
+                device.</p>
             """.trimIndent(),
             buttons = listOf(
                 PluginTooltipButton(description = "AI Agent MCP guide", uri = "index.html", order = 0)

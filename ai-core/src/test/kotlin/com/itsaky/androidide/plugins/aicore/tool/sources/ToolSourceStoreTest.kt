@@ -30,6 +30,14 @@ class ToolSourceStoreTest {
 
     private val builtIns = listOf(BuiltInHandler("edit_file"), BuiltInHandler("read_file"))
 
+    /**
+     * The exact alternative the grammar carries for one tool name.
+     *
+     * Quoted as `ToolCallGrammar` writes it — a bare `contains(name)` would also match a longer
+     * name that starts the same way, which is how `remote_tool_1` passes for `remote_tool_13`.
+     */
+    private fun alternative(name: String) = "\\\"$name\\\""
+
     private fun toolsFrom(store: ToolSourceStore): AgentTools = AgentTools.build(
         builtInHandlers = builtIns,
         store = store,
@@ -127,6 +135,69 @@ class ToolSourceStoreTest {
         val handlers = store.handlers(emptySet())
 
         assertEquals(listOf("search", "one2_search"), handlers.map { it.toolName })
+    }
+
+    @Test
+    fun givenAToolNamedLikeTheTerminalTool_whenHandlersAreBuilt_thenItIsDroppedRatherThanQualified() {
+        // Qualified to `aiagentmcp_respond`, it stays reachable through the router's suffix pass:
+        // a model emitting `Respond` would have its final answer dispatched to the remote server.
+        val store = ToolSourceStore()
+        store.register(FakeToolSource(MCP, tools = listOf(contributedTool(MCP, TERMINAL_TOOL))))
+
+        val tools = toolsFrom(store)
+
+        assertTrue("nothing may register under a reserved name", tools.contributedHandlers.isEmpty())
+        assertNull(tools.router.getHandler(TERMINAL_TOOL))
+        assertNull("no suffix match may resolve it either", tools.router.getHandler("Respond"))
+    }
+
+    @Test
+    fun givenAToolNamedLikeABuiltInUnderARealProviderId_whenHandlersAreBuilt_thenItIsDropped() {
+        val store = ToolSourceStore()
+        store.register(FakeToolSource(MCP, tools = listOf(contributedTool(MCP, "edit_file"))))
+
+        val tools = toolsFrom(store)
+
+        assertTrue(tools.contributedHandlers.isEmpty())
+        assertNull(tools.router.getHandler("aiagentmcp_edit_file"))
+        assertTrue(tools.router.getHandler("edit_file") is BuiltInHandler)
+    }
+
+    @Test
+    fun givenMoreContributedToolsThanThePromptBudget_whenTheToolSetIsBuilt_thenGrammarAndPromptAgree() {
+        // The trap: a grammar built from every handler permits names the prompt never mentioned,
+        // so the local backend's token mask and the model's instructions describe different sets.
+        val store = ToolSourceStore()
+        val count = PromptToolBudget.MAX_CONTRIBUTED_TOOLS + 8
+        store.register(
+            FakeToolSource(
+                MCP,
+                tools = (1..count).map { contributedTool(MCP, "remote_tool_$it") },
+            )
+        )
+
+        val tools = toolsFrom(store)
+        val promptNames = tools.promptTools.definitions.map { it.name }
+
+        assertEquals(
+            "the budget admits exactly its cap of contributed tools",
+            PromptToolBudget.MAX_CONTRIBUTED_TOOLS,
+            promptNames.count { it.startsWith("remote_tool_") },
+        )
+        assertEquals(8, tools.promptTools.droppedTools.size)
+        for (name in promptNames) {
+            assertTrue("the grammar must allow $name", tools.grammar.contains(alternative(name)))
+        }
+        for (name in tools.promptTools.droppedTools) {
+            assertFalse(
+                "the grammar must not allow $name, which the prompt never mentioned",
+                tools.grammar.contains(alternative(name)),
+            )
+        }
+        assertTrue(
+            "every contributed tool still routes, budget or not",
+            tools.promptTools.droppedTools.all { tools.router.getHandler(it) != null },
+        )
     }
 
     @Test

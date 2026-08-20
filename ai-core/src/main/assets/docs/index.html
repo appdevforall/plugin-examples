@@ -121,7 +121,10 @@
   <ul>
     <li><b>They ask every time.</b> The approval dialog names the plugin the tool
       came from — <i>From MCP servers</i>, for example — and <b>Always Allow</b>
-      does not apply to them, however you answer.</li>
+      does not apply to them, however you answer. A plugin cannot waive this for
+      its own tools, and the title shows the name the agent registered rather than
+      the one the tool came with, so a remote tool cannot pass itself off as a
+      built-in one.</li>
     <li><b>They are not confined to the project root.</b> A contributed tool runs
       inside its own plugin, under the permissions that plugin declared, so one
       from a plugin with network access can send what it is given off the device.

@@ -3,9 +3,11 @@ package com.itsaky.androidide.plugins.aiagentmcp.tools
 /**
  * Sanitises the text an MCP server supplies before it leaves this plugin.
  *
- * Tool names and descriptions are untrusted remote strings that end up verbatim in a system prompt
- * assembled inside a third-party backend plugin. A newline is enough to forge prompt structure
- * there, and a name outside `[a-z0-9_]` is enough to make a tool the model can read but never call.
+ * Only the exposed *name* is built here. A name outside `[a-z0-9_]` is one the model can read but
+ * never call, and the prefix and disambiguation rules below need a sanitised name to work on.
+ * Descriptions are left alone on purpose: the agent flattens and caps every contributed description
+ * itself, on its own side of the plugin boundary, and a second cap here only gave the two constants
+ * room to diverge — whereupon the agent's truncation counter would quietly report nothing.
  */
 object McpToolText {
 
@@ -14,9 +16,6 @@ object McpToolText {
 
     /** Max characters kept from a tool name; the agent caps the namespaced form again. */
     private const val MAX_NAME_LENGTH = 24
-
-    /** Max characters kept from a description; the agent's prompt budget caps it again, lower. */
-    const val MAX_DESCRIPTION_LENGTH = 200
 
     /** Numbered variants tried for a name two tools truncated onto; past this the tool is dropped. */
     private const val MAX_VARIANTS = 20
@@ -51,24 +50,6 @@ object McpToolText {
     fun disambiguate(name: String, taken: Set<String>): String? {
         if (name !in taken) return name
         return (2..MAX_VARIANTS).map { "${name}_$it" }.firstOrNull { it !in taken }
-    }
-
-    /**
-     * A description safe to put in a prompt.
-     * @param description the server's own text.
-     * @return the text, flattened to one line and capped.
-     */
-    fun description(description: String): String {
-        val flattened = description
-            .map { if (it.isWhitespace() || it.isISOControl()) ' ' else it }
-            .joinToString("")
-            .replace(Regex(" +"), " ")
-            .trim()
-        return if (flattened.length > MAX_DESCRIPTION_LENGTH) {
-            flattened.take(MAX_DESCRIPTION_LENGTH).trimEnd() + "…"
-        } else {
-            flattened
-        }
     }
 
     /** Lowercases and reduces to `[a-z0-9_]`, collapsing runs of separators into one `_`. */

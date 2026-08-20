@@ -54,7 +54,7 @@ class McpToolSource : ToolSourceRegistry.ToolSource {
     override fun listTools(): List<ToolSourceRegistry.ToolSpec> = exposedTools().map { exposed ->
         Spec(
             name = exposed.name,
-            description = McpToolText.description(exposed.tool.description),
+            description = exposed.tool.description,
             parametersSchema = exposed.tool.inputSchema,
         )
     }

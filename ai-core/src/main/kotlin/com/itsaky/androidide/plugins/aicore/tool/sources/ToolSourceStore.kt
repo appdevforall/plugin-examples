@@ -105,8 +105,9 @@ class ToolSourceStore {
      * Builds one handler per contributed tool, namespaced into the agent's global tool namespace.
      *
      * A source that throws from [ContributedToolSource.listTools] is skipped whole and the others
-     * survive; a tool whose name collides with [reservedNames] or with an earlier contributed tool
-     * is dropped, so a source can never shadow a built-in like `edit_file`.
+     * survive; a tool whose name collides with [reservedNames] is dropped outright, and one that
+     * collides with an earlier contributed tool is qualified with its provider's alias. So a source
+     * can neither shadow a built-in like `edit_file` nor reach one under a longer name.
      *
      * @param reservedNames names already taken, i.e. the built-in tools and the terminal tool.
      * @return the contributed handlers, in registration order.
@@ -127,6 +128,16 @@ class ToolSourceStore {
                 val candidates = ContributedToolNames.candidates(source.providerId, tool.name)
                 if (candidates.isEmpty()) {
                     Log.w(TAG, "Dropping tool '${tool.name}' from '${source.providerId}': unusable name")
+                    continue
+                }
+                // Dropped rather than qualified: `respond` published as `<alias>_respond` is still
+                // reachable through the router's suffix pass, which would hand a model's final
+                // answer to a remote server instead of to the user.
+                if (candidates.first() in reservedNames) {
+                    Log.w(
+                        TAG,
+                        "Dropping tool '${tool.name}' from '${source.providerId}': the name is reserved"
+                    )
                     continue
                 }
                 // The plain name first, its qualified form second; `add` returns false for a name

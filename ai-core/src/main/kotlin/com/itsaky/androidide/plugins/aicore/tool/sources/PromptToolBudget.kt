@@ -62,7 +62,7 @@ object PromptToolBudget {
             }
             admitted++
 
-            val flattened = flatten(handler.description)
+            val flattened = ContributedText.flatten(handler.description)
             val description = if (flattened.length > MAX_DESCRIPTION_CHARS) {
                 truncated++
                 flattened.take(MAX_DESCRIPTION_CHARS).trimEnd() + "…"
@@ -78,11 +78,4 @@ object PromptToolBudget {
 
         return Budgeted(definitions, dropped, truncated)
     }
-
-    /** Collapses whitespace and control characters onto one line. */
-    private fun flatten(description: String): String = description
-        .map { if (it.isWhitespace() || it.isISOControl()) ' ' else it }
-        .joinToString("")
-        .replace(Regex(" +"), " ")
-        .trim()
 }

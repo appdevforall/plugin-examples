@@ -24,7 +24,6 @@ import com.itsaky.androidide.plugins.aicore.tool.ToolCall
 import com.itsaky.androidide.plugins.aicore.tool.ToolCallExtractor
 import com.itsaky.androidide.plugins.aicore.tool.ToolExecutionTracker
 import com.itsaky.androidide.plugins.aicore.tool.ToolHandler
-import com.itsaky.androidide.plugins.aicore.tool.sources.PromptToolBudget
 import com.itsaky.androidide.plugins.aicore.tool.sources.ToolSourceStore
 import com.itsaky.androidide.plugins.aicore.tool.handlers.AddDependencyHandler
 import com.itsaky.androidide.plugins.aicore.tool.handlers.CreateFileHandler
@@ -255,7 +254,32 @@ class ChatViewModel(
         approvalManager = approvalManager,
         toolExecutionTracker = toolExecutionTracker,
         terminalTool = RESPOND_TOOL,
-    )
+    ).also(::logPromptBudget)
+
+    /**
+     * Logs what the prompt budget cost this snapshot.
+     *
+     * Once per rebuild rather than per message: silent truncation reads as "everything is exposed"
+     * when it is not, and the same line on every turn is how a log stops being read.
+     *
+     * @param tools the snapshot just built.
+     */
+    private fun logPromptBudget(tools: AgentTools) {
+        val budgeted = tools.promptTools
+        if (budgeted.droppedTools.isNotEmpty()) {
+            android.util.Log.w(
+                TAG,
+                "Prompt budget dropped ${budgeted.droppedTools.size} contributed tool(s): " +
+                    budgeted.droppedTools.joinToString(", ")
+            )
+        }
+        if (budgeted.truncatedDescriptions > 0) {
+            android.util.Log.i(
+                TAG,
+                "Prompt budget shortened ${budgeted.truncatedDescriptions} tool description(s)"
+            )
+        }
+    }
 
     /**
      * Swaps in a tool set that includes the current sources. One assignment, so a run can never see
@@ -438,33 +462,18 @@ class ChatViewModel(
     }
 
     /**
-     * The tools to present in the system prompt: every registered handler within
-     * [PromptToolBudget], plus [RESPOND_TOOL], which is not a handler but is how the model
-     * addresses the user.
+     * The tools to present in the system prompt: the snapshot's budgeted list, plus [RESPOND_TOOL],
+     * which is not a handler but is how the model addresses the user.
      *
-     * The cap lands here rather than in a backend because each backend renders this list itself,
-     * including backends written elsewhere; anything dropped is logged, since silent truncation
-     * reads as "everything is exposed" when it is not.
+     * The cap is applied when the snapshot is built, not here, so the grammar the local backend is
+     * constrained by and the list the prompt describes can never disagree. It lands on this side of
+     * the boundary at all because every backend renders the list itself, this repo's or not.
      *
      * @param tools the snapshot this run is using.
      * @return the definitions to hand the backend.
      */
     private fun promptToolDefinitions(tools: AgentTools): List<LlmInferenceService.ToolDefinition> {
-        val budgeted = PromptToolBudget.apply(tools.router.getAllHandlers())
-        if (budgeted.droppedTools.isNotEmpty()) {
-            android.util.Log.w(
-                TAG,
-                "Prompt budget dropped ${budgeted.droppedTools.size} contributed tool(s): " +
-                    budgeted.droppedTools.joinToString(", ")
-            )
-        }
-        if (budgeted.truncatedDescriptions > 0) {
-            android.util.Log.i(
-                TAG,
-                "Prompt budget shortened ${budgeted.truncatedDescriptions} tool description(s)"
-            )
-        }
-        return budgeted.definitions + LlmInferenceService.ToolDefinition(
+        return tools.promptTools.definitions + LlmInferenceService.ToolDefinition(
             RESPOND_TOOL,
             "Send the user your reply or final answer. It MUST carry a \"message\" holding the " +
                 "text itself — a respond call with no \"message\" shows the user nothing.",

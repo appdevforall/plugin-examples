@@ -39,6 +39,9 @@ Configuration → MCP servers**:
 4. Switch on the tools you want. **They start off**: one popular GitHub server
    advertises around ninety tools, which would fill a phone-sized context window
    on its own.
+5. **Clear stored credential** — removes the stored token and headers. The token
+   field never shows what is stored and an empty field keeps it, so this is the
+   only way back to a server that needs no credential.
 
 Every remote tool asks for approval on every call, and there is no "always
 allow" for contributed tools — they run outside the Agent's own path
@@ -80,9 +83,10 @@ Two dependencies were deliberately not taken:
 
 ## Security notes
 
-- Tool names and descriptions from a server are **untrusted remote text**. They
-  are reduced to `[a-z0-9_]` and to a single capped line before they can reach a
-  system prompt assembled inside a backend plugin.
+- Tool names and descriptions from a server are **untrusted remote text**. Names
+  are reduced to `[a-z0-9_]` here; descriptions are flattened to one capped line
+  by `ai-core`, which owns that cap because it is the side that assembles the
+  prompt. Capping in both places only gave the two constants room to diverge.
 - Tokens are encrypted with an AES/GCM key held in the Android Keystore under
   this plugin's own alias; only ciphertext is written to disk. A token that can no
   longer be decrypted — a restored backup, an OEM Keystore reset — is reported as

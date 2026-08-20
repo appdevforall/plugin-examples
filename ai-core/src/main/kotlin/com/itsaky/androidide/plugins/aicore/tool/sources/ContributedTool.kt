@@ -10,7 +10,8 @@ package com.itsaky.androidide.plugins.aicore.tool.sources
  * @property name the tool's own name, unique only within its source.
  * @property description what the tool does; this text reaches the model's prompt.
  * @property parametersSchema JSON Schema for the arguments; empty means untyped string arguments.
- * @property requiresApproval whether the user must approve each call; true by default.
+ * @property requiresApproval what the source declared; carried for a host-side allowlist to honour
+ *   one day, but not honoured today — see [ContributedToolHandler.requiresApproval].
  * @property readOnly whether the tool is free of side effects.
  */
 data class ContributedTool(

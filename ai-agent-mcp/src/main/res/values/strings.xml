@@ -39,6 +39,9 @@
     <string name="mcp_url_required">Enter the server\'s endpoint URL.</string>
     <string name="mcp_url_scheme_invalid">The URL must start with https:// or http://.</string>
     <string name="mcp_url_insecure_credentials">A token or extra header cannot be sent to an http:// URL — it would travel in the clear, readable by anyone on the same network. Use https://, or remove the credential.</string>
+    <string name="mcp_clear_credential">Clear stored credential</string>
+    <string name="mcp_credential_cleared">The stored token and headers for this server have been removed.</string>
+    <string name="mcp_credentials_loading">Still reading this server\'s stored credentials — try again in a moment.</string>
     <string name="mcp_secrets_unreadable">The saved token or headers for this server can no longer be read on this device. Enter them again.</string>
     <string name="mcp_status_testing">Connecting…</string>
     <string name="mcp_status_refreshing">Asking the server for its tools…</string>
