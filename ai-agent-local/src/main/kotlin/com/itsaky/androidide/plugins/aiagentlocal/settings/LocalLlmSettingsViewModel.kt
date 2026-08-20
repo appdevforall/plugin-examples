@@ -286,6 +286,7 @@ class LocalLlmSettingsViewModel(
             fileSizeBytes = fileInfo.sizeBytes,
             header = resolved.header,
             contextTokens = resolved.contextTokens,
+            kvType = resolved.kvType,
         )
 
         return when (val verdict = ModelMemoryGate.evaluate(estimate, availableBytes)) {
