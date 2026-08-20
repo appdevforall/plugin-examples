@@ -132,7 +132,7 @@ class ChatViewModel(
         return try {
             SharedServices.get(LlmInferenceService::class.java)
         } catch (e: Exception) {
-            android.util.Log.e(TAG, "Error getting LLM service", e)
+            logError("could not obtain the LLM service", e)
             null
         }
     }
@@ -278,22 +278,19 @@ class ChatViewModel(
     }
 
     fun initializeStorage(context: android.content.Context) {
-        android.util.Log.d(TAG, "initializeStorage called")
         storageManager = ChatStorageManager(context)
         loadSessions()
     }
 
     fun loadSessions() {
         val loaded = storageManager.loadSessions()
-        android.util.Log.d(TAG, "loadSessions: loaded ${loaded.size} sessions")
+        logDebug("loadSessions: loaded ${loaded.size} sessions")
         if (loaded.isEmpty()) {
-            android.util.Log.d(TAG, "No sessions found, creating new session")
             createNewSession()
         } else {
             _sessions.value = loaded
             val currentId = storageManager.loadCurrentSessionId()
             val session = loaded.firstOrNull { it.id == currentId } ?: loaded.first()
-            android.util.Log.d(TAG, "Switching to session ${session.id} with ${session.messages.size} messages")
             switchToSession(session.id)
         }
     }
@@ -372,7 +369,7 @@ class ChatViewModel(
                     contextBuilder.append(content)
                     contextBuilder.append("\n\n")
                 } catch (e: Exception) {
-                    android.util.Log.e(TAG, "Error reading context file ${file.name}: ${e.message}")
+                    logWarn("could not read context file ${file.name}", e)
                 }
             }
         }
@@ -405,7 +402,7 @@ class ChatViewModel(
         val backend = try {
             getLlmService()?.getBackend(currentBackendId)
         } catch (e: Throwable) {
-            android.util.Log.w(TAG, "Could not resolve backend '$currentBackendId'", e)
+            logWarn("could not resolve backend '$currentBackendId'", e)
             null
         } ?: return null
 
@@ -418,8 +415,8 @@ class ChatViewModel(
                 )
             )?.takeIf { it.isNotBlank() }
         } catch (e: Throwable) {
-            android.util.Log.w(TAG,
-                "Backend '$currentBackendId' failed to supply a system prompt; using the default",
+            logWarn(
+                "backend '$currentBackendId' supplied no system prompt; using the default",
                 e
             )
             null
@@ -434,7 +431,7 @@ class ChatViewModel(
     private fun backendTemperature(): Float? = try {
         getLlmService()?.getBackend(currentBackendId)?.defaultTemperature
     } catch (e: Throwable) {
-        android.util.Log.w(TAG, "Backend '$currentBackendId' failed to supply a temperature", e)
+        logWarn("backend '$currentBackendId' supplied no temperature", e)
         null
     }
 
@@ -587,7 +584,6 @@ class ChatViewModel(
                     sender = Sender.TOOL,
                     status = if (result.success) MessageStatus.SENT else MessageStatus.ERROR
                 )
-                android.util.Log.d(TAG, "Adding tool result message: $resultText")
                 _messages.value = _messages.value + resultMessage
                 syncMessageToSession(resultMessage)
             }
@@ -611,38 +607,35 @@ class ChatViewModel(
      * refusing to send with a backend that was configured in between.
      */
     fun checkBackendAvailability() {
-        android.util.Log.d(TAG, "checkBackendAvailability: Starting check")
         backendCheckJob?.cancel()
         val sequence = ++backendCheckSequence
         backendCheckJob = viewModelScope.launch(Dispatchers.IO) {
             // Retry up to 5 times with 500ms delays to handle plugin loading order
             repeat(5) { attempt ->
-                android.util.Log.d(TAG, "checkBackendAvailability: Attempt ${attempt + 1}")
                 val llmService = getLlmService()
-                android.util.Log.d(TAG, "checkBackendAvailability: llmService = $llmService")
                 if (llmService != null) {
                     try {
                         // Resolved through the registry, exactly as the settings screen and the
                         // status line resolve it. Going to the service's own list instead would
                         // hand AiBackend.preferredId a hash-ordered collection, and with nothing
                         // stored the two would answer differently on the same launch.
-                        val selected = BackendRegistry.selected()
-                        android.util.Log.d(TAG, "checkBackendAvailability: Selection resolved to $selected")
-
-                        val selectedId = (selected as? SelectedBackend.Installed)?.option?.id
+                        val selectedId =
+                            (BackendRegistry.selected() as? SelectedBackend.Installed)?.option?.id
                         val backend = selectedId?.let { llmService.getBackend(it) }
-                        android.util.Log.d(TAG, "checkBackendAvailability: Preferred backend ($selectedId) found=${backend != null}, available=${backend?.isAvailable}")
                         if (backend != null) {
                             // Id set even when unavailable: a stale id from an earlier check would
                             // otherwise build the next request for a backend since moved off.
                             val published = publishBackendStatus(sequence) {
                                 BackendStatus(backend.id, backend.isAvailable)
                             }
-                            android.util.Log.d(TAG, "checkBackendAvailability: Selected backend ${backend.id}, available=${backend.isAvailable}, published=$published")
+                            logDebug(
+                                "backend check: selected=${backend.id} " +
+                                    "available=${backend.isAvailable} published=$published"
+                            )
                             return@launch // Answered — available or not, there is no substitute
                         }
                     } catch (e: Exception) {
-                        android.util.Log.e(TAG, "Error checking backends on attempt ${attempt + 1}: ${e.message}", e)
+                        logWarn("backend check failed on attempt ${attempt + 1}", e)
                     }
                 }
 
@@ -653,7 +646,7 @@ class ChatViewModel(
             }
 
             // All retries failed
-            android.util.Log.d(TAG, "checkBackendAvailability: No backend registered for the selection")
+            logWarn("backend check: nothing registered for the selected backend")
             // Keeps whichever id is on record: nothing was resolved to replace it with.
             publishBackendStatus(sequence) { it.copy(isAvailable = false) }
         }
@@ -686,16 +679,13 @@ class ChatViewModel(
      * Send a user message and get agent response.
      */
     fun sendMessage(userMessage: String) {
-        android.util.Log.d(TAG, "sendMessage called")
         val llmService = getLlmService()
         if (llmService == null) {
-            android.util.Log.d(TAG, "sendMessage: LLM service not available")
             emitSystemError(str(R.string.error_llm_service_not_available))
             return
         }
 
         if (!_backendStatus.value.isAvailable) {
-            android.util.Log.d(TAG, "sendMessage: Backend not available")
             // Names the selected backend: the point of stopping here is that the user learns which
             // backend is not ready, instead of the request quietly going somewhere else.
             emitSystemError(
@@ -712,13 +702,11 @@ class ChatViewModel(
         }
 
         if (userMessage.isBlank()) {
-            android.util.Log.d(TAG, "sendMessage: Message is blank")
             return
         }
 
         // Reject re-entry while a generation is still in flight.
         if (!isGenerating.compareAndSet(false, true)) {
-            android.util.Log.d(TAG, "sendMessage: generation already in progress; ignoring")
             return
         }
 
@@ -829,7 +817,7 @@ class ChatViewModel(
                 stopStateTimer()
                 throw ce
             } catch (e: Exception) {
-                android.util.Log.e(TAG, "sendMessage failed", e)
+                logError("sendMessage failed", e)
                 AgentTrace.endRun("error: ${e.message}")
                 stopStateTimer()
                 _agentState.value = AgentState.Error(str(R.string.state_error, e.message))
@@ -992,7 +980,7 @@ class ChatViewModel(
             )
         } catch (e: Exception) {
             // A synchronous throw fires no callback; complete deferred so await() doesn't hang.
-            android.util.Log.e(TAG, "generateStreaming threw synchronously", e)
+            logError("generateStreaming threw synchronously", e)
             viewModelScope.launch(Dispatchers.Main) {
                 _messages.value = _messages.value.filter { it.id != agentMessageId }
             }
@@ -1018,6 +1006,33 @@ class ChatViewModel(
             _messages.value = _messages.value + message
             syncMessageToSession(message)
         }
+    }
+
+    /**
+     * Logs to the IDE's plugin log, which is where a plugin's output is expected to land.
+     * @param message the line to log.
+     */
+    private fun logDebug(message: String) {
+        getContext()?.logger?.debug("$TAG: $message")
+    }
+
+    /**
+     * Logs a condition the chat recovered from; see [logDebug].
+     * @param message the line to log.
+     * @param error the cause, when there was one.
+     */
+    private fun logWarn(message: String, error: Throwable? = null) {
+        val logger = getContext()?.logger ?: return
+        if (error == null) logger.warn("$TAG: $message") else logger.warn("$TAG: $message", error)
+    }
+
+    /**
+     * Logs a failure; see [logDebug].
+     * @param message the line to log.
+     * @param error the cause.
+     */
+    private fun logError(message: String, error: Throwable) {
+        getContext()?.logger?.error("$TAG: $message", error)
     }
 
     /**
@@ -1091,14 +1106,14 @@ class ChatViewModel(
      */
     fun switchToSession(sessionId: String) {
         val session = _sessions.value.firstOrNull { it.id == sessionId }
-        android.util.Log.d(TAG, "switchToSession: sessionId=$sessionId, session found=${session != null}")
-        if (session != null) {
-            _currentSessionId.value = sessionId
-            // Use immutable snapshot to ensure StateFlow emits on mutations
-            _messages.value = session.messages.toList()
-            _history.value = emptyList()
-            android.util.Log.d(TAG, "switchToSession: set _messages to ${session.messages.size} messages")
+        if (session == null) {
+            logWarn("switchToSession: no session $sessionId")
+            return
         }
+        _currentSessionId.value = sessionId
+        // Use immutable snapshot to ensure StateFlow emits on mutations
+        _messages.value = session.messages.toList()
+        _history.value = emptyList()
     }
 
     /**
