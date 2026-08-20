@@ -1,6 +1,6 @@
 # client-time-tracker
 
-A time-tracking and invoicing plugin for [CodeOnTheGo](https://github.com/appdevforall/CodeOnTheGo). It tracks billable coding sessions per project and generates invoices as PDF, Excel, or CSV.
+A time-tracking and invoicing plugin for [Code on theGo](https://github.com/appdevforall/CodeOnTheGo). It tracks billable coding sessions per project and generates invoices as PDF, Excel, or CSV.
 
 Surfaces as a **Client Time Tracker** sidebar item and editor tab. Sessions start/stop automatically from editor activity, and each tracked project carries its own client, rate, currency, and tax settings.
 
