@@ -55,16 +55,18 @@ class AgentTools private constructor(
         ): AgentTools {
             val reserved = builtInHandlers.mapTo(mutableSetOf()) { it.toolName }
             reserved += terminalTool
+            // The approval gate exempts a name, not a handler, so those names are reserved too.
+            reserved += ToolApprovalManager.AUTO_APPROVED_TOOLS
 
             val handlers = builtInHandlers + store.handlers(reserved)
-            val router = ToolRouter(handlers)
             // The grammar is built from the budgeted list, not from every handler: a name the
             // token mask permits but the prompt never mentioned is a name the model cannot use,
             // and one the prompt mentions but the mask forbids is a tool it cannot call.
             val promptTools = PromptToolBudget.apply(handlers)
-            val grammar = ToolCallGrammar.build(
-                promptTools.definitions.map { it.name } + terminalTool
-            )
+            val admitted = promptTools.definitions.mapTo(mutableSetOf()) { it.name }
+            // Routing stays unbudgeted; only what a failure offers back is narrowed to that set.
+            val router = ToolRouter(handlers, suggestableNames = admitted)
+            val grammar = ToolCallGrammar.build(admitted.toList() + terminalTool)
             return AgentTools(
                 router = router,
                 executor = Executor(router, approvalManager, toolExecutionTracker),

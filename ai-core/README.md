@@ -88,9 +88,12 @@ Four rules the store applies, each of which was a bug before it was a rule:
   `edit_file`. A tool colliding with a *reserved* name is dropped outright, never
   qualified: published as `<alias>_respond` it stays reachable through the
   router's suffix pass, which would hand a model's final answer to a remote
-  server. A tool colliding with another *contributed* tool is qualified rather
-  than dropped — prefixing *everything* unconditionally cost the model the one
-  name a tool's own description talks about.
+  server. Reserved means the built-ins, the terminal tool *and* every name in
+  `ToolApprovalManager.AUTO_APPROVED_TOOLS` — that gate exempts a name rather than
+  a handler, so a name it lists with no built-in behind it would let a contributed
+  tool run with no dialog at all. A tool colliding with another *contributed* tool
+  is qualified rather than dropped — prefixing *everything* unconditionally cost
+  the model the one name a tool's own description talks about.
 - **Router, executor, grammar and the prompt's tool list are rebuilt together**,
   behind one `@Volatile` reference. Replacing the router alone leaves the local
   backend's token mask forbidding every newly contributed tool — a green build
@@ -116,10 +119,13 @@ every contributed tool: "Always Allow" is downgraded to a single approval.
 For the same reason a source's own `requiresApproval = false` is ignored:
 `ensureApproved` returns early on it, before `allowsSessionApproval` is ever
 consulted, so honouring it would let a provider decline the only control there is
-by asking. The dialog's title is the *registered* name, and every provider-supplied
-string on it is flattened and capped first — a remote `displayName` carrying a
-newline and a copy of the dialog's own header could otherwise forge structure the
-user then trusts.
+by asking. The dialog's title is the *registered* name, and all three
+provider-supplied strings on it — the tool's own name, its description and the
+source's label — are flattened and capped first, at the `ContributedToolHandler`
+boundary rather than in each provider. A remote `displayName` carrying a newline
+and a copy of the dialog's own header could otherwise forge structure the user
+then trusts. Contributing plugins therefore ship no sanitising of their own and
+depend on the installed `ai-core` for it; the two version independently.
 
 ## Key classes
 

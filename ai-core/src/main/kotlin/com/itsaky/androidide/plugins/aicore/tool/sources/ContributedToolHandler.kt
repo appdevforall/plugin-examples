@@ -44,7 +44,12 @@ class ContributedToolHandler(
      */
     override val displayName: String = ContributedText.label(tool.name)
 
-    override val sourceLabel: String = source.displayName
+    /**
+     * The contributing plugin's own name, flattened and capped like the two strings above: it is
+     * the third provider-supplied string the approval dialog renders, and it reaches the model too
+     * through [providerFailure].
+     */
+    override val sourceLabel: String = ContributedText.label(source.displayName)
 
     /**
      * Always true, whatever the source declared.
@@ -165,5 +170,5 @@ class ContributedToolHandler(
 
     /** One model-facing sentence naming the provider, so a failure is attributable. */
     private fun providerFailure(what: String): String =
-        "Tool '$displayName' from ${source.displayName} $what"
+        "Tool '$displayName' from $sourceLabel $what"
 }

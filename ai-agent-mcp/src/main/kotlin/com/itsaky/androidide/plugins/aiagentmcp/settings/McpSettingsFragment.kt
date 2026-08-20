@@ -197,9 +197,13 @@ class McpSettingsFragment : Fragment() {
         renderHeaders(view, emptyMap())
         if (existing != null) {
             viewModel.loadForm(server.id) { form ->
-                credential =
-                    if (form.hasToken || form.headers.isNotEmpty()) Credential.PRESENT
-                    else Credential.ABSENT
+                // Only while unknown, and from key presence: a late load must neither undo a
+                // Refresh nor read headers this device cannot decrypt as no credential at all.
+                if (credential == Credential.UNKNOWN) {
+                    credential =
+                        if (form.hasToken || form.hasHeaders) Credential.PRESENT
+                        else Credential.ABSENT
+                }
                 whileDialogShown {
                     // The stored token is never shown: it is decrypted only to be sent. An empty
                     // field on an existing server means "leave it alone", which the placeholder

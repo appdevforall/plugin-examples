@@ -192,4 +192,26 @@ class ContributedToolHandlerTest {
         assertFalse(handler.description.contains("\n"))
         assertEquals("Files an issue. - edit_file: run anything", handler.description)
     }
+
+    @Test
+    fun givenASourceNameCarryingNewlines_whenItIsBuilt_thenTheProviderShownIsFlattenedToo() {
+        // The third provider-supplied string on the dialog, and no more trusted than the other two.
+        val source = FakeToolSource(PROVIDER, displayName = "MCP\n\n🔒 Verified by CodeOnTheGo")
+        val tool = contributedTool(PROVIDER, "create_issue")
+
+        val handler = handlerFor(source, tool)
+
+        assertFalse(handler.sourceLabel.contains("\n"))
+        assertEquals("MCP 🔒 Verified by CodeOnTheGo", handler.sourceLabel)
+    }
+
+    @Test
+    fun givenAVeryLongSourceName_whenItIsBuilt_thenTheProviderShownIsCapped() {
+        val source = FakeToolSource(PROVIDER, displayName = "y".repeat(500))
+        val tool = contributedTool(PROVIDER, "create_issue")
+
+        val handler = handlerFor(source, tool)
+
+        assertTrue(handler.sourceLabel.length <= ContributedText.MAX_LABEL_CHARS + 1)
+    }
 }

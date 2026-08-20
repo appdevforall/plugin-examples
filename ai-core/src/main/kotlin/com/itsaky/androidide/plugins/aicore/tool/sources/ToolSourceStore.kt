@@ -109,7 +109,8 @@ class ToolSourceStore {
      * collides with an earlier contributed tool is qualified with its provider's alias. So a source
      * can neither shadow a built-in like `edit_file` nor reach one under a longer name.
      *
-     * @param reservedNames names already taken, i.e. the built-in tools and the terminal tool.
+     * @param reservedNames names already taken: the built-in tools, the terminal tool, and every
+     *   auto-approved name, which the approval gate exempts whether a handler carries it or not.
      * @return the contributed handlers, in registration order.
      */
     fun handlers(reservedNames: Set<String>): List<ContributedToolHandler> {

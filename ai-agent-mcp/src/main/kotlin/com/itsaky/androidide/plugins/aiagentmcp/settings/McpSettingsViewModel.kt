@@ -45,12 +45,16 @@ class McpSettingsViewModel(
     /**
      * What the add/edit dialog needs from the store before it can show a server.
      * @property hasToken whether a token is stored, so the field can say so.
+     * @property hasHeaders whether headers are stored, from key presence rather than a decrypt:
+     *   [headers] comes back empty for headers this device can no longer read, and "stored but
+     *   unreadable" has to count as a stored credential or the control that clears it hides.
      * @property secretsUnreadable whether a stored token or header cannot be decrypted on this
      *   device, which the field has to say aloud: it looks stored, but nothing can send it.
      * @property headers the extra headers configured for the server.
      */
     data class FormState(
         val hasToken: Boolean,
+        val hasHeaders: Boolean,
         val secretsUnreadable: Boolean,
         val headers: Map<String, String>,
     )
@@ -86,6 +90,7 @@ class McpSettingsViewModel(
                 }
                 FormState(
                     hasToken = McpServerStore.hasToken(id),
+                    hasHeaders = McpServerStore.hasHeaders(id),
                     secretsUnreadable =
                         token is SecureTokenStore.Stored.Unreadable || headers == null,
                     headers = headers.orEmpty(),

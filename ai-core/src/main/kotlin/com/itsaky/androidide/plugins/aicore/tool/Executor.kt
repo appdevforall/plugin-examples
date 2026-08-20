@@ -27,7 +27,6 @@ class Executor(
             "read_file",
             "list_files",
             "search_project",
-            "get_current_datetime"
         )
 
         /**
@@ -229,7 +228,8 @@ class Executor(
         // Before tool execution
         val toolStartTime = System.currentTimeMillis()
 
-        val result = toolRouter.dispatch(toolName, validatedArgs)
+        // The handler `execute` already resolved, so the name is not looked up a second time.
+        val result = toolRouter.dispatch(handler, validatedArgs)
 
         // After tool execution
         val toolDuration = System.currentTimeMillis() - toolStartTime

@@ -6,9 +6,14 @@ import com.itsaky.androidide.plugins.aicore.models.ToolResult
 
 /**
  * Routes tool calls to appropriate handlers.
+ *
+ * @param handlers every registered handler; routing is deliberately unbudgeted.
+ * @param suggestableNames the names a failed call may be offered back, i.e. the ones the prompt
+ *   admitted; suggesting a name the token mask forbids costs the model a whole turn.
  */
 class ToolRouter(
-    private val handlers: List<ToolHandler>
+    private val handlers: List<ToolHandler>,
+    suggestableNames: Set<String>? = null,
 ) {
     companion object {
         /** Names offered back on a failed lookup; a long list is noise the model reads every turn. */
@@ -18,6 +23,8 @@ class ToolRouter(
     private val TAG = "$LOG_PREFIX.ToolRouter"
     private val handlerMap: Map<String, ToolHandler> = handlers.associateBy { it.toolName }
     private val byLowercase: Map<String, List<ToolHandler>> = handlers.groupBy { it.toolName.lowercase() }
+    private val suggestable: List<String> =
+        handlers.map { it.toolName }.filter { suggestableNames == null || it in suggestableNames }
 
     /**
      * Finds the handler for a name the model emitted.
@@ -48,7 +55,8 @@ class ToolRouter(
     /**
      * Registered names worth offering back when a call named a tool that resolved to nothing.
      *
-     * The model reads this in the failure and retries, so it is cheaper than the turn it saves.
+     * The model reads this in the failure and retries, so it is cheaper than the turn it saves —
+     * but only for a name it was told about and is allowed to emit.
      *
      * @param toolName the name that failed to resolve.
      * @return up to [MAX_SUGGESTIONS] plausible names, nearest kind of match first.
@@ -56,7 +64,7 @@ class ToolRouter(
     fun suggestionsFor(toolName: String): List<String> {
         val lower = toolName.trim().lowercase()
         if (lower.isEmpty()) return emptyList()
-        val names = handlers.map { it.toolName }
+        val names = suggestable
         return (names.filter { it.lowercase().endsWith("_$lower") } +
             names.filter { it.lowercase().startsWith("${lower}_") } +
             names.filter { it.lowercase().contains(lower) })
@@ -73,7 +81,18 @@ class ToolRouter(
             Log.e(TAG, "No handler found for tool: $toolName")
             return ToolResult.failure("Unknown tool: $toolName")
         }
+        return dispatch(handler, args)
+    }
 
+    /**
+     * Dispatch to a handler a caller has already resolved.
+     *
+     * @param handler the handler to run.
+     * @param args the validated call arguments.
+     * @return the tool's result, or the failure it raised.
+     */
+    suspend fun dispatch(handler: ToolHandler, args: Map<String, Any?>): ToolResult {
+        val toolName = handler.toolName
         return try {
             Log.d(TAG, "Dispatching $toolName with args: $args")
             handler.execute(args)

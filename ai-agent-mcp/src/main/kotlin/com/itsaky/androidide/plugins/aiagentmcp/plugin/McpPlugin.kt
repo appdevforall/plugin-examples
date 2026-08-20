@@ -41,11 +41,11 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
     /**
      * Background work: listing tools is network work and never belongs on the main thread.
      *
-     * Replaced on every [activate] rather than created once, because [deactivate] cancels it: a
-     * refresh left running would keep building sessions and registering them in
-     * [McpConnections] after `closeAll()` emptied the map, leaving sockets nothing can reach.
+     * Replaced on every [activate] and cancelled by [deactivate], so a refresh left running cannot
+     * register sessions in [McpConnections] after `closeAll()` emptied the map. Volatile like
+     * [registered]: the host may drive the lifecycle from one thread and the next from another.
      */
-    private var scope = newScope()
+    @Volatile private var scope = newScope()
 
     companion object {
         /** Must match `plugin.id` in AndroidManifest.xml; also this source's provider id. */
@@ -118,6 +118,8 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
     }
 
     override fun activate(): Boolean = try {
+        // Cancelled first: a host that activates twice would otherwise orphan the running scope.
+        scope.cancel()
         scope = newScope()
         toolSource = McpToolSource()
         McpServerStore.addChangeListener(settingsChanged)

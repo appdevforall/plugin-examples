@@ -19,10 +19,13 @@ private const val TAG = "$LOG_PREFIX.McpHttpClient"
  * `NoSuchMethodError`. Kept apart from [com.itsaky.androidide.plugins.aiagentmcp.client.McpSession]
  * so the session is about the protocol, not about sockets.
  *
+ * Open, and [post] / [deleteSession] with it, only so a test can answer the protocol without a
+ * socket — which is what `McpSession`'s injectable transport promises.
+ *
  * @param connectTimeoutMs how long to wait for the connection itself.
  * @param readTimeoutMs how long a call may take to answer.
  */
-class McpHttpClient(
+open class McpHttpClient(
     private val connectTimeoutMs: Int = CONNECT_TIMEOUT_MS,
     private val readTimeoutMs: Int = READ_TIMEOUT_MS,
 ) {
@@ -65,7 +68,7 @@ class McpHttpClient(
      * @return the reply document and any session id the server sent.
      * @throws McpHttpException on a non-2xx answer, carrying the server's error body.
      */
-    fun post(
+    open fun post(
         url: String,
         token: String,
         body: JSONObject,
@@ -101,8 +104,8 @@ class McpHttpClient(
                     // 202 with no body is the correct answer to a notification; drained rather
                     // than ignored, since a body left unread keeps the socket out of the pool.
                     if (conn.responseCode == HttpURLConnection.HTTP_ACCEPTED) {
-                        runCatching { conn.inputStream.use { it.readBytes() } }
-                        reusable = true
+                        // A half-read body is neither pooled nor closed, so only a whole drain counts.
+                        reusable = runCatching { conn.inputStream.use { it.readBytes() } }.isSuccess
                         return Response(null, assignedSession)
                     }
 
@@ -139,7 +142,7 @@ class McpHttpClient(
      * @param token bearer token, or blank.
      * @param sessionId the session to end.
      */
-    fun deleteSession(
+    open fun deleteSession(
         url: String,
         token: String,
         sessionId: String,

@@ -22,17 +22,23 @@ class ToolApprovalManager {
     // Approval request timeout: 5 minutes
     private val APPROVAL_TIMEOUT_MS = 5 * 60 * 1000L
 
-    // Tools that don't require approval (read-only and safe)
-    private val autoApprovedTools = setOf(
-        "read_file",
-        "list_files",
-        "search_project",
-        "open_file",
-        "read_build_output",
-        "gradle_sync",
-        "generate_from_template",
-        "get_current_datetime"
-    )
+    companion object {
+        /**
+         * Tools that run with no approval dialog, because they only read state.
+         *
+         * [ensureApproved] exempts a *name*, ahead of the handler's own `requiresApproval`, so
+         * `AgentTools.build` reserves this whole set against contributed tools claiming one.
+         */
+        val AUTO_APPROVED_TOOLS = setOf(
+            "read_file",
+            "list_files",
+            "search_project",
+            "open_file",
+            "read_build_output",
+            "gradle_sync",
+            "generate_from_template",
+        )
+    }
 
     /**
      * Built-in tools that can never be blanket-approved for the session, however the user answers.
@@ -84,7 +90,7 @@ class ToolApprovalManager {
         args: Map<String, Any?>
     ): ApprovalResponse {
         // Check if tool doesn't require approval
-        if (!handler.requiresApproval || autoApprovedTools.contains(toolName)) {
+        if (!handler.requiresApproval || AUTO_APPROVED_TOOLS.contains(toolName)) {
             AgentTrace.detail("APPROVAL", "$toolName skipped=auto-approved")
             return ApprovalResponse(approved = true)
         }

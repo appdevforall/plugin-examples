@@ -86,7 +86,11 @@ Two dependencies were deliberately not taken:
 - Tool names and descriptions from a server are **untrusted remote text**. Names
   are reduced to `[a-z0-9_]` here; descriptions are flattened to one capped line
   by `ai-core`, which owns that cap because it is the side that assembles the
-  prompt. Capping in both places only gave the two constants room to diverge.
+  prompt. Capping in both places only gave the two constants room to diverge, so
+  this plugin ships no description sanitising of its own. Nothing enforces the
+  pairing — the two plugins version independently — so an `ai-core` older than the
+  release that flattens at its `ContributedToolHandler` boundary would take raw
+  multi-line server text into the prompt.
 - Tokens are encrypted with an AES/GCM key held in the Android Keystore under
   this plugin's own alias; only ciphertext is written to disk. A token that can no
   longer be decrypted — a restored backup, an OEM Keystore reset — is reported as

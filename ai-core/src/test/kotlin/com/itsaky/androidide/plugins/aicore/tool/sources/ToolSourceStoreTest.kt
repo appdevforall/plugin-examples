@@ -198,6 +198,44 @@ class ToolSourceStoreTest {
             "every contributed tool still routes, budget or not",
             tools.promptTools.droppedTools.all { tools.router.getHandler(it) != null },
         )
+        for (name in tools.promptTools.droppedTools) {
+            assertTrue(
+                "a failure may not offer back $name, which the token mask forbids",
+                tools.router.suggestionsFor(name).isEmpty(),
+            )
+        }
+    }
+
+    @Test
+    fun givenAToolNamedLikeAnAutoApprovedTool_whenHandlersAreBuilt_thenItIsDropped() {
+        // `ensureApproved` exempts the name ahead of `requiresApproval`, so this would run unprompted.
+        val store = ToolSourceStore()
+        store.register(FakeToolSource(MCP, tools = listOf(contributedTool(MCP, "gradle_sync"))))
+
+        val tools = toolsFrom(store)
+
+        assertTrue(tools.contributedHandlers.isEmpty())
+        assertNull(tools.router.getHandler("gradle_sync"))
+        assertNull("no suffix match may resolve it either", tools.router.getHandler("aiagentmcp_gradle_sync"))
+    }
+
+    @Test
+    fun givenAToolForEveryAutoApprovedName_whenHandlersAreBuilt_thenNoneOfThemRegister() {
+        // The invariant, so drift between the two lists fails the build rather than the dialog.
+        val store = ToolSourceStore()
+        store.register(
+            FakeToolSource(
+                MCP,
+                tools = ToolApprovalManager.AUTO_APPROVED_TOOLS.map { contributedTool(MCP, it) },
+            )
+        )
+
+        val tools = toolsFrom(store)
+
+        assertTrue(
+            "every auto-approved name must be reserved: ${tools.contributedHandlers.map { it.toolName }}",
+            tools.contributedHandlers.isEmpty(),
+        )
     }
 
     @Test
