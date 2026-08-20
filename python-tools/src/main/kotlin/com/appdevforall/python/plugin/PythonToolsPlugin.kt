@@ -1,6 +1,9 @@
 package com.appdevforall.python.plugin
 
 import android.util.Log
+import android.view.View
+import android.view.ViewGroup
+import android.widget.ImageButton
 import android.widget.Toast
 import com.itsaky.androidide.plugins.IPlugin
 import com.itsaky.androidide.plugins.PluginContext
@@ -8,12 +11,15 @@ import com.itsaky.androidide.plugins.extensions.BuildActionCategory
 import com.itsaky.androidide.plugins.extensions.BuildActionExtension
 import com.itsaky.androidide.plugins.extensions.CommandResult
 import com.itsaky.androidide.plugins.extensions.CommandSpec
+import com.itsaky.androidide.plugins.extensions.DocumentationExtension
 import com.itsaky.androidide.plugins.extensions.PluginBuildAction
+import com.itsaky.androidide.plugins.extensions.PluginTooltipEntry
 import com.itsaky.androidide.plugins.extensions.ToolbarActionIds
 import com.itsaky.androidide.plugins.services.IdeCommandService
 import com.itsaky.androidide.plugins.services.IdeEditorService
 import com.itsaky.androidide.plugins.services.IdeProjectService
 import com.itsaky.androidide.plugins.services.IdeTemplateService
+import com.itsaky.androidide.plugins.services.IdeTooltipService
 import com.itsaky.androidide.plugins.services.IdeUIService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -22,6 +28,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import java.io.File
+import java.lang.ref.WeakReference
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Python Tools plugin.
@@ -36,7 +44,7 @@ import java.io.File
  * plugin must not steal the toolbar from Java/Kotlin/Android projects, and it must be usable on a
  * fresh device without Python pre-installed.
  */
-class PythonToolsPlugin : IPlugin, BuildActionExtension {
+class PythonToolsPlugin : IPlugin, BuildActionExtension, DocumentationExtension {
 
     private var pluginContext: PluginContext? = null
     private var templateService: IdeTemplateService? = null
@@ -44,9 +52,12 @@ class PythonToolsPlugin : IPlugin, BuildActionExtension {
     private var editorService: IdeEditorService? = null
     private var commandService: IdeCommandService? = null
     private var uiService: IdeUIService? = null
+    private var tooltipService: IdeTooltipService? = null
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var installJob: Job? = null
+    private var toolbarContainer: WeakReference<ViewGroup>? = null
+    private val tooltipBindingScheduled = AtomicBoolean(false)
 
     override fun initialize(context: PluginContext): Boolean {
         pluginContext = context
@@ -55,6 +66,7 @@ class PythonToolsPlugin : IPlugin, BuildActionExtension {
         editorService = context.services.get(IdeEditorService::class.java)
         commandService = context.services.get(IdeCommandService::class.java)
         uiService = context.services.get(IdeUIService::class.java)
+        tooltipService = context.services.get(IdeTooltipService::class.java)
         Log.i(TAG, "Python Tools initialized")
         return true
     }
@@ -85,20 +97,25 @@ class PythonToolsPlugin : IPlugin, BuildActionExtension {
         editorService = null
         commandService = null
         uiService = null
+        tooltipService = null
     }
 
     // region Build toolbar (Python domain only)
 
-    override fun toolbarActionsToHide(): Set<String> =
-        if (isPythonProjectOpen()) ToolbarActionIds.BUILD_HIDEABLE else emptySet()
+    override fun toolbarActionsToHide(): Set<String> {
+        if (!isPythonProjectOpen()) return emptySet()
+        scheduleTooltipBinding()
+        return ToolbarActionIds.BUILD_HIDEABLE
+    }
 
     override fun getBuildActions(): List<PluginBuildAction> {
         if (!isPythonProjectOpen()) return emptyList()
+        scheduleTooltipBinding()
 
         val actions = mutableListOf(
             PluginBuildAction(
-                id = "python.run.app",
-                name = "Run app",
+                id = ACTION_RUN_APP,
+                name = ACTION_LABELS.getValue(ACTION_RUN_APP),
                 description = "Run the Python app (app.py, main.py, manage.py, __main__.py, or wsgi.py)",
                 icon = R.drawable.ic_run_server,
                 category = BuildActionCategory.BUILD,
@@ -119,8 +136,8 @@ class PythonToolsPlugin : IPlugin, BuildActionExtension {
         if (current != null && current.name.endsWith(".py")) {
             actions.add(
                 PluginBuildAction(
-                    id = "python.run.currentFile",
-                    name = "Run current file",
+                    id = ACTION_RUN_CURRENT_FILE,
+                    name = ACTION_LABELS.getValue(ACTION_RUN_CURRENT_FILE),
                     description = "Run ${current.name}",
                     icon = R.drawable.ic_run_python,
                     category = BuildActionCategory.BUILD,
@@ -132,8 +149,8 @@ class PythonToolsPlugin : IPlugin, BuildActionExtension {
 
         actions.add(
             PluginBuildAction(
-                id = "python.sync.deps",
-                name = "Install requirements",
+                id = ACTION_SYNC_DEPS,
+                name = ACTION_LABELS.getValue(ACTION_SYNC_DEPS),
                 description = "Install dependencies from requirements.txt",
                 icon = R.drawable.ic_sync_deps,
                 category = BuildActionCategory.BUILD,
@@ -143,8 +160,8 @@ class PythonToolsPlugin : IPlugin, BuildActionExtension {
         )
         actions.add(
             PluginBuildAction(
-                id = "python.test",
-                name = "Run tests",
+                id = ACTION_TEST,
+                name = ACTION_LABELS.getValue(ACTION_TEST),
                 description = "Run the test suite with pytest",
                 icon = R.drawable.ic_run_tests,
                 category = BuildActionCategory.TEST,
@@ -179,16 +196,10 @@ class PythonToolsPlugin : IPlugin, BuildActionExtension {
         }
     }
 
-    private fun actionLabel(actionId: String): String = when (actionId) {
-        "python.run.app" -> "Run app"
-        "python.run.currentFile" -> "Run current file"
-        "python.sync.deps" -> "Install requirements"
-        "python.test" -> "Run tests"
-        else -> actionId
-    }
+    private fun actionLabel(actionId: String): String = ACTION_LABELS[actionId] ?: actionId
 
     private fun isRunAction(actionId: String): Boolean =
-        actionId == "python.run.app" || actionId == "python.run.currentFile"
+        actionId == ACTION_RUN_APP || actionId == ACTION_RUN_CURRENT_FILE
 
     private fun isMissingDependencyFailure(result: CommandResult.Failure): Boolean {
         val output = result.stderr + "\n" + result.stdout
@@ -290,6 +301,58 @@ class PythonToolsPlugin : IPlugin, BuildActionExtension {
 
     // endregion
 
+    override fun getTooltipCategory(): String = PythonToolsDocumentation.CATEGORY
+
+    override fun getTooltipEntries(): List<PluginTooltipEntry> = PythonToolsDocumentation.entries()
+
+    override fun getTier3DocsAssetPath(): String = PythonToolsDocumentation.DOCS_ASSET_PATH
+
+    private fun scheduleTooltipBinding() {
+        if (tooltipService == null) return
+        val activity = uiService?.takeIf { it.isUIAvailable() }?.getCurrentActivity() ?: return
+        if (!tooltipBindingScheduled.compareAndSet(false, true)) return
+        activity.runOnUiThread {
+            val decor = activity.window?.decorView
+            if (decor == null) {
+                tooltipBindingScheduled.set(false)
+                return@runOnUiThread
+            }
+            decor.post {
+                tooltipBindingScheduled.set(false)
+                bindActionTooltips(decor)
+            }
+        }
+    }
+
+    private fun bindActionTooltips(decor: View) {
+        val tooltips = tooltipService ?: return
+        val container = toolbarContainer?.get()
+        if (container != null && container.isAttachedToWindow && bindTooltipsIn(container, tooltips)) return
+        (decor as? ViewGroup)?.let { bindTooltipsIn(it, tooltips) }
+    }
+
+    private fun bindTooltipsIn(group: ViewGroup, tooltips: IdeTooltipService): Boolean {
+        var bound = false
+        for (index in 0 until group.childCount) {
+            when (val child = group.getChildAt(index)) {
+                is ImageButton -> if (bindTooltip(child, tooltips)) bound = true
+                is ViewGroup -> if (bindTooltipsIn(child, tooltips)) bound = true
+            }
+        }
+        return bound
+    }
+
+    private fun bindTooltip(button: ImageButton, tooltips: IdeTooltipService): Boolean {
+        val actionId = TOOLTIP_TARGETS[button.contentDescription?.toString()] ?: return false
+        val tag = PythonToolsDocumentation.tagFor(actionId)
+        button.setOnLongClickListener { view ->
+            tooltips.showTooltip(view, PythonToolsDocumentation.CATEGORY, tag)
+            true
+        }
+        (button.parent as? ViewGroup)?.let { toolbarContainer = WeakReference(it) }
+        return true
+    }
+
     // region Python interpreter bootstrap
 
     private suspend fun ensurePython() {
@@ -344,6 +407,23 @@ class PythonToolsPlugin : IPlugin, BuildActionExtension {
 
     companion object {
         private const val TAG = "PythonToolsPlugin"
+
+        internal const val PLUGIN_ID = "com.appdevforall.python.plugin"
+        internal const val ACTION_RUN_APP = "python.run.app"
+        internal const val ACTION_RUN_CURRENT_FILE = "python.run.currentFile"
+        internal const val ACTION_SYNC_DEPS = "python.sync.deps"
+        internal const val ACTION_TEST = "python.test"
+
+        internal val ACTION_LABELS: Map<String, String> = mapOf(
+            ACTION_RUN_APP to "Run app",
+            ACTION_RUN_CURRENT_FILE to "Run current file",
+            ACTION_SYNC_DEPS to "Install requirements",
+            ACTION_TEST to "Run tests",
+        )
+
+        private val TOOLTIP_TARGETS: Map<String, String> =
+            ACTION_LABELS.entries.flatMap { (id, label) -> listOf(label to id, "Cancel " + label to id) }.toMap()
+
         private const val FLASK_CGT = "PythonFlaskApp.cgt"
         private const val STARTER_CGT = "PythonStarter.cgt"
 

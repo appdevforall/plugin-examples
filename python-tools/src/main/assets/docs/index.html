@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Python Tools - Commands</title>
+<link rel="stylesheet" href="css/walkthrough.css">
+</head>
+<body>
+
+<h1>Python Tools</h1>
+<p class="lede">Run Python and Flask projects on the device, straight from the editor toolbar.</p>
+
+<p>Python Tools adds two project templates and four toolbar commands. The commands appear only
+while a Python project is open; in a Java, Kotlin, or Android project the toolbar is left alone.
+Because Gradle plays no part in a Python project, the Gradle actions (Quick Run, Sync, Debug, Run
+Tasks, Launch App) are hidden while you work in one.</p>
+
+<div class="callout">
+<p>A project counts as Python when its root holds a Python entry point (<code>app.py</code>,
+<code>main.py</code>, <code>manage.py</code>, <code>__main__.py</code>, or <code>wsgi.py</code>), a
+<code>requirements.txt</code>, or any <code>.py</code> file.</p>
+</div>
+
+<h2>Getting Python</h2>
+<p>The first time the plugin activates it checks for a Python interpreter and, when none is found,
+installs one with the bundled Termux package manager (<code>pkg install python</code>). That
+download runs in the background and reports its result as a message; give it a few minutes on a
+fresh device before running anything.</p>
+
+<h2>The commands</h2>
+<table>
+  <tr><th>Command</th><th>What it runs</th><th>Stopped after</th></tr>
+  <tr><td><a href="#run-app">Run app</a></td><td>the project entry point</td><td>30 minutes</td></tr>
+  <tr><td><a href="#run-current-file">Run current file</a></td><td>the open <code>.py</code> file</td><td>30 minutes</td></tr>
+  <tr><td><a href="#install-requirements">Install requirements</a></td><td><code>pip install -r requirements.txt</code></td><td>5 minutes</td></tr>
+  <tr><td><a href="#run-tests">Run tests</a></td><td><code>python -m pytest -q</code></td><td>10 minutes</td></tr>
+</table>
+<p>Every command streams its output into the <b>Build Output</b> panel at the bottom of the editor,
+and the panel opens itself when a command starts. While a command is running its toolbar button
+turns into a Cancel button: tap it to stop the process.</p>
+
+<h3 id="run-app">Run app</h3>
+<p>Looks for an entry point in the project root and runs the first one it finds:</p>
+<ol>
+  <li><code>app.py</code> - a Flask app</li>
+  <li><code>main.py</code> - a plain Python project</li>
+  <li><code>manage.py</code> - started with <code>runserver</code></li>
+  <li><code>__main__.py</code></li>
+  <li><code>wsgi.py</code></li>
+</ol>
+<p>When none of those exist the command says so and stops, rather than guessing.</p>
+<p>Output is unbuffered, so <code>print()</code> lines and a Flask request log appear as they
+happen instead of arriving in a block at the end. A Flask app keeps running until you cancel it;
+open the port it prints (<code>5000</code> by default) in a browser on the device to use the app.</p>
+<p>If the run fails because a module is missing and the project has a <code>requirements.txt</code>,
+the plugin installs the dependencies for you, then asks you to tap Run again.</p>
+
+<h3 id="run-current-file">Run current file</h3>
+<p>Appears only while a <code>.py</code> file is open, and runs exactly that file by its full path.
+Use it for a script that is not the project entry point - a data fixture, a one-off check, a
+scratch file.</p>
+<p>Missing dependencies are installed from <code>requirements.txt</code> the same way as Run app.</p>
+
+<h3 id="install-requirements">Install requirements</h3>
+<p>Runs <code>pip install -r requirements.txt</code> in the project root and streams pip's output
+into Build Output.</p>
+<p>The same install runs on its own when a run fails because a module is missing, so reach for this
+button after you edit <code>requirements.txt</code> yourself. When the file is absent, a failed run
+says so instead of installing anything.</p>
+
+<h3 id="run-tests">Run tests</h3>
+<p>Runs <code>python -m pytest -q</code> in the project root. When pytest is not installed yet it
+is fetched with pip before the tests start, so the first run takes longer than later ones.</p>
+
+<h2>The project templates</h2>
+<p>Both templates appear on the New Project screen beside the built-in ones:</p>
+<ul>
+  <li><b>Python Flask App</b> - routes, HTML templates, static CSS, a config file, and a 404 page.
+  The port is a template parameter and defaults to <code>5000</code>.</li>
+  <li><b>Python Starter</b> - a single <code>main.py</code> entry point, a
+  <code>requirements.txt</code>, and a <code>.gitignore</code>.</li>
+</ul>
+
+<h2>Stopping a runaway process</h2>
+<p>A Python process started by the plugin is tied to the IDE: if the IDE is killed, the child
+process is killed with it, so a forgotten Flask server cannot keep holding a port after the IDE is
+gone. Each command also has its own time limit, listed in the table above.</p>
+
+<h2>Turning it off</h2>
+<p>Disable Python Tools in the Plugin Manager. The Python commands disappear, the Gradle actions
+come back for every project, and the two templates are removed from the New Project screen. Any
+Python packages already installed on the device stay where they are.</p>
+
+</body>
+</html>
