@@ -1,6 +1,6 @@
 # Jetpack Compose Preview
 
-A plugin for [CodeOnTheGo](https://github.com/appdevforall/CodeOnTheGo) that renders Jetpack Compose `@Preview` composables **on-device** — it compiles and runs the previews inside the IDE, without a full app build-and-run.
+A plugin for [Code on the Go](https://github.com/appdevforall/CodeOnTheGo) that renders Jetpack Compose `@Preview` composables **on-device** — it compiles and runs the previews inside the IDE, without a full app build-and-run.
 
 Surfaces as a preview action in the editor toolbar, shown only when a Kotlin file containing `@Preview` is open (on those files it also hides the built-in XML layout-preview action, so there's a single preview entry point). Tapping it opens a **Jetpack Compose Preview** screen that renders every `@Preview` in the file, honoring light/dark, `@PreviewParameter`, and per-preview background and size.
 
