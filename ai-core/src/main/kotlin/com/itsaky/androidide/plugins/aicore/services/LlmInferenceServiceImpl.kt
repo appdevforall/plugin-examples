@@ -2,7 +2,7 @@ package com.itsaky.androidide.plugins.aicore.services
 
 import com.itsaky.androidide.plugins.PluginLogger
 import com.itsaky.androidide.plugins.aicore.backends.AiBackend
-import com.itsaky.androidide.plugins.aicore.plugin.AiCorePlugin
+import com.itsaky.androidide.plugins.aicore.backends.BackendRegistry
 import com.itsaky.androidide.plugins.services.LlmInferenceService
 import com.itsaky.androidide.plugins.services.LlmInferenceService.*
 import java.util.concurrent.CompletableFuture
@@ -31,9 +31,19 @@ class LlmInferenceServiceImpl(private val logger: PluginLogger? = null) : LlmInf
         backends.remove(backendId)
     }
 
-    override fun getAvailableBackends(): List<LlmBackend> {
-        return backends.values.toList()
-    }
+    /**
+     * Every registered backend, in the order the settings selector lists them.
+     *
+     * Sorted here rather than left in this map's hash order, so a caller that lists them or takes
+     * the first one gets the same answer on every launch instead of an arbitrary backend.
+     *
+     * @return the registered backends, sorted by display name, tolerating a backend that throws
+     *   from its own accessor by sorting it under its id
+     */
+    override fun getAvailableBackends(): List<LlmBackend> =
+        backends.entries
+            .sortedBy { (id, backend) -> runCatching { backend.name }.getOrNull() ?: id }
+            .map { (_, backend) -> backend }
 
     override fun getBackend(backendId: String): LlmBackend? {
         return backends[backendId]
@@ -162,22 +172,43 @@ class LlmInferenceServiceImpl(private val logger: PluginLogger? = null) : LlmInf
     }
 
     /**
-     * Resolves the backend id a request should run on. An explicit id is returned unchanged
-     * (so the caller keeps its "not found"/"not available" errors); [AiBackend.AUTO] is
-     * resolved to the user-selected backend, then to any available backend, so callers can
-     * defer backend choice to AI Core instead of hardcoding one.
+     * Resolves the backend id a request should run on. An explicit id is returned unchanged;
+     * [AiBackend.AUTO] resolves to the selected backend the same way the settings screen and the
+     * chat's status line resolve it, so all three name one backend.
+     *
+     * Availability is deliberately not consulted: stepping past an unready backend to another that
+     * happens to answer would send the prompt to a provider the user did not choose, so an unready
+     * selection has to fail here instead.
      *
      * @param requestedId the id from [LlmConfig.backendId]
-     * @return the id to route to; for AUTO with nothing available, the selected backend's id
-     *   so the downstream "not available" error stays meaningful
+     * @return the id to route to, unavailable or not, so the caller's "not found"/"not available"
+     *   error names the backend the user actually selected
      */
     private fun effectiveBackendId(requestedId: String): String {
         if (requestedId != AiBackend.AUTO) return requestedId
-        val preferredId = AiBackend.idFromPreference(readSelectedBackendPreference())
-        return backends[preferredId]?.takeIf { it.isAvailable() }?.getId()
-            ?: backends.values.firstOrNull { it.isAvailable() }?.getId()
-            ?: preferredId
+        val storedId = getPreferredBackendId()
+        // Falling back to the stored id keeps the failure naming the backend the user selected,
+        // rather than the default one, when its plugin is no longer installed.
+        return AiBackend.preferredId(storedId, installedIdsInSelectorOrder())
+            ?: storedId
+            ?: AiBackend.DEFAULT_ID
     }
+
+    /**
+     * Installed ids in the order the settings selector lists them, which is by display name.
+     *
+     * With nothing stored yet, [AiBackend.preferredId] falls back to the first id offered, so the
+     * order decides the answer. Handing it this map's own keys would hand it a hash order, and AUTO
+     * would route to a backend other than the one the selector and the chat's status line name.
+     *
+     * @return every registered id, sorted by display name, tolerating a backend that throws from
+     *   its own accessor by sorting it under its id
+     */
+    private fun installedIdsInSelectorOrder(): List<String> =
+        backends.entries
+            .map { (id, backend) -> id to (runCatching { backend.name }.getOrNull() ?: id) }
+            .sortedBy { (_, displayName) -> displayName }
+            .map { (id, _) -> id }
 
     /**
      * The backend the user selected on the Agent settings screen.
@@ -185,20 +216,13 @@ class LlmInferenceServiceImpl(private val logger: PluginLogger? = null) : LlmInf
      * Published so a backend can find out whether it is the active one without reading this
      * plugin's preferences — see [LlmInferenceService.getPreferredBackendId].
      *
+     * Read through the registry rather than from the preference file directly, so "nothing has been
+     * chosen" means the same here as it does on the settings screen; resolution turns on that
+     * distinction now, and reading the file twice let the two answer differently on a blank value.
+     *
      * @return the selected backend id, or null when nothing has been chosen yet
      */
-    override fun getPreferredBackendId(): String? =
-        readSelectedBackendPreference()?.let(AiBackend::idFromPreference)
-
-    /**
-     * Reads the raw stored selection from this plugin's own preferences.
-     *
-     * @return the stored preference value, or null when unset or before initialization
-     */
-    private fun readSelectedBackendPreference(): String? =
-        AiCorePlugin.getContext()
-            ?.getPluginSharedPreferences(AiBackend.PREFERENCE_FILE)
-            ?.getString(AiBackend.PREFERENCE_KEY, null)
+    override fun getPreferredBackendId(): String? = BackendRegistry.selectedId()
 
     override fun cancelGeneration() {
         currentGeneration?.cancel(true)

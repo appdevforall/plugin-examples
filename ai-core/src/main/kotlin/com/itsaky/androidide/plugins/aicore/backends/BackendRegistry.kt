@@ -22,6 +22,25 @@ data class BackendOption(
 )
 
 /**
+ * What the stored backend selection resolves to against what is installed right now.
+ *
+ * The three cases are three different fixes for the user, so callers that report the selection have
+ * to tell them apart: configure the chosen backend, install the plugin it came from, or install any
+ * backend at all.
+ */
+sealed interface SelectedBackend {
+
+    /** The selected backend, installed and registered. */
+    data class Installed(val option: BackendOption) : SelectedBackend
+
+    /** A selection is stored, but no installed backend answers to it. */
+    data object Missing : SelectedBackend
+
+    /** No backend is installed to select. */
+    data object None : SelectedBackend
+}
+
+/**
  * AI Core's own view of the backends currently installed: the registry the settings selector, the
  * chat's status line and its availability check all read.
  *
@@ -66,6 +85,22 @@ object BackendRegistry {
     fun preferred(options: List<BackendOption>, storedId: String? = selectedId()): BackendOption? {
         val id = AiBackend.preferredId(storedId, options.map { it.id }) ?: return null
         return options.firstOrNull { it.id == id }
+    }
+
+    /**
+     * The selection resolved against what is installed, as the one question a caller has to ask.
+     *
+     * Resolved from a single snapshot: asking [preferred] and [selectedId] as two separate
+     * questions reads the registry and the preference twice, and a backend registering in between
+     * let the two answers disagree — reporting "not installed" about a backend that just appeared.
+     *
+     * @param storedId the persisted selection; defaults to the stored one
+     * @return which of the three [SelectedBackend] cases holds now
+     */
+    @JvmOverloads
+    fun selected(storedId: String? = selectedId()): SelectedBackend {
+        preferred(options(), storedId)?.let { return SelectedBackend.Installed(it) }
+        return if (storedId != null) SelectedBackend.Missing else SelectedBackend.None
     }
 
     /**
