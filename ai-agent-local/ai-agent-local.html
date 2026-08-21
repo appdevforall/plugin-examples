@@ -96,9 +96,10 @@
       Core mounts: model browser, load-from-saved, SHA-256 verification and the
       prompt-format toggle, plus the low-memory warning dialog.</td></tr>
   </table>
-  <p>The native library is committed prebuilt (four ABIs: arm64-v8a,
-  armeabi-v7a, x86, x86_64), so a normal build needs no NDK, CMake, or the
-  llama.cpp submodule.</p>
+  <p>The native library is committed prebuilt, so a normal build needs no NDK,
+  CMake, or the llama.cpp submodule. Packaging is limited to <code>arm64-v8a</code>:
+  the IDE extracts a single ABI and ships no x86 build, so this plugin requires a
+  64-bit ARM device.</p>
 
   <h2>Usage</h2>
   <ol>

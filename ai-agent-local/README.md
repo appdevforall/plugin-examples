@@ -6,7 +6,8 @@ what `ai-core`'s Agent chat, `code-suggestions-plugin`, `speech-to-text-plugin` 
 `vector-search-plugin` actually talk to.
 
 Runs `.gguf` models through a bundled, prebuilt **llama.cpp** AAR. Declares no
-INTERNET permission — prompts and code never leave the device.
+INTERNET permission — prompts and code never leave the device. Requires a 64-bit
+ARM device (`arm64-v8a`).
 
 ## Building
 

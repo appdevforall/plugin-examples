@@ -45,8 +45,14 @@ ndk.dir=/Users/your-username/Library/Android/sdk/ndk/27.0.12077973
 
 That's the only setup a normal build needs. The native llama.cpp library is
 already committed as `ai-agent-local/libs/v8/llama-v8-release.aar` (the JNI
-wrapper plus `.so` files for arm64-v8a, armeabi-v7a, x86 and x86_64), with its
-tiny interface jar at `ai-agent-local/libs/llama-api.jar`.
+wrapper plus the `.so` files), with its tiny interface jar at
+`ai-agent-local/libs/llama-api.jar`.
+
+The plugin packages **arm64-v8a only**. The IDE extracts a single ABI
+(`PluginLoader.extractNativeLibs` reads `lib/${Build.SUPPORTED_ABIS[0]}/`) and
+CoGo itself ships no x86 build, so any other ABI would be download weight no
+device can execute. `assemblePlugin` checks the packaged `.cgp` as its last step
+and fails the build if it carries anything else.
 
 ---
 
@@ -141,8 +147,8 @@ normal build.
 
 ### Native library not found (`UnsatisfiedLinkError`)
 
-The prebuilt AAR bundles arm64-v8a, armeabi-v7a, x86 and x86_64. If you rebuilt
-it with a restricted ABI set, confirm your device's ABI is included:
+The plugin packages arm64-v8a only, so it needs a 64-bit ARM device. Confirm
+what the AAR carries:
 
 ```bash
 unzip -l ai-agent-local/libs/v8/llama-v8-release.aar | grep 'jni/'
@@ -366,13 +372,12 @@ jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 \
 ### Size Optimization
 
 Current release sizes:
-- **ai-agent-local**: ~5 MB (includes llama.cpp native libraries)
+- **ai-agent-local**: ~15 MB (includes the arm64-v8a llama.cpp native libraries)
 - **ai-assistant-plugin**: ~2 MB (UI and business logic)
 
-To reduce size:
-1. Build only arm64-v8a ABI (skip v7/x86)
-2. Enable R8 full mode in `gradle.properties`
-3. Strip debug symbols from native libraries
+To reduce size further:
+1. Enable R8 full mode in `gradle.properties`
+2. Strip debug symbols from native libraries
 
 ---
 
@@ -380,7 +385,8 @@ To reduce size:
 
 When contributing changes to the AI plugins:
 
-1. Test on **physical ARM64 device** (emulators may not support native code)
+1. Test on a **physical ARM64 device** — the plugin packages arm64-v8a only, and
+   an x86_64 emulator cannot run CoGo at all (there is no x86 build of the IDE)
 2. Verify **ai-core**, **ai-agent-local**, **ai-agent-gemini** and **ai-assistant** work together
 3. Ensure **llama.cpp submodule** updates are documented
 4. Run ProGuard/R8 release build to catch reflection issues
