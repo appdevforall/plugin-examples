@@ -165,7 +165,12 @@ class LLamaAndroid : ILlamaController {
     private external fun log_to_android()
     private external fun load_model(filename: String): Long
     private external fun free_model(model: Long)
-    private external fun new_context(model: Long, nCtx: Int): Long
+    private external fun new_context(
+        model: Long,
+        nCtx: Int,
+        quantizeKv: Boolean,
+        fallbackNCtx: Int,
+    ): Long
     private external fun free_context(context: Long)
     private external fun backend_init(numa: Boolean)
     private external fun backend_free()
@@ -241,21 +246,31 @@ class LLamaAndroid : ILlamaController {
     override suspend fun load(pathToModel: String) = load(pathToModel, DEFAULT_N_CTX)
 
     /**
-     * Loads a model and gives its context [nCtx] tokens. The size is an argument rather than
-     * process-global state so that it cannot be overwritten between being chosen and being used:
-     * the context is created on the run loop, well after the caller picked the number.
+     * Loads a model and gives its context [nCtx] tokens, stored as q8_0 when [quantizeKv] asks for
+     * it. Every part of the shape is an argument rather than process-global state so that none of it
+     * can be overwritten between being chosen and being used, and so that the size and the type
+     * cannot disagree: the context is created on the run loop, well after the caller picked them.
      *
      * @param pathToModel filesystem path to the `.gguf` model
-     * @param nCtx context size in tokens; anything non-positive means [DEFAULT_N_CTX]
+     * @param nCtx context size in tokens, sized for [quantizeKv]; non-positive means [DEFAULT_N_CTX]
+     * @param quantizeKv true to store the KV cache as q8_0, roughly half the bytes of f16; the
+     *   native side may still refuse it, in which case the load falls back to f16 at [fallbackNCtx]
+     * @param fallbackNCtx context size for that f16 fallback, which the caller sizes against f16's
+     *   own per-token cost; defaults to [nCtx], correct when [quantizeKv] is false
      */
-    suspend fun load(pathToModel: String, nCtx: Int) {
+    suspend fun load(
+        pathToModel: String,
+        nCtx: Int,
+        quantizeKv: Boolean = false,
+        fallbackNCtx: Int = nCtx,
+    ) {
         withContext(runLoop()) {
             when (threadLocalState.get()) {
                 is State.Idle -> {
                     val model = load_model(pathToModel)
                     if (model == 0L) throw IllegalStateException("load_model() failed")
 
-                    val context = new_context(model, nCtx)
+                    val context = new_context(model, nCtx, quantizeKv, fallbackNCtx)
                     if (context == 0L) throw IllegalStateException("new_context() failed")
 
                     val batch = new_batch(2048, 0, 1)

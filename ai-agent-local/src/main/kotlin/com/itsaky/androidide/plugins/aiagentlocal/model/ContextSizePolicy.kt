@@ -1,9 +1,9 @@
 package com.itsaky.androidide.plugins.aiagentlocal.model
 
 /**
- * Picks the context size (`n_ctx`) one model load gets, from what the model advertises and what the
- * device can spare — the KV cache scales linearly with it and is the largest knob we control. Pure
- * and Android-free, so every boundary is unit-testable off-device. See ADFA-5187.
+ * Picks what one model load gets: the context size (`n_ctx`) and the type the KV cache is stored as,
+ * from what the model advertises and what the device can spare. Pure and Android-free, so every
+ * boundary is unit-testable off-device. See ADFA-5187 and ADFA-5188.
  */
 object ContextSizePolicy {
 
@@ -35,19 +35,36 @@ object ContextSizePolicy {
     private const val KV_BUDGET_DIVISOR = 2L
 
     /**
+     * The cache type a load should ask for. Quantized wherever the model allows it: it halves the
+     * bytes one cached token costs, which is what lets [choose] return a longer context on the same
+     * device. Falls back to [KvCacheType.F16] rather than risking a refused context. See ADFA-5188.
+     *
+     * @param header the model's GGUF metadata, or null when it could not be read
+     * @return the type to configure natively, and to size the context against
+     */
+    fun chooseKvCache(header: GgufHeader?): KvCacheType =
+        if (KvCacheType.Q8_0.supports(header)) KvCacheType.Q8_0 else KvCacheType.F16
+
+    /**
      * @param header the model's GGUF metadata, or null when it could not be read
      * @param availableBytes free RAM right now, or null when it could not be read
+     * @param kvType the cache type this load will ask for, from [chooseKvCache]; the budget buys
+     *   about twice the context under [KvCacheType.Q8_0], so the two have to be decided together
      * @return the context to configure, always between [DEFAULT_CONTEXT_TOKENS] and
      *   [MAX_CONTEXT_TOKENS] inclusive
      */
-    fun choose(header: GgufHeader?, availableBytes: Long?): Int {
+    fun choose(
+        header: GgufHeader?,
+        availableBytes: Long?,
+        kvType: KvCacheType = KvCacheType.F16,
+    ): Int {
         // Each null is a distinct "we don't know"; all of them mean the same fallback.
         if (header == null || availableBytes == null) return DEFAULT_CONTEXT_TOKENS
         val modelTokens = header.contextLength?.takeIf { it > 0L } ?: return DEFAULT_CONTEXT_TOKENS
         // Nothing to weigh below the floor, and no reason to price a cache we would not shrink.
         if (modelTokens <= DEFAULT_CONTEXT_TOKENS) return DEFAULT_CONTEXT_TOKENS
 
-        val perToken = ModelMemoryEstimator.kvBytesPerToken(header)?.takeIf { it > 0L }
+        val perToken = ModelMemoryEstimator.kvBytesPerToken(header, kvType)?.takeIf { it > 0L }
             ?: return DEFAULT_CONTEXT_TOKENS
 
         // Compute buffers come off the top; goes negative on a short device, which the floor absorbs.

@@ -51,6 +51,14 @@ class ModelContextResolverTest {
         assertEquals(DEFAULT_CONTEXT_TOKENS, resolved.contextTokens)
     }
 
+    @Test
+    fun givenAnUnreadableHeader_whenResolving_thenTheFallbackSizeIsTheDefaultToo() {
+        // No header means f16, so the native fallback has nothing shorter to drop to.
+        val resolved = ModelContextResolver.resolve(Long.MAX_VALUE) { null }
+        assertEquals(KvCacheType.F16, resolved.kvType)
+        assertEquals(resolved.contextTokens, resolved.fallbackContextTokens)
+    }
+
     /** Opens fine and then fails, which is the case a null-check on the opener would not cover. */
     private class ThrowingStream : InputStream() {
         override fun read(): Int = throw IOException("device is gone")
