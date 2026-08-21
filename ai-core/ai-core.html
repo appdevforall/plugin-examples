@@ -52,6 +52,11 @@
   Gemini</b> for Google's API — which register with AI Core when they activate.
   Install AI Core <i>and at least one backend</i>; without a backend, requests
   fail with "Backend not found". Install order does not matter.</p>
+  <p>Other plugins can also <b>give the agent new tools</b>. AI Core publishes a
+  tool registry that any plugin may register with, so its actions appear in the
+  agent's tool list beside the built-in ones — <b>AI Agent MCP</b> uses it to
+  offer the tools of remote Model Context Protocol servers. Contributed tools are
+  optional: with no provider installed, the agent has exactly its own tools.</p>
 
   <h2>Core functionality</h2>
   <ul>
@@ -71,6 +76,15 @@
     <li><b>Capability negotiation</b> — uses a backend's tool-calling, multi-turn
       and cancellation support where it declares it, and degrades cleanly where it
       does not.</li>
+    <li><b>Plugin-contributed tools</b> — other plugins register tool sources at
+      runtime and their tools join the agent's tool list. The built-in tools are
+      reserved first, so a contributed tool can never take over a name like
+      <code>edit_file</code>; one that arrives with a name already in use is
+      offered under a provider-prefixed name instead of being dropped.</li>
+    <li><b>Approval with provenance</b> — the approval dialog names the plugin a
+      tool came from, and a contributed tool can never be blanket-approved for the
+      session: it asks every time, because it runs outside the path containment
+      that covers the agent's own tools.</li>
     <li>Text completion, chat with history, and streaming responses, plus a
       single cancellation path so <b>Stop</b> reaches whichever backend is
       running.</li>
@@ -98,6 +112,24 @@
     <tr><td><code>ConfigurableBackend</code></td><td>Implemented by a backend that
       draws its own settings screen, so the credentials or files it needs are
       collected without AI Core knowing the provider's API.</td></tr>
+    <tr><td><code>ToolSourceRegistryImpl</code></td><td>The tool registry exposed
+      via <code>SharedServices</code>, published on activation and withdrawn on
+      deactivation. The only component that names the host contract: everything
+      past it works in AI Core's own types, and only plain JDK values cross the
+      boundary, because each plugin has its own class loader.</td></tr>
+    <tr><td><code>ToolSourceStore</code></td><td>The registered sources, keyed by
+      provider. Every change rebuilds the agent's tool set — router, executor and
+      the local backend's grammar together — so a newly contributed tool is
+      immediately callable rather than named in a prompt the grammar forbids.</td></tr>
+    <tr><td><code>ContributedToolHandler</code></td><td>Wraps one contributed tool
+      as an ordinary agent tool. Nothing a provider does escapes it: a source that
+      throws, hangs or completes with nothing costs that one tool call, never the
+      run, and stopping the run cancels through to the provider.</td></tr>
+    <tr><td><code>PromptToolBudget</code></td><td>Caps how much of the contributed
+      tool list reaches the system prompt (12 tools, 200 characters of description
+      each, flattened to one line). One remote server can advertise ninety tools
+      and exhaust a phone-sized context window on its own; anything dropped is
+      logged rather than dropped silently.</td></tr>
   </table>
   <p>AI Core declares <b>filesystem.read</b>, <b>filesystem.write</b>,
   <b>system.commands</b> and <b>project.structure</b> — the agent reads and edits
@@ -105,7 +137,10 @@
   build service, and inspects the project's module structure. It declares
   <b>no network access and loads no native code</b>: those belong to the backend
   plugin that serves a given request, so a device using only the local backend
-  never grants a network-capable AI plugin.</p>
+  never grants a network-capable AI plugin. The same holds for tools another
+  plugin contributes — they run inside the contributing plugin, under the
+  permissions <i>it</i> declared, which is why the approval dialog names the
+  plugin a tool came from.</p>
 
   <h2>Usage</h2>
   <ol>
@@ -117,6 +152,10 @@
       enter a Gemini API key. The same screen is reachable from the Agent tab.</li>
     <li>Open a project and switch to the <b>Agent</b> tab to start chatting. Any
       action that changes a file asks for your approval first.</li>
+    <li><i>Optional:</i> install a tool provider such as <b>AI Agent MCP</b> to
+      give the agent tools beyond its own. Its tools appear in the agent's tool
+      list once configured, and each asks for approval naming the plugin it came
+      from.</li>
   </ol>
   <div class="note">
     Installing both backends is supported and useful: pick the local one for
@@ -134,8 +173,13 @@
     <li><b>Least privilege</b> — network access, filesystem access and native
       code are declared by the specific backend that needs them, so what a user
       grants matches what they installed.</li>
-    <li><b>Extensible</b> — adding a provider means writing a new backend plugin;
-      neither AI Core nor any consumer plugin changes.</li>
+    <li><b>Extensible in two directions</b> — a new model provider is a new
+      backend plugin, and a new agent capability is a new tool source. Neither
+      requires a change to AI Core or to any consumer plugin.</li>
+    <li><b>Informed consent for third-party tools</b> — a contributed tool names
+      its plugin in the approval dialog and asks every single time, so approving
+      something that leaves the device stays a deliberate decision rather than a
+      side effect of one earlier tap.</li>
   </ul>
 </body>
 </html>

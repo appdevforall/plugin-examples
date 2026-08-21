@@ -143,6 +143,44 @@ class ToolApprovalManagerTest {
     }
 
     @Test
+    fun givenAContributedTool_whenApprovedForTheSession_thenTheUserIsStillAskedAgain() {
+        // A contributed tool runs outside PathGuard and cannot be enumerated in a name list, so
+        // "Always Allow" has to be refused by the handler's own declaration.
+        val manager = ToolApprovalManager()
+        val contributed = object : ToolHandler {
+            override val toolName = "aiagentmcp_create_issue"
+            override val description = "creates an issue on a remote server"
+            override val requiresApproval = true
+            override val allowsSessionApproval = false
+            override suspend fun execute(args: Map<String, Any?>) = ToolResult.success("ok")
+        }
+
+        val first = runBlocking {
+            val pending = async(Dispatchers.Default) {
+                manager.ensureApproved(contributed.toolName, contributed, emptyMap())
+            }
+            withTimeout(5_000) {
+                while (!manager.hasPendingApproval()) delay(5)
+                manager.submitApproval(ApprovalResult.APPROVED_FOR_SESSION)
+                pending.await()
+            }
+        }
+        assertTrue(first.approved)
+
+        val second = runBlocking {
+            val pending = async(Dispatchers.Default) {
+                manager.ensureApproved(contributed.toolName, contributed, emptyMap())
+            }
+            withTimeout(5_000) {
+                while (!manager.hasPendingApproval()) delay(5)
+                manager.submitApproval(ApprovalResult.DENIED)
+                pending.await()
+            }
+        }
+        assertFalse("a contributed tool must be prompt-every-time", second.approved)
+    }
+
+    @Test
     fun givenADenial_whenApprovalIsRequested_thenItReportsTheDenial() {
         val manager = ToolApprovalManager()
 

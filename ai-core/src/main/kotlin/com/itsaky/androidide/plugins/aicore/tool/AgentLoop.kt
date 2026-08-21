@@ -118,9 +118,11 @@ class AgentLoop(
             }
 
             // Terminal tool alone ends the loop; if co-emitted with real tools, run those first.
-            val realCalls = terminalTool?.let { tt -> calls.filterNot { it.name == tt } } ?: calls
+            val realCalls = terminalTool?.let { tt ->
+                calls.filterNot { isTerminalToolName(it.name, tt) }
+            } ?: calls
             terminalTool?.let { tt ->
-                val terminal = calls.firstOrNull { it.name == tt }
+                val terminal = calls.firstOrNull { isTerminalToolName(it.name, tt) }
                 if (terminal != null && realCalls.isEmpty()) {
                     events.onFinalAnswer(turn, respondMessageOf(terminal.args).orEmpty())
                     return Result(turn, StopReason.COMPLETED)

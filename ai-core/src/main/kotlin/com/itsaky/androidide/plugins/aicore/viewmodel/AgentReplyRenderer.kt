@@ -2,6 +2,7 @@ package com.itsaky.androidide.plugins.aicore.viewmodel
 
 import com.itsaky.androidide.plugins.aicore.tool.ToolCall
 import com.itsaky.androidide.plugins.aicore.tool.ToolCallExtractor
+import com.itsaky.androidide.plugins.aicore.tool.isTerminalToolName
 import com.itsaky.androidide.plugins.aicore.tool.respondMessageOf
 
 /**
@@ -31,7 +32,7 @@ object AgentReplyRenderer {
         noResponseText: String,
         renderToolCall: (ToolCall) -> String,
     ): String {
-        val respondCall = toolCalls.firstOrNull { it.name == terminalTool }
+        val respondCall = toolCalls.firstOrNull { isTerminalToolName(it.name, terminalTool) }
         return when {
             respondCall != null && lastToolFailed -> actionFailedText
             // The answer wherever the model put it, then the prose beside an empty envelope.

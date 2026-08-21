@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Matches the Agent screen's chrome, so the two read as one plugin rather than two. -->
+<resources>
+    <dimen name="mcp_toolbar_height">48dp</dimen>
+    <dimen name="mcp_toolbar_icon_size">40dp</dimen>
+    <dimen name="mcp_toolbar_icon_padding">8dp</dimen>
+    <dimen name="mcp_title_text_size">18sp</dimen>
+
+    <!-- The dialog's own inset. Matches what the Material dialog puts below its button bar, so
+         the gap above the first field equals the gap under the last one. -->
+    <dimen name="mcp_dialog_padding_horizontal">24dp</dimen>
+    <dimen name="mcp_dialog_padding_vertical">16dp</dimen>
+</resources>

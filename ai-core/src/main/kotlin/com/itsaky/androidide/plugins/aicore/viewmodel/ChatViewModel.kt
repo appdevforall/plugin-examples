@@ -17,14 +17,15 @@ import com.itsaky.androidide.plugins.aicore.models.MessageStatus
 import com.itsaky.androidide.plugins.aicore.models.Sender
 import com.itsaky.androidide.plugins.aicore.models.ToolResult
 import com.itsaky.androidide.plugins.aicore.tool.AgentLoop
+import com.itsaky.androidide.plugins.aicore.tool.AgentTools
 import com.itsaky.androidide.plugins.aicore.tool.ApprovalRequest
 import com.itsaky.androidide.plugins.aicore.tool.ApprovalResult
-import com.itsaky.androidide.plugins.aicore.tool.Executor
 import com.itsaky.androidide.plugins.aicore.tool.ToolApprovalManager
 import com.itsaky.androidide.plugins.aicore.tool.ToolCall
 import com.itsaky.androidide.plugins.aicore.tool.ToolCallExtractor
 import com.itsaky.androidide.plugins.aicore.tool.ToolExecutionTracker
-import com.itsaky.androidide.plugins.aicore.tool.ToolRouter
+import com.itsaky.androidide.plugins.aicore.tool.ToolHandler
+import com.itsaky.androidide.plugins.aicore.tool.sources.ToolSourceStore
 import com.itsaky.androidide.plugins.aicore.tool.handlers.AddDependencyHandler
 import com.itsaky.androidide.plugins.aicore.tool.handlers.CreateFileHandler
 import com.itsaky.androidide.plugins.aicore.tool.handlers.EditFileHandler
@@ -83,8 +84,8 @@ class ChatViewModel(
 
         /**
          * The call envelope this side parses back (see [ToolCallExtractor]) and constrains local
-         * sampling to (see [buildLocalToolCallGrammar]). Handed to every backend composing a system
-         * prompt, so all three can never drift apart.
+         * sampling to (see [com.itsaky.androidide.plugins.aicore.tool.ToolCallGrammar]). Handed to
+         * every backend composing a system prompt, so all three can never drift apart.
          */
         const val TOOL_CALL_SYNTAX =
             """<tool_call>{"tool":"TOOL_NAME","args":{"arg":"value"}}</tool_call>"""
@@ -104,29 +105,6 @@ class ChatViewModel(
          */
         private const val FALLBACK_EXAMPLE_PATH = "app/src/main/java/com/example/MainActivity.kt"
     }
-
-    /**
-     * Builds the local-backend GBNF forcing one well-formed `<tool_call>`. The `tool`
-     * alternatives come from the registered handlers (+ [RESPOND_TOOL]) so the token
-     * mask can't drift; control chars are excluded so `org.json` accepts the strings.
-     * @return the GBNF grammar string.
-     */
-    private fun buildLocalToolCallGrammar(): String {
-        val toolNames = (toolRouter.getAllHandlers().map { it.toolName } + RESPOND_TOOL).distinct()
-        val toolAlternatives = toolNames.joinToString(" | ") { "\"~$it~\"" }
-        return """
-            root ::= "<tool_call>{~tool~:" tool ",~args~:" args "}</tool_call>"
-            tool ::= $toolAlternatives
-            args ::= "{}" | "{" pair ("," pair)* "}"
-            pair ::= "~" key "~:~" val "~"
-            key  ::= [a-z_]+
-            val  ::= char*
-            char ::= [^~\\\x00-\x1F] | "\\" [~\\/bfnrt]
-        """.trimIndent().replace("~", "\\\"")
-    }
-
-    /** Local-backend GBNF, built once from the registered handlers. */
-    private val localToolCallGrammar: String by lazy { buildLocalToolCallGrammar() }
 
     private fun getLlmService(): LlmInferenceService? {
         return try {
@@ -204,10 +182,22 @@ class ChatViewModel(
 
     // Tool execution infrastructure
     private val approvalManager = ToolApprovalManager()
-    private val toolRouter: ToolRouter
-    private val executor: Executor
     private val agentLoop = AgentLoop(terminalTool = RESPOND_TOOL)
     val toolExecutionTracker = ToolExecutionTracker()
+
+    /** This plugin's own handlers, fixed for the ViewModel's life; the contributed ones are not. */
+    private val builtInHandlers: List<ToolHandler>
+
+    /**
+     * Router, executor and grammar as one snapshot, replaced wholesale when a source registers.
+     * Volatile because the rebuild arrives on whichever thread activated the contributing plugin,
+     * while the agent loop reads it on its own.
+     */
+    @Volatile
+    private var agentTools: AgentTools
+
+    /** Rebuilds the tool set whenever the registered sources change. */
+    private val toolSourcesChanged: () -> Unit = { rebuildAgentTools() }
 
     /** The in-flight agent run (streaming + tool loop), so it can be cancelled. */
     private var generationJob: Job? = null
@@ -250,7 +240,7 @@ class ChatViewModel(
     init {
         // Initialize tool handlers
         val context = getContext()
-        val handlers = if (context != null) {
+        builtInHandlers = if (context != null) {
             listOf(
                 // Read-only tools
                 ReadFileHandler(context),
@@ -273,8 +263,59 @@ class ChatViewModel(
             emptyList()
         }
 
-        toolRouter = ToolRouter(handlers)
-        executor = Executor(toolRouter, approvalManager, toolExecutionTracker)
+        agentTools = buildAgentTools()
+        ToolSourceStore.shared.addChangeListener(toolSourcesChanged)
+    }
+
+    /**
+     * Builds a fresh snapshot from the built-ins plus whatever is contributed right now.
+     * @return the new tool set.
+     */
+    private fun buildAgentTools(): AgentTools = AgentTools.build(
+        builtInHandlers = builtInHandlers,
+        store = ToolSourceStore.shared,
+        approvalManager = approvalManager,
+        toolExecutionTracker = toolExecutionTracker,
+        terminalTool = RESPOND_TOOL,
+    ).also(::logPromptBudget)
+
+    /**
+     * Logs what the prompt budget cost this snapshot.
+     *
+     * Once per rebuild rather than per message: silent truncation reads as "everything is exposed"
+     * when it is not, and the same line on every turn is how a log stops being read.
+     *
+     * @param tools the snapshot just built.
+     */
+    private fun logPromptBudget(tools: AgentTools) {
+        val budgeted = tools.promptTools
+        if (budgeted.droppedTools.isNotEmpty()) {
+            android.util.Log.w(
+                TAG,
+                "Prompt budget dropped ${budgeted.droppedTools.size} contributed tool(s): " +
+                    budgeted.droppedTools.joinToString(", ")
+            )
+        }
+        if (budgeted.truncatedDescriptions > 0) {
+            android.util.Log.i(
+                TAG,
+                "Prompt budget shortened ${budgeted.truncatedDescriptions} tool description(s)"
+            )
+        }
+    }
+
+    /**
+     * Swaps in a tool set that includes the current sources. One assignment, so a run can never see
+     * a router and a grammar that disagree; a run already in flight keeps the snapshot it started
+     * with and finishes against it.
+     */
+    private fun rebuildAgentTools() {
+        agentTools = buildAgentTools()
+        android.util.Log.i(
+            TAG,
+            "Tool set rebuilt: ${agentTools.router.getAllHandlers().size} tools, " +
+                "${agentTools.contributedHandlers.size} contributed"
+        )
     }
 
     fun initializeStorage(context: android.content.Context) {
@@ -383,22 +424,27 @@ class ChatViewModel(
      * The wording comes from the backend, which knows its own model; this side supplies the tool
      * contract and appends the IDE context. A backend with no prompt of its own gets
      * [buildDefaultSystemPrompt], so a third-party `.cgp` works without shipping prompt text.
+     *
+     * @param tools the snapshot this run is using; the prompt must describe those tools and no others.
      */
-    private suspend fun buildSystemPrompt(): String {
+    private suspend fun buildSystemPrompt(tools: AgentTools): String {
         // One editor read serves both the IDE CONTEXT block and the paths in the examples.
         val ide = readIdeSnapshot()
         val examplePath = ide.exampleFilePath()
-        val base = backendSystemPrompt(examplePath) ?: buildDefaultSystemPrompt(examplePath)
+        val base = backendSystemPrompt(tools, examplePath)
+            ?: buildDefaultSystemPrompt(tools, examplePath)
         return base + ide.contextBlock()
     }
 
     /**
      * Asks the active backend for its system prompt.
      *
+     * @param tools the snapshot this run is using.
+     * @param examplePath the path the tool-call examples should use.
      * @return the backend's prompt, or null when it has none, is unreachable, or throws — one bad
      *   backend must degrade to the default prompt, not break every message
      */
-    private fun backendSystemPrompt(examplePath: String): String? {
+    private fun backendSystemPrompt(tools: AgentTools, examplePath: String): String? {
         val backend = try {
             getLlmService()?.getBackend(currentBackendId)
         } catch (e: Throwable) {
@@ -409,7 +455,7 @@ class ChatViewModel(
         return try {
             backend.getSystemPrompt(
                 LlmInferenceService.SystemPromptRequest(
-                    promptToolDefinitions(),
+                    promptToolDefinitions(tools),
                     TOOL_CALL_SYNTAX,
                     examplePath,
                 )
@@ -436,18 +482,24 @@ class ChatViewModel(
     }
 
     /**
-     * The tools to present in the system prompt: every registered handler, plus [RESPOND_TOOL],
+     * The tools to present in the system prompt: the snapshot's budgeted list, plus [RESPOND_TOOL],
      * which is not a handler but is how the model addresses the user.
+     *
+     * The cap is applied when the snapshot is built, not here, so the grammar the local backend is
+     * constrained by and the list the prompt describes can never disagree. It lands on this side of
+     * the boundary at all because every backend renders the list itself, this repo's or not.
+     *
+     * @param tools the snapshot this run is using.
+     * @return the definitions to hand the backend.
      */
-    private fun promptToolDefinitions(): List<LlmInferenceService.ToolDefinition> =
-        toolRouter.getAllHandlers().map { handler ->
-            LlmInferenceService.ToolDefinition(handler.toolName, handler.description, emptyMap())
-        } + LlmInferenceService.ToolDefinition(
+    private fun promptToolDefinitions(tools: AgentTools): List<LlmInferenceService.ToolDefinition> {
+        return tools.promptTools.definitions + LlmInferenceService.ToolDefinition(
             RESPOND_TOOL,
             "Send the user your reply or final answer. It MUST carry a \"message\" holding the " +
                 "text itself — a respond call with no \"message\" shows the user nothing.",
             emptyMap(),
         )
+    }
 
     /**
      * Prompt used for a backend that supplies none of its own.
@@ -456,8 +508,8 @@ class ChatViewModel(
      * behaviour, which is the part only the backend can know. A backend that needs more should
      * override `getSystemPrompt`.
      */
-    private fun buildDefaultSystemPrompt(examplePath: String): String {
-        val toolDescriptions = promptToolDefinitions()
+    private fun buildDefaultSystemPrompt(tools: AgentTools, examplePath: String): String {
+        val toolDescriptions = promptToolDefinitions(tools)
             .joinToString("\n") { "- ${it.name}: ${it.description}" }
 
         return """
@@ -548,10 +600,14 @@ class ChatViewModel(
      * Executes a batch of tool calls, renders each result as a TOOL message, and
      * returns the results for the [agentLoop] to feed back; leaves [AgentState.Idle]
      * to the loop.
+     * @param tools the snapshot this run started with; a source registered mid-run does not join it.
      * @param toolCalls the calls to execute.
      * @return the results, positionally aligned with [toolCalls].
      */
-    private suspend fun executeToolCalls(toolCalls: List<ToolCall>): List<ToolResult> {
+    private suspend fun executeToolCalls(
+        tools: AgentTools,
+        toolCalls: List<ToolCall>,
+    ): List<ToolResult> {
         if (toolCalls.isEmpty()) return emptyList()
 
         val executingState = AgentState.Executing(
@@ -562,7 +618,7 @@ class ChatViewModel(
         withContext(Dispatchers.Main) { _agentState.value = executingState }
         startStateTimer(executingState)
 
-        val results = executor.execute(toolCalls)
+        val results = tools.executor.execute(toolCalls)
 
         // Record whether this batch's last tool failed (read by runModelTurn).
         lastToolFailedThisRun = results.lastOrNull()?.success == false
@@ -714,6 +770,8 @@ class ChatViewModel(
         // Reset per-run tool tracking.
         lastToolFailedThisRun = false
         lastSucceededCalls = null
+        // Read once: prompt, grammar and executor must all describe the same tool set.
+        val tools = agentTools
         val epoch = generationEpoch.incrementAndGet()
         generationJob = viewModelScope.launch(Dispatchers.IO) {
             try {
@@ -734,9 +792,9 @@ class ChatViewModel(
                     // The grammar shapes a local tool call but not its values, so paths get sampled.
                     temperature = backendTemperature() ?: DEFAULT_TEMPERATURE
                     maxTokens = 4096  // headroom for complete tool calls
-                    systemPrompt = buildSystemPrompt()
+                    systemPrompt = buildSystemPrompt(tools)
                     // Local backend constrains generation to this grammar; cloud ignores it.
-                    extraParams = mapOf(EXTRA_PARAM_GRAMMAR to localToolCallGrammar)
+                    extraParams = mapOf(EXTRA_PARAM_GRAMMAR to tools.grammar)
                 }
 
                 val messageWithContext = buildString {
@@ -760,7 +818,7 @@ class ChatViewModel(
                             }
                             runModelTurn(llmService, turns, config, epoch)
                         },
-                        executeTools = { calls -> executeToolCalls(calls) },
+                        executeTools = { calls -> executeToolCalls(tools, calls) },
                         events = object : AgentLoop.Events {
                             override suspend fun onToolResults(
                                 turn: Int,
@@ -1197,6 +1255,7 @@ class ChatViewModel(
 
     override fun onCleared() {
         super.onCleared()
+        ToolSourceStore.shared.removeChangeListener(toolSourcesChanged)
         persistSessions()
         stopProcessing()
         stopStateTimer()

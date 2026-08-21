@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Talks JSON-RPC to remote MCP servers over HTTPS (McpHttpClient, raw HttpURLConnection) -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application
+        android:label="AI Agent MCP Plugin"
+        android:theme="@style/PluginTheme">
+
+        <!-- Plugin metadata -->
+        <meta-data
+            android:name="plugin.id"
+            android:value="com.itsaky.androidide.plugins.aiagentmcp" />
+
+        <meta-data
+            android:name="plugin.name"
+            android:value="AI Agent MCP" />
+
+        <meta-data
+            android:name="plugin.version"
+            android:value="${pluginVersion}" />
+
+        <meta-data
+            android:name="plugin.description"
+            android:value="Connects the Agent to Model Context Protocol servers, so their tools appear alongside the built-in ones. Configure servers under Preferences &gt; Configuration &gt; MCP servers." />
+
+        <meta-data
+            android:name="plugin.author"
+            android:value="App Dev for All" />
+
+        <meta-data
+            android:name="plugin.min_ide_version"
+            android:value="26.35" />
+
+        <meta-data
+            android:name="plugin.max_ide_version"
+            android:value="26.99" />
+
+        <!-- network.access and nothing else: this plugin only speaks HTTP to the servers the user
+             configured. It never touches the filesystem, the project or the shell — which is the
+             whole reason MCP lives here instead of inside ai-core. -->
+        <meta-data
+            android:name="plugin.permissions"
+            android:value="network.access" />
+
+        <meta-data
+            android:name="plugin.main_class"
+            android:value="com.itsaky.androidide.plugins.aiagentmcp.plugin.McpPlugin" />
+
+        <meta-data
+            android:name="plugin.icon_day"
+            android:value="assets/icon_day.png" />
+
+        <meta-data
+            android:name="plugin.icon_night"
+            android:value="assets/icon_night.png" />
+
+    </application>
+
+</manifest>

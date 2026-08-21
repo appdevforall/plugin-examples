@@ -110,6 +110,31 @@
     device.
   </div>
 
+  <h2>Tools from other plugins</h2>
+  <p>Other plugins can give the agent tools of their own. <b>AI Agent MCP</b> is
+  one: it connects to Model Context Protocol servers — issue trackers,
+  documentation indexes, internal APIs — and their tools appear in the agent's
+  list beside the built-in ones. Nothing is required here; with no such plugin
+  installed the agent has exactly the tools listed above.</p>
+  <p>These tools are treated more cautiously than the agent's own, because only
+  the plugin that supplied one knows what it does:</p>
+  <ul>
+    <li><b>They ask every time.</b> The approval dialog names the plugin the tool
+      came from — <i>From MCP servers</i>, for example — and <b>Always Allow</b>
+      does not apply to them, however you answer. A plugin cannot waive this for
+      its own tools, and the title shows the name the agent registered rather than
+      the one the tool came with, so a remote tool cannot pass itself off as a
+      built-in one.</li>
+    <li><b>They are not confined to the project root.</b> A contributed tool runs
+      inside its own plugin, under the permissions that plugin declared, so one
+      from a plugin with network access can send what it is given off the device.
+      That is exactly why the dialog names the source and shows the arguments.</li>
+    <li><b>Only a limited number reach the model each message.</b> A single remote
+      server can advertise ninety tools, which would fill the whole context window
+      on its own, so the agent describes the first twelve to the model. Enable the
+      few you actually want in the providing plugin's settings.</li>
+  </ul>
+
   <h2>Attaching context files</h2>
   <ul>
     <li>Tap the <b>attach</b> button beside the prompt to pick files whose
@@ -202,6 +227,12 @@
       the key itself from AI Studio and not the page's URL.</li>
     <li><b>Agent tab missing</b> — confirm AI Core is installed and enabled and
       the IDE was restarted.</li>
+    <li><b>The agent never uses a tool another plugin supplies</b> — it is
+      probably past the twelve the agent describes to the model. Turn off the ones
+      you do not need in that plugin's own settings, then start a new message.</li>
+    <li><b>A tool from another plugin keeps failing</b> — the failure belongs to
+      that plugin, not to the Agent; the chat shows one sentence naming it, and the
+      run carries on. Check that plugin's own settings.</li>
   </ul>
 </body>
 </html>

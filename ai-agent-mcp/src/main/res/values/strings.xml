@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- Preferences row this plugin contributes (see McpPlugin.getSettingsEntries) -->
+    <string name="pref_mcp_title">MCP servers</string>
+    <string name="pref_mcp_summary">Remote tools for the Agent</string>
+
+    <!-- Settings screen (see McpSettingsFragment) -->
+    <string name="mcp_title">MCP servers</string>
+    <string name="mcp_description">Connect the Agent to Model Context Protocol servers. Their tools appear alongside the Agent\'s own, and every one of them asks for your approval before it runs.</string>
+    <string name="mcp_empty">No servers yet. Add one to give the Agent remote tools.</string>
+    <string name="mcp_add_server">Add server</string>
+    <string name="mcp_server_tools_summary">%1$d of %2$d tools enabled</string>
+    <string name="mcp_cd_server_enabled">Use this server</string>
+
+    <!-- Add/edit dialog -->
+    <string name="mcp_dialog_add_title">Add MCP server</string>
+    <string name="mcp_dialog_edit_title">Edit MCP server</string>
+    <string name="mcp_label_name">Name</string>
+    <string name="mcp_hint_name">e.g. Company docs</string>
+    <string name="mcp_label_url">Endpoint URL</string>
+    <string name="mcp_hint_url">https://example.com/mcp</string>
+    <string name="mcp_label_token">Access token (optional)</string>
+    <string name="mcp_hint_token">Leave empty if the server needs none</string>
+    <string name="mcp_hint_token_stored">Stored — type to replace it</string>
+    <string name="mcp_hint_token_unreadable">Stored but unreadable — type it again</string>
+    <string name="mcp_test_connection">Test connection</string>
+    <string name="mcp_refresh_tools">Refresh tools</string>
+    <string name="mcp_save">Save</string>
+    <string name="mcp_cancel">Cancel</string>
+    <string name="mcp_delete">Delete</string>
+    <string name="mcp_delete_title">Delete this server?</string>
+    <string name="mcp_delete_message">%1$s and its saved token will be removed. The Agent loses its tools straight away.</string>
+    <string name="mcp_tools_header">Tools</string>
+    <string name="mcp_tools_none">No tools known yet. Use Refresh tools to ask the server.</string>
+
+    <!-- Form validation and progress -->
+    <string name="mcp_name_required">Give the server a name — it also prefixes its tool names.</string>
+    <string name="mcp_url_required">Enter the server\'s endpoint URL.</string>
+    <string name="mcp_url_scheme_invalid">The URL must start with https:// or http://.</string>
+    <string name="mcp_url_insecure_credentials">A token or extra header cannot be sent to an http:// URL — it would travel in the clear, readable by anyone on the same network. Use https://, or remove the credential.</string>
+    <string name="mcp_clear_credential">Clear stored credential</string>
+    <string name="mcp_credential_cleared">The stored token and headers for this server have been removed.</string>
+    <string name="mcp_credentials_loading">Still reading this server\'s stored credentials — try again in a moment.</string>
+    <string name="mcp_secrets_unreadable">The saved token or headers for this server can no longer be read on this device. Enter them again.</string>
+    <string name="mcp_status_testing">Connecting…</string>
+    <string name="mcp_status_refreshing">Asking the server for its tools…</string>
+    <string name="mcp_status_connected">Connected to %1$s, which offers %2$d tools.</string>
+    <string name="mcp_status_connected_no_tools">Connected to %1$s, which offers no tools.</string>
+    <string name="mcp_status_tools_refreshed">The server listed %1$d tools. New ones start switched off.</string>
+    <string name="mcp_token_save_failed">The server was saved, but the token could not be encrypted on this device.</string>
+    <string name="mcp_token_illegal">The token contains a line break or control character and cannot be sent. Paste it again without one.</string>
+
+    <!-- Failures (see McpErrorFormatter); %1$s is always the server's name -->
+    <string name="mcp_error_bad_request">%1$s rejected the request as malformed.</string>
+    <string name="mcp_error_token_refused">%1$s refused the token. Check it in MCP server settings.</string>
+    <string name="mcp_error_forbidden">%1$s refused access with this token.</string>
+    <string name="mcp_error_no_endpoint">%1$s has no MCP endpoint at that URL.</string>
+    <string name="mcp_error_wrong_transport">%1$s does not accept this request. It may not speak Streamable HTTP MCP.</string>
+    <string name="mcp_error_no_common_format">%1$s and this plugin could not agree on a response format.</string>
+    <string name="mcp_error_rate_limited">%1$s is rate limiting. Wait a moment and try again.</string>
+    <string name="mcp_error_server_error">%1$s reported a server error (HTTP %2$d).</string>
+    <string name="mcp_error_http">%1$s answered with HTTP %2$d.</string>
+    <string name="mcp_error_rejected">%1$s rejected the call: %2$s</string>
+    <string name="mcp_error_unknown_host">Could not find %1$s. Check the URL and your connection.</string>
+    <string name="mcp_error_tls">The secure connection to %1$s failed. Check that the URL is https.</string>
+    <string name="mcp_error_timeout">%1$s did not answer in time. It may be slow or offline.</string>
+    <string name="mcp_error_cancelled">The call to %1$s was cancelled.</string>
+    <string name="mcp_error_redirect_refused">%1$s redirected the request to another address, so it was not sent — it carries your token. Check the endpoint URL.</string>
+    <string name="mcp_error_secret_unreadable">%1$s\'s saved token can no longer be read on this device. Open MCP server settings and enter it again.</string>
+    <string name="mcp_error_failed">Could not reach %1$s.</string>
+    <string name="mcp_error_failed_reason">Could not reach %1$s: %2$s</string>
+    <string name="mcp_error_tool_gone">\'%1$s\' is no longer offered by any configured MCP server.</string>
+
+    <!-- Extra request headers -->
+    <string name="mcp_headers_header">Extra headers</string>
+    <string name="mcp_headers_summary">Sent with every request to this server. Add one for an API key, an environment, or anything else the server requires.</string>
+    <string name="mcp_headers_none">No extra headers.</string>
+    <string name="mcp_add_header">Add header</string>
+    <string name="mcp_remove_header">Remove this header</string>
+    <string name="mcp_hint_header_name">Name, e.g. X-Api-Key</string>
+    <string name="mcp_hint_header_value">Value</string>
+    <string name="mcp_header_name_reserved">This plugin sets that header itself. Choose another name.</string>
+    <string name="mcp_header_name_illegal">A header name can only use letters, digits and - _ . symbols.</string>
+    <string name="mcp_header_name_too_long">That header name is too long.</string>
+    <string name="mcp_header_value_illegal">A header value cannot contain line breaks.</string>
+    <string name="mcp_header_name_duplicate">That header is already listed above. Remove one of the two.</string>
+    <string name="mcp_headers_save_failed">The extra headers could not be encrypted, so they were not saved.</string>
+    <string name="mcp_headers_invalid">Fix the marked header before saving.</string>
+    <string name="cd_mcp_back">Back</string>
+
+</resources>

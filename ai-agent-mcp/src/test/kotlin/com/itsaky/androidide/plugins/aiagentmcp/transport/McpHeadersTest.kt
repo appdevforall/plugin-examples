@@ -1,0 +1,150 @@
+package com.itsaky.androidide.plugins.aiagentmcp.transport
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+/** Unit tests for [McpHeaders], which decides what a user's own header may contain. */
+class McpHeadersTest {
+
+    @Test
+    fun givenAnOrdinaryHeader_whenValidated_thenItIsAccepted() {
+        assertTrue(McpHeaders.isValidName("X-Api-Key"))
+        assertTrue(McpHeaders.isValidName("x-extra-param"))
+        assertTrue(McpHeaders.isValidName("Api_Key.v2"))
+        assertTrue(McpHeaders.isValidValue("wycro"))
+    }
+
+    @Test
+    fun givenAHeaderThePluginSetsItself_whenValidated_thenItIsRefused() {
+        // A user-supplied Accept or session id breaks the protocol and reads as a broken server.
+        assertFalse(McpHeaders.isValidName("Accept"))
+        assertFalse(McpHeaders.isValidName("content-type"))
+        assertFalse(McpHeaders.isValidName("Mcp-Session-Id"))
+        assertFalse(McpHeaders.isValidName("MCP-Protocol-Version"))
+        assertEquals(McpHeaders.Problem.RESERVED, McpHeaders.nameProblem("ACCEPT"))
+    }
+
+    @Test
+    fun givenAnAuthorizationHeader_whenValidated_thenItIsAllowed() {
+        // The token field only writes Bearer; a server wanting another scheme has no other way.
+        assertTrue(McpHeaders.isValidName("Authorization"))
+    }
+
+    @Test
+    fun givenANameWithASpaceOrColon_whenValidated_thenItIsRefused() {
+        assertFalse(McpHeaders.isValidName("X Tenant"))
+        assertFalse(McpHeaders.isValidName("X-Api-Key:"))
+        assertEquals(McpHeaders.Problem.ILLEGAL_CHARACTERS, McpHeaders.nameProblem("X Tenant"))
+    }
+
+    @Test
+    fun givenAValueWithALineBreak_whenValidated_thenItIsRefused() {
+        // Request splitting: a value carrying CRLF would forge a header of its own.
+        assertFalse(McpHeaders.isValidValue("wycro\r\nX-Admin: true"))
+        assertFalse(McpHeaders.isValidValue("wycro\n"))
+        assertFalse(McpHeaders.isValidValue("wy\u0000cro"))
+    }
+
+    @Test
+    fun givenAnEmptyValue_whenValidated_thenItIsAccepted() {
+        assertTrue(McpHeaders.isValidValue(""))
+    }
+
+    @Test
+    fun givenAnEmptyName_whenAskedForTheProblem_thenItIsReportedAsEmpty() {
+        assertEquals(McpHeaders.Problem.EMPTY, McpHeaders.nameProblem("   "))
+    }
+
+    @Test
+    fun givenAUsableName_whenAskedForTheProblem_thenThereIsNone() {
+        assertNull(McpHeaders.nameProblem("X-Api-Key"))
+    }
+
+    @Test
+    fun givenAnOverlongName_whenValidated_thenItIsRefused() {
+        val long = "x".repeat(McpHeaders.MAX_NAME_LENGTH + 1)
+
+        assertFalse(McpHeaders.isValidName(long))
+        assertEquals(McpHeaders.Problem.TOO_LONG, McpHeaders.nameProblem(long))
+    }
+
+    @Test
+    fun givenAnOverlongValue_whenValidated_thenItIsRefused() {
+        assertFalse(McpHeaders.isValidValue("v".repeat(McpHeaders.MAX_VALUE_LENGTH + 1)))
+    }
+
+    @Test
+    fun givenAMixOfGoodAndBadPairs_whenSanitized_thenOnlyTheSendableSurvive() {
+        val clean = McpHeaders.sanitize(
+            linkedMapOf(
+                "X-Api-Key" to "wycro",
+                "Accept" to "text/plain",
+                "Bad Name" to "x",
+                "X-Split" to "a\r\nb",
+                " X-Padded " to "trimmed",
+            )
+        )
+
+        assertEquals(listOf("X-Api-Key", "X-Padded"), clean.keys.toList())
+        assertEquals("wycro", clean["X-Api-Key"])
+        assertEquals("trimmed", clean["X-Padded"])
+    }
+
+    @Test
+    fun givenTheSameNameTwice_whenSanitized_thenTheFirstWinsRegardlessOfCase() {
+        val clean = McpHeaders.sanitize(linkedMapOf("X-Api-Key" to "first", "x-api-key" to "second"))
+
+        assertEquals(1, clean.size)
+        assertEquals("first", clean["X-Api-Key"])
+    }
+
+    @Test
+    fun givenNoHeaders_whenSanitized_thenTheResultIsEmpty() {
+        assertTrue(McpHeaders.sanitize(emptyMap()).isEmpty())
+    }
+
+    @Test
+    fun givenARowNamingAHeaderAlreadyListed_whenChecked_thenItIsReportedAsADuplicate() {
+        // sanitize() keeps the first of two, so a duplicate the screen accepts vanishes in silence.
+        assertEquals(
+            McpHeaders.Problem.DUPLICATE,
+            McpHeaders.rowProblem("X-Api-Key", "second", listOf("X-Api-Key"))
+        )
+        assertEquals(
+            McpHeaders.Problem.DUPLICATE,
+            McpHeaders.rowProblem(" x-api-key ", "second", listOf("X-Api-Key"))
+        )
+    }
+
+    @Test
+    fun givenARowWithALineBreakInItsValue_whenChecked_thenTheValueIsReported() {
+        assertEquals(
+            McpHeaders.Problem.ILLEGAL_VALUE,
+            McpHeaders.rowProblem("X-Api-Key", "a\r\nX-Admin: true", emptyList())
+        )
+    }
+
+    @Test
+    fun givenARowWithBothABadNameAndABadValue_whenChecked_thenTheNameIsReportedFirst() {
+        assertEquals(
+            McpHeaders.Problem.RESERVED,
+            McpHeaders.rowProblem("Accept", "a\nb", emptyList())
+        )
+    }
+
+    @Test
+    fun givenAUsableRow_whenChecked_thenThereIsNoProblem() {
+        assertNull(McpHeaders.rowProblem("X-Api-Key", "wycro", listOf("X-Other")))
+    }
+
+    @Test
+    fun givenATokenWithALineBreak_whenChecked_thenItCannotBeSent() {
+        // A pasted credential often carries one, and it would forge a header of its own.
+        assertFalse(McpHeaders.isSendableToken("secret\n"))
+        assertFalse(McpHeaders.isSendableToken("secret\r\nX-Admin: true"))
+        assertTrue(McpHeaders.isSendableToken("secret"))
+    }
+}
