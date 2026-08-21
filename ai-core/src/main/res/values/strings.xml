@@ -55,7 +55,7 @@
 
     <!-- Errors -->
     <string name="error_llm_service_not_available">LLM service not available. Install AI Core plugin.</string>
-    <string name="error_no_backend">No LLM backend available. Please configure one in AI Core plugin.</string>
+    <string name="error_backend_not_ready">%1$s is not ready, so nothing was sent. Open Settings to finish configuring it, or choose a different backend.</string>
     <string name="error_generation_failed">Failed to generate response</string>
     <string name="error_file_read">Error reading file: %s</string>
     <string name="error_file_write">Error writing file: %s</string>
@@ -158,6 +158,8 @@
     <!-- Backend selector states; the panes themselves come from the backend plugins. -->
     <string name="backend_none_installed">No AI backend is installed. Install a backend plugin from the Plugin Manager, then return to this screen to choose it.</string>
     <string name="backend_none_installed_short">No backend</string>
+    <string name="backend_selected_not_installed">The AI backend you selected is not installed, so nothing was sent. No other backend stands in for it — install its plugin again, or choose a different backend in Settings.</string>
+    <string name="backend_selected_missing_short">Backend not installed</string>
     <string name="backend_no_settings">%1$s has no settings to configure.</string>
     <string name="backend_pane_unavailable">This backend\'s settings are unavailable. It may have been uninstalled or disabled.</string>
     <string name="state_error">Error: %s</string>

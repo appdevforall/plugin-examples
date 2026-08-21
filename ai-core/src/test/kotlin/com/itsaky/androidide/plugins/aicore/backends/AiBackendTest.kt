@@ -32,13 +32,13 @@ class AiBackendTest {
     }
 
     @Test
-    fun givenAStoredSelectionWhoseBackendIsGone_whenResolving_thenTheDefaultWins() {
-        assertEquals("local", AiBackend.preferredId("uninstalled", installed))
+    fun givenAStoredSelectionWhoseBackendIsGone_whenResolving_thenThereIsNoBackend() {
+        assertNull(AiBackend.preferredId("uninstalled", installed))
     }
 
     @Test
-    fun givenNeitherTheSelectionNorTheDefaultIsInstalled_whenResolving_thenTheFirstOfferedWins() {
-        assertEquals("gemini", AiBackend.preferredId("uninstalled", listOf("gemini", "openai")))
+    fun givenNothingStoredAndNoDefaultInstalled_whenResolving_thenTheFirstOfferedWins() {
+        assertEquals("gemini", AiBackend.preferredId(null, listOf("gemini", "openai")))
     }
 
     @Test

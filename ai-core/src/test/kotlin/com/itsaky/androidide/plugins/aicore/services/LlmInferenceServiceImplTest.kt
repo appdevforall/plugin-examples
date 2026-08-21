@@ -6,6 +6,7 @@ import com.itsaky.androidide.plugins.services.LlmInferenceService.*
 import com.itsaky.androidide.plugins.services.SharedServices
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import java.util.concurrent.CompletableFuture
 import org.junit.Assert.*
 import org.junit.Before
@@ -18,7 +19,7 @@ class LlmInferenceServiceImplTest {
     @Before
     fun setup() {
         // No AI Assistant PluginContext registered → no stored preference, so AUTO resolves
-        // via the LOCAL default + availability fallback rather than a value left by another test.
+        // via the LOCAL default and what is installed, not a value left by another test.
         SharedServices.clear()
         service = LlmInferenceServiceImpl()
     }
@@ -27,9 +28,10 @@ class LlmInferenceServiceImplTest {
         backendId: String,
         available: Boolean = true,
         text: String = "generated",
+        displayName: String = backendId,
     ) = mockk<LlmBackend> {
         every { getId() } returns backendId
-        every { getName() } returns backendId
+        every { getName() } returns displayName
         every { isAvailable() } returns available
         every { generate(any(), any()) } returns CompletableFuture.completedFuture(
             LlmResponse.success(text, 1, 1)
@@ -49,6 +51,18 @@ class LlmInferenceServiceImplTest {
         val backends = service.getAvailableBackends()
         assertEquals(1, backends.size)
         assertEquals("test-backend", backends[0].getId())
+    }
+
+    @Test
+    fun givenSeveralBackends_whenListingThem_thenTheSelectorsOrderIsReturned() {
+        // Listed by display name, not by the registry map's hash order, or a caller reading this
+        // list disagrees with the settings selector about which backend comes first.
+        service.registerBackend(mockBackend("zulu", displayName = "Alpha"))
+        service.registerBackend(mockBackend("alpha", displayName = "Zulu"))
+
+        val ids = service.getAvailableBackends().map { it.id }
+
+        assertEquals(listOf("zulu", "alpha"), ids)
     }
 
     @Test
@@ -128,8 +142,10 @@ class LlmInferenceServiceImplTest {
     }
 
     @Test
-    fun testAutoFallsBackToAvailableBackendWhenSelectedMissing() {
-        // Selection defaults to LOCAL, but only Gemini is registered/available.
+    fun givenNothingStoredAndNoDefaultInstalled_whenAutoRouting_thenTheInstalledOneIsUsed() {
+        // Nothing has been chosen and the default is not installed, so there is a choice to make.
+        // Resolving by what is *installed* is what the settings screen and the chat label do, so
+        // AUTO must agree — otherwise the AUTO consumers resolve to an unregistered id.
         service.registerBackend(mockBackend("gemini", text = "from gemini"))
 
         val config = LlmConfig(AiBackend.AUTO)
@@ -138,6 +154,86 @@ class LlmInferenceServiceImplTest {
         assertTrue(response.success)
         assertEquals("from gemini", response.text)
         assertEquals("gemini", config.backendId)
+    }
+
+    @Test
+    fun givenSelectedBackendUnavailable_whenAutoRouting_thenNoOtherBackendIsCalled() {
+        // ADFA-5132: an unconfigured local model used to hand the prompt to whichever remote
+        // provider had a key, sending the user's code to a third party they never chose.
+        val local = mockBackend("local", available = false)
+        val gemini = mockBackend("gemini", text = "from gemini")
+        service.registerBackend(local)
+        service.registerBackend(gemini)
+
+        val config = LlmConfig(AiBackend.AUTO)
+        val response = service.generateCompletion("prompt", config).get()
+
+        assertFalse(response.success)
+        // The verdict alone would pass even if the hop still happened somewhere downstream.
+        verify(exactly = 0) { gemini.generate(any(), any()) }
+    }
+
+    @Test
+    fun givenAnExplicitlyRequestedBackendThatIsUnavailable_whenGenerating_thenNoOtherBackendIsCalled() {
+        // The AUTO path is not the only way in: a caller naming an unready backend outright must
+        // fail on it too, or the hard gate would depend on which entry point the caller picked.
+        val local = mockBackend("local", available = false)
+        val gemini = mockBackend("gemini", text = "from gemini")
+        service.registerBackend(local)
+        service.registerBackend(gemini)
+
+        val response = service.generateCompletion("prompt", LlmConfig("local")).get()
+
+        assertFalse(response.success)
+        verify(exactly = 0) { gemini.generate(any(), any()) }
+        verify(exactly = 0) { local.generate(any(), any()) }
+    }
+
+    @Test
+    fun givenAnExplicitlyRequestedBackendThatIsUnavailable_whenStreamingWithTools_thenItFailsAtOnce() {
+        // The chat's own path: it stamps the resolved id into the config, so the request arrives
+        // explicit rather than as AUTO.
+        val local = object : RecordingBackend("local") {
+            override fun isAvailable(): Boolean = false
+        }
+        val gemini = RecordingBackend("gemini")
+        service.registerBackend(local)
+        service.registerBackend(gemini)
+
+        val errors = mutableListOf<String>()
+        service.generateStreamingWithTools(
+            "prompt",
+            emptyList(),
+            LlmConfig("local"),
+            emptyList(),
+            object : ToolStreamCallback {
+                override fun onToken(token: String) = Unit
+                override fun onToolCall(toolCall: ToolCallRequest) = Unit
+                override fun onComplete(response: LlmResponse) = Unit
+                override fun onError(error: String) {
+                    errors.add(error)
+                }
+            },
+        )
+
+        assertEquals(1, errors.size)
+        assertTrue("the error must name the backend the user selected", errors[0].contains("local"))
+        assertTrue("no substitute may be streamed to", gemini.streamedPrompts.isEmpty())
+    }
+
+    @Test
+    fun givenNothingStoredAndNoDefaultInstalled_whenAutoRouting_thenTheSelectorsOrderDecides() {
+        // The tie-break is "first offered", so this has to be offered the selector's order — by
+        // display name — and not the registry map's hash order, or AUTO routes to one backend
+        // while the settings screen and the chat label name another.
+        service.registerBackend(mockBackend("zulu", displayName = "Alpha", text = "from zulu"))
+        service.registerBackend(mockBackend("alpha", displayName = "Zulu", text = "from alpha"))
+
+        val config = LlmConfig(AiBackend.AUTO)
+        val response = service.generateCompletion("prompt", config).get()
+
+        assertEquals("from zulu", response.text)
+        assertEquals("zulu", config.backendId)
     }
 
     @Test
