@@ -13,6 +13,8 @@ import java.io.InputStream
  *
  * @property architecture `general.architecture`; also the prefix every other key here is read under
  * @property blockCount transformer layers, `{arch}.block_count`
+ * @property contextLength the context the model was trained for, `{arch}.context_length`; the
+ *   ceiling [ContextSizePolicy] sizes the KV cache against, and absent on files that omit it
  * @property embeddingLength model width, `{arch}.embedding_length`
  * @property headCount attention heads, `{arch}.attention.head_count`
  * @property headCountKv key/value heads under grouped-query attention, absent for plain MHA
@@ -23,6 +25,7 @@ import java.io.InputStream
 data class GgufHeader(
     val architecture: String?,
     val blockCount: Long?,
+    val contextLength: Long? = null,
     val embeddingLength: Long?,
     val headCount: Long?,
     val headCountKv: Long?,
@@ -59,6 +62,7 @@ internal object GgufHeaderReader {
 
     // Matched by suffix, then attributed to the "{arch}." prefix they carry — see [readHeader].
     private const val SUFFIX_BLOCK_COUNT = ".block_count"
+    private const val SUFFIX_CONTEXT_LENGTH = ".context_length"
     private const val SUFFIX_EMBEDDING_LENGTH = ".embedding_length"
     private const val SUFFIX_HEAD_COUNT = ".attention.head_count"
     private const val SUFFIX_HEAD_COUNT_KV = ".attention.head_count_kv"
@@ -138,6 +142,7 @@ internal object GgufHeaderReader {
     /** The shape values seen under one `{arch}.` prefix. A file may carry more than one. */
     private class ArchShape {
         var blockCount: Long? = null
+        var contextLength: Long? = null
         var embeddingLength: Long? = null
         var headCount: Long? = null
         var headCountKv: Long? = null
@@ -170,6 +175,9 @@ internal object GgufHeaderReader {
                 key.endsWith(SUFFIX_BLOCK_COUNT) ->
                     shapeFor(shapes, key, SUFFIX_BLOCK_COUNT).blockCount = readInteger(input, type, wide)
 
+                key.endsWith(SUFFIX_CONTEXT_LENGTH) ->
+                    shapeFor(shapes, key, SUFFIX_CONTEXT_LENGTH).contextLength = readInteger(input, type, wide)
+
                 key.endsWith(SUFFIX_EMBEDDING_LENGTH) ->
                     shapeFor(shapes, key, SUFFIX_EMBEDDING_LENGTH).embeddingLength = readInteger(input, type, wide)
 
@@ -195,6 +203,7 @@ internal object GgufHeaderReader {
         return GgufHeader(
             architecture = architecture,
             blockCount = shape?.blockCount,
+            contextLength = shape?.contextLength,
             embeddingLength = shape?.embeddingLength,
             headCount = shape?.headCount,
             headCountKv = shape?.headCountKv,

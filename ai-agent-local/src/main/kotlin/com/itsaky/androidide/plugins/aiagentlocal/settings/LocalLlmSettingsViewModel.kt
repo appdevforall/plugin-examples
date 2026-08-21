@@ -14,7 +14,7 @@ import com.itsaky.androidide.plugins.aiagentlocal.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aiagentlocal.model.ContentModelFileSource
 import com.itsaky.androidide.plugins.aiagentlocal.model.DeviceMemory
 import com.itsaky.androidide.plugins.aiagentlocal.model.GgufFileInspector
-import com.itsaky.androidide.plugins.aiagentlocal.model.GgufHeaderReader
+import com.itsaky.androidide.plugins.aiagentlocal.model.ModelContextResolver
 import com.itsaky.androidide.plugins.aiagentlocal.model.ModelFileInfo
 import com.itsaky.androidide.plugins.aiagentlocal.model.ModelFileSource
 import com.itsaky.androidide.plugins.aiagentlocal.model.ModelMemoryEstimator
@@ -276,12 +276,17 @@ class LocalLlmSettingsViewModel(
         context: Context
     ): Boolean {
         val modelName = fileInfo.displayName
+        // Never cached: the user may have just closed apps to make room.
+        val availableBytes = deviceMemory.availableBytes()
+        // Resolved the same way the load will resolve it, so the warning describes the real allocation.
+        val resolved = ModelContextResolver.resolve(availableBytes) {
+            modelFiles.openStream(context, uriString)
+        }
         val estimate = ModelMemoryEstimator.estimate(
             fileSizeBytes = fileInfo.sizeBytes,
-            header = GgufHeaderReader.read { modelFiles.openStream(context, uriString) },
+            header = resolved.header,
+            contextTokens = resolved.contextTokens,
         )
-        // Read last and never cached: the user may have just closed apps to make room.
-        val availableBytes = deviceMemory.availableBytes()
 
         return when (val verdict = ModelMemoryGate.evaluate(estimate, availableBytes)) {
             ModelMemoryGate.Verdict.Safe -> true
