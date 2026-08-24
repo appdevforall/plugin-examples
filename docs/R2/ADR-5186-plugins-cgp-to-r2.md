@@ -5,7 +5,7 @@
 
 ## Context
 
-Two workflows put a plugin's `.cgp` on GitHub. `update-libs.yml` builds each `.cgp`, keeps it in a GitHub Release and an inter-job artifact, and also ships it to GreenGeeks by scp. `build-plugins.yml` uploads each `.cgp` twice as run artifacts (a bundle plus a per-plugin artifact). A guarded R2 upload step already exists in `update-libs.yml`'s deploy job, so R2 is reachable today — it just is not yet the store of record.
+Two workflows put a plugin's `.cgp` on GitHub. `update-libs.yml` builds each `.cgp`, keeps it in a GitHub Release and an inter-job artifact, and also ships it to GreenGeeks by scp. `build-plugins.yml` uploads each `.cgp` twice as run artifacts (a bundle plus a per-plugin artifact).
 
 The binding problem is the GitHub **artifact** quota: a couple of very large plugins nearly exhaust it in a single run, and `build-plugins.yml`'s double upload is the largest consumer. The GitHub **Release** draws on a separate quota and is not the problem.
 
@@ -20,7 +20,7 @@ Cloudflare R2 becomes the single distribution store for plugin `.cgp`, in one ch
 
 ## Storage layout
 
-- Dedicated bucket **`addons`** (not `apk-repo`).
+- Dedicated bucket **`addons`**.
 - Prefix **`plugins/`** now; the same bucket later gains `templates/`, `snippets/`, and `code-actions/` (a prefix is a folder within the bucket).
 - Public retrieval URL: `https://addons.appdevforall.org/plugins/<PLUGIN>.cgp`.
 - Reuses the existing Cloudflare credentials and secret — no new credentials.
