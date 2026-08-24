@@ -13,6 +13,7 @@ import kotlinx.coroutines.withContext
  * Applies an edit to a file **open in the editor** through the buffer, not behind it: unsaved work is
  * what changes, the change is one Ctrl+Z away, and no stale buffer can overwrite it. Owns the
  * coordinate conversion, since [IdeEditorService.replaceRange] takes 0-based (line, column) pairs.
+ * The save is file-targeted, so it never depends on - or steals - the user's tab focus.
  * @param editorService the host editor.
  * @param mainDispatcher dispatcher for editor-UI calls; overridden in unit tests.
  */
@@ -77,7 +78,8 @@ class EditorBufferApplier(
                 "range=${range.startLine}:${range.startColumn}-${range.endLine}:${range.endColumn}",
         )
 
-        val outcome = withContext(mainDispatcher) {
+        // Read-check and mutate in one main-thread block; a refusal short-circuits the save.
+        val refusal = withContext(mainDispatcher) {
             val current = editorService.getFileContent(file)
             if (current != matched) {
                 AgentTrace.refusal(
@@ -98,21 +100,20 @@ class EditorBufferApplier(
                 )
             }
 
-            // saveCurrentFile() saves the FOCUSED tab, so saving unfocused persists another file.
-            val focused = editorService.openFile(file)
-            if (!focused) {
-                AgentTrace.refusal(
-                    "EDIT", "apply=editor path=${file.name}",
-                    "openFile returned false; not saving, to avoid saving a different tab",
-                )
-            }
-            Outcome.Applied(saved = focused && editorService.saveCurrentFile())
+            null
+        }
+        refusal?.let { return it }
+
+        // Only a denied filesystem.write means "unsaved"; cancellation and defects must propagate.
+        val saved = try {
+            editorService.saveFile(file)
+        } catch (e: SecurityException) {
+            AgentTrace.refusal("EDIT", "apply=editor path=${file.name}", "saveFile: ${e.message}")
+            false
         }
 
-        if (outcome is Outcome.Applied) {
-            Log.d(TAG, "Edited $displayPath in the editor buffer (saved=${outcome.saved})")
-        }
-        return outcome
+        Log.d(TAG, "Edited $displayPath in the editor buffer (saved=$saved)")
+        return Outcome.Applied(saved = saved)
     }
 
     /**
