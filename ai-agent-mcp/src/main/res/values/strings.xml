@@ -24,6 +24,7 @@
     <string name="mcp_hint_token">Leave empty if the server needs none</string>
     <string name="mcp_hint_token_stored">Stored — type to replace it</string>
     <string name="mcp_hint_token_unreadable">Stored but unreadable — type it again</string>
+    <string name="mcp_hint_token_unavailable">Stored, but unreadable right now — try again</string>
     <string name="mcp_connect">Connect</string>
     <string name="mcp_save">Save</string>
     <string name="mcp_cancel">Cancel</string>
@@ -42,6 +43,7 @@
     <string name="mcp_credential_cleared">The stored token and headers for this server have been removed.</string>
     <string name="mcp_credentials_loading">Still reading this server\'s stored credentials — try again in a moment.</string>
     <string name="mcp_secrets_unreadable">The saved token or headers for this server can no longer be read on this device. Enter them again.</string>
+    <string name="mcp_secrets_unavailable">The saved token or headers for this server could not be read just now. They are still stored — close this and try again in a moment.</string>
     <string name="mcp_status_connecting">Connecting…</string>
     <string name="mcp_status_connected">Connected to %1$s. It listed %2$d tools below — new ones start switched off.</string>
     <string name="mcp_status_connected_no_tools">Connected to %1$s, which offers no tools.</string>
@@ -65,6 +67,7 @@
     <string name="mcp_error_cancelled">The call to %1$s was cancelled.</string>
     <string name="mcp_error_redirect_refused">%1$s redirected the request to another address, so it was not sent — it carries your token. Check the endpoint URL.</string>
     <string name="mcp_error_secret_unreadable">%1$s\'s saved token can no longer be read on this device. Open MCP server settings and enter it again.</string>
+    <string name="mcp_error_secret_unavailable">%1$s\'s saved token could not be read just now. It is still stored — try again in a moment.</string>
     <string name="mcp_error_failed">Could not reach %1$s.</string>
     <string name="mcp_error_failed_reason">Could not reach %1$s: %2$s</string>
     <string name="mcp_error_tool_gone">\'%1$s\' is no longer offered by any configured MCP server.</string>

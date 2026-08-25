@@ -18,6 +18,7 @@ import com.itsaky.androidide.plugins.services.SharedServices
 import com.itsaky.androidide.plugins.services.ToolSourceRegistry
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.isActive
@@ -39,13 +40,31 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
     @Volatile private var registered = false
 
     /**
+     * Serialises every swap of [scope].
+     *
+     * Cancelling the old scope and installing a new one is one transition, not two: without this,
+     * two lifecycle calls landing together can each cancel the scope the other has already replaced,
+     * leaving a live refresh behind after [deactivate] or orphaning an activation's scope uncancelled.
+     * `@Volatile` alone would publish each write but still let the pair interleave.
+     */
+    private val lifecycleLock = Any()
+
+    /**
      * Background work: listing tools is network work and never belongs on the main thread.
      *
      * Replaced on every [activate] and cancelled by [deactivate], so a refresh left running cannot
      * register sessions in [McpConnections] after `closeAll()` emptied the map. Volatile like
-     * [registered]: the host may drive the lifecycle from one thread and the next from another.
+     * [registered]: the host may drive the lifecycle from one thread and the next from another,
+     * and [scopeJob] reads it outside [lifecycleLock].
      */
     @Volatile private var scope = newScope()
+
+    /**
+     * The scope [stopScope] leaves behind: cancelled from birth, so a `launch` arriving after the
+     * lifecycle edge is the no-op it has always been. One per plugin, since cancellation is
+     * terminal and a cancelled scope carries no state a later stop could disturb.
+     */
+    private val stoppedScope = newScope().apply { cancel() }
 
     companion object {
         /** Must match `plugin.id` in AndroidManifest.xml; also this source's provider id. */
@@ -117,9 +136,10 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
     }
 
     override fun activate(): Boolean = try {
-        // Cancelled first: a host that activates twice would otherwise orphan the running scope.
-        scope.cancel()
-        scope = newScope()
+        // Cancelled and replaced as one step: a host that activates twice would otherwise orphan
+        // the running scope, and the launch below has to use this activation's scope, not whatever
+        // a concurrent lifecycle call has since installed.
+        val active = swapScope(newScope())
         toolSource = McpToolSource()
         McpServerStore.addChangeListener(settingsChanged)
         context.addPluginLifecycleListener(aiCoreLifecycle)
@@ -130,7 +150,7 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
 
         // Tool lists are answered from cache, so the cache has to be filled before the user opens
         // the Agent — otherwise the first cold-start session sees no MCP tools at all.
-        scope.launch {
+        active.launch {
             val refreshed = McpToolCatalog.refreshAll { isActive }
             if (refreshed > 0 && isActive) settingsChanged()
         }
@@ -146,7 +166,7 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
         unregisterToolSource()
         // Before the connections are closed: an in-flight refresh would otherwise repopulate the
         // catalogue and the session map straight after they were cleared.
-        scope.cancel()
+        stopScope()
         releaseConnections()
         true
     } catch (e: Exception) {
@@ -158,7 +178,7 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
         runCatching { context.removePluginLifecycleListener(aiCoreLifecycle) }
         McpServerStore.removeChangeListener(settingsChanged)
         unregisterToolSource()
-        scope.cancel()
+        stopScope()
         releaseConnections()
         pluginContext = null
         context.logger.info("McpPlugin: disposed")
@@ -166,6 +186,41 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
 
     /** A fresh scope for this activation; the previous one is cancelled, never reused. */
     private fun newScope() = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /**
+     * Installs [next] as the current scope and cancels whichever scope it displaced.
+     *
+     * @param next the scope to install.
+     * @return [next], so a caller can launch on the scope it installed rather than re-reading the
+     *   field and handing its work to a later activation.
+     */
+    private fun swapScope(next: CoroutineScope): CoroutineScope {
+        val previous = synchronized(lifecycleLock) { scope.also { scope = next } }
+        previous.cancel()
+        return next
+    }
+
+    /**
+     * Ends the current activation's scope, leaving an already-cancelled one in the field.
+     *
+     * Installing [stoppedScope] rather than cancelling the field in place: an [activate] running
+     * alongside this has by then installed a scope of its own, and cancelling whatever the field
+     * happens to hold would either miss it or kill it. Swapping ends exactly the scope this call
+     * displaced.
+     */
+    private fun stopScope() {
+        swapScope(stoppedScope)
+    }
+
+    /**
+     * The current activation scope's job.
+     *
+     * A seam: the rule that a second [activate] orphans nothing and that [deactivate] leaves no
+     * refresh running is otherwise only observable on a device, where the symptom is a background
+     * `tools/list` repopulating a catalogue that was just cleared.
+     */
+    internal val scopeJob: Job?
+        get() = scope.coroutineContext[Job]
 
     /**
      * Registers this plugin's tools with AI Core, if the registry is reachable.

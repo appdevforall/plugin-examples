@@ -8,9 +8,10 @@ import com.itsaky.androidide.plugins.aiagentmcp.R
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpConnections
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpTool
 import com.itsaky.androidide.plugins.aiagentmcp.errors.McpErrorFormatter
-import com.itsaky.androidide.plugins.aiagentmcp.security.SecureTokenStore
+import com.itsaky.androidide.plugins.aiagentmcp.security.UnavailableSecretException
 import com.itsaky.androidide.plugins.aiagentmcp.security.UnreadableSecretException
 import com.itsaky.androidide.plugins.aiagentmcp.tools.McpToolCatalog
+import com.itsaky.androidide.plugins.security.KeystoreSecretStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -48,12 +49,15 @@ class McpSettingsViewModel(
      *   unreadable" has to count as a stored credential or the control that clears it hides.
      * @property secretsUnreadable whether a stored token or header cannot be decrypted on this
      *   device, which the field has to say aloud: it looks stored, but nothing can send it.
+     * @property secretsUnavailable whether the keystore merely would not answer this time, which
+     *   the field says differently: the credential is intact and the read is worth repeating.
      * @property headers the extra headers configured for the server.
      */
     data class FormState(
         val hasToken: Boolean,
         val hasHeaders: Boolean,
         val secretsUnreadable: Boolean,
+        val secretsUnavailable: Boolean,
         val headers: Map<String, String>,
     )
 
@@ -81,16 +85,26 @@ class McpSettingsViewModel(
         viewModelScope.launch {
             val state = withContext(Dispatchers.IO) {
                 val token = McpServerStore.token(id)
+                var headersUnreadable = false
+                var headersUnavailable = false
                 val headers = try {
                     McpServerStore.headers(id)
                 } catch (e: UnreadableSecretException) {
+                    headersUnreadable = true
+                    null
+                } catch (e: UnavailableSecretException) {
+                    headersUnavailable = true
                     null
                 }
                 FormState(
                     hasToken = McpServerStore.hasToken(id),
                     hasHeaders = McpServerStore.hasHeaders(id),
                     secretsUnreadable =
-                        token is SecureTokenStore.Stored.Unreadable || headers == null,
+                        token is KeystoreSecretStore.Stored.Unreadable || headersUnreadable,
+                    // Both can be true; the dialog shows the unreadable message first, since a
+                    // credential that has to be entered again is the worse news.
+                    secretsUnavailable =
+                        token is KeystoreSecretStore.Stored.Unavailable || headersUnavailable,
                     headers = headers.orEmpty(),
                 )
             }

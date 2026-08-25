@@ -27,10 +27,14 @@ The key is entered in **AI Core → Agent settings**, not here. It is stored
 encrypted (AES/GCM under a hardware-backed Android Keystore secret) and sent as
 an `x-goog-api-key` **header**, never in a URL query string.
 
-`security/SecureApiKeyStore.kt` is the only copy of the crypto — this plugin owns
-both the write and the read, so there are no constants to keep in sync with
-another plugin. A key written under an earlier plugin id is adopted once by
-`preferences/GeminiPreferences.kt` and re-encrypted here.
+`security/SecureApiKeyStore.kt` holds only this plugin's Keystore alias
+(`cotg_ai_gemini_key_v1`); the AES/GCM itself is the IDE's `KeystoreSecretStore`
+(`plugin-api`, since **26.35** — hence this plugin's `min_ide_version`), so there
+is one implementation in the process rather than a copy per plugin. The alias
+stays per plugin: they all share the host's Keystore, so a shared alias would let
+one plugin's invalidated-key recovery delete another's secret. A key written under
+an earlier plugin id is adopted once by `preferences/GeminiPreferences.kt` and
+re-encrypted here.
 
 ## Installation
 
@@ -57,7 +61,7 @@ root of `com/itsaky/androidide/plugins/aiagentgemini/`.
 - `plugin/GeminiPlugin.kt` — plugin entry point; registers the backend with ai-core
 - `backend/GeminiBackend.kt` — the REST transport, streaming (SSE) and model catalog
 - `errors/GeminiErrorFormatter.kt` — turns an API failure into one translated sentence
-- `security/SecureApiKeyStore.kt` — AES/GCM at rest
+- `security/SecureApiKeyStore.kt` — this plugin's Keystore alias, over the IDE's `KeystoreSecretStore`
 - `preferences/GeminiPreferences.kt` — this plugin's settings store, plus the
   one-time adoption of settings written under earlier plugin ids
 - `prompt/GeminiSystemPrompt.kt` — the system prompt this cloud model is given

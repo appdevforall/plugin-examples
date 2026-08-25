@@ -31,6 +31,7 @@ import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aiagentgemini.plugin.GeminiPlugin
 import com.itsaky.androidide.plugins.aiagentgemini.R
 import com.itsaky.androidide.plugins.base.PluginFragmentHelper
+import com.itsaky.androidide.plugins.security.KeystoreSecretStore
 import com.itsaky.androidide.plugins.services.IdeTooltipService
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -189,18 +190,28 @@ class GeminiSettingsFragment : Fragment() {
         }
 
         viewLifecycleOwner.lifecycleScope.launch {
-            val savedApiKey = viewModel.getGeminiApiKey()
+            val stored = viewModel.getGeminiApiKey()
+            val savedApiKey = (stored as? KeystoreSecretStore.Stored.Value)?.plain
             val hasKey = !savedApiKey.isNullOrBlank()
             updateUiState(isEditing = !hasKey)
             if (hasKey) {
                 statusTextView.text = savedApiKeyStatusText()
             } else {
                 apiKeyInput.setText("")
-                // A stored-but-undecryptable key also reads as null; warn as the Edit path does.
-                if (viewModel.hasStoredGeminiApiKey()) {
+                // Only for a key that is there and will not decrypt; an empty box alone looks like
+                // data loss. Nothing stored at all is the ordinary first run and says nothing.
+                if (stored is KeystoreSecretStore.Stored.Unreadable) {
                     Toast.makeText(
                         requireContext(),
                         getString(R.string.msg_api_key_unreadable),
+                        Toast.LENGTH_LONG
+                    ).show()
+                } else if (stored is KeystoreSecretStore.Stored.Unavailable) {
+                    // Said differently from the above: the key is still there and intact, so this
+                    // must not send the user off to find and type it again.
+                    Toast.makeText(
+                        requireContext(),
+                        getString(R.string.msg_api_key_unavailable),
                         Toast.LENGTH_LONG
                     ).show()
                 }
@@ -383,20 +394,30 @@ class GeminiSettingsFragment : Fragment() {
         editButton.setOnClickListener {
             editButton.isEnabled = false
             viewLifecycleOwner.lifecycleScope.launch {
-                val apiKey = try {
+                val stored = try {
                     viewModel.getGeminiApiKey()
                 } finally {
                     editButton.isEnabled = true
                 }
-                // null = a key IS stored but won't decrypt; an empty box alone looks like data loss.
-                if (apiKey == null) {
+                // A key that is stored and will not decrypt; an empty box alone looks like data
+                // loss. Told apart from "nothing stored" here, which this button rarely sees but
+                // must not report as a lost Keystore entry when it does.
+                if (stored is KeystoreSecretStore.Stored.Unreadable) {
                     Toast.makeText(
                         requireContext(),
                         getString(R.string.msg_api_key_unreadable),
                         Toast.LENGTH_LONG
                     ).show()
+                } else if (stored is KeystoreSecretStore.Stored.Unavailable) {
+                    // Said differently from the above: the key is still there and intact, so this
+                    // must not send the user off to find and type it again.
+                    Toast.makeText(
+                        requireContext(),
+                        getString(R.string.msg_api_key_unavailable),
+                        Toast.LENGTH_LONG
+                    ).show()
                 }
-                revealEditMode(apiKey.orEmpty())
+                revealEditMode((stored as? KeystoreSecretStore.Stored.Value)?.plain.orEmpty())
             }
         }
 

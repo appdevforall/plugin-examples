@@ -38,7 +38,7 @@
              carries it once that host version is known. -->
         <meta-data
             android:name="plugin.min_ide_version"
-            android:value="26.32" />
+            android:value="26.35" />
 
         <meta-data
             android:name="plugin.max_ide_version"

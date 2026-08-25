@@ -211,6 +211,9 @@ class McpSettingsFragment : Fragment() {
                     if (form.secretsUnreadable) {
                         tokenField.hint = getString(R.string.mcp_hint_token_unreadable)
                         status.text = getString(R.string.mcp_secrets_unreadable)
+                    } else if (form.secretsUnavailable) {
+                        tokenField.hint = getString(R.string.mcp_hint_token_unavailable)
+                        status.text = getString(R.string.mcp_secrets_unavailable)
                     } else if (form.hasToken) {
                         tokenField.hint = getString(R.string.mcp_hint_token_stored)
                     }
