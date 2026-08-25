@@ -61,9 +61,10 @@
     <li><b>Server management</b> — add, edit, disable and remove MCP servers from
       one screen under <b>Preferences &rarr; Configuration &rarr; MCP
       servers</b>.</li>
-    <li><b>Test connection</b> — performs the MCP handshake and reports the
-      result in one sentence, so a wrong URL or a stale token is caught while you
-      are looking at the settings rather than mid-conversation.</li>
+    <li><b>Connect</b> — saves the server, performs the MCP handshake and
+      reads its tool catalogue in one step, so a wrong URL or a stale token is
+      caught while you are looking at the settings rather than
+      mid-conversation.</li>
     <li><b>Tool discovery</b> — reads a server's tool catalogue, including
       paginated catalogues, and remembers what it advertised.</li>
     <li><b>Per-tool switches, off by default</b> — you choose which of a server's
@@ -132,14 +133,14 @@
       so two servers offering <code>search</code> stay distinguishable — the
       <b>endpoint URL</b> (usually ending in <code>/mcp</code>), and an
       <b>access token</b> if the server needs one.</li>
-    <li>Tap <b>Test connection</b>, then <b>Refresh tools</b> to list what the
-      server offers.</li>
+    <li>Tap <b>Connect</b>. The server is saved, contacted, and the tools it
+      offers are listed right there.</li>
     <li>Switch on the tools you want, and save. Ask the Agent for something those
       tools cover; it will request your approval before each call.</li>
   </ol>
   <div class="note">
-    New tools always arrive switched <b>off</b>, including after a refresh that
-    discovers them. Nothing a server adds later becomes visible to the model
+    New tools always arrive switched <b>off</b>, including on the connection
+    that discovers them. Nothing a server adds later becomes visible to the model
     without your say-so.
   </div>
 
@@ -168,7 +169,7 @@
     <li>Only <b>tools</b> are consumed. MCP prompts, resources and sampling are
       not used.</li>
     <li>The tool list is answered from memory, so a server that was unreachable at
-      startup needs a <b>Refresh tools</b> before its tools appear.</li>
+      startup needs a <b>Connect</b> before its tools appear.</li>
   </ul>
 
   <h2>Troubleshooting</h2>

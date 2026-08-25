@@ -223,8 +223,8 @@ class McpSettingsFragment : Fragment() {
             }
         }
 
-        view.findViewById<Button>(R.id.mcpTestConnection).also { button ->
-            wireTooltip(button, McpPlugin.TOOLTIP_TAG_TEST_CONNECTION)
+        view.findViewById<Button>(R.id.mcpConnect).also { button ->
+            wireTooltip(button, McpPlugin.TOOLTIP_TAG_CONNECT)
             button.setOnClickListener {
                 val candidate = server.copy(
                     name = nameField.text.toString().trim(),
@@ -241,39 +241,14 @@ class McpSettingsFragment : Fragment() {
                     status.text = validation
                     return@setOnClickListener
                 }
-                status.text = getString(R.string.mcp_status_testing)
-                viewModel.testConnection(candidate, tokenField.text.toString(), headers) { message ->
-                    whileDialogShown { status.text = message }
-                }
-            }
-        }
-
-        view.findViewById<Button>(R.id.mcpRefreshTools).also { button ->
-            wireTooltip(button, McpPlugin.TOOLTIP_TAG_REFRESH_TOOLS)
-            button.setOnClickListener {
-                val candidate = server.copy(
-                    name = nameField.text.toString().trim(),
-                    url = urlField.text.toString().trim(),
-                )
-                val headers = collectHeaders(view)
-                if (headers == null) {
-                    status.text = getString(R.string.mcp_headers_invalid)
-                    return@setOnClickListener
-                }
-                val validation =
-                    validate(candidate, tokenField.text.toString(), credential, headers)
-                if (validation != null) {
-                    status.text = validation
-                    return@setOnClickListener
-                }
-                // Stored first: refreshing reads the token, headers and URL from the store, so an
-                // unsaved edit would otherwise be refreshed against the old server.
-                status.text = getString(R.string.mcp_status_refreshing)
+                // Stored first: connecting reads the URL and credentials from the store.
+                status.text = getString(R.string.mcp_status_connecting)
+                button.isEnabled = false
                 viewModel.save(
                     candidate,
                     viewModel.tokenToStore(tokenField.text.toString()),
                     headers,
-                ) { saved, _ ->
+                ) { saved, failure ->
                     server = saved
                     if (tokenField.text.isNotBlank() || headers.isNotEmpty()) {
                         credential = Credential.PRESENT
@@ -282,10 +257,19 @@ class McpSettingsFragment : Fragment() {
                         clearButton.visibility =
                             if (credential == Credential.PRESENT) View.VISIBLE else View.GONE
                     }
-                    viewModel.refreshTools(saved) { message, tools ->
+                    // An unstored credential would go out missing and come back a puzzling 401.
+                    if (failure != null) {
+                        whileDialogShown {
+                            status.text = failure
+                            button.isEnabled = true
+                        }
+                        return@save
+                    }
+                    viewModel.connect(saved) { message, tools ->
                         whileDialogShown {
                             status.text = message
                             renderTools(view, saved.id, tools)
+                            button.isEnabled = true
                         }
                     }
                 }

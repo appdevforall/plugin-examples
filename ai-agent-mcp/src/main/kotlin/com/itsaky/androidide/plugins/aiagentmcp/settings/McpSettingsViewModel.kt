@@ -6,8 +6,6 @@ import androidx.lifecycle.viewModelScope
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aiagentmcp.R
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpConnections
-import com.itsaky.androidide.plugins.aiagentmcp.client.McpCredentials
-import com.itsaky.androidide.plugins.aiagentmcp.client.McpSession
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpTool
 import com.itsaky.androidide.plugins.aiagentmcp.errors.McpErrorFormatter
 import com.itsaky.androidide.plugins.aiagentmcp.security.SecureTokenStore
@@ -106,27 +104,6 @@ class McpSettingsViewModel(
      * @return the token to store, or null to keep the stored one.
      */
     fun tokenToStore(typed: String): String? = typed.trim().takeIf { it.isNotEmpty() }
-
-    /**
-     * What an empty token field means when testing: send whatever is stored.
-     *
-     * The mirror of [tokenToStore], and here rather than in the screen so the one convention the
-     * dialog's placeholder promises is written once.
-     *
-     * @param id the server being tested.
-     * @param typed the current contents of the token field.
-     * @return the token to send, empty when the server needs none.
-     * @throws UnreadableSecretException when a token is stored but cannot be decrypted here.
-     */
-    private fun tokenToSend(id: String, typed: String): String {
-        tokenToStore(typed)?.let { return it }
-        return when (val stored = McpServerStore.token(id)) {
-            is SecureTokenStore.Stored.Value -> stored.plain
-            SecureTokenStore.Stored.Absent -> ""
-            SecureTokenStore.Stored.Unreadable ->
-                throw UnreadableSecretException("The stored token for '$id' cannot be decrypted.")
-        }
-    }
 
     /**
      * Stores the edited name and URL of a server and, when given, its token.
@@ -230,71 +207,27 @@ class McpSettingsViewModel(
     }
 
     /**
-     * Performs the handshake and asks for the tool list, without storing anything.
+     * Connects to a saved server: handshake, tool list, and the list cached for the agent. Reads
+     * the URL and credentials from the store, so save the form first. A server that handshakes but
+     * offers no tool catalogue is still reachable — some expose only prompts or resources.
      *
-     * A server that handshakes but exposes no tool catalogue is still reported as reachable — some
-     * expose only prompts or resources, which this plugin does not use.
-     *
-     * @param server the server to test, with the values currently in the form.
-     * @param typedToken the current contents of the token field; empty means "use the stored one",
-     *   which is resolved here so the screen never holds a decrypted credential.
-     * @param headers the extra headers currently in the form, so a test exercises what a real call
-     *   would send rather than what was last saved.
-     * @param onResult receives the sentence to show.
-     */
-    fun testConnection(
-        server: McpServer,
-        typedToken: String,
-        headers: Map<String, String> = emptyMap(),
-        onResult: (String) -> Unit,
-    ) {
-        viewModelScope.launch {
-            val message = withContext(Dispatchers.IO) {
-                // The form's own values, not the store's: a test has to exercise the unsaved edit.
-                val typed = try {
-                    McpCredentials(tokenToSend(server.id, typedToken), headers)
-                } catch (e: UnreadableSecretException) {
-                    return@withContext McpErrorFormatter.format(
-                        getContext()?.androidContext, server.name, e
-                    )
-                }
-                val session = McpSession(server.url.trim(), { typed })
-                try {
-                    session.initialize()
-                    val tools = try {
-                        session.listTools()
-                    } catch (e: Exception) {
-                        // A missing catalogue is not a failed connection.
-                        emptyList<McpTool>()
-                    }
-                    val name = session.serverName ?: server.name
-                    if (tools.isEmpty()) {
-                        string(R.string.mcp_status_connected_no_tools, name)
-                    } else {
-                        string(R.string.mcp_status_connected, name, tools.size)
-                    }
-                } catch (e: Exception) {
-                    McpErrorFormatter.format(getContext()?.androidContext, server.name, e)
-                } finally {
-                    runCatching { session.close() }
-                }
-            }
-            onResult(message)
-        }
-    }
-
-    /**
-     * Re-reads one server's tool catalogue and stores it.
-     * @param server the server to refresh.
+     * @param server the server to connect to, as stored.
      * @param onResult receives the sentence to show and the tools now known.
      */
-    fun refreshTools(server: McpServer, onResult: (String, List<McpTool>) -> Unit) {
+    fun connect(server: McpServer, onResult: (String, List<McpTool>) -> Unit) {
         viewModelScope.launch {
             val outcome = withContext(Dispatchers.IO) {
                 try {
-                    val tools = McpToolCatalog.refresh(server)
-                    string(R.string.mcp_status_tools_refreshed, tools.size) to tools
+                    val listing = McpToolCatalog.connect(server)
+                    val name = listing.serverName ?: server.name
+                    val message = if (listing.tools.isEmpty()) {
+                        string(R.string.mcp_status_connected_no_tools, name)
+                    } else {
+                        string(R.string.mcp_status_connected, name, listing.tools.size)
+                    }
+                    message to listing.tools
                 } catch (e: Exception) {
+                    // The cached tools: a failed reconnect must not blank out the switches.
                     McpErrorFormatter.format(getContext()?.androidContext, server.name, e) to
                         McpToolCatalog.tools(server.id)
                 }

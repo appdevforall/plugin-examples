@@ -17,7 +17,7 @@ private const val TAG = "$LOG_PREFIX.McpSession"
  * One client connection to one MCP server: initialize, list tools, call a tool.
  *
  * Every call is blocking and belongs off the main thread; the callers are a background executor
- * (tool invocation) and the settings pane's IO dispatcher (Test Connection).
+ * (tool invocation) and the settings pane's IO dispatcher (Connect).
  *
  * @param endpoint the server's MCP URL.
  * @param credentials read once per request; see [McpCredentials] for why they are not held here.

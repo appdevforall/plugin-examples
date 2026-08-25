@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Filled pill for an icon-only button, matching what the theme gives the Test connection button.
+  Filled pill for an icon-only button, matching what the theme gives the Connect button.
 
   Drawn here rather than taken from a Material style because the fill is the only part an
   ImageButton does not inherit: colours stay @color/plugin_* so the button follows the IDE's

@@ -34,12 +34,12 @@ Install the `.cgp` through the Plugin Manager, then open **Preferences →
 Configuration → MCP servers**:
 
 1. **Add server** — name, endpoint URL, optional token.
-2. **Test connection** — performs the MCP handshake and reports one sentence.
-3. **Refresh tools** — lists what the server offers.
-4. Switch on the tools you want. **They start off**: one popular GitHub server
+2. **Connect** — saves the server, performs the MCP handshake and lists the tools
+   it offers, all in one step.
+3. Switch on the tools you want. **They start off**: one popular GitHub server
    advertises around ninety tools, which would fill a phone-sized context window
    on its own.
-5. **Clear stored credential** — removes the stored token and headers. The token
+4. **Clear stored credential** — removes the stored token and headers. The token
    field never shows what is stored and an empty field keeps it, so this is the
    only way back to a server that needs no credential.
 

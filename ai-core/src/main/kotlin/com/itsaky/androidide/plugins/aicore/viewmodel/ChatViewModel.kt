@@ -226,6 +226,17 @@ class ChatViewModel(
     @Volatile
     private var lastSucceededCalls: List<ToolCall>? = null
 
+    /** The prompt the last run was started with, for [retryLastRun]; null before the first send. */
+    @Volatile
+    private var lastRunPrompt: String? = null
+
+    /**
+     * How long [history] was before the last run began appending to it, so [retryLastRun] can drop
+     * that run's turns rather than retrying behind them.
+     */
+    @Volatile
+    private var historySizeBeforeLastRun = 0
+
     /** The tool awaiting approval, straight from [approvalManager] — no polling in between. */
     val pendingApprovalRequest: StateFlow<ApprovalRequest?> = approvalManager.currentApprovalRequest
 
@@ -770,6 +781,9 @@ class ChatViewModel(
         // Reset per-run tool tracking.
         lastToolFailedThisRun = false
         lastSucceededCalls = null
+        // Where a Retry has to rewind to; read here, on Main, while no run can be appending.
+        lastRunPrompt = userMessage
+        historySizeBeforeLastRun = _history.value.size
         // Read once: prompt, grammar and executor must all describe the same tool set.
         val tools = agentTools
         val epoch = generationEpoch.incrementAndGet()
@@ -885,6 +899,26 @@ class ChatViewModel(
                 isGenerating.set(false)
             }
         }
+    }
+
+    /**
+     * Re-runs the last prompt, dropping the failed run's turns from [history] first: a denied tool
+     * leaves "FAILED: User denied permission" there, and retrying behind it had the model answer
+     * from that line rather than ask for the tool again, so the dialog never reappeared.
+     */
+    fun retryLastRun() {
+        val prompt = lastRunPrompt
+        if (prompt == null) {
+            logWarn("retryLastRun: nothing has been sent in this conversation yet")
+            return
+        }
+        // Checked before the rewind, which would otherwise pull the transcript out of a live run.
+        if (isGenerating.get()) {
+            logDebug("retryLastRun: a run is already in flight")
+            return
+        }
+        _history.value = _history.value.take(historySizeBeforeLastRun)
+        sendMessage(prompt)
     }
 
     /**
@@ -1145,6 +1179,7 @@ class ChatViewModel(
         stopStateTimer()
         _messages.value = emptyList()
         _history.value = emptyList()
+        forgetRetryPoint()
         _agentState.value = AgentState.Idle
     }
 
@@ -1157,6 +1192,7 @@ class ChatViewModel(
         _currentSessionId.value = newSession.id
         _messages.value = emptyList()
         _history.value = emptyList()
+        forgetRetryPoint()
     }
 
     /**
@@ -1172,6 +1208,16 @@ class ChatViewModel(
         // Use immutable snapshot to ensure StateFlow emits on mutations
         _messages.value = session.messages.toList()
         _history.value = emptyList()
+        forgetRetryPoint()
+    }
+
+    /**
+     * Drops the rewind point [retryLastRun] uses, for a conversation that was cleared or swapped:
+     * its prompt belongs to a transcript this one no longer has.
+     */
+    private fun forgetRetryPoint() {
+        lastRunPrompt = null
+        historySizeBeforeLastRun = 0
     }
 
     /**

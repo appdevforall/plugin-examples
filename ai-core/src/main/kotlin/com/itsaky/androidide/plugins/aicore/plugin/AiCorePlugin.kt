@@ -413,13 +413,17 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
         ),
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_MESSAGE_RETRY,
-            summary = "Send that message again after a failed reply.",
+            summary = "Run your last request again after a failed reply or a step you declined.",
             detail = """
-                <p>Appears on a message whose reply failed — a dropped network
-                request, a model that wasn't loaded, or a turn you stopped.</p>
-                <p><b>Retry</b> re-sends the same prompt with the same attached
-                context files; it does not add a new message to the conversation.
-                If it keeps failing, check the backend and model under
+                <p>Appears on a step that failed — a dropped network request, a
+                model that wasn't loaded, a tool that errored, a turn you stopped,
+                or a tool call you declined.</p>
+                <p><b>Retry</b> re-sends your last prompt with the same attached
+                context files, from the conversation as it stood before that
+                attempt: the failed turn is dropped rather than left for the model
+                to read. That is why a declined tool asks for approval again
+                instead of the agent simply reporting that it was declined.</p>
+                <p>If it keeps failing, check the backend and model under
                 <b>Preferences &rarr; Configuration &rarr; Agent</b>.</p>
             """.trimIndent(),
             buttons = listOf(

@@ -66,8 +66,7 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
         const val TOOLTIP_TAG_ADD_SERVER = "mcp_add_server"
         const val TOOLTIP_TAG_SERVER_ROW = "mcp_server_row"
         const val TOOLTIP_TAG_SERVER_ENABLED = "mcp_server_enabled"
-        const val TOOLTIP_TAG_TEST_CONNECTION = "mcp_test_connection"
-        const val TOOLTIP_TAG_REFRESH_TOOLS = "mcp_refresh_tools"
+        const val TOOLTIP_TAG_CONNECT = "mcp_connect"
         const val TOOLTIP_TAG_TOOL_TOGGLE = "mcp_tool_toggle"
         const val TOOLTIP_TAG_SERVER_NAME = "mcp_server_name"
         const val TOOLTIP_TAG_SERVER_URL = "mcp_server_url"
@@ -296,8 +295,8 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
             detail = """
                 <p>Opens the server's details: name, URL, token, and the list of
                 tools it advertises with a switch for each.</p>
-                <p>The tool list comes from the last successful refresh. If it is
-                empty, use <b>Refresh tools</b> — the server may have been
+                <p>The tool list comes from the last successful connection. If it is
+                empty, tap <b>Connect</b> — the server may have been
                 unreachable when the IDE started.</p>
             """.trimIndent(),
             buttons = listOf(
@@ -326,7 +325,7 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
                 first few characters, lowercased and reduced to letters, digits
                 and <code>_</code>, are prefixed to every tool this server
                 offers. Renaming the server therefore renames its tools, so a
-                chat already open needs <b>Refresh tools</b> to see them.</p>
+                chat already open needs a <b>Connect</b> to see them.</p>
             """.trimIndent(),
             buttons = listOf(
                 PluginTooltipButton(description = "AI Agent MCP guide", uri = "index.html", order = 0)
@@ -456,28 +455,19 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
             )
         ),
         PluginTooltipEntry(
-            tag = TOOLTIP_TAG_TEST_CONNECTION,
-            summary = "Check the URL and token now, rather than finding out mid-conversation.",
+            tag = TOOLTIP_TAG_CONNECT,
+            summary = "Save this server, connect to it, and list the tools it offers below.",
             detail = """
-                <p>Performs the MCP handshake and asks for the tool list, then
-                reports what happened in one sentence.</p>
+                <p>Saves what you typed, performs the MCP handshake and reads the
+                server's tool catalogue, then reports what happened in one
+                sentence. Tools that disappeared are removed along with their
+                switches; new ones arrive switched <b>off</b>.</p>
                 <p>A server that completes the handshake but offers no tool
                 catalogue is still reported as reachable — some servers expose
                 only prompts or resources, which this plugin does not use.</p>
-            """.trimIndent(),
-            buttons = listOf(
-                PluginTooltipButton(description = "AI Agent MCP guide", uri = "index.html", order = 0)
-            )
-        ),
-        PluginTooltipEntry(
-            tag = TOOLTIP_TAG_REFRESH_TOOLS,
-            summary = "Ask the server what tools it offers now and update the list below.",
-            detail = """
-                <p>Re-reads the server's tool catalogue. Tools that disappeared are
-                removed along with their switches; new ones arrive switched
-                <b>off</b>.</p>
-                <p>The Agent reads this list from memory, so a refresh is also what
-                makes a newly added tool visible to a chat that is already open.</p>
+                <p>The Agent reads this list from memory, so connecting again is
+                also what makes a newly added tool visible to a chat that is
+                already open.</p>
             """.trimIndent(),
             buttons = listOf(
                 PluginTooltipButton(description = "AI Agent MCP guide", uri = "index.html", order = 0)

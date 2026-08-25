@@ -24,15 +24,14 @@
     <string name="mcp_hint_token">Leave empty if the server needs none</string>
     <string name="mcp_hint_token_stored">Stored — type to replace it</string>
     <string name="mcp_hint_token_unreadable">Stored but unreadable — type it again</string>
-    <string name="mcp_test_connection">Test connection</string>
-    <string name="mcp_refresh_tools">Refresh tools</string>
+    <string name="mcp_connect">Connect</string>
     <string name="mcp_save">Save</string>
     <string name="mcp_cancel">Cancel</string>
     <string name="mcp_delete">Delete</string>
     <string name="mcp_delete_title">Delete this server?</string>
     <string name="mcp_delete_message">%1$s and its saved token will be removed. The Agent loses its tools straight away.</string>
     <string name="mcp_tools_header">Tools</string>
-    <string name="mcp_tools_none">No tools known yet. Use Refresh tools to ask the server.</string>
+    <string name="mcp_tools_none">No tools known yet. Tap Connect to ask the server.</string>
 
     <!-- Form validation and progress -->
     <string name="mcp_name_required">Give the server a name — it also prefixes its tool names.</string>
@@ -43,11 +42,9 @@
     <string name="mcp_credential_cleared">The stored token and headers for this server have been removed.</string>
     <string name="mcp_credentials_loading">Still reading this server\'s stored credentials — try again in a moment.</string>
     <string name="mcp_secrets_unreadable">The saved token or headers for this server can no longer be read on this device. Enter them again.</string>
-    <string name="mcp_status_testing">Connecting…</string>
-    <string name="mcp_status_refreshing">Asking the server for its tools…</string>
-    <string name="mcp_status_connected">Connected to %1$s, which offers %2$d tools.</string>
+    <string name="mcp_status_connecting">Connecting…</string>
+    <string name="mcp_status_connected">Connected to %1$s. It listed %2$d tools below — new ones start switched off.</string>
     <string name="mcp_status_connected_no_tools">Connected to %1$s, which offers no tools.</string>
-    <string name="mcp_status_tools_refreshed">The server listed %1$d tools. New ones start switched off.</string>
     <string name="mcp_token_save_failed">The server was saved, but the token could not be encrypted on this device.</string>
     <string name="mcp_token_illegal">The token contains a line break or control character and cannot be sent. Paste it again without one.</string>
 

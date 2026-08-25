@@ -139,7 +139,7 @@
 
             <!--
               Icon only, filled in the primary colour so it reads as the same kind of control as
-              Test connection, with the glyph in on-primary — white on the light theme's teal,
+              Connect, with the glyph in on-primary — white on the light theme's teal,
               near-black on the dark theme's.
 
               An ImageButton with platform attributes only, deliberately. A library `app:`
@@ -176,26 +176,12 @@
             android:layout_height="wrap_content"
             android:orientation="vertical" />
 
-        <LinearLayout
-            android:layout_width="match_parent"
+        <Button
+            android:id="@+id/mcpConnect"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
-            android:orientation="horizontal">
-
-            <Button
-                android:id="@+id/mcpTestConnection"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/mcp_test_connection" />
-
-            <Button
-                android:id="@+id/mcpRefreshTools"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:text="@string/mcp_refresh_tools" />
-
-        </LinearLayout>
+            android:text="@string/mcp_connect" />
 
         <TextView
             android:id="@+id/mcpStatus"
