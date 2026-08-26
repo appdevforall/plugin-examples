@@ -346,6 +346,34 @@ class ExecutorTest {
     }
 
     @Test
+    fun givenLooselyNamedReads_whenExecuting_thenTheyStillRunConcurrently() = runBlocking {
+        // The router resolves `Read_File` and `  read_file ` to the same read-only handler, so the
+        // batch must be scheduled on the registered name, not on the string the model emitted.
+        val started = mutableListOf<String>()
+        val handler = object : ToolHandler {
+            override val toolName = "read_file"
+            override val description = "fake read"
+            override val pathArgs = emptyList<String>()
+            override suspend fun execute(args: Map<String, Any?>): ToolResult {
+                synchronized(started) { started.add(args["file_path"].toString()) }
+                delay(100)
+                synchronized(started) { started.add("done:${args["file_path"]}") }
+                return ToolResult.success("contents")
+            }
+        }
+        val executor = Executor(ToolRouter(listOf(handler)), ToolApprovalManager())
+
+        executor.execute(
+            listOf(
+                ToolCall("Read_File", mapOf("file_path" to "A.kt")),
+                ToolCall("  read_file ", mapOf("file_path" to "B.kt")),
+            )
+        )
+
+        assertEquals(listOf("A.kt", "B.kt", "done:A.kt", "done:B.kt"), started)
+    }
+
+    @Test
     fun givenAReadWriteReadBatch_whenExecuting_thenResultsStayInInputOrder() = runBlocking {
         // Whatever the schedule, result[i] belongs to toolCalls[i]; the loop pairs them positionally.
         val read = object : ToolHandler {

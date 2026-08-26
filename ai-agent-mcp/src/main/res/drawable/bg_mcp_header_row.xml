@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Groups one header's name and value into a single visible pair.
+
+  Both colours are @color/plugin_* so the row follows the IDE's day/night setting, and the fill is
+  surface_variant against the dialog's surface — enough separation to count the pairs at a glance
+  without turning the list into a stack of cards.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+
+    <solid android:color="@color/plugin_surface_variant" />
+    <stroke
+        android:width="1dp"
+        android:color="@color/plugin_outline_variant" />
+    <corners android:radius="6dp" />
+
+</shape>

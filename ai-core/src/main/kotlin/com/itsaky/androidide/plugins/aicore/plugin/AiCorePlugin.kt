@@ -7,7 +7,9 @@ import com.itsaky.androidide.plugins.aicore.R
 import com.itsaky.androidide.plugins.aicore.fragments.AiSettingsFragment
 import com.itsaky.androidide.plugins.aicore.fragments.ChatFragment
 import com.itsaky.androidide.plugins.aicore.services.LlmInferenceServiceImpl
+import com.itsaky.androidide.plugins.aicore.services.ToolSourceRegistryImpl
 import com.itsaky.androidide.plugins.aicore.tool.handlers.PathGuard
+import com.itsaky.androidide.plugins.aicore.tool.sources.ToolSourceStore
 import com.itsaky.androidide.plugins.extensions.DocumentationExtension
 import com.itsaky.androidide.plugins.extensions.MenuItem
 import com.itsaky.androidide.plugins.extensions.PluginSettingsEntry
@@ -19,6 +21,8 @@ import com.itsaky.androidide.plugins.extensions.UIExtension
 import com.itsaky.androidide.plugins.services.IdeProjectService
 import com.itsaky.androidide.plugins.services.LlmInferenceService
 import com.itsaky.androidide.plugins.services.SharedServices
+import com.itsaky.androidide.plugins.services.ToolSourceRegistry
+import java.io.File
 
 class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExtension {
 
@@ -92,6 +96,8 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
         SharedServices.register(LlmInferenceService::class.java, router)
         context.logger.info("AI Core Plugin: registered LlmInferenceService in SharedServices")
 
+        registerToolSourceRegistry()
+
         PathGuard.setProjectRootProvider {
             try {
                 context.services.get(IdeProjectService::class.java)
@@ -108,12 +114,43 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
         return true
     }
 
+    /**
+     * Publishes the tool registry so other plugins can contribute agent tools.
+     *
+     * Guarded against [Throwable] rather than [Exception]: on an IDE older than the release that
+     * ships the contract the class is simply absent, and an uncaught [NoClassDefFoundError] here
+     * would take the whole agent down instead of the one feature that needs it.
+     */
+    private fun registerToolSourceRegistry() {
+        try {
+            SharedServices.register(ToolSourceRegistry::class.java, ToolSourceRegistryImpl())
+            context.logger.info("AI Core Plugin: registered ToolSourceRegistry in SharedServices")
+        } catch (e: Throwable) {
+            context.logger.warn(
+                "AI Core Plugin: this IDE has no ToolSourceRegistry; plugin-contributed tools are off",
+                e
+            )
+        }
+    }
+
     override fun deactivate(): Boolean {
         context.logger.info("AI Core Plugin deactivating...")
 
         // Backends belong to their own plugins; dropping the service drops the whole registry, and
         // each backend plugin unregisters itself on its own deactivation.
         SharedServices.unregister(LlmInferenceService::class.java)
+
+        // Same guard as the registration: an IDE without the contract must not fail deactivation.
+        try {
+            SharedServices.unregister(ToolSourceRegistry::class.java)
+        } catch (e: Throwable) {
+            context.logger.debug("AI Core Plugin: no ToolSourceRegistry to unregister")
+        }
+
+        // Contributed tools die with the registry that carried them; a provider that is still
+        // installed re-registers from its own lifecycle listener when this plugin comes back.
+        ToolSourceStore.shared.clear()
+
         PathGuard.setProjectRootProvider(null)
         return true
     }
@@ -376,13 +413,17 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
         ),
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_MESSAGE_RETRY,
-            summary = "Send that message again after a failed reply.",
+            summary = "Run your last request again after a failed reply or a step you declined.",
             detail = """
-                <p>Appears on a message whose reply failed — a dropped network
-                request, a model that wasn't loaded, or a turn you stopped.</p>
-                <p><b>Retry</b> re-sends the same prompt with the same attached
-                context files; it does not add a new message to the conversation.
-                If it keeps failing, check the backend and model under
+                <p>Appears on a step that failed — a dropped network request, a
+                model that wasn't loaded, a tool that errored, a turn you stopped,
+                or a tool call you declined.</p>
+                <p><b>Retry</b> re-sends your last prompt with the same attached
+                context files, from the conversation as it stood before that
+                attempt: the failed turn is dropped rather than left for the model
+                to read. That is why a declined tool asks for approval again
+                instead of the agent simply reporting that it was declined.</p>
+                <p>If it keeps failing, check the backend and model under
                 <b>Preferences &rarr; Configuration &rarr; Agent</b>.</p>
             """.trimIndent(),
             buttons = listOf(
