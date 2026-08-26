@@ -76,6 +76,39 @@ class PromptToolBudgetTest {
     }
 
     @Test
+    fun givenAContributedSchema_whenApplied_thenTheDescriptionSpellsOutItsArgumentNames() {
+        // Backends render name and description only, so a name the model must guess is a lost turn.
+        val handler = ContributedToolHandler(
+            FakeToolSource(PROVIDER),
+            ContributedTool(
+                providerId = PROVIDER,
+                name = "read_wiki_structure",
+                description = "Lists a repository's wiki pages",
+                parametersSchema = mapOf(
+                    "properties" to mapOf("repoName" to mapOf("type" to "string"), "page" to mapOf("type" to "integer")),
+                    "required" to listOf("repoName"),
+                ),
+            ),
+            "deepwiki_read_wiki_structure",
+        )
+
+        val description = PromptToolBudget.apply(listOf(handler)).definitions.first().description
+
+        assertTrue(description.contains("repoName (required)"))
+        assertTrue(description.contains("page"))
+        assertFalse("a snake_case guess is exactly what the hint exists to prevent", description.contains("repo_name"))
+    }
+
+    @Test
+    fun givenASchemaWithoutProperties_whenApplied_thenNoArgumentClauseIsInvented() {
+        val handlers = contributedHandlers(1)
+
+        val description = PromptToolBudget.apply(handlers).definitions.first().description
+
+        assertEquals("does something", description)
+    }
+
+    @Test
     fun givenBothKinds_whenApplied_thenTheSchemaTravelsWithEachDefinition() {
         val contributed = ContributedToolHandler(
             FakeToolSource(PROVIDER),

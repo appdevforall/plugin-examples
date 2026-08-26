@@ -18,6 +18,12 @@ object PromptToolBudget {
     /** Per-description cap, applied to contributed descriptions only. */
     const val MAX_DESCRIPTION_CHARS = 200
 
+    /** Argument names spelled out per contributed tool; one schema can declare dozens. */
+    const val MAX_ARGUMENT_NAMES = 12
+
+    /** Per-name cap, so one absurd property name cannot crowd out the rest of the list. */
+    private const val MAX_ARGUMENT_NAME_CHARS = 40
+
     /**
      * The tool list as the prompt will see it.
      * @property definitions what to hand the backend.
@@ -71,11 +77,38 @@ object PromptToolBudget {
             }
             definitions += LlmInferenceService.ToolDefinition(
                 handler.toolName,
-                description,
+                description + argumentHint(handler.parametersSchema),
                 handler.parametersSchema,
             )
         }
 
         return Budgeted(definitions, dropped, truncated)
+    }
+
+    /**
+     * The argument names a contributed tool takes, as a clause to append to its prompt description.
+     *
+     * Every backend renders a tool as its name and description alone, so a schema that stops here
+     * leaves the model guessing argument names — and it guesses the snake_case shape the built-in
+     * tools use, spending a turn on `repo_name` before a failure names `repoName` back to it.
+     *
+     * @param schema the tool's JSON Schema, as its provider supplied it.
+     * @return the clause to append, or empty when the schema names no properties.
+     */
+    private fun argumentHint(schema: Map<String, Any>): String {
+        val required = (schema["required"] as? Collection<*>)?.mapNotNull { it as? String }.orEmpty().toSet()
+        val names = (schema["properties"] as? Map<*, *>)?.keys.orEmpty()
+            .mapNotNull { it as? String }
+            .filter { it.isNotBlank() }
+        if (names.isEmpty()) return ""
+
+        val kept = names.take(MAX_ARGUMENT_NAMES)
+        val listed = kept.joinToString(", ") { name ->
+            // Flattened and capped like every other provider string reaching the prompt.
+            val label = ContributedText.label(name, MAX_ARGUMENT_NAME_CHARS)
+            if (name in required) "$label (required)" else label
+        }
+        val elided = if (names.size > kept.size) ", and ${names.size - kept.size} more" else ""
+        return " Arguments, spelled exactly as written: $listed$elided."
     }
 }
