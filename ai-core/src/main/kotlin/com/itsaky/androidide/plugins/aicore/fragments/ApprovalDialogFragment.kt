@@ -53,6 +53,8 @@ class ApprovalDialogFragment : DialogFragment() {
 
     companion object {
         private const val ARG_TOOL_NAME = "tool_name"
+        private const val ARG_PROVIDER_NAME = "provider_name"
+        private const val ARG_SOURCE = "source"
         private const val ARG_DESCRIPTION = "description"
         private const val ARG_ARGS = "args"
         private const val ARG_IS_EDIT = "is_edit"
@@ -66,7 +68,14 @@ class ApprovalDialogFragment : DialogFragment() {
             val isEdit = request.toolName == EditFileHandler.TOOL_NAME
             return ApprovalDialogFragment().apply {
                 arguments = Bundle().apply {
+                    // The registered name, not the provider's: it is the tool that will actually
+                    // run, and the one thing on the dialog a remote source cannot choose.
                     putString(ARG_TOOL_NAME, request.toolName)
+                    putString(
+                        ARG_PROVIDER_NAME,
+                        request.displayName.takeIf { it != request.toolName },
+                    )
+                    putString(ARG_SOURCE, request.sourceLabel)
                     putString(ARG_DESCRIPTION, request.description)
                     putBoolean(ARG_IS_EDIT, isEdit)
                     putString(
@@ -81,6 +90,8 @@ class ApprovalDialogFragment : DialogFragment() {
 
     override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
         val toolName = arguments?.getString(ARG_TOOL_NAME) ?: "unknown"
+        val providerName = arguments?.getString(ARG_PROVIDER_NAME)
+        val source = arguments?.getString(ARG_SOURCE)
         val description = arguments?.getString(ARG_DESCRIPTION) ?: ""
         val argsText = arguments?.getString(ARG_ARGS) ?: "{}"
         val isEdit = arguments?.getBoolean(ARG_IS_EDIT) == true
@@ -88,6 +99,19 @@ class ApprovalDialogFragment : DialogFragment() {
         val message = buildString {
             append(getString(R.string.approval_header))
             append("\n\n")
+            // Provenance before the description: a tool that leaves the device is a different
+            // decision from a local edit, and only the source says which this is.
+            if (!source.isNullOrBlank()) {
+                append(getString(R.string.approval_source, source))
+                append("\n")
+                // Both names, when they differ: the title says what runs, this says what the
+                // source calls it, so neither can be passed off as the other.
+                if (!providerName.isNullOrBlank()) {
+                    append(getString(R.string.approval_provider_name, providerName))
+                    append("\n")
+                }
+                append("\n")
+            }
             append(description)
             append("\n\n")
             append(getString(if (isEdit) R.string.approval_proposed_change else R.string.approval_args))

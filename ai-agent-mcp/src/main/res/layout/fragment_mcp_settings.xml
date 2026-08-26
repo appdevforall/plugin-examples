@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  MCP settings pane. Structured like the Agent screen: a fixed toolbar row, then the scrolling
+  content, so the two screens of this plugin family read as one product.
+
+  Every colour is a @color/plugin_* reference so the screen follows the IDE's day/night setting: the
+  host keeps this plugin's inflation Context in sync, and values-night/ supplies the dark variants.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/plugin_surface"
+    android:orientation="vertical">
+
+    <!-- Toolbar: back affordance and title, matching the Agent screen's chrome. -->
+    <LinearLayout
+        android:id="@+id/mcpToolbar"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/mcp_toolbar_height"
+        android:background="@color/plugin_surface_variant"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="4dp"
+        android:paddingEnd="16dp">
+
+        <ImageButton
+            android:id="@+id/mcpBack"
+            android:layout_width="@dimen/mcp_toolbar_icon_size"
+            android:layout_height="@dimen/mcp_toolbar_icon_size"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/cd_mcp_back"
+            android:padding="@dimen/mcp_toolbar_icon_padding"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_arrow_back"
+            android:tint="@color/plugin_on_surface" />
+
+        <TextView
+            android:id="@+id/mcpTitle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:layout_weight="1"
+            android:text="@string/mcp_title"
+            android:textColor="@color/plugin_on_surface"
+            android:textSize="@dimen/mcp_title_text_size"
+            android:textStyle="bold" />
+
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:id="@+id/mcpDescription"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/mcp_description"
+                android:textColor="@color/plugin_text_muted"
+                android:textSize="14sp" />
+
+            <LinearLayout
+                android:id="@+id/mcpServerList"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:orientation="vertical" />
+
+            <TextView
+                android:id="@+id/mcpEmptyState"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="@string/mcp_empty"
+                android:textColor="@color/plugin_text_muted"
+                android:textSize="14sp" />
+
+            <Button
+                android:id="@+id/mcpAddServer"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="@string/mcp_add_server" />
+
+        </LinearLayout>
+
+    </ScrollView>
+
+</LinearLayout>

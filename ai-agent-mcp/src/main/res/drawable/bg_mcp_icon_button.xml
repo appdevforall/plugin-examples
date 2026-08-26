@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Filled pill for an icon-only button, matching what the theme gives the Connect button.
+
+  Drawn here rather than taken from a Material style because the fill is the only part an
+  ImageButton does not inherit: colours stay @color/plugin_* so the button follows the IDE's
+  day/night setting like every other surface in this plugin.
+-->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="@color/plugin_ripple">
+
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@color/plugin_primary" />
+            <corners android:radius="20dp" />
+        </shape>
+    </item>
+
+</ripple>

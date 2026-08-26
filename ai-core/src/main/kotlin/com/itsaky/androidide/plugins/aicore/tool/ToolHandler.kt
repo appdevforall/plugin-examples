@@ -31,6 +31,36 @@ interface ToolHandler {
         get() = false
 
     /**
+     * JSON Schema for the arguments, in the shape the backend's tool definitions take. Empty means
+     * untyped, flat string arguments, which is what the tool-call protocol supports today.
+     */
+    val parametersSchema: Map<String, Any>
+        get() = emptyMap()
+
+    /**
+     * The tool's name as a person should read it, for the approval dialog and anywhere else a tool
+     * is named on screen. Defaults to the registered name, which is what a built-in wants.
+     */
+    val displayName: String
+        get() = toolName
+
+    /**
+     * Where this tool came from, shown next to [displayName] so consent is informed: approving a
+     * tool that reaches a remote server is a different decision from approving a local edit. Null
+     * for the agent's own tools, which need no provenance.
+     */
+    val sourceLabel: String?
+        get() = null
+
+    /**
+     * Whether an "Always Allow" answer may cover this tool for the rest of the session. False for
+     * anything running outside the agent's own path containment, where the dialog is the only
+     * control there is.
+     */
+    val allowsSessionApproval: Boolean
+        get() = true
+
+    /**
      * Arg keys whose values are filesystem paths. The Executor verifies each of
      * these resolves within the project root before the tool runs, so no handler
      * can forget the containment check. Empty by default (non-filesystem tools).

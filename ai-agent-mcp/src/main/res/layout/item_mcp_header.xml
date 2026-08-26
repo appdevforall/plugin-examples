@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  One extra request header: name, value, and a control to drop the row.
+
+  Boxed rather than laid out flat: with several headers configured, four bare fields in a column
+  give no clue which value belongs to which name. The border and fill make each pair one object.
+
+  The remove control sits on the name line rather than beside the pair, so it stays put when the
+  error message below appears — centring it against the whole box moved it every time a row was
+  marked.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="8dp"
+    android:background="@drawable/bg_mcp_header_row"
+    android:orientation="vertical"
+    android:paddingStart="8dp"
+    android:paddingTop="4dp"
+    android:paddingEnd="4dp"
+    android:paddingBottom="8dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:baselineAligned="false"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <EditText
+            android:id="@+id/mcpHeaderName"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:autofillHints="none"
+            android:hint="@string/mcp_hint_header_name"
+            android:inputType="textNoSuggestions"
+            android:maxLines="1"
+            android:textColor="@color/plugin_on_surface"
+            android:textColorHint="@color/plugin_text_subtle"
+            android:textSize="14sp" />
+
+        <ImageButton
+            android:id="@+id/mcpHeaderRemove"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="4dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/mcp_remove_header"
+            android:padding="10dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_close"
+            android:tint="@color/plugin_on_surface_variant" />
+
+    </LinearLayout>
+
+    <EditText
+        android:id="@+id/mcpHeaderValue"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="44dp"
+        android:autofillHints="none"
+        android:hint="@string/mcp_hint_header_value"
+        android:inputType="textNoSuggestions"
+        android:maxLines="1"
+        android:textColor="@color/plugin_on_surface"
+        android:textColorHint="@color/plugin_text_subtle"
+        android:textSize="14sp" />
+
+    <!-- Only takes a row when there is something wrong to say. -->
+    <TextView
+        android:id="@+id/mcpHeaderError"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:layout_marginEnd="44dp"
+        android:textColor="@color/plugin_error"
+        android:textSize="12sp"
+        android:visibility="gone" />
+
+</LinearLayout>

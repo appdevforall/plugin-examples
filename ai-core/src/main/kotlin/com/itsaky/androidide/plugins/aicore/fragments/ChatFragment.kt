@@ -509,8 +509,8 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
                 binding.promptInputEdittext.requestFocus()
             }
             ChatAdapter.ACTION_RETRY -> {
-                // Resend the message
-                viewModel.sendMessage(message.text)
+                // The prompt behind this row, not its text: the row may be a tool failure.
+                viewModel.retryLastRun()
             }
             ChatAdapter.ACTION_OPEN_SETTINGS -> {
                 // Open settings fragment

@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One configured server: tap the row to edit it, use the switch to disable it in place. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/mcpServerRow"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@color/plugin_surface_variant"
+    android:clickable="true"
+    android:focusable="true"
+    android:gravity="center_vertical"
+    android:layout_marginBottom="8dp"
+    android:orientation="horizontal"
+    android:padding="12dp">
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/mcpServerName"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@color/plugin_on_surface"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/mcpServerUrl"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="middle"
+            android:maxLines="1"
+            android:textColor="@color/plugin_text_muted"
+            android:textSize="13sp" />
+
+        <TextView
+            android:id="@+id/mcpServerTools"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@color/plugin_on_surface_variant"
+            android:textSize="13sp" />
+
+    </LinearLayout>
+
+    <com.google.android.material.switchmaterial.SwitchMaterial
+        android:id="@+id/mcpServerEnabled"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:contentDescription="@string/mcp_cd_server_enabled" />
+
+</LinearLayout>
