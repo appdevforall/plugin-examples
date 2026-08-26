@@ -78,6 +78,21 @@ sealed class AgentState {
 }
 
 /**
+ * Short name for the trace log: the state and what it is doing, without a data class's field dump
+ * and without the error text, which is already in the transcript.
+ */
+val AgentState.traceLabel: String
+    get() = when (this) {
+        is AgentState.Idle -> "Idle"
+        is AgentState.Initializing -> "Initializing"
+        is AgentState.Thinking -> "Thinking"
+        is AgentState.Executing -> "Executing(step ${currentStepIndex + 1}/$totalSteps $description)"
+        is AgentState.Processing -> "Processing"
+        is AgentState.Cancelling -> "Cancelling"
+        is AgentState.Error -> "Error"
+    }
+
+/**
  * True while a run is in flight, which is what the composer keys its Stop control off. One
  * definition so the UI cannot drift from it a state at a time.
  */

@@ -10,6 +10,7 @@ import com.itsaky.androidide.plugins.aicore.services.LlmInferenceServiceImpl
 import com.itsaky.androidide.plugins.aicore.services.ToolSourceRegistryImpl
 import com.itsaky.androidide.plugins.aicore.tool.handlers.PathGuard
 import com.itsaky.androidide.plugins.aicore.tool.sources.ToolSourceStore
+import com.itsaky.androidide.plugins.aicore.viewmodel.ChatViewModelStore
 import com.itsaky.androidide.plugins.extensions.DocumentationExtension
 import com.itsaky.androidide.plugins.extensions.MenuItem
 import com.itsaky.androidide.plugins.extensions.PluginSettingsEntry
@@ -161,6 +162,10 @@ class AiCorePlugin : IPlugin, UIExtension, DocumentationExtension, SettingsExten
         // Freeing backend resources (native models, HTTP scopes) is each backend plugin's own
         // dispose(); this only stops whatever this plugin still has in flight.
         llmService?.cancelGeneration()
+
+        // The chat ViewModel is plugin-scoped, not fragment-scoped, so this is what ends a run
+        // that outlived its fragment; clearing it persists the transcript first.
+        ChatViewModelStore.clear()
 
         PathGuard.setProjectRootProvider(null)
         pluginContext = null
