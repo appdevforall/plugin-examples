@@ -367,17 +367,20 @@ Java_android_llama_cpp_LLamaAndroid_free_1model(JNIEnv *, jobject, jlong model) 
 
 /**
  * Backstops a context size Kotlin chose: a misparsed header must not ask for more than the model
- * was trained for, and a non-positive argument falls back to the default.
+ * was trained for, and a non-positive argument falls back to the default. Never clamps below
+ * DEFAULT_N_CTX, the context a 2048-trained model always got, so no prompt that fit regresses.
  *
  * @param requested the context asked for, in tokens
  * @param trained_ctx what the model was trained for, or 0 when it does not say
- * @return the context to configure, never above trained_ctx when the model declares one
+ * @return the context to configure, never above trained_ctx unless that is below DEFAULT_N_CTX
  */
 static int clamp_context(int requested, int trained_ctx) {
     int clamped = requested > 0 ? requested : DEFAULT_N_CTX;
-    if (trained_ctx > 0 && clamped > trained_ctx) {
-        LOGi("context: n_ctx %d exceeds the model's trained %d; clamping", clamped, trained_ctx);
-        clamped = trained_ctx;
+    const int ceiling = std::max(trained_ctx, DEFAULT_N_CTX);
+    if (trained_ctx > 0 && clamped > ceiling) {
+        LOGi("context: n_ctx %d exceeds the model's trained %d; clamping to %d", clamped,
+             trained_ctx, ceiling);
+        clamped = ceiling;
     }
     return clamped;
 }

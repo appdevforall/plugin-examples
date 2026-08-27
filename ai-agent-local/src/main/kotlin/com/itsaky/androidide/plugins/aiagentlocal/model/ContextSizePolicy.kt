@@ -28,9 +28,9 @@ object ContextSizePolicy {
     private const val GRANULARITY_TOKENS = 256
 
     /**
-     * The share of usable free RAM the KV cache may claim. The IDE and the app being edited draw on
-     * the same pool, and `availMem` is a snapshot taken before a load that then takes seconds, so
-     * half is left alone rather than sizing to the last free byte.
+     * The share of what the weights and compute buffers leave that the KV cache may claim. The IDE
+     * and the app being edited draw on the same pool, and `availMem` is a snapshot taken before a
+     * load that then takes seconds, so half is left alone rather than sized to the last free byte.
      */
     private const val KV_BUDGET_DIVISOR = 2L
 
@@ -48,6 +48,8 @@ object ContextSizePolicy {
     /**
      * @param header the model's GGUF metadata, or null when it could not be read
      * @param availableBytes free RAM right now, or null when it could not be read
+     * @param modelSizeBytes the model file's size, or null when it could not be read; the weights
+     *   are charged against free RAM before the cache gets a budget
      * @param kvType the cache type this load will ask for, from [chooseKvCache]; the budget buys
      *   about twice the context under [KvCacheType.Q8_0], so the two have to be decided together
      * @return the context to configure, always between [DEFAULT_CONTEXT_TOKENS] and
@@ -56,10 +58,12 @@ object ContextSizePolicy {
     fun choose(
         header: GgufHeader?,
         availableBytes: Long?,
+        modelSizeBytes: Long?,
         kvType: KvCacheType = KvCacheType.F16,
     ): Int {
         // Each null is a distinct "we don't know"; all of them mean the same fallback.
         if (header == null || availableBytes == null) return DEFAULT_CONTEXT_TOKENS
+        val weightBytes = modelSizeBytes?.takeIf { it > 0L } ?: return DEFAULT_CONTEXT_TOKENS
         val modelTokens = header.contextLength?.takeIf { it > 0L } ?: return DEFAULT_CONTEXT_TOKENS
         // Nothing to weigh below the floor, and no reason to price a cache we would not shrink.
         if (modelTokens <= DEFAULT_CONTEXT_TOKENS) return DEFAULT_CONTEXT_TOKENS
@@ -67,8 +71,9 @@ object ContextSizePolicy {
         val perToken = ModelMemoryEstimator.kvBytesPerToken(header, kvType)?.takeIf { it > 0L }
             ?: return DEFAULT_CONTEXT_TOKENS
 
-        // Compute buffers come off the top; goes negative on a short device, which the floor absorbs.
-        val budgetBytes = (availableBytes - ModelMemory.RUN_BUFFER_BYTES) / KV_BUDGET_DIVISOR
+        // Weights and compute buffers come off the top; negative on a short device, floor absorbs it.
+        val spareBytes = availableBytes - weightBytes - ModelMemory.RUN_BUFFER_BYTES
+        val budgetBytes = spareBytes / KV_BUDGET_DIVISOR
         val affordableTokens = budgetBytes / perToken
 
         val ceiling = minOf(modelTokens, affordableTokens, MAX_CONTEXT_TOKENS.toLong())

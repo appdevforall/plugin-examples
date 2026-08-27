@@ -38,19 +38,27 @@ internal object ModelContextResolver {
      * answers its default for one. Blocking — the header sits at the front of the model file.
      *
      * @param availableBytes free RAM in bytes, or null when it could not be read
+     * @param modelSizeBytes the model file's size in bytes, or null when it could not be read; the
+     *   weights are charged against free RAM before the KV cache gets a budget
      * @param openStream opens the model file, or returns null when there is nothing to open
      * @return the context and cache type to load with, and the header behind them
      */
-    fun resolve(availableBytes: Long?, openStream: () -> InputStream?): ModelContextSize {
+    fun resolve(
+        availableBytes: Long?,
+        modelSizeBytes: Long?,
+        openStream: () -> InputStream?,
+    ): ModelContextSize {
         val header = GgufHeaderReader.read(openStream)
         // A quantized cache buys about twice the context, so the type is picked before the size.
         val kvType = ContextSizePolicy.chooseKvCache(header)
         return ModelContextSize(
-            contextTokens = ContextSizePolicy.choose(header, availableBytes, kvType),
+            contextTokens = ContextSizePolicy.choose(header, availableBytes, modelSizeBytes, kvType),
             kvType = kvType,
             // Sized here rather than scaled natively, so the fallback obeys the one policy that
             // knows the floor, the ceiling and the rounding.
-            fallbackContextTokens = ContextSizePolicy.choose(header, availableBytes, KvCacheType.F16),
+            fallbackContextTokens = ContextSizePolicy.choose(
+                header, availableBytes, modelSizeBytes, KvCacheType.F16,
+            ),
             header = header,
         )
     }

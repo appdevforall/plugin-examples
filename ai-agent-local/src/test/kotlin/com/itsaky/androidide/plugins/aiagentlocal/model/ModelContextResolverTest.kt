@@ -15,7 +15,7 @@ class ModelContextResolverTest {
 
     @Test
     fun givenAnOpenerThatThrows_whenResolving_thenReturnsTheDefaultContext() {
-        val resolved = ModelContextResolver.resolve(Long.MAX_VALUE) {
+        val resolved = resolve {
             throw IOException("permission denied")
         }
         assertEquals(DEFAULT_CONTEXT_TOKENS, resolved.contextTokens)
@@ -24,14 +24,14 @@ class ModelContextResolverTest {
 
     @Test
     fun givenAnOpenerReturningNoStream_whenResolving_thenReturnsTheDefaultContext() {
-        val resolved = ModelContextResolver.resolve(Long.MAX_VALUE) { null }
+        val resolved = resolve { null }
         assertEquals(DEFAULT_CONTEXT_TOKENS, resolved.contextTokens)
         assertNull(resolved.header)
     }
 
     @Test
     fun givenAStreamThatIsNotGguf_whenResolving_thenReturnsTheDefaultContext() {
-        val resolved = ModelContextResolver.resolve(Long.MAX_VALUE) {
+        val resolved = resolve {
             "not a model file".byteInputStream()
         }
         assertEquals(DEFAULT_CONTEXT_TOKENS, resolved.contextTokens)
@@ -40,27 +40,45 @@ class ModelContextResolverTest {
 
     @Test
     fun givenAStreamThatThrowsMidRead_whenResolving_thenReturnsTheDefaultContext() {
-        val resolved = ModelContextResolver.resolve(Long.MAX_VALUE) { ThrowingStream() }
+        val resolved = resolve { ThrowingStream() }
         assertEquals(DEFAULT_CONTEXT_TOKENS, resolved.contextTokens)
         assertNull(resolved.header)
     }
 
     @Test
     fun givenUnknownFreeMemory_whenResolving_thenReturnsTheDefaultContext() {
-        val resolved = ModelContextResolver.resolve(null) { "not a model file".byteInputStream() }
+        val resolved = ModelContextResolver.resolve(null, MODEL_SIZE) {
+            "not a model file".byteInputStream()
+        }
         assertEquals(DEFAULT_CONTEXT_TOKENS, resolved.contextTokens)
     }
 
     @Test
     fun givenAnUnreadableHeader_whenResolving_thenTheFallbackSizeIsTheDefaultToo() {
         // No header means f16, so the native fallback has nothing shorter to drop to.
-        val resolved = ModelContextResolver.resolve(Long.MAX_VALUE) { null }
+        val resolved = resolve { null }
         assertEquals(KvCacheType.F16, resolved.kvType)
         assertEquals(resolved.contextTokens, resolved.fallbackContextTokens)
     }
 
+    @Test
+    fun givenUnknownModelSize_whenResolving_thenReturnsTheDefaultContext() {
+        val resolved = ModelContextResolver.resolve(Long.MAX_VALUE, null) {
+            "not a model file".byteInputStream()
+        }
+        assertEquals(DEFAULT_CONTEXT_TOKENS, resolved.contextTokens)
+    }
+
+    /** [ModelContextResolver.resolve] with room to spare, so only the header decides the answer. */
+    private fun resolve(openStream: () -> InputStream?) =
+        ModelContextResolver.resolve(Long.MAX_VALUE, MODEL_SIZE, openStream)
+
     /** Opens fine and then fails, which is the case a null-check on the opener would not cover. */
     private class ThrowingStream : InputStream() {
         override fun read(): Int = throw IOException("device is gone")
+    }
+
+    private companion object {
+        const val MODEL_SIZE = 64L * 1024 * 1024
     }
 }

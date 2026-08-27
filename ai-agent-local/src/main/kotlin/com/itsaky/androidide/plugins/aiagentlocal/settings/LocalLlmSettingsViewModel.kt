@@ -12,9 +12,10 @@ import com.itsaky.androidide.plugins.aiagentlocal.R
 import com.itsaky.androidide.plugins.aiagentlocal.format.ByteSize
 import com.itsaky.androidide.plugins.aiagentlocal.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aiagentlocal.model.ContentModelFileSource
+import com.itsaky.androidide.plugins.aiagentlocal.model.ContextSizePolicy
 import com.itsaky.androidide.plugins.aiagentlocal.model.DeviceMemory
 import com.itsaky.androidide.plugins.aiagentlocal.model.GgufFileInspector
-import com.itsaky.androidide.plugins.aiagentlocal.model.ModelContextResolver
+import com.itsaky.androidide.plugins.aiagentlocal.model.GgufHeaderReader
 import com.itsaky.androidide.plugins.aiagentlocal.model.ModelFileInfo
 import com.itsaky.androidide.plugins.aiagentlocal.model.ModelFileSource
 import com.itsaky.androidide.plugins.aiagentlocal.model.ModelMemoryEstimator
@@ -267,6 +268,9 @@ class LocalLlmSettingsViewModel(
     /**
      * Checks the model against free RAM and, when it looks too large, asks the user whether to go
      * ahead. Fails OPEN: an unreadable size or header means no warning rather than a wrong one.
+     * Prices the KV cache at the floor context, never at one derived from the free RAM it is then
+     * compared against — that would make a larger granted context the thing that trips the warning,
+     * and would move "needs X to run" between two selections of the same model.
      *
      * @return true to continue with this model
      */
@@ -278,15 +282,14 @@ class LocalLlmSettingsViewModel(
         val modelName = fileInfo.displayName
         // Never cached: the user may have just closed apps to make room.
         val availableBytes = deviceMemory.availableBytes()
-        // Resolved the same way the load will resolve it, so the warning describes the real allocation.
-        val resolved = ModelContextResolver.resolve(availableBytes) {
-            modelFiles.openStream(context, uriString)
-        }
+        // The floor is the least the load can use, so also the least this model can cost.
+        val header = GgufHeaderReader.read { modelFiles.openStream(context, uriString) }
         val estimate = ModelMemoryEstimator.estimate(
             fileSizeBytes = fileInfo.sizeBytes,
-            header = resolved.header,
-            contextTokens = resolved.contextTokens,
-            kvType = resolved.kvType,
+            header = header,
+            contextTokens = ContextSizePolicy.DEFAULT_CONTEXT_TOKENS,
+            // The type does not depend on free RAM, so the load will pick this same one.
+            kvType = ContextSizePolicy.chooseKvCache(header),
         )
 
         return when (val verdict = ModelMemoryGate.evaluate(estimate, availableBytes)) {

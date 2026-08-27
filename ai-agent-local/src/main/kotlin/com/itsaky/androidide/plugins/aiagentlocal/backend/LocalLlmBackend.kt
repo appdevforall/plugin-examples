@@ -338,6 +338,33 @@ class LocalLlmBackend(
         modelLoaded = true
         currentModelPath = resolvedPath
         context.logger.info("Model loaded successfully")
+        reportEffectiveContextSize(contextSize.contextTokens)
+    }
+
+    /**
+     * Logs the context the native side actually created. It can be smaller than what was asked for
+     * — clamped to the trained context, or dropped to the shorter f16 fallback when a quantized
+     * cache was refused — and a prompt rejected as too long otherwise looks like it fit.
+     *
+     * @param requestedTokens the context [resolveContextSize] asked for
+     */
+    private suspend fun reportEffectiveContextSize(requestedTokens: Int) {
+        val actual = try {
+            llama.getContextSize()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            context.logger.warn("Could not read the created context size: ${e.message}")
+            return
+        }
+        if (actual == requestedTokens) {
+            context.logger.info("Context size in effect: $actual tokens")
+        } else {
+            context.logger.warn(
+                "Context size in effect: $actual tokens, not the $requestedTokens requested;" +
+                    " prompt-length limits follow the smaller number"
+            )
+        }
     }
 
     /**
@@ -356,9 +383,11 @@ class LocalLlmBackend(
         availableBytes: Long,
     ): ModelContextSize {
         val resolved = withContext(Dispatchers.IO) {
-            ModelContextResolver.resolve(availableBytes.takeIf { it >= 0L }) {
-                File(resolvedPath).takeIf { it.isFile }?.inputStream()
-            }
+            val file = File(resolvedPath).takeIf { it.isFile }
+            ModelContextResolver.resolve(
+                availableBytes = availableBytes.takeIf { it >= 0L },
+                modelSizeBytes = file?.length()?.takeIf { it > 0L },
+            ) { file?.inputStream() }
         }
         // Unconditional: a wrongly sized context otherwise just reads as the assistant forgetting.
         context.logger.info(

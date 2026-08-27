@@ -24,8 +24,8 @@ data class MemoryEstimate(
 /**
  * Estimates the memory a `.gguf` model needs, from its size and its declared shape. Pure and
  * Android-free, so the arithmetic is unit-testable. The context and cache type it measures at are
- * the caller's — pass what [ModelContextResolver] resolved, or it describes an allocation nothing
- * makes. See ADFA-5187 and ADFA-5188.
+ * the caller's: the load path passes what [ModelContextResolver] resolved, the pre-flight warning
+ * the floor, since a figure derived from free RAM cannot then be judged against it (ADFA-5187/5188).
  */
 object ModelMemoryEstimator {
 
@@ -47,8 +47,8 @@ object ModelMemoryEstimator {
     /**
      * @param fileSizeBytes the model file's size, or null when it is unknown
      * @param header the model's metadata, or null when it could not be read
-     * @param contextTokens the context the load will be given; required, because a default here
-     *   would silently describe an allocation nobody makes. [ModelContextResolver] supplies it.
+     * @param contextTokens the context to price the cache at; required, because a default here
+     *   would silently describe an allocation nobody makes
      * @param kvType the cache type the load will be given; required for the same reason, and from
      *   the same [ModelContextResolver] answer, since it halves what a cached token costs
      * @return the estimate, or null when there is nothing to base one on
