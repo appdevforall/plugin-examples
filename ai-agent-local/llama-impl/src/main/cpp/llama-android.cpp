@@ -391,11 +391,14 @@ Java_android_llama_cpp_LLamaAndroid_new_1context(JNIEnv *env, jobject, jlong jmo
 
     int requested_ctx = jn_ctx > 0 ? jn_ctx : DEFAULT_N_CTX;
 
-    // Backstop on Kotlin's number: a misparsed header must not exceed what the model was trained for.
+    // Backstop on Kotlin's number: a misparsed header must not exceed the trained context. Floored
+    // at DEFAULT_N_CTX, the context a 2048-trained model always got, so no prompt that fit regresses.
     const int trained_ctx = llama_model_n_ctx_train(model);
-    if (trained_ctx > 0 && requested_ctx > trained_ctx) {
-        LOGi("context: requested n_ctx %d exceeds the model's trained %d; clamping", requested_ctx, trained_ctx);
-        requested_ctx = trained_ctx;
+    const int clamp_ctx = std::max(trained_ctx, DEFAULT_N_CTX);
+    if (trained_ctx > 0 && requested_ctx > clamp_ctx) {
+        LOGi("context: requested n_ctx %d exceeds the model's trained %d; clamping to %d",
+             requested_ctx, trained_ctx, clamp_ctx);
+        requested_ctx = clamp_ctx;
     }
 
     ctx_params.n_ctx = requested_ctx;

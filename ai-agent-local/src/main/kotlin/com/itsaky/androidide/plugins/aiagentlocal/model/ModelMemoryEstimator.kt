@@ -23,8 +23,9 @@ data class MemoryEstimate(
 
 /**
  * Estimates the memory a `.gguf` model needs, from its size and its declared shape. Pure and
- * Android-free, so the arithmetic is unit-testable. The context it measures at is the caller's —
- * pass [ContextSizePolicy.choose]'s answer, or it describes an allocation nothing makes (ADFA-5187).
+ * Android-free, so the arithmetic is unit-testable. The context it measures at is the caller's: the
+ * load path passes [ContextSizePolicy.choose]'s answer, the pre-flight warning the floor, since a
+ * figure derived from free RAM cannot then be judged against it (ADFA-5187).
  */
 object ModelMemoryEstimator {
 
@@ -49,8 +50,8 @@ object ModelMemoryEstimator {
     /**
      * @param fileSizeBytes the model file's size, or null when it is unknown
      * @param header the model's metadata, or null when it could not be read
-     * @param contextTokens the context the load will be given; required, because a default here
-     *   would silently describe an allocation nobody makes. [ModelContextResolver] supplies it.
+     * @param contextTokens the context to price the cache at; required, because a default here
+     *   would silently describe an allocation nobody makes
      * @return the estimate, or null when there is nothing to base one on
      */
     fun estimate(

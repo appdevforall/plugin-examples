@@ -30,13 +30,19 @@ internal object ModelContextResolver {
      * answers its default for one. Blocking — the header sits at the front of the model file.
      *
      * @param availableBytes free RAM in bytes, or null when it could not be read
+     * @param modelSizeBytes the model file's size in bytes, or null when it could not be read; the
+     *   weights are charged against free RAM before the KV cache gets a budget
      * @param openStream opens the model file, or returns null when there is nothing to open
      * @return the context to load with, and the header behind it
      */
-    fun resolve(availableBytes: Long?, openStream: () -> InputStream?): ModelContextSize {
+    fun resolve(
+        availableBytes: Long?,
+        modelSizeBytes: Long?,
+        openStream: () -> InputStream?,
+    ): ModelContextSize {
         val header = GgufHeaderReader.read(openStream)
         return ModelContextSize(
-            contextTokens = ContextSizePolicy.choose(header, availableBytes),
+            contextTokens = ContextSizePolicy.choose(header, availableBytes, modelSizeBytes),
             header = header,
         )
     }

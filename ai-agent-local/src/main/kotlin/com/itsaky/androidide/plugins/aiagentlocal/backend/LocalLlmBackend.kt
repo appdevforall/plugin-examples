@@ -331,6 +331,33 @@ class LocalLlmBackend(
         modelLoaded = true
         currentModelPath = resolvedPath
         context.logger.info("Model loaded successfully")
+        reportEffectiveContextSize(contextTokens)
+    }
+
+    /**
+     * Logs the context the native side actually created. It can be smaller than what was asked for
+     * — `new_context` clamps a request above what the model was trained for — and without this the
+     * only visible number is the request, so a prompt rejected as too long looks like it fit.
+     *
+     * @param requestedTokens the context [resolveContextSize] asked for
+     */
+    private suspend fun reportEffectiveContextSize(requestedTokens: Int) {
+        val actual = try {
+            llama.getContextSize()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            context.logger.warn("Could not read the created context size: ${e.message}")
+            return
+        }
+        if (actual == requestedTokens) {
+            context.logger.info("Context size in effect: $actual tokens")
+        } else {
+            context.logger.warn(
+                "Context size in effect: $actual tokens, not the $requestedTokens requested;" +
+                    " prompt-length limits follow the smaller number"
+            )
+        }
     }
 
     /**
@@ -344,9 +371,11 @@ class LocalLlmBackend(
      */
     private suspend fun resolveContextSize(resolvedPath: String, availableBytes: Long): Int {
         val resolved = withContext(Dispatchers.IO) {
-            ModelContextResolver.resolve(availableBytes.takeIf { it >= 0L }) {
-                File(resolvedPath).takeIf { it.isFile }?.inputStream()
-            }
+            val file = File(resolvedPath).takeIf { it.isFile }
+            ModelContextResolver.resolve(
+                availableBytes = availableBytes.takeIf { it >= 0L },
+                modelSizeBytes = file?.length()?.takeIf { it > 0L },
+            ) { file?.inputStream() }
         }
         // Unconditional: a wrongly sized context otherwise just reads as the assistant forgetting.
         context.logger.info(
