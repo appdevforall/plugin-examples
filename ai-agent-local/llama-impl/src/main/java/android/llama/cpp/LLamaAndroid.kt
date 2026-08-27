@@ -270,14 +270,27 @@ class LLamaAndroid : ILlamaController {
                     val model = load_model(pathToModel)
                     if (model == 0L) throw IllegalStateException("load_model() failed")
 
-                    val context = new_context(model, nCtx, quantizeKv, fallbackNCtx)
-                    if (context == 0L) throw IllegalStateException("new_context() failed")
+                    // Only State.Loaded holds these, so a later step failing leaks them unless freed here.
+                    var context = 0L
+                    var batch = 0L
+                    var sampler = 0L
+                    try {
+                        context = new_context(model, nCtx, quantizeKv, fallbackNCtx)
+                        if (context == 0L) throw IllegalStateException("new_context() failed")
 
-                    val batch = new_batch(2048, 0, 1)
-                    if (batch == 0L) throw IllegalStateException("new_batch() failed")
+                        batch = new_batch(2048, 0, 1)
+                        if (batch == 0L) throw IllegalStateException("new_batch() failed")
 
-                    val sampler = new_sampler()
-                    if (sampler == 0L) throw IllegalStateException("new_sampler() failed")
+                        sampler = new_sampler()
+                        if (sampler == 0L) throw IllegalStateException("new_sampler() failed")
+                    } catch (e: Throwable) {
+                        // Model last: the context borrows from it, so it has to outlive the context.
+                        if (sampler != 0L) free_sampler(sampler)
+                        if (batch != 0L) free_batch(batch)
+                        if (context != 0L) free_context(context)
+                        free_model(model)
+                        throw e
+                    }
 
                     log.info("Loaded model {}", pathToModel)
                     threadLocalState.set(State.Loaded(model, context, batch, sampler))

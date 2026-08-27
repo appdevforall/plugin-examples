@@ -437,18 +437,38 @@ Java_android_llama_cpp_LLamaAndroid_new_1context(JNIEnv *env, jobject, jlong jmo
     llama_context *context = llama_init_from_model(model, ctx_params);
     bool quantized_in_use = quantize_kv;
 
-    if (!context) {
-        // The safety fallback: f16 with flash attention off is the one configuration nothing here
-        // can refuse — no block-size constraint on the cache, and no graph for AUTO to fail to
-        // place. It costs the attention speed-up on a model whose only problem was the cache type,
-        // which is the cheaper mistake to make. Kotlin already screens the head width, so getting
-        // here at all means the header and llama.cpp disagreed.
+    // Two unrelated failures land here and want opposite retries: a refused quantized cache is not
+    // a shortage and keeps its long context, while a shortage is answered only by fewer bytes.
+    if (!context && quantize_kv) {
+        // f16 with flash attention off is the one configuration nothing here can refuse — no
+        // block-size constraint on the cache, and no graph for AUTO to fail to place. It costs the
+        // attention speed-up on a model whose only problem was the cache type, which is the cheaper
+        // mistake to make. Kotlin already screens the head width, so getting here at all means the
+        // header and llama.cpp disagreed.
         LOGe("Context creation failed; retrying at f16 with flash attention off and n_ctx %d",
              fallback_ctx);
         ctx_params.type_k = GGML_TYPE_F16;
         ctx_params.type_v = GGML_TYPE_F16;
         ctx_params.flash_attn_type = LLAMA_FLASH_ATTN_TYPE_DISABLED;
         ctx_params.n_ctx = fallback_ctx;
+        context = llama_init_from_model(model, ctx_params);
+        quantized_in_use = false;
+    }
+
+    // The only retry that shrinks the allocation, back to the context every load got before this was
+    // sized per device; fallback_ctx cannot, since f16 costs what q8_0 bought the extra tokens with.
+    // The guard skips an attempt that would re-request exactly what just failed.
+    // n_ctx is unsigned; every value compared here is a clamped positive.
+    const int current_ctx = (int) ctx_params.n_ctx;
+    const int floor_ctx = std::min(current_ctx, DEFAULT_N_CTX);
+    if (!context && (floor_ctx < current_ctx ||
+                     ctx_params.flash_attn_type != LLAMA_FLASH_ATTN_TYPE_DISABLED)) {
+        LOGe("Context creation failed; retrying at the n_ctx %d floor with f16 and flash attention off",
+             floor_ctx);
+        ctx_params.type_k = GGML_TYPE_F16;
+        ctx_params.type_v = GGML_TYPE_F16;
+        ctx_params.flash_attn_type = LLAMA_FLASH_ATTN_TYPE_DISABLED;
+        ctx_params.n_ctx = floor_ctx;
         context = llama_init_from_model(model, ctx_params);
         quantized_in_use = false;
     }
