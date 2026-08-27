@@ -1,7 +1,5 @@
 package com.itsaky.androidide.plugins.aiagentlocal.model
 
-import java.io.InputStream
-
 /**
  * The context size one model load should get, and the header it was decided from.
  *
@@ -18,32 +16,29 @@ internal data class ModelContextSize(
 }
 
 /**
- * Decides how large a context a given model gets on this device: reads the model's GGUF header and
- * hands it to [ContextSizePolicy]. Owning both steps lets the load path and the pre-load memory
- * warning derive their numbers the same way, and stays Android-free to test. See ADFA-5187.
+ * Decides how large a context a given model gets on this device, from the header someone else
+ * already read. Pure, so the load path can take its free-RAM reading after an unload and still
+ * price the same header the embedding-model guard used. See ADFA-5187.
  */
 internal object ModelContextResolver {
 
     /**
-     * Fails open by construction, with no error path of its own: [GgufHeaderReader.read] turns
-     * anything thrown while opening or parsing into a null header, and [ContextSizePolicy.choose]
-     * answers its default for one. Blocking — the header sits at the front of the model file.
+     * Fails open by construction, with no error path of its own: a null header is what
+     * [GgufHeaderReader.read] returns for anything it could not open or parse, and
+     * [ContextSizePolicy.choose] answers its default for one.
      *
+     * @param header the model's parsed metadata, or null when it could not be read
      * @param availableBytes free RAM in bytes, or null when it could not be read
      * @param modelSizeBytes the model file's size in bytes, or null when it could not be read; the
      *   weights are charged against free RAM before the KV cache gets a budget
-     * @param openStream opens the model file, or returns null when there is nothing to open
      * @return the context to load with, and the header behind it
      */
     fun resolve(
+        header: GgufHeader?,
         availableBytes: Long?,
         modelSizeBytes: Long?,
-        openStream: () -> InputStream?,
-    ): ModelContextSize {
-        val header = GgufHeaderReader.read(openStream)
-        return ModelContextSize(
-            contextTokens = ContextSizePolicy.choose(header, availableBytes, modelSizeBytes),
-            header = header,
-        )
-    }
+    ): ModelContextSize = ModelContextSize(
+        contextTokens = ContextSizePolicy.choose(header, availableBytes, modelSizeBytes),
+        header = header,
+    )
 }

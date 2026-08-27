@@ -150,6 +150,33 @@ class ContextSizePolicyTest {
     }
 
     @Test
+    fun givenAModelLargerThanFreeRam_whenChoosing_thenHoldsTheFloorRatherThanWrapping() {
+        // Unclamped, both subtractions underflow here and the wrapped budget picks the ceiling.
+        assertEquals(DEFAULT_CONTEXT_TOKENS, choose(header(), 0L, Long.MAX_VALUE))
+        assertEquals(DEFAULT_CONTEXT_TOKENS, choose(header(), 1L, Long.MAX_VALUE))
+        assertEquals(DEFAULT_CONTEXT_TOKENS, choose(header(), ramAffording(100_000L), Long.MAX_VALUE))
+    }
+
+    @Test
+    fun givenNegativeFreeMemory_whenChoosing_thenFallsBackToDefault() {
+        assertEquals(DEFAULT_CONTEXT_TOKENS, choose(header(), -1L))
+        assertEquals(DEFAULT_CONTEXT_TOKENS, choose(header(), Long.MIN_VALUE))
+    }
+
+    @Test
+    fun givenGrowingModelSizes_whenChoosing_thenTheContextNeverGrows() {
+        // Monotonicity is what a bounds-only assertion misses: a wrap reads as more RAM, not less.
+        val availableBytes = ramAffording(50_000L, weightBytes = 0L)
+        val sizes = listOf(1L, 1L shl 20, 1L shl 30, 4L shl 30, Long.MAX_VALUE / 2, Long.MAX_VALUE)
+        var previous = MAX_CONTEXT_TOKENS
+        for (size in sizes) {
+            val result = choose(header(), availableBytes, size)
+            assertTrue("size=$size gave $result, up from $previous", result <= previous)
+            previous = result
+        }
+    }
+
+    @Test
     fun givenTwoModelSizesAndTheSameFreeRam_whenChoosing_thenTheLargerModelGetsLessContext() {
         val availableBytes = ramAffording(12_000L, weightBytes = 0L)
         val small = choose(header(), availableBytes, modelSizeBytes = 128L * 1024 * 1024)
@@ -160,7 +187,8 @@ class ContextSizePolicyTest {
     @Test
     fun givenAnyInputs_whenChoosing_thenResultStaysWithinTheDeclaredBounds() {
         val contexts = listOf(null, -1L, 0L, 512L, 4096L, 8192L, 32768L, Long.MAX_VALUE)
-        val memories = listOf(null, 0L, 1L, ModelMemory.RUN_BUFFER_BYTES, ramAffording(50_000L), Long.MAX_VALUE)
+        val memories =
+            listOf(null, Long.MIN_VALUE, -1L, 0L, 1L, ModelMemory.RUN_BUFFER_BYTES, ramAffording(50_000L), Long.MAX_VALUE)
         val sizes = listOf(null, -1L, 0L, 1L, modelSize, Long.MAX_VALUE)
         for (context in contexts) {
             for (memory in memories) {
