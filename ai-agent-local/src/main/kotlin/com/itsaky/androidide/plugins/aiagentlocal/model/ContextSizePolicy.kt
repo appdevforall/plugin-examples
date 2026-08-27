@@ -47,7 +47,8 @@ object ContextSizePolicy {
 
     /**
      * @param header the model's GGUF metadata, or null when it could not be read
-     * @param availableBytes free RAM right now, or null when it could not be read
+     * @param availableBytes free RAM right now, or null when it could not be read; a negative
+     *   reading is treated as unreadable too
      * @param modelSizeBytes the model file's size, or null when it could not be read; the weights
      *   are charged against free RAM before the cache gets a budget
      * @param kvType the cache type this load will ask for, from [chooseKvCache]; the budget buys
@@ -62,7 +63,9 @@ object ContextSizePolicy {
         kvType: KvCacheType = KvCacheType.F16,
     ): Int {
         // Each null is a distinct "we don't know"; all of them mean the same fallback.
-        if (header == null || availableBytes == null) return DEFAULT_CONTEXT_TOKENS
+        if (header == null) return DEFAULT_CONTEXT_TOKENS
+        // A negative reading is not free RAM this can reason about, so treat it as unreadable.
+        val freeBytes = availableBytes?.takeIf { it >= 0L } ?: return DEFAULT_CONTEXT_TOKENS
         val weightBytes = modelSizeBytes?.takeIf { it > 0L } ?: return DEFAULT_CONTEXT_TOKENS
         val modelTokens = header.contextLength?.takeIf { it > 0L } ?: return DEFAULT_CONTEXT_TOKENS
         // Nothing to weigh below the floor, and no reason to price a cache we would not shrink.
@@ -71,8 +74,11 @@ object ContextSizePolicy {
         val perToken = ModelMemoryEstimator.kvBytesPerToken(header, kvType)?.takeIf { it > 0L }
             ?: return DEFAULT_CONTEXT_TOKENS
 
-        // Weights and compute buffers come off the top; negative on a short device, floor absorbs it.
-        val spareBytes = availableBytes - weightBytes - ModelMemory.RUN_BUFFER_BYTES
+        // Weights first, then the compute buffers, each clamped at zero rather than left to run
+        // negative: an unclamped Long would underflow on an absurd size and wrap to a huge
+        // positive budget, turning "no RAM at all" into the ceiling instead of the floor.
+        val afterWeights = (freeBytes - weightBytes).coerceAtLeast(0L)
+        val spareBytes = (afterWeights - ModelMemory.RUN_BUFFER_BYTES).coerceAtLeast(0L)
         val budgetBytes = spareBytes / KV_BUDGET_DIVISOR
         val affordableTokens = budgetBytes / perToken
 

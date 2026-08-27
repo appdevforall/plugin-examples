@@ -8,8 +8,9 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
- * Pins the fail-open contract: no way of failing to read a header may propagate out of [resolve],
- * because the caller is a model load that should proceed at the default context instead of aborting.
+ * Pins the fail-open contract of the read-then-resolve pair the load path runs: no way of failing
+ * to read a header may propagate out of it, because the caller is a model load that should proceed
+ * at the default context instead of aborting.
  */
 class ModelContextResolverTest {
 
@@ -47,9 +48,7 @@ class ModelContextResolverTest {
 
     @Test
     fun givenUnknownFreeMemory_whenResolving_thenReturnsTheDefaultContext() {
-        val resolved = ModelContextResolver.resolve(null, MODEL_SIZE) {
-            "not a model file".byteInputStream()
-        }
+        val resolved = ModelContextResolver.resolve(header(), null, MODEL_SIZE)
         assertEquals(DEFAULT_CONTEXT_TOKENS, resolved.contextTokens)
     }
 
@@ -63,15 +62,25 @@ class ModelContextResolverTest {
 
     @Test
     fun givenUnknownModelSize_whenResolving_thenReturnsTheDefaultContext() {
-        val resolved = ModelContextResolver.resolve(Long.MAX_VALUE, null) {
-            "not a model file".byteInputStream()
-        }
+        val resolved = ModelContextResolver.resolve(header(), Long.MAX_VALUE, null)
         assertEquals(DEFAULT_CONTEXT_TOKENS, resolved.contextTokens)
     }
 
-    /** [ModelContextResolver.resolve] with room to spare, so only the header decides the answer. */
+    /** Reads then resolves the way the load path does, with room to spare so only the header decides. */
     private fun resolve(openStream: () -> InputStream?) =
-        ModelContextResolver.resolve(Long.MAX_VALUE, MODEL_SIZE, openStream)
+        ModelContextResolver.resolve(GgufHeaderReader.read(openStream), Long.MAX_VALUE, MODEL_SIZE)
+
+    /** A header that would earn more than the floor, so a null one is what the assertions catch. */
+    private fun header() = GgufHeader(
+        architecture = "llama",
+        blockCount = 24L,
+        embeddingLength = 1024L,
+        headCount = 16L,
+        headCountKv = 8L,
+        keyLength = 64L,
+        valueLength = 64L,
+        contextLength = 32768L,
+    )
 
     /** Opens fine and then fails, which is the case a null-check on the opener would not cover. */
     private class ThrowingStream : InputStream() {

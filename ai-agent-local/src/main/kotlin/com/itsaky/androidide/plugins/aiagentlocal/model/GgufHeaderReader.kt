@@ -11,33 +11,36 @@ import java.io.InputStream
  * The GGUF metadata the memory estimate needs. Every field is nullable because a file may omit any
  * key; the estimator then falls back to a heuristic instead of guessing.
  *
+ * New properties are appended rather than inserted: every one of them is `Long?`, so a positional
+ * construction that shifted would still compile and silently bind the wrong value to each name.
+ *
  * @property architecture `general.architecture`; also the prefix every other key here is read under
  * @property blockCount transformer layers, `{arch}.block_count`
- * @property contextLength the context the model was trained for, `{arch}.context_length`; the
- *   ceiling [ContextSizePolicy] sizes the KV cache against, and absent on files that omit it
  * @property embeddingLength model width, `{arch}.embedding_length`
  * @property headCount attention heads, `{arch}.attention.head_count`
  * @property headCountKv key/value heads under grouped-query attention, absent for plain MHA
  * @property keyLength per-head key width, `{arch}.attention.key_length`; absent means it is the
  *   model width divided by the head count, which is only the default and not always the truth
  * @property valueLength per-head value width, `{arch}.attention.value_length`; as [keyLength]
+ * @property contextLength the context the model was trained for, `{arch}.context_length`; the
+ *   ceiling [ContextSizePolicy] sizes the KV cache against, and absent on files that omit it
  */
 data class GgufHeader(
     val architecture: String?,
     val blockCount: Long?,
-    val contextLength: Long? = null,
     val embeddingLength: Long?,
     val headCount: Long?,
     val headCountKv: Long?,
     val keyLength: Long? = null,
     val valueLength: Long? = null,
+    val contextLength: Long? = null,
 )
 
 /**
  * Reads the metadata block at the front of a `.gguf` file — the shape values the KV-cache estimate
- * needs. Never reads the weights, and fails closed to null: an unreadable header must mean "no
- * estimate", never a wrong one. Parses the same metadata block as [GgufModelInspector], which
- * answers a different question — chat model or embedding model.
+ * needs, plus the architecture [GgufModelInspector] classifies. Never reads the weights, and fails
+ * closed to null: an unreadable header must mean "no estimate", never a wrong one. The one parser
+ * for this block, so a model load walks the front of the file once.
  */
 internal object GgufHeaderReader {
 
@@ -203,12 +206,12 @@ internal object GgufHeaderReader {
         return GgufHeader(
             architecture = architecture,
             blockCount = shape?.blockCount,
-            contextLength = shape?.contextLength,
             embeddingLength = shape?.embeddingLength,
             headCount = shape?.headCount,
             headCountKv = shape?.headCountKv,
             keyLength = shape?.keyLength,
             valueLength = shape?.valueLength,
+            contextLength = shape?.contextLength,
         )
     }
 

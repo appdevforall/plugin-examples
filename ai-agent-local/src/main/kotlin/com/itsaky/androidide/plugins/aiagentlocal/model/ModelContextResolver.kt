@@ -1,7 +1,5 @@
 package com.itsaky.androidide.plugins.aiagentlocal.model
 
-import java.io.InputStream
-
 /**
  * What one model load should get — context size and KV cache type — and the header behind them.
  *
@@ -25,30 +23,28 @@ internal data class ModelContextSize(
 }
 
 /**
- * Decides what one model load gets on this device — context size and KV cache type: reads the
- * model's GGUF header and hands it to [ContextSizePolicy]. Owning every step lets the load path and
- * the pre-load memory warning derive their numbers the same way, and stays Android-free to test.
- * See ADFA-5187 and ADFA-5188.
+ * Decides what one model load gets on this device — context size and KV cache type — from the header
+ * someone else already read. Pure, so the load path can take its free-RAM reading after an unload
+ * and still price the same header the embedding-model guard used. See ADFA-5187 and ADFA-5188.
  */
 internal object ModelContextResolver {
 
     /**
-     * Fails open by construction, with no error path of its own: [GgufHeaderReader.read] turns
-     * anything thrown while opening or parsing into a null header, and [ContextSizePolicy.choose]
-     * answers its default for one. Blocking — the header sits at the front of the model file.
+     * Fails open by construction, with no error path of its own: a null header is what
+     * [GgufHeaderReader.read] returns for anything it could not open or parse, and
+     * [ContextSizePolicy.choose] answers its default for one.
      *
+     * @param header the model's parsed metadata, or null when it could not be read
      * @param availableBytes free RAM in bytes, or null when it could not be read
      * @param modelSizeBytes the model file's size in bytes, or null when it could not be read; the
      *   weights are charged against free RAM before the KV cache gets a budget
-     * @param openStream opens the model file, or returns null when there is nothing to open
      * @return the context and cache type to load with, and the header behind them
      */
     fun resolve(
+        header: GgufHeader?,
         availableBytes: Long?,
         modelSizeBytes: Long?,
-        openStream: () -> InputStream?,
     ): ModelContextSize {
-        val header = GgufHeaderReader.read(openStream)
         // A quantized cache buys about twice the context, so the type is picked before the size.
         val kvType = ContextSizePolicy.chooseKvCache(header)
         return ModelContextSize(

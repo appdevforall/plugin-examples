@@ -280,8 +280,6 @@ class LocalLlmSettingsViewModel(
         context: Context
     ): Boolean {
         val modelName = fileInfo.displayName
-        // Never cached: the user may have just closed apps to make room.
-        val availableBytes = deviceMemory.availableBytes()
         // The floor is the least the load can use, so also the least this model can cost.
         val header = GgufHeaderReader.read { modelFiles.openStream(context, uriString) }
         val estimate = ModelMemoryEstimator.estimate(
@@ -291,6 +289,9 @@ class LocalLlmSettingsViewModel(
             // The type does not depend on free RAM, so the load will pick this same one.
             kvType = ContextSizePolicy.chooseKvCache(header),
         )
+        // Read last and never cached: the header parse above is blocking I/O over the model file,
+        // and the user may have just closed apps to make room.
+        val availableBytes = deviceMemory.availableBytes()
 
         return when (val verdict = ModelMemoryGate.evaluate(estimate, availableBytes)) {
             ModelMemoryGate.Verdict.Safe -> true
