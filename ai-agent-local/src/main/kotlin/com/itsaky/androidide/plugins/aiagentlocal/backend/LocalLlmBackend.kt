@@ -297,15 +297,19 @@ class LocalLlmBackend(
         // sizing after the unload: it sits at the front of a multi-GB file, and a model switch
         // used to walk it twice.
         val modelFile = File(resolvedPath).takeIf { it.isFile }
+        val openModel = { modelFile?.inputStream() }
         val (header, modelSizeBytes) = withContext(Dispatchers.IO) {
-            GgufHeaderReader.read { modelFile?.inputStream() } to
-                modelFile?.length()?.takeIf { it > 0L }
+            GgufHeaderReader.read(openModel) to modelFile?.length()?.takeIf { it > 0L }
         }
 
         // Guard the chat path against encoder-only embedding models. Running causal generation on
         // one aborts natively (SIGABRT) and takes the IDE down. Classify BEFORE unloading any
         // working chat model, so a wrong selection never tears down a good one. See ADFA-4388.
-        if (GgufModelInspector.classify(header).isEmbeddingOnly) {
+        // The overload rescans for the architecture alone, and only if the parse above gave up.
+        val modelKind = withContext(Dispatchers.IO) {
+            GgufModelInspector.classify(header, openModel)
+        }
+        if (modelKind.isEmbeddingOnly) {
             throw IncompatibleModelException(
                 "The selected model is an embedding model and can't be used for chat. " +
                     "Choose a chat model in AI Settings."

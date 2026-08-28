@@ -46,6 +46,10 @@ object ContextSizePolicy {
         if (KvCacheType.Q8_0.supports(header)) KvCacheType.Q8_0 else KvCacheType.F16
 
     /**
+     * The weights are charged against free RAM even though they are mmap'd: this reading is taken
+     * before a load that then pages them in from the same pool. So a model whose file approaches
+     * free RAM gets the floor — deliberate, since the alternative is sizing a cache it must fight.
+     *
      * @param header the model's GGUF metadata, or null when it could not be read
      * @param availableBytes free RAM right now, or null when it could not be read; a negative
      *   reading is treated as unreadable too
@@ -74,9 +78,7 @@ object ContextSizePolicy {
         val perToken = ModelMemoryEstimator.kvBytesPerToken(header, kvType)?.takeIf { it > 0L }
             ?: return DEFAULT_CONTEXT_TOKENS
 
-        // Weights first, then the compute buffers, each clamped at zero rather than left to run
-        // negative: an unclamped Long would underflow on an absurd size and wrap to a huge
-        // positive budget, turning "no RAM at all" into the ceiling instead of the floor.
+        // Each clamped at zero: an unclamped Long underflows on an absurd size and wraps positive.
         val afterWeights = (freeBytes - weightBytes).coerceAtLeast(0L)
         val spareBytes = (afterWeights - ModelMemory.RUN_BUFFER_BYTES).coerceAtLeast(0L)
         val budgetBytes = spareBytes / KV_BUDGET_DIVISOR

@@ -40,7 +40,7 @@ data class GgufHeader(
  * Reads the metadata block at the front of a `.gguf` file — the shape values the KV-cache estimate
  * needs, plus the architecture [GgufModelInspector] classifies. Never reads the weights, and fails
  * closed to null: an unreadable header must mean "no estimate", never a wrong one. The one parser
- * for this block, so a model load walks the front of the file once.
+ * for this block — a well-formed file is walked once, [readArchitecture] retries only after a null.
  */
 internal object GgufHeaderReader {
 
@@ -105,6 +105,23 @@ internal object GgufHeaderReader {
         }
     } catch (e: Throwable) {
         // Throwable, so a StackOverflowError is a null header rather than a crash.
+        null
+    }
+
+    /**
+     * The architecture and nothing else, for the crash guard when [read] already returned null.
+     * Stops at the first `general.architecture` — conventionally the first entry — so nothing later
+     * in the block can defeat it. Blocking I/O, bounded by [MAX_METADATA_BYTES].
+     *
+     * @param openStream opens the candidate model, or returns null when it can't be opened
+     * @return the declared architecture, or null if the parse never reached it
+     */
+    fun readArchitecture(openStream: () -> InputStream?): String? = try {
+        openStream()?.use { stream ->
+            val budgeted = BudgetedInputStream(stream, MAX_METADATA_BYTES)
+            readArchitectureOnly(DataInputStream(BufferedInputStream(budgeted, 1 shl 16)))
+        }
+    } catch (_: Throwable) {
         null
     }
 
@@ -213,6 +230,30 @@ internal object GgufHeaderReader {
             valueLength = shape?.valueLength,
             contextLength = shape?.contextLength,
         )
+    }
+
+    /**
+     * Deliberately laxer than [readHeader]: no entry-count ceiling, and it returns before reading
+     * whatever follows the architecture, so the constructs that make a full parse fail cannot make
+     * an embedding model look chat-capable. See ADFA-4388.
+     */
+    private fun readArchitectureOnly(input: DataInputStream): String? {
+        if (readU32(input) != GGUF_MAGIC) return null
+
+        val wide = readU32(input) >= 2
+        readCount(input, wide) // tensor count, unused here
+        val entryCount = readCount(input, wide)
+        if (entryCount < 0L) return null
+
+        var index = 0L
+        while (index < entryCount) {
+            val key = readString(input, wide)
+            val type = readU32(input)
+            if (key == KEY_ARCHITECTURE && type == T_STRING) return readString(input, wide)
+            skipValue(input, type, wide)
+            index++
+        }
+        return null
     }
 
     /** The shape values for the architecture [key] belongs to, created on first sight. */
