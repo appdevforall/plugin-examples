@@ -36,8 +36,10 @@
             android:name="plugin.max_ide_version"
             android:value="26.99" />
 
-        <!-- filesystem.*: reads the selected .gguf and caches a copy under the plugin's
-             files dir. native.code: bundles the prebuilt llama.cpp .so libraries. -->
+        <!-- filesystem.read: reads the selected .gguf in place, through the read grant the
+             document picker persisted — no copy is made. filesystem.write: deletes the model
+             copies earlier releases left behind (LocalLlmBackend.deleteLegacyModelCache).
+             native.code: bundles the prebuilt llama.cpp .so libraries. -->
         <meta-data
             android:name="plugin.permissions"
             android:value="filesystem.read,filesystem.write,native.code" />

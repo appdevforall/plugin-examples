@@ -3,6 +3,7 @@
 
     <!-- Local model load failures (see ModelLoadDiagnostics) -->
     <string name="llm_load_error_missing">The model file could not be found. Re-select the .gguf model in AI Settings.</string>
+    <string name="llm_load_error_unavailable">The selected model can no longer be reached. It may have been moved, deleted, or saved to storage that isn\'t connected right now, or the IDE\'s permission to read it was withdrawn. Select the .gguf model again in AI Settings.</string>
     <string name="llm_load_error_empty">The model file is empty — the download may have been interrupted. Re-download the .gguf model and select it again.</string>
     <string name="llm_load_error_not_gguf">This file isn\'t a valid .gguf model (it may be corrupt or only partially downloaded). Re-download the model and select it again.</string>
     <string name="llm_load_error_low_memory">Loading this model needs at least %1$s of free memory, but only %2$s is available on this device. Close other apps and try again, or pick a smaller or more heavily quantized model (for example a Q4_K_M build of a 1–3B model).</string>
@@ -13,11 +14,15 @@
     <string name="state_error">Error: %s</string>
     <string name="engine_initializing">Initializing engine…</string>
     <string name="engine_ready">Engine ready</string>
+    <string name="engine_no_model">Engine not ready — no model selected</string>
+    <string name="engine_model_unavailable">Engine not ready — the selected model can\'t be reached</string>
     <string name="model_saved_path">Saved: %s</string>
     <string name="model_none_loaded">No model is currently loaded</string>
     <string name="model_loading_wait">Loading model, please wait…</string>
     <string name="model_loaded">✅ Model loaded: %s</string>
     <string name="model_load_error">❌ Error: %s</string>
+    <string name="model_unavailable">⚠️ \"%1$s\" can no longer be reached. It may have been moved, deleted, or saved to storage that isn\'t connected right now. Select the .gguf model again.</string>
+    <string name="model_saved_path_unavailable">Saved: %s (unavailable)</string>
     <string name="model_loading_toast">Loading model…</string>
     <string name="model_none_selected">No model selected</string>
     <string name="btn_browse_model">Browse for Model File</string>

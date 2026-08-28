@@ -3,14 +3,13 @@ package com.itsaky.androidide.plugins.aiagentlocal.backend
 import android.app.ActivityManager
 import android.content.Context
 import android.llama.cpp.LLamaAndroid
-import android.net.Uri
-import android.provider.OpenableColumns
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aiagentlocal.feedback.IncompatibleModelException
 import com.itsaky.androidide.plugins.aiagentlocal.feedback.ModelLoadException
-import com.itsaky.androidide.plugins.aiagentlocal.feedback.ModelNotConfiguredException
 import com.itsaky.androidide.plugins.aiagentlocal.feedback.UserActionableLlmException
 import com.itsaky.androidide.plugins.aiagentlocal.feedback.UserFeedback
+import com.itsaky.androidide.plugins.aiagentlocal.format.ByteSize
+import com.itsaky.androidide.plugins.aiagentlocal.model.ContentNativeModelSource
 import com.itsaky.androidide.plugins.aiagentlocal.model.GgufHeader
 import com.itsaky.androidide.plugins.aiagentlocal.model.GgufHeaderReader
 import com.itsaky.androidide.plugins.aiagentlocal.model.GgufModelInspector
@@ -19,13 +18,17 @@ import com.itsaky.androidide.plugins.aiagentlocal.model.ModelContextResolver
 import com.itsaky.androidide.plugins.aiagentlocal.model.ModelContextSize
 import com.itsaky.androidide.plugins.aiagentlocal.model.ModelLoadDiagnostics
 import com.itsaky.androidide.plugins.aiagentlocal.model.ModelLoadMessages
+import com.itsaky.androidide.plugins.aiagentlocal.model.ModelSourceWatcher
+import com.itsaky.androidide.plugins.aiagentlocal.model.NativeModelSource
+import com.itsaky.androidide.plugins.aiagentlocal.model.OpenModelFile
+import com.itsaky.androidide.plugins.aiagentlocal.model.PlatformModelSourceWatcher
 import com.itsaky.androidide.plugins.aiagentlocal.preferences.LocalLlmPreferences
 import com.itsaky.androidide.plugins.aiagentlocal.prompt.LocalSystemPrompt
 import com.itsaky.androidide.plugins.services.LlmInferenceService
 import com.itsaky.androidide.plugins.services.LlmInferenceService.*
 import com.itsaky.androidide.plugins.services.SharedServices
+import java.io.Closeable
 import java.io.File
-import java.io.FileOutputStream
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CancellationException
@@ -45,7 +48,10 @@ import kotlinx.coroutines.withContext
  * Wraps llama-impl APIs and implements LlmBackend interface.
  */
 class LocalLlmBackend(
-    private val context: PluginContext
+    private val context: PluginContext,
+    private val modelSourceOverride: NativeModelSource? = null,
+    private val engineOverride: ModelResidencyEngine? = null,
+    private val watcherOverride: ModelSourceWatcher? = null,
 ) : HistoryCapableBackend, CancellableBackend, ConfigurableBackend {
 
     companion object {
@@ -63,6 +69,12 @@ class LocalLlmBackend(
          * text, in which case the native stop truncates before the match.
          */
         private val CHAT_STOP = listOf("<|im_end|>")
+
+        /**
+         * Where models were copied before ADFA-5253. Nothing writes here any more; see
+         * [deleteLegacyModelCache], which gives the space back.
+         */
+        private const val LEGACY_MODEL_CACHE_DIR = "llm-models"
     }
 
     private val llamaLazy = lazy { LLamaAndroid.instance() }
@@ -87,10 +99,84 @@ class LocalLlmBackend(
     private val loadMessages by lazy { ModelLoadMessages(context.androidContext) }
 
     @Volatile private var modelLoaded = false
-    @Volatile private var currentModelPath: String? = null
+
+    /**
+     * The configured reference — path or `content://` URI — of the resident model.
+     *
+     * Keyed off the *reference*, never off the resolved native path: a document's procfs path is
+     * a different string on every open, so comparing resolved paths would report "not loaded" for
+     * a model that is already resident and reload it on every message.
+     */
+    @Volatile private var currentModelRef: String? = null
+
+    /**
+     * Holds the resident model's descriptor open. Closing it invalidates the procfs path the
+     * native loader was given, so it lives exactly as long as the loaded model does.
+     */
+    @Volatile private var openModel: OpenModelFile? = null
+
+    /**
+     * The reference last found unreachable, so the chat is told the backend is unavailable
+     * instead of being sent to a model that is gone.
+     *
+     * Held as the reference rather than a flag so picking a different model clears it by itself;
+     * a successful load clears it for the same one.
+     */
+    @Volatile private var unreachableModelRef: String? = null
+
+    /**
+     * Stops the delete watch on the resident model. Follows residency exactly: taken when a model
+     * is adopted, closed when it is released.
+     */
+    @Volatile private var modelWatch: Closeable? = null
+
+    /**
+     * Opens the configured model for the native loader. Lazy so construction touches no Android
+     * services, and overridable so the load path can be tested without a device.
+     */
+    private val modelSource: NativeModelSource by lazy {
+        modelSourceOverride ?: ContentNativeModelSource(context.androidContext) { message, error ->
+            context.logger.error("LocalLlmBackend: $message", error)
+        }
+    }
+
+    /**
+     * Drives model residency. Defaults to the shared native engine; overridable so the residency
+     * rules — evicting a model whose file went away, and releasing its descriptor — can be tested
+     * without loading real weights.
+     */
+    private val engine: ModelResidencyEngine = engineOverride ?: object : ModelResidencyEngine {
+        override suspend fun load(
+            nativePath: String,
+            contextTokens: Int,
+            quantizeKv: Boolean,
+            fallbackContextTokens: Int,
+        ) = llama.load(
+            pathToModel = nativePath,
+            nCtx = contextTokens,
+            quantizeKv = quantizeKv,
+            fallbackNCtx = fallbackContextTokens,
+        )
+        override suspend fun unload() = llama.unload()
+        override suspend fun contextSize() = llama.getContextSize()
+    }
+
+    /**
+     * Reports the deletion of the resident model's file, so its gigabytes come back when the user
+     * deletes it rather than at their next message. Lazy for the same reason as [modelSource].
+     */
+    private val watcher: ModelSourceWatcher by lazy {
+        watcherOverride ?: PlatformModelSourceWatcher(context.androidContext) { message, error ->
+            context.logger.warn("LocalLlmBackend: $message", error)
+        }
+    }
 
     /** Ensures the background warm-up load is launched at most once. */
     private val warmUpStarted = AtomicBoolean(false)
+
+    init {
+        scope.launch { deleteLegacyModelCache() }
+    }
 
     override fun getId(): String = "local"
 
@@ -148,7 +234,13 @@ class LocalLlmBackend(
         context.logger.debug("LocalLlmBackend.isAvailable() - configured path: $configuredPath, modelLoaded: $modelLoaded")
 
         // Chat-open hits this; start loading now so the first message isn't gated on a cold load.
+        // Kept ahead of the check below so a model the user restores is picked up on the next ask.
         maybeWarmUp(configuredPath)
+
+        // A model whose file has gone away is not available, however resident its pages still are.
+        // Answered from the memo rather than probed here: this runs on the caller's thread, which
+        // may be the main one, and a document probe is a binder round trip.
+        if (!configuredPath.isNullOrBlank() && configuredPath == unreachableModelRef) return false
 
         // Available if model is loaded OR if a path is configured
         return modelLoaded || !configuredPath.isNullOrBlank()
@@ -169,7 +261,7 @@ class LocalLlmBackend(
         scope.launch {
             try {
                 // Serialize with real generations so a mid-warm-up send just waits for this load.
-                generationMutex.withLock { ensureModelLoaded(configuredPath!!) }
+                generationMutex.withLock { ensureModelLoaded(configuredPath) }
                 context.logger.info("Local model warm-up complete")
             } catch (e: Exception) {
                 // Stay silent (the real send surfaces config errors); allow a later retry.
@@ -180,180 +272,112 @@ class LocalLlmBackend(
     }
 
     /**
-     * Resolves the user-selected model reference to a real filesystem path the native
-     * loader can `fopen`.
-     *
-     * - A plain path is returned as-is.
-     * - A `content://` URI (what SAF `OpenDocument` returns, held with persistable read
-     *   permission) is streamed into a private cache file and that path is returned.
-     *
-     * IMPORTANT: this loads *exactly* the file the user selected. It must never fall back
-     * to "some other .gguf on disk" — doing so silently loads the wrong model (e.g. an
-     * embedding model), which aborts native inference and takes the IDE down. See ADFA-4388.
-     */
-    private fun resolveContentUriToPath(uriString: String): String? {
-        if (!uriString.startsWith("content://")) {
-            return uriString // Already a real file path
-        }
-
-        val uri = Uri.parse(uriString)
-        context.logger.info("Resolving selected model URI: $uri")
-
-        val resolver = context.androidContext.contentResolver
-
-        // Read the selected document's display name + size (used to key the cache copy).
-        var displayName = "model.gguf"
-        var size = -1L
-        try {
-            resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null)
-                ?.use { c ->
-                    if (c.moveToFirst()) {
-                        val nameIdx = c.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                        val sizeIdx = c.getColumnIndex(OpenableColumns.SIZE)
-                        if (nameIdx >= 0 && !c.isNull(nameIdx)) displayName = c.getString(nameIdx)
-                        if (sizeIdx >= 0 && !c.isNull(sizeIdx)) size = c.getLong(sizeIdx)
-                    }
-                }
-        } catch (e: Exception) {
-            context.logger.warn("Could not query model metadata for $uri: ${e.message}")
-        }
-
-        // Deterministic cache path keyed by URI + size, so the same selection reuses the
-        // same copy and a different selection can never collide with it.
-        val modelsDir = File(context.androidContext.filesDir, "llm-models").apply { mkdirs() }
-        val safeName = displayName.replace(Regex("[^A-Za-z0-9._-]"), "_")
-        val cacheFile = File(modelsDir, "${kotlin.math.abs(uriString.hashCode())}_${size}_$safeName")
-
-        // Reuse a complete prior copy.
-        if (cacheFile.exists() && (size < 0 || cacheFile.length() == size)) {
-            context.logger.info("Using cached model copy: ${cacheFile.absolutePath}")
-            pruneOtherModels(modelsDir, cacheFile)
-            return cacheFile.absolutePath
-        }
-
-        // Materialize the selected URI into the cache. Copy to a temp file then rename, so an
-        // interrupted copy can't be mistaken for a complete model on the next launch.
-        return try {
-            context.logger.info("Copying selected model into app storage: $displayName ($size bytes)")
-            val tmp = File(modelsDir, cacheFile.name + ".tmp")
-            val copied = resolver.openInputStream(uri)?.use { input ->
-                FileOutputStream(tmp).use { output -> input.copyTo(output, 1 shl 20) }
-            }
-            if (copied == null) {
-                context.logger.error("Could not open input stream for selected model $uri")
-                tmp.delete()
-                return null
-            }
-            if (size >= 0 && tmp.length() != size) {
-                context.logger.error("Model copy incomplete: expected $size bytes, got ${tmp.length()}")
-                tmp.delete()
-                return null
-            }
-            if (!tmp.renameTo(cacheFile)) {
-                tmp.copyTo(cacheFile, overwrite = true)
-                tmp.delete()
-            }
-            pruneOtherModels(modelsDir, cacheFile)
-            context.logger.info("Model ready at ${cacheFile.absolutePath}")
-            cacheFile.absolutePath
-        } catch (e: Exception) {
-            context.logger.error("Failed to copy selected model into app storage", e)
-            null
-        }
-    }
-
-    /**
-     * Keeps only the active model copy in the cache dir. Model files are large, and we only
-     * ever need the currently-selected one on disk. Deleting a file that native code has
-     * already mmap'd is safe on Android — the mapping stays valid until the model is freed.
-     */
-    private fun pruneOtherModels(modelsDir: File, keep: File) {
-        modelsDir.listFiles()?.forEach { f ->
-            if (f.absolutePath != keep.absolutePath && f.delete()) {
-                context.logger.debug("Pruned old model copy: ${f.name}")
-            }
-        }
-    }
-
-    /**
-     * Loads [modelPath] unless it is already resident, diagnosing any native failure into a
+     * Loads [modelRef] unless it is already resident, diagnosing any failure into a
      * [ModelLoadException]. Cancellation is rethrown first because [CancellationException] extends
      * [IllegalStateException] and would otherwise be diagnosed as a corrupt model.
      *
-     * @param modelPath the configured model path or content URI
+     * The model is opened in place — the document the user picked, through the persisted read
+     * grant — and the native loader is handed the procfs path of that descriptor. Nothing is
+     * copied. IMPORTANT: this loads *exactly* the file the user selected. It must never fall back
+     * to "some other .gguf on disk" — doing so silently loads the wrong model (e.g. an embedding
+     * model), which aborts native inference and takes the IDE down. See ADFA-4388.
+     *
+     * Visible to the module so the failure paths that never reach native code — an unreachable
+     * model, an embedding model, and the descriptor release that follows both — can be tested off
+     * a device.
+     *
+     * @param modelRef the configured model path or content URI
      */
-    private suspend fun ensureModelLoaded(modelPath: String) {
-        // Resolve content URI to actual file path
-        val resolvedPath = resolveContentUriToPath(modelPath)
-        if (resolvedPath == null) {
-            throw ModelNotConfiguredException("Could not read the selected model file. Re-select the .gguf model in AI Settings.")
+    internal suspend fun ensureModelLoaded(modelRef: String) {
+        if (modelLoaded && currentModelRef == modelRef) {
+            // Residency is not evidence the file still exists. The descriptor this backend holds
+            // keeps a deleted inode alive, so an unchecked early return keeps answering from a
+            // model the user threw away — and keeps its gigabytes mapped. Confirm, then serve.
+            if (modelSource.isReachable(modelRef)) return
+            context.logger.info("Resident model is no longer reachable; unloading: $modelRef")
+            evictResidentModel()
+            throw unopenable(modelRef)
         }
 
-        if (modelLoaded && currentModelPath == resolvedPath) {
-            return // Already loaded
-        }
+        val opened = modelSource.open(modelRef) ?: throw unopenable(modelRef)
 
-        // One parse of the metadata block per load, feeding both the guard below and the context
-        // sizing after the unload: it sits at the front of a multi-GB file, and a model switch
-        // used to walk it twice.
-        // Every stat is inside the block too: isFile and length() both hit the filesystem, which on
-        // a removed SD card or a stale SAF mount blocks whoever called us.
-        val openModel = { File(resolvedPath).takeIf { it.isFile }?.inputStream() }
-        val (header, modelSizeBytes) = withContext(Dispatchers.IO) {
-            GgufHeaderReader.read(openModel) to File(resolvedPath).length().takeIf { it > 0L }
-        }
-
-        // Guard the chat path against encoder-only embedding models. Running causal generation on
-        // one aborts natively (SIGABRT) and takes the IDE down. Classify BEFORE unloading any
-        // working chat model, so a wrong selection never tears down a good one. See ADFA-4388.
-        // The overload rescans for the architecture alone, and only if the parse above gave up.
-        val modelKind = withContext(Dispatchers.IO) {
-            GgufModelInspector.classify(header, openModel)
-        }
-        if (modelKind.isEmbeddingOnly) {
-            throw IncompatibleModelException(
-                "The selected model is an embedding model and can't be used for chat. " +
-                    "Choose a chat model in AI Settings."
-            )
-        }
-
-        // Unload old model if loaded
-        if (modelLoaded) {
-            context.logger.info("Unloading previous model: $currentModelPath")
-            llama.unload()
-            modelLoaded = false
-            currentModelPath = null
-        }
-
-        // Measured after the unload: availMem excludes the context and batch it just released.
-        val availableBytes = availableMemoryBytes()
-        ModelLoadDiagnostics.refuseBeforeLoad(availableBytes)?.let { shortfall ->
-            throw ModelLoadException(loadMessages.describe(shortfall), shortfall)
-        }
-
-        val contextSize = resolveContextSize(resolvedPath, availableBytes, header, modelSizeBytes)
-
-        context.logger.info("Loading model: $resolvedPath")
+        // Every failure below leaves this handle unadopted; without the finally it would leak a
+        // file descriptor per failed attempt, and warm-up retries make that a loop.
+        var adopted = false
         try {
-            llama.load(
-                pathToModel = resolvedPath,
-                nCtx = contextSize.contextTokens,
-                quantizeKv = contextSize.kvType == KvCacheType.Q8_0,
-                fallbackNCtx = contextSize.fallbackContextTokens,
-            )
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            if (e is UserActionableLlmException) throw e
-            // Native load_model() signals failure only with a null handle, so diagnose the likely cause.
-            context.logger.error("Native model load failed for $resolvedPath", e)
-            val diagnosis = ModelLoadDiagnostics.diagnose(resolvedPath, availableMemoryBytes(), e.message)
-            throw ModelLoadException(loadMessages.describe(diagnosis), diagnosis)
+            // One parse of the metadata block per load, feeding both the guard below and the
+            // context sizing after the unload: it sits at the front of a multi-GB file, and a
+            // model switch used to walk it twice.
+            val header = withContext(Dispatchers.IO) { GgufHeaderReader.read(opened::openStream) }
+            // The handle's own size, not File.length(): the native path is a procfs entry, on
+            // which length() reports 0 and would price the KV cache off a zero-byte model.
+            val modelSizeBytes = opened.sizeBytes.takeIf { it > 0L }
+
+            // Guard the chat path against encoder-only embedding models. Running causal generation
+            // on one aborts natively (SIGABRT) and takes the IDE down. Classify BEFORE unloading any
+            // working chat model, so a wrong selection never tears down a good one. See ADFA-4388.
+            // The overload rescans for the architecture alone, and only if the parse above gave up.
+            val kind = withContext(Dispatchers.IO) {
+                GgufModelInspector.classify(header, opened::openStream)
+            }
+            // UNKNOWN means the header could not be read, so the guard let this model through
+            // unchecked. Logged so a future embedding-model abort can be told apart from one that
+            // got past a header the inspector did read.
+            context.logger.debug("Model architecture: ${kind.architecture ?: "unreadable"} (${kind.kind})")
+            if (kind.isEmbeddingOnly) {
+                throw IncompatibleModelException(
+                    "The selected model is an embedding model and can't be used for chat. " +
+                        "Choose a chat model in AI Settings."
+                )
+            }
+
+            // Unload old model if loaded
+            if (modelLoaded) {
+                context.logger.info("Unloading previous model: $currentModelRef")
+                evictResidentModel()
+            }
+
+            // Measured after the unload: availMem excludes the context and batch it just released.
+            val availableBytes = availableMemoryBytes()
+            ModelLoadDiagnostics.refuseBeforeLoad(availableBytes)?.let { shortfall ->
+                throw ModelLoadException(loadMessages.describe(shortfall), shortfall)
+            }
+
+            val contextSize = resolveContextSize(modelRef, availableBytes, header, modelSizeBytes)
+
+            context.logger.info("Loading model: $modelRef via ${opened.nativePath}")
+            try {
+                engine.load(
+                    nativePath = opened.nativePath,
+                    contextTokens = contextSize.contextTokens,
+                    quantizeKv = contextSize.kvType == KvCacheType.Q8_0,
+                    fallbackContextTokens = contextSize.fallbackContextTokens,
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                if (e is UserActionableLlmException) throw e
+                // Native load_model() signals failure only with a null handle, so diagnose the likely cause.
+                context.logger.error("Native model load failed for $modelRef", e)
+                val diagnosis = ModelLoadDiagnostics.diagnose(
+                    sizeBytes = opened.sizeBytes,
+                    availableMemoryBytes = availableMemoryBytes(),
+                    nativeError = e.message,
+                    openStream = opened::openStream,
+                )
+                throw ModelLoadException(loadMessages.describe(diagnosis), diagnosis)
+            }
+            modelLoaded = true
+            currentModelRef = modelRef
+            openModel = opened
+            unreachableModelRef = null
+            adopted = true
+            startWatching(modelRef)
+            context.logger.info("Model loaded successfully")
+            reportEffectiveContextSize(contextSize.contextTokens)
+        } finally {
+            if (!adopted) opened.close()
         }
-        modelLoaded = true
-        currentModelPath = resolvedPath
-        context.logger.info("Model loaded successfully")
-        reportEffectiveContextSize(contextSize.contextTokens)
     }
 
     /**
@@ -365,7 +389,7 @@ class LocalLlmBackend(
      */
     private suspend fun reportEffectiveContextSize(requestedTokens: Int) {
         val actual = try {
-            llama.getContextSize()
+            engine.contextSize()
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -385,18 +409,18 @@ class LocalLlmBackend(
     /**
      * Sizes the KV cache for this model on this device and picks the type it is stored as. Must run
      * after any unload, so the freed context is counted as available. Answers rather than applies:
-     * every part of the shape is an argument to [LLamaAndroid.load], so nothing can drift between
-     * being chosen here and being used natively. [ModelContextResolver] fails open, so this has no
+     * every part of the shape is an argument to [ModelResidencyEngine.load], so nothing can drift
+     * between being chosen here and being used natively. [ModelContextResolver] fails open, so this has no
      * failure of its own.
      *
-     * @param resolvedPath filesystem path to the model, already resolved from any content URI
+     * @param modelRef the configured model path or content URI, for the log line only
      * @param availableBytes free RAM as [availableMemoryBytes] reports it, negative if unknown
      * @param header the model's metadata as read once by [ensureModelLoaded], null if unreadable
-     * @param modelSizeBytes the model file's size, null if unreadable
+     * @param modelSizeBytes the model's size, null if unreadable
      * @return the context size, cache type and f16 fallback size to load the model with
      */
     private fun resolveContextSize(
-        resolvedPath: String,
+        modelRef: String,
         availableBytes: Long,
         header: GgufHeader?,
         modelSizeBytes: Long?,
@@ -408,12 +432,117 @@ class LocalLlmBackend(
         )
         // Unconditional: a wrongly sized context otherwise just reads as the assistant forgetting.
         context.logger.info(
-            "Context size for $resolvedPath: ${resolved.contextTokens} tokens," +
+            "Context size for $modelRef: ${resolved.contextTokens} tokens," +
                 " ${resolved.kvType} KV cache" +
                 " (model advertises ${resolved.advertisedTokens ?: "unknown"}," +
                 " ${if (availableBytes >= 0L) "$availableBytes bytes free" else "free RAM unknown"})"
         )
         return resolved
+    }
+
+    /**
+     * Forgets the resident model and releases its descriptor. The native unload is the caller's to
+     * do first — the mapped pages must be freed before the descriptor behind them goes.
+     */
+    private fun releaseCurrentModel() {
+        stopWatching()
+        modelLoaded = false
+        currentModelRef = null
+        openModel?.close()
+        openModel = null
+        // Re-arm the warm-up: a model that becomes reachable again is loaded without a restart.
+        warmUpStarted.set(false)
+    }
+
+    /**
+     * Gives a resident model back in full — native pages first, then the descriptor holding the
+     * inode alive. That order is the whole point: closing the descriptor while the loader still
+     * has its procfs path mapped leaves it reading an entry whose target is gone.
+     *
+     * Callers must hold [generationMutex], so a model is never pulled out from under a generation.
+     */
+    private suspend fun evictResidentModel() {
+        engine.unload()
+        releaseCurrentModel()
+    }
+
+    /**
+     * Records [modelRef] as unreachable and builds the failure to report for it.
+     *
+     * @return the exception to throw; never thrown here, so the caller's control flow stays visible
+     */
+    private fun unopenable(modelRef: String): ModelLoadException {
+        unreachableModelRef = modelRef
+        val diagnosis = ModelLoadDiagnostics.diagnoseUnopenable(modelRef)
+        return ModelLoadException(loadMessages.describe(diagnosis), diagnosis)
+    }
+
+    /**
+     * Watches the newly resident model's file, so a deletion frees it right away instead of at the
+     * next message. Best effort — an unwatchable source just leaves the check in
+     * [ensureModelLoaded] to catch it.
+     */
+    private fun startWatching(modelRef: String) {
+        modelWatch = try {
+            watcher.watch(modelRef) { onModelSourceGone(modelRef) }
+        } catch (e: Exception) {
+            context.logger.warn("Could not watch the selected model: ${e.message}")
+            null
+        }
+    }
+
+    private fun stopWatching() {
+        try {
+            modelWatch?.close()
+        } catch (e: Exception) {
+            context.logger.warn("Could not stop watching the selected model: ${e.message}")
+        }
+        modelWatch = null
+    }
+
+    /**
+     * A watch fired for [modelRef]. Notifications are hints, not verdicts — providers notify for
+     * edits as well as deletions, and for a whole document tree — so reachability is confirmed
+     * before anything is torn down.
+     *
+     * Runs under [generationMutex] on [cleanupScope]: a generation already in flight finishes on
+     * the model it started with, and this survives the cancellation of [scope].
+     */
+    private fun onModelSourceGone(modelRef: String) {
+        cleanupScope.launch {
+            generationMutex.withLock {
+                if (!modelLoaded || currentModelRef != modelRef) return@withLock
+                if (modelSource.isReachable(modelRef)) return@withLock
+                context.logger.info("Selected model was deleted; releasing it: $modelRef")
+                evictResidentModel()
+                unreachableModelRef = modelRef
+            }
+        }
+    }
+
+    /**
+     * Deletes the private model copies made before ADFA-5253, which run to gigabytes. The model is
+     * now read in place through its own grant, so nothing recreates this directory; once it is gone
+     * this is a single `exists()` call, which is cheaper than storing an "already done" flag.
+     *
+     * Walks and deletes gigabytes, so it pins its own dispatcher rather than inheriting whichever
+     * one a caller happens to launch it on.
+     *
+     * Visible to the module so a test can run it deterministically rather than racing [init].
+     */
+    internal suspend fun deleteLegacyModelCache() = withContext(Dispatchers.IO) {
+        try {
+            val legacy = File(context.androidContext.filesDir, LEGACY_MODEL_CACHE_DIR)
+            if (!legacy.exists()) return@withContext
+            val freedBytes = legacy.walkBottomUp().filter { it.isFile }.sumOf { it.length() }
+            if (legacy.deleteRecursively()) {
+                context.logger.info("Reclaimed ${ByteSize.format(freedBytes)} of copied model files")
+            } else {
+                context.logger.warn("Could not fully delete the old model cache at ${legacy.absolutePath}")
+            }
+        } catch (e: Exception) {
+            context.logger.warn("Could not delete the old model cache: ${e.message}")
+        }
     }
 
     /**
@@ -676,9 +805,7 @@ class LocalLlmBackend(
     /** Suspending model unload — safe to call from any coroutine. */
     private suspend fun unloadModelInternal() {
         if (modelLoaded) {
-            llama.unload()
-            modelLoaded = false
-            currentModelPath = null
+            evictResidentModel()
             context.logger.info("Model unloaded")
         }
     }
@@ -698,6 +825,8 @@ class LocalLlmBackend(
     fun close() {
         scope.cancel()
         val cleanup = cleanupScope.launch {
+            // Ahead of the native check: a watch outliving the plugin would fire into a dead scope.
+            stopWatching()
             if (!llamaLazy.isInitialized()) {
                 return@launch
             }

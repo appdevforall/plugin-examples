@@ -63,14 +63,15 @@
     <li><b>Model safety checks</b> — inspects a selected <code>.gguf</code>
       header and refuses embedding-only models for chat, with a clear error
       instead of a native crash.</li>
-    <li><b>Actionable load failures</b> — a failed load is classified (missing,
-      empty, not a GGUF, out of memory, unsupported quantization) and reported as
-      a message that says what to do next.</li>
-    <li><b>Storage-picker support</b> — a model chosen as a
-      <code>content://</code> document is copied once into private storage so the
-      native loader can open it, and only the current model is kept.</li>
+    <li><b>Actionable load failures</b> — a failed load is classified (no longer
+      reachable, empty, not a GGUF, out of memory, unsupported quantization) and
+      reported as a message that says what to do next.</li>
+    <li><b>Direct storage access</b> — a model chosen as a <code>content://</code>
+      document is read in place, through the read grant the picker persisted.
+      Nothing is copied into private storage, so a multi-gigabyte model costs no
+      device space beyond the file you downloaded.</li>
     <li><b>Its own settings pane</b> — browse for a <code>.gguf</code> file,
-      re-load a previously imported model, record the model's published SHA-256,
+      re-load the model already selected, record the model's published SHA-256,
       and choose between the short system prompt small models follow
       reliably and the full tool-calling one. A model too large for the device's
       free RAM raises a warning first.</li>
@@ -82,14 +83,15 @@
     <tr><td><code>LocalLlmPlugin</code></td><td>Plugin entry point. Registers the
       backend with AI Core on activation, re-registering if AI Core activates
       later; frees the native model on dispose.</td></tr>
-    <tr><td><code>LocalLlmBackend</code></td><td>The inference engine. Resolves
-      the selected model to a real file path, manages loading and unloading, and
-      serializes generations against the shared native context.</td></tr>
+    <tr><td><code>LocalLlmBackend</code></td><td>The inference engine. Opens the
+      selected model in place and hands the native loader that descriptor, manages
+      loading and unloading, and serializes generations against the shared native
+      context.</td></tr>
     <tr><td><code>GgufModelInspector</code></td><td>Minimal GGUF header reader
       that classifies a model as chat- or embedding-only.</td></tr>
     <tr><td><code>ModelLoadDiagnostics</code></td><td>Classifies a load failure
-      from the file, free memory and the native error text, as a pure function
-      that is unit-tested off-device.</td></tr>
+      from the model's size and readability, free memory and the native error
+      text, as a pure function that is unit-tested off-device.</td></tr>
     <tr><td><code>ModelLoadMessages</code></td><td>Renders a diagnosis as
       user-facing text, keeping string resources out of the engine.</td></tr>
     <tr><td><code>LocalLlmSettingsFragment</code></td><td>The settings pane AI
@@ -107,11 +109,12 @@
       Manager, then restart the IDE.</li>
     <li>Open <b>Preferences &rarr; Configuration &rarr; Agent</b> and select the
       <b>local</b> backend. This plugin's own pane appears below it.</li>
-    <li>Tap <b>Browse</b> and pick a <code>.gguf</code> model file. The file is
-      copied once into private storage, then loaded; a model larger than the free
-      RAM asks you to confirm first.</li>
+    <li>Tap <b>Browse</b> and pick a <code>.gguf</code> model file. It is loaded
+      from wherever you saved it, with no copy made; a model larger than the free
+      RAM asks you to confirm first. Leave the file in place — moving or deleting
+      it breaks the selection.</li>
     <li>Optionally record the model's published <b>SHA-256</b>, or use <b>Load
-      from saved</b> to return to a model you already imported.</li>
+      from saved</b> to return to the model you already selected.</li>
   </ol>
   <div class="note">
     Model choice drives whether this works at all on a given device. A Q4_K_M

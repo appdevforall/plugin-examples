@@ -2,8 +2,6 @@ package com.itsaky.androidide.plugins.aiagentlocal.model
 
 import java.io.BufferedInputStream
 import java.io.DataInputStream
-import java.io.File
-import java.io.FileInputStream
 import java.io.InputStream
 
 /**
@@ -18,6 +16,10 @@ import java.io.InputStream
  * It deliberately **fails open**: an unreadable header or a missing architecture is reported as
  * [ModelKind.UNKNOWN] and treated as chat-capable, so a genuine chat model is never wrongly
  * blocked by a header quirk.
+ *
+ * Both entry points take a stream *factory* rather than a path, because since ADFA-5253 the model
+ * is read in place through a `content://` grant and has no stable filesystem path. Each call opens
+ * its own stream and closes it, so inspection never disturbs the native loader's file offset.
  */
 object GgufModelInspector {
 
@@ -38,11 +40,15 @@ object GgufModelInspector {
 
     /**
      * Cheap magic-only check that never throws; reads just the first 4 bytes.
-     * @param modelPath path to the candidate file
-     * @return true if the file begins with the GGUF magic; false on any read error or mismatch
+     *
+     * @param openStream opens a fresh read stream over the candidate model, or returns null when
+     *   it cannot be reached
+     * @return true if the model begins with the GGUF magic; false on any read error or mismatch
      */
-    fun isGguf(modelPath: String): Boolean = try {
-        DataInputStream(BufferedInputStream(FileInputStream(File(modelPath)), 16)).use { readU32(it) == GGUF_MAGIC }
+    fun isGguf(openStream: () -> InputStream?): Boolean = try {
+        openStream()?.use { stream ->
+            readU32(DataInputStream(BufferedInputStream(stream, 16))) == GGUF_MAGIC
+        } ?: false
     } catch (_: Exception) {
         false
     }
