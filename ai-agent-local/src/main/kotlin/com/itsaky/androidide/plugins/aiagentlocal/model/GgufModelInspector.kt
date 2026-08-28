@@ -4,6 +4,7 @@ import java.io.BufferedInputStream
 import java.io.DataInputStream
 import java.io.File
 import java.io.FileInputStream
+import java.io.InputStream
 
 /**
  * Tells whether a `.gguf` file is a chat/generation model or an embedding (encoder-only) model,
@@ -52,8 +53,22 @@ object GgufModelInspector {
      *
      * @param header the model's metadata, or null when it could not be read
      */
-    fun classify(header: GgufHeader?): Result {
-        val arch = header?.architecture ?: return Result(ModelKind.UNKNOWN, null)
+    fun classify(header: GgufHeader?): Result = classifyArchitecture(header?.architecture)
+
+    /**
+     * As [classify], but a header with no architecture retries via
+     * [GgufHeaderReader.readArchitecture]. A full parse rejects far more files than an
+     * architecture-only scan, and each rejection is a model this guard would wave through (ADFA-4388).
+     *
+     * @param header the model's metadata, or null when it could not be read
+     * @param openStream reopens the same model for the fallback scan; blocking I/O
+     */
+    fun classify(header: GgufHeader?, openStream: () -> InputStream?): Result =
+        header?.architecture?.let(::classifyArchitecture)
+            ?: classifyArchitecture(GgufHeaderReader.readArchitecture(openStream))
+
+    private fun classifyArchitecture(architecture: String?): Result {
+        val arch = architecture ?: return Result(ModelKind.UNKNOWN, null)
         val a = arch.lowercase()
         val isEmbedding = a.contains("bert") || a in EMBEDDING_ARCHS
         return Result(if (isEmbedding) ModelKind.EMBEDDING else ModelKind.CHAT, arch)

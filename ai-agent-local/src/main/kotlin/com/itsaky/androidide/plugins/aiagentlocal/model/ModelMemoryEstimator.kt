@@ -5,8 +5,9 @@ import com.itsaky.androidide.plugins.aiagentlocal.model.GgufHeader
 /**
  * What a model will cost in memory, split the way it behaves at runtime.
  *
- * @property loadBytes the weights. mmap'd, so they need not *fit*: when they don't, the device
- *   thrashes page cache instead of failing fast, which is the "ten minutes, then an error" report.
+ * @property loadBytes the weights. mmap'd, so a shortfall thrashes page cache instead of failing
+ *   fast — the "ten minutes, then an error" report. Not a reason to treat them as free:
+ *   [ContextSizePolicy] charges them, since it sizes the cache before the load pages them in.
  * @property runBytes KV cache and compute buffers. Ordinary allocations, so this part must fit.
  * @property fromHeader true when [runBytes] came from the model's own shape values rather than the
  *   size-based fallback; diagnostics only.

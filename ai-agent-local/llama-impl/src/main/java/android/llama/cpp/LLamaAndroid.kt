@@ -245,6 +245,10 @@ class LLamaAndroid : ILlamaController {
      * process-global state so that it cannot be overwritten between being chosen and being used:
      * the context is created on the run loop, well after the caller picked the number.
      *
+     * A partial load frees what it allocated before rethrowing: [threadLocalState] stays `Idle`, so
+     * nothing else can reach those handles, and a retry would otherwise mmap another model on top
+     * of the leaked one for the process lifetime.
+     *
      * @param pathToModel filesystem path to the `.gguf` model
      * @param nCtx context size in tokens; anything non-positive means [DEFAULT_N_CTX]
      */
@@ -255,14 +259,26 @@ class LLamaAndroid : ILlamaController {
                     val model = load_model(pathToModel)
                     if (model == 0L) throw IllegalStateException("load_model() failed")
 
-                    val context = new_context(model, nCtx)
-                    if (context == 0L) throw IllegalStateException("new_context() failed")
+                    var context = 0L
+                    var batch = 0L
+                    var sampler = 0L
+                    try {
+                        context = new_context(model, nCtx)
+                        if (context == 0L) throw IllegalStateException("new_context() failed")
 
-                    val batch = new_batch(2048, 0, 1)
-                    if (batch == 0L) throw IllegalStateException("new_batch() failed")
+                        batch = new_batch(2048, 0, 1)
+                        if (batch == 0L) throw IllegalStateException("new_batch() failed")
 
-                    val sampler = new_sampler()
-                    if (sampler == 0L) throw IllegalStateException("new_sampler() failed")
+                        sampler = new_sampler()
+                        if (sampler == 0L) throw IllegalStateException("new_sampler() failed")
+                    } catch (failure: Throwable) {
+                        // Reverse of the allocation order, and the model last: it owns the rest.
+                        if (sampler != 0L) free_sampler(sampler)
+                        if (batch != 0L) free_batch(batch)
+                        if (context != 0L) free_context(context)
+                        free_model(model)
+                        throw failure
+                    }
 
                     log.info("Loaded model {}", pathToModel)
                     threadLocalState.set(State.Loaded(model, context, batch, sampler))
