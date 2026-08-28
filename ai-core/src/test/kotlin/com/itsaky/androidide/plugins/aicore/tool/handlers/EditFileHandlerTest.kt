@@ -5,6 +5,8 @@ import com.itsaky.androidide.plugins.ServiceRegistry
 import com.itsaky.androidide.plugins.aicore.tool.Validation
 import com.itsaky.androidide.plugins.services.IdeEditorService
 import com.itsaky.androidide.plugins.services.SelectionRange
+import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
@@ -41,8 +43,8 @@ class EditFileHandlerTest {
         editorService = mockk(relaxed = true)
         // Default: nothing is open in the editor, so the disk path is exercised.
         every { editorService.getFileContent(any()) } returns null
-        // Default: focusing before saving succeeds; the false case has its own test below.
-        every { editorService.openFile(any()) } returns true
+        // Default: the host persists the buffer; the false case has its own test below.
+        coEvery { editorService.saveFile(any()) } returns true
         services = mockk()
         context = mockk()
         every { context.services } returns services
@@ -472,7 +474,7 @@ class EditFileHandlerTest {
         val target = File(projectRoot, "Main.kt")
         every { editorService.getFileContent(target) } returns "line0\nline1\nline2\n"
         every { editorService.replaceRange(any(), any(), any()) } returns true
-        every { editorService.saveCurrentFile() } returns true
+        coEvery { editorService.saveFile(any()) } returns true
 
         val range = slot<SelectionRange>()
         val replacement = slot<String>()
@@ -487,7 +489,10 @@ class EditFileHandlerTest {
         assertEquals(1, range.captured.endLine)
         assertEquals(5, range.captured.endColumn)
         assertEquals("LINE1", replacement.captured)
-        verify { editorService.saveCurrentFile() }
+        coVerify { editorService.saveFile(target) }
+        // The save is file-targeted: the user's tab focus must not be read or moved (ADFA-5215).
+        verify(exactly = 0) { editorService.openFile(any()) }
+        verify(exactly = 0) { editorService.saveCurrentFile() }
     }
 
     @Test
@@ -496,7 +501,7 @@ class EditFileHandlerTest {
         val file = createFile("Main.kt", "val a = 1\n")
         every { editorService.getFileContent(file) } returns "val a = 1\nval userTyped = 2\n"
         every { editorService.replaceRange(any(), any(), any()) } returns true
-        every { editorService.saveCurrentFile() } returns true
+        coEvery { editorService.saveFile(any()) } returns true
 
         val result = edit(
             "file_path" to "Main.kt",
@@ -518,7 +523,7 @@ class EditFileHandlerTest {
         val file = createFile("Main.kt", "a\na\n")
         every { editorService.getFileContent(file) } returns "a\na\n"
         every { editorService.replaceRange(any(), any(), any()) } returns true
-        every { editorService.saveCurrentFile() } returns true
+        coEvery { editorService.saveFile(any()) } returns true
 
         val range = slot<SelectionRange>()
         val replacement = slot<String>()
@@ -538,12 +543,11 @@ class EditFileHandlerTest {
     }
 
     @Test
-    fun givenTheTabCannotBeFocused_whenEdited_thenNothingIsSavedAndTheResultSaysUnsaved() {
-        // saveCurrentFile() saves the FOCUSED tab, so saving unfocused persists a different file.
+    fun givenTheHostCannotSaveTheFile_whenEdited_thenTheResultSaysUnsaved() {
         val file = createFile("Main.kt", "old\n")
         every { editorService.getFileContent(file) } returns "old\n"
         every { editorService.replaceRange(any(), any(), any()) } returns true
-        every { editorService.openFile(any()) } returns false
+        coEvery { editorService.saveFile(any()) } returns false
 
         val result = edit("file_path" to "Main.kt", "old_string" to "old", "new_string" to "new")
 
@@ -552,6 +556,8 @@ class EditFileHandlerTest {
             "Must not claim the file was saved; got: ${result.message}",
             result.message.contains("left unsaved")
         )
+        // A failed save must not be retried by focusing the tab and saving that instead.
+        verify(exactly = 0) { editorService.openFile(any()) }
         verify(exactly = 0) { editorService.saveCurrentFile() }
         assertEquals("old\n", file.readText())
     }
@@ -566,7 +572,7 @@ class EditFileHandlerTest {
 
         assertFalse(result.success)
         assertEquals("old\n", file.readText())
-        verify(exactly = 0) { editorService.saveCurrentFile() }
+        coVerify(exactly = 0) { editorService.saveFile(any()) }
     }
 
     @Test
@@ -589,7 +595,7 @@ class EditFileHandlerTest {
             result.message.contains("changed")
         )
         verify(exactly = 0) { editorService.replaceRange(any(), any(), any()) }
-        verify(exactly = 0) { editorService.saveCurrentFile() }
+        coVerify(exactly = 0) { editorService.saveFile(any()) }
         assertEquals("the disk copy must not be touched either", analysed, file.readText())
     }
 
@@ -602,7 +608,7 @@ class EditFileHandlerTest {
             "line0\nline1\n",
         )
         every { editorService.replaceRange(any(), any(), any()) } returns true
-        every { editorService.saveCurrentFile() } returns true
+        coEvery { editorService.saveFile(any()) } returns true
 
         val result = edit("file_path" to "Main.kt", "old_string" to "line1", "new_string" to "LINE1")
 
@@ -680,7 +686,7 @@ class EditFileHandlerTest {
 
         assertEquals("val a = 1\n", file.readText())
         verify(exactly = 0) { editorService.replaceRange(any(), any(), any()) }
-        verify(exactly = 0) { editorService.saveCurrentFile() }
+        coVerify(exactly = 0) { editorService.saveFile(any()) }
     }
 
     // --- Content changing while the approval dialog is open -----------------
