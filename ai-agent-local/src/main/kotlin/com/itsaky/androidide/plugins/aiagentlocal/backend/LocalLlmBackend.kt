@@ -296,10 +296,11 @@ class LocalLlmBackend(
         // One parse of the metadata block per load, feeding both the guard below and the context
         // sizing after the unload: it sits at the front of a multi-GB file, and a model switch
         // used to walk it twice.
-        val modelFile = File(resolvedPath).takeIf { it.isFile }
-        val openModel = { modelFile?.inputStream() }
+        // Every stat is inside the block too: isFile and length() both hit the filesystem, which on
+        // a removed SD card or a stale SAF mount blocks whoever called us.
+        val openModel = { File(resolvedPath).takeIf { it.isFile }?.inputStream() }
         val (header, modelSizeBytes) = withContext(Dispatchers.IO) {
-            GgufHeaderReader.read(openModel) to modelFile?.length()?.takeIf { it > 0L }
+            GgufHeaderReader.read(openModel) to File(resolvedPath).length().takeIf { it > 0L }
         }
 
         // Guard the chat path against encoder-only embedding models. Running causal generation on

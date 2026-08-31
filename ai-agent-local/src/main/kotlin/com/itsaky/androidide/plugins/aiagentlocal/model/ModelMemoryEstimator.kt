@@ -25,8 +25,9 @@ data class MemoryEstimate(
 /**
  * Estimates the memory a `.gguf` model needs, from its size and its declared shape. Pure and
  * Android-free, so the arithmetic is unit-testable. The context and cache type it measures at are
- * the caller's: the load path passes what [ModelContextResolver] resolved, the pre-flight warning
- * the floor, since a figure derived from free RAM cannot then be judged against it (ADFA-5187/5188).
+ * the caller's: the load path passes what [ModelContextResolver] resolved. The model-selection
+ * pre-flight has [estimateForSelection] instead, because a figure derived from free RAM cannot then
+ * be judged against that same free RAM (ADFA-5187/5188).
  */
 object ModelMemoryEstimator {
 
@@ -38,18 +39,43 @@ object ModelMemoryEstimator {
 
     /**
      * Ceilings on the header's shape values, each far above the largest real model. They exist so a
-     * corrupt or crafted file cannot wrap the KV-cache product: within them it stays below 2^57, and
-     * an out-of-range value falls back to the size-based heuristic instead of a wrong estimate.
+     * corrupt or crafted file cannot wrap the KV-cache product: within them the per-token figure
+     * stays below 2^44, and an out-of-range value falls back to the size-based heuristic instead of
+     * a wrong estimate. They bound only the header's side of the product — [kvCacheBytes] clamps
+     * the context, since that one arrives from the caller.
      */
     private const val MAX_LAYERS = 1L shl 10
     private const val MAX_HEADS = 1L shl 12
     private const val MAX_WIDTH = 1L shl 20
 
     /**
+     * The estimate behind the pre-flight warning shown when a user picks a model. Priced at
+     * [ContextSizePolicy.DEFAULT_CONTEXT_TOKENS] — the least any load can use, so the least this
+     * model can cost — and deliberately without a context parameter: a context derived from free
+     * RAM would then be compared against the free RAM it came from, which makes the larger context
+     * the policy granted the very thing that trips the warning, and moves the "needs X to run"
+     * figure between two selections of the same model (ADFA-5187).
+     *
+     * The cache type comes from [ContextSizePolicy.chooseKvCache], which reads only the header, so
+     * naming it here adds no free-RAM term to the estimate.
+     *
+     * @param fileSizeBytes the model file's size, or null when it is unknown
+     * @param header the model's metadata, or null when it could not be read
+     * @return the estimate, or null when there is nothing to base one on
+     */
+    fun estimateForSelection(fileSizeBytes: Long?, header: GgufHeader?): MemoryEstimate? = estimate(
+        fileSizeBytes,
+        header,
+        ContextSizePolicy.DEFAULT_CONTEXT_TOKENS,
+        ContextSizePolicy.chooseKvCache(header),
+    )
+
+    /**
      * @param fileSizeBytes the model file's size, or null when it is unknown
      * @param header the model's metadata, or null when it could not be read
      * @param contextTokens the context to price the cache at; required, because a default here
-     *   would silently describe an allocation nobody makes
+     *   would silently describe an allocation nobody makes. Anything above
+     *   [ContextSizePolicy.MAX_CONTEXT_TOKENS] is clamped to it, since no load asks for more
      * @param kvType the cache type the load will be given; required for the same reason, and from
      *   the same [ModelContextResolver] answer, since it halves what a cached token costs
      * @return the estimate, or null when there is nothing to base one on
@@ -81,13 +107,17 @@ object ModelMemoryEstimator {
     private fun kvCacheBytes(header: GgufHeader, contextTokens: Int, kvType: KvCacheType): Long? {
         if (contextTokens <= 0) return null
         val perToken = kvBytesPerToken(header, kvType) ?: return null
-        return perToken * contextTokens
+        // The ceilings bound perToken; nothing bounds an Int arrived at elsewhere, and the product
+        // wrapping negative would let MemoryEstimate.totalBytes wave a model through.
+        return perToken * contextTokens.coerceAtMost(ContextSizePolicy.MAX_CONTEXT_TOKENS)
     }
 
     /**
      * What one cached position costs: one key and one value entry per kv head, per layer. The
      * factor [ContextSizePolicy] divides a RAM budget by, so sizing and estimate cannot drift apart.
-     * Stays under 2^44 within the ceilings below, so any context the policy returns fits a Long.
+     * Stays under 2^44 within the ceilings declared above — [KvCacheType.F16] being the dearer of the
+     * two types — so the product with a context clamped to [ContextSizePolicy.MAX_CONTEXT_TOKENS]
+     * stays under 2^58 and fits a Long.
      *
      * @param header the model's metadata
      * @param kvType the type the cache will be stored as
