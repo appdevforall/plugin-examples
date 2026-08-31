@@ -5,6 +5,7 @@ import java.io.IOException
 import java.io.InputStream
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -61,6 +62,16 @@ class ModelContextResolverTest {
     }
 
     @Test
+    fun givenAQuantizableModel_whenResolving_thenTheFallbackSizeIsTheShorterOne() {
+        // What the native f16 retry needs from this side: fewer tokens, since f16 costs nearly twice
+        // as much per cached token out of the same budget.
+        val resolved = ModelContextResolver.resolve(header(), ROOMY_DEVICE_BYTES, MODEL_SIZE)
+
+        assertEquals(KvCacheType.Q8_0, resolved.kvType)
+        assertTrue(resolved.fallbackContextTokens < resolved.contextTokens)
+    }
+
+    @Test
     fun givenUnknownModelSize_whenResolving_thenReturnsTheDefaultContext() {
         val resolved = ModelContextResolver.resolve(header(), Long.MAX_VALUE, null)
         assertEquals(DEFAULT_CONTEXT_TOKENS, resolved.contextTokens)
@@ -89,5 +100,8 @@ class ModelContextResolverTest {
 
     private companion object {
         const val MODEL_SIZE = 64L * 1024 * 1024
+
+        /** Free RAM that buys more than the floor under both types, so the two sizes can differ. */
+        const val ROOMY_DEVICE_BYTES = 1024L * 1024 * 1024
     }
 }

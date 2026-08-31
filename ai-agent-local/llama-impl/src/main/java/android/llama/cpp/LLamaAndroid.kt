@@ -248,21 +248,27 @@ class LLamaAndroid : ILlamaController {
     /**
      * Loads a model and gives its context [nCtx] tokens, stored as q8_0 when [quantizeKv] asks for
      * it. Every part of the shape is an argument rather than process-global state so that none of it
-     * can be overwritten between being chosen and being used, and so that the size and the type
-     * cannot disagree: the context is created on the run loop, well after the caller picked them.
+     * can be overwritten between being chosen and being used: the context is created on the run
+     * loop, well after the caller picked them.
+     *
+     * A partial load frees what it allocated before rethrowing: [threadLocalState] stays `Idle`, so
+     * nothing else can reach those handles, and a retry would otherwise mmap another model on top
+     * of the leaked one for the process lifetime.
      *
      * @param pathToModel filesystem path to the `.gguf` model
      * @param nCtx context size in tokens, sized for [quantizeKv]; non-positive means [DEFAULT_N_CTX]
      * @param quantizeKv true to store the KV cache as q8_0, roughly half the bytes of f16; the
      *   native side may still refuse it, in which case the load falls back to f16 at [fallbackNCtx]
      * @param fallbackNCtx context size for that f16 fallback, which the caller sizes against f16's
-     *   own per-token cost; defaults to [nCtx], correct when [quantizeKv] is false
+     *   own per-token cost; non-positive means [DEFAULT_N_CTX], since [nCtx] would be the wrong
+     *   default under [quantizeKv] — an f16 cache at a size q8_0 paid for asks for nearly twice the
+     *   bytes the attempt that just failed did
      */
     suspend fun load(
         pathToModel: String,
         nCtx: Int,
         quantizeKv: Boolean = false,
-        fallbackNCtx: Int = nCtx,
+        fallbackNCtx: Int = 0,
     ) {
         withContext(runLoop()) {
             when (threadLocalState.get()) {
@@ -270,7 +276,6 @@ class LLamaAndroid : ILlamaController {
                     val model = load_model(pathToModel)
                     if (model == 0L) throw IllegalStateException("load_model() failed")
 
-                    // Only State.Loaded holds these, so a later step failing leaks them unless freed here.
                     var context = 0L
                     var batch = 0L
                     var sampler = 0L
@@ -283,13 +288,13 @@ class LLamaAndroid : ILlamaController {
 
                         sampler = new_sampler()
                         if (sampler == 0L) throw IllegalStateException("new_sampler() failed")
-                    } catch (e: Throwable) {
-                        // Model last: the context borrows from it, so it has to outlive the context.
+                    } catch (failure: Throwable) {
+                        // Reverse of the allocation order, and the model last: it owns the rest.
                         if (sampler != 0L) free_sampler(sampler)
                         if (batch != 0L) free_batch(batch)
                         if (context != 0L) free_context(context)
                         free_model(model)
-                        throw e
+                        throw failure
                     }
 
                     log.info("Loaded model {}", pathToModel)

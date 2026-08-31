@@ -47,14 +47,18 @@ internal object ModelContextResolver {
     ): ModelContextSize {
         // A quantized cache buys about twice the context, so the type is picked before the size.
         val kvType = ContextSizePolicy.chooseKvCache(header)
+        val contextTokens = ContextSizePolicy.choose(header, availableBytes, modelSizeBytes, kvType)
         return ModelContextSize(
-            contextTokens = ContextSizePolicy.choose(header, availableBytes, modelSizeBytes, kvType),
+            contextTokens = contextTokens,
             kvType = kvType,
-            // Sized here rather than scaled natively, so the fallback obeys the one policy that
-            // knows the floor, the ceiling and the rounding.
-            fallbackContextTokens = ContextSizePolicy.choose(
-                header, availableBytes, modelSizeBytes, KvCacheType.F16,
-            ),
+            // Sized by the one policy that knows the floor, the ceiling and the rounding rather
+            // than scaled natively, and reused outright where the load is already f16: that is the
+            // documented invariant, and asking twice would only make it hold by coincidence.
+            fallbackContextTokens = if (kvType == KvCacheType.F16) {
+                contextTokens
+            } else {
+                ContextSizePolicy.choose(header, availableBytes, modelSizeBytes, KvCacheType.F16)
+            },
             header = header,
         )
     }

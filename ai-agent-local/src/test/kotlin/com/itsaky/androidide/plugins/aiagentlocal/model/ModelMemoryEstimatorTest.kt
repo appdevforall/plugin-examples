@@ -9,8 +9,8 @@ import org.junit.Test
 
 /**
  * Pins the two properties the pre-flight warning depends on: that it prices the KV cache at the
- * floor context and at the type the load will actually use, never at a context derived from the
- * free RAM it is then compared against (ADFA-5187/5188), and that no context can wrap the product
+ * floor context and at f16 — an upper bound over both cache types, never a context derived from the
+ * free RAM it is then compared against (ADFA-5187/5188) — and that no context can wrap the product
  * and turn "does not fit" into "fits".
  */
 class ModelMemoryEstimatorTest {
@@ -19,21 +19,22 @@ class ModelMemoryEstimatorTest {
     fun givenASelectedModel_whenEstimating_thenTheCacheIsPricedAtTheFloorContext() {
         val selection = ModelMemoryEstimator.estimateForSelection(MODEL_SIZE, header())!!
 
-        assertEquals(Q8_0_PER_TOKEN * DEFAULT_CONTEXT_TOKENS + ModelMemory.RUN_BUFFER_BYTES, selection.runBytes)
+        assertEquals(F16_PER_TOKEN * DEFAULT_CONTEXT_TOKENS + ModelMemory.RUN_BUFFER_BYTES, selection.runBytes)
     }
 
     @Test
-    fun givenAQuantizableModel_whenEstimatingForSelection_thenItIsPricedAtTheTypeTheLoadWillUse() {
-        // The type is a function of the header alone, so naming it adds no free-RAM term — but
-        // pricing at f16 while the load quantizes would overstate the cache by nearly half.
+    fun givenAQuantizableModel_whenEstimatingForSelection_thenItIsStillPricedAtF16() {
+        // Pricing a quantizable model at q8_0 would halve the cache term and go quiet on exactly the
+        // load the native f16 retry exists for, which allocates the figure nobody was warned about.
         val header = header()
         assertEquals(KvCacheType.Q8_0, ContextSizePolicy.chooseKvCache(header))
 
         val selection = ModelMemoryEstimator.estimateForSelection(MODEL_SIZE, header)!!
         val atF16 = ModelMemoryEstimator.estimate(MODEL_SIZE, header, DEFAULT_CONTEXT_TOKENS, KvCacheType.F16)!!
+        val atQ8 = ModelMemoryEstimator.estimate(MODEL_SIZE, header, DEFAULT_CONTEXT_TOKENS, KvCacheType.Q8_0)!!
 
-        assertNotEquals(atF16.runBytes, selection.runBytes)
-        assertTrue(selection.runBytes < atF16.runBytes)
+        assertEquals(atF16.runBytes, selection.runBytes)
+        assertTrue(atQ8.runBytes < selection.runBytes)
     }
 
     @Test
@@ -49,7 +50,7 @@ class ModelMemoryEstimatorTest {
 
         assertEquals(MAX_CONTEXT_TOKENS, granted)
         assertNotEquals(ramDerived.runBytes, selection.runBytes)
-        assertEquals(Q8_0_PER_TOKEN * DEFAULT_CONTEXT_TOKENS + ModelMemory.RUN_BUFFER_BYTES, selection.runBytes)
+        assertEquals(F16_PER_TOKEN * DEFAULT_CONTEXT_TOKENS + ModelMemory.RUN_BUFFER_BYTES, selection.runBytes)
     }
 
     @Test
@@ -97,8 +98,8 @@ class ModelMemoryEstimatorTest {
         /** Cached elements per position for the default header: 24 layers x 8 kv heads x 128. */
         const val ELEMENTS_PER_TOKEN = 24L * 8 * (64 + 64)
 
-        /** Those elements stored as q8_0: 34 bytes per 32-element block. */
-        const val Q8_0_PER_TOKEN = ELEMENTS_PER_TOKEN * 34 / 32
+        /** Those elements stored as f16, the type the selection estimate prices at: 2 bytes each. */
+        const val F16_PER_TOKEN = ELEMENTS_PER_TOKEN * 2
 
         /** Enough free RAM that the policy lands on its ceiling rather than on the affordable term. */
         const val ROOMY_DEVICE_BYTES = 8L * 1024 * 1024 * 1024

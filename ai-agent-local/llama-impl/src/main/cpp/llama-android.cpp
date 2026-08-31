@@ -372,13 +372,14 @@ Java_android_llama_cpp_LLamaAndroid_free_1model(JNIEnv *, jobject, jlong model) 
  *
  * @param requested the context asked for, in tokens
  * @param trained_ctx what the model was trained for, or 0 when it does not say
+ * @param which which size is being clamped, so two clamps in one load read as two in the log
  * @return the context to configure, never above trained_ctx unless that is below DEFAULT_N_CTX
  */
-static int clamp_context(int requested, int trained_ctx) {
+static int clamp_context(int requested, int trained_ctx, const char *which) {
     int clamped = requested > 0 ? requested : DEFAULT_N_CTX;
     const int ceiling = std::max(trained_ctx, DEFAULT_N_CTX);
     if (trained_ctx > 0 && clamped > ceiling) {
-        LOGi("context: n_ctx %d exceeds the model's trained %d; clamping to %d", clamped,
+        LOGi("context: %s n_ctx %d exceeds the model's trained %d; clamping to %d", which, clamped,
              trained_ctx, ceiling);
         clamped = ceiling;
     }
@@ -411,10 +412,7 @@ Java_android_llama_cpp_LLamaAndroid_new_1context(JNIEnv *env, jobject, jlong jmo
     llama_context_params ctx_params = llama_context_default_params();
 
     const int trained_ctx = llama_model_n_ctx_train(model);
-    const int requested_ctx = clamp_context(jn_ctx, trained_ctx);
-    // Sized by Kotlin against f16, the type the fallback below drops to; the two sizes differ
-    // because f16 costs nearly twice as much per cached token.
-    const int fallback_ctx = clamp_context(jfallback_n_ctx, trained_ctx);
+    const int requested_ctx = clamp_context(jn_ctx, trained_ctx, "requested");
     const bool quantize_kv = jquantize_kv == JNI_TRUE;
 
     // AUTO rather than ENABLED: it is AUTO that makes llama.cpp validate a quantized cache against
@@ -431,8 +429,11 @@ Java_android_llama_cpp_LLamaAndroid_new_1context(JNIEnv *env, jobject, jlong jmo
     ctx_params.n_threads = n_threads;
     ctx_params.n_threads_batch = n_threads_batch;
 
-    LOGi("Creating context: n_ctx = %d (model trained for %d), kv cache = %s", requested_ctx,
-         trained_ctx, quantize_kv ? "q8_0" : "f16");
+    // The request, not the outcome: whether AUTO resolved to on is llama.cpp's own line to log,
+    // under the AiAgentLocal.llama.cpp tag, since no public getter exposes cparams.flash_attn.
+    LOGi("Creating context: n_ctx = %d (model trained for %d), kv cache = %s, flash attention = %s",
+         requested_ctx, trained_ctx, quantize_kv ? "q8_0" : "f16",
+         llama_flash_attn_type_name(ctx_params.flash_attn_type));
 
     llama_context *context = llama_init_from_model(model, ctx_params);
     bool quantized_in_use = quantize_kv;
@@ -440,34 +441,28 @@ Java_android_llama_cpp_LLamaAndroid_new_1context(JNIEnv *env, jobject, jlong jmo
     // Two unrelated failures land here and want opposite retries: a refused quantized cache is not
     // a shortage and keeps its long context, while a shortage is answered only by fewer bytes.
     if (!context && quantize_kv) {
-        // f16 with flash attention off is the one configuration nothing here can refuse — no
-        // block-size constraint on the cache, and no graph for AUTO to fail to place. It costs the
-        // attention speed-up on a model whose only problem was the cache type, which is the cheaper
-        // mistake to make. Kotlin already screens the head width, so getting here at all means the
-        // header and llama.cpp disagreed.
-        LOGe("Context creation failed; retrying at f16 with flash attention off and n_ctx %d",
-             fallback_ctx);
+        // Only the cache type moves: AUTO was the default before this PR and downgrades itself on
+        // an f16 cache, so disabling it would make a refused model slower than it is on main.
+        // Sized by Kotlin against f16, and clamped here so a load that never retries logs no clamp.
+        const int fallback_ctx = clamp_context(jfallback_n_ctx, trained_ctx, "fallback");
+        LOGe("Context creation failed; retrying at f16 with n_ctx %d", fallback_ctx);
         ctx_params.type_k = GGML_TYPE_F16;
         ctx_params.type_v = GGML_TYPE_F16;
-        ctx_params.flash_attn_type = LLAMA_FLASH_ATTN_TYPE_DISABLED;
         ctx_params.n_ctx = fallback_ctx;
         context = llama_init_from_model(model, ctx_params);
         quantized_in_use = false;
     }
 
-    // The only retry that shrinks the allocation, back to the context every load got before this was
-    // sized per device; fallback_ctx cannot, since f16 costs what q8_0 bought the extra tokens with.
-    // The guard skips an attempt that would re-request exactly what just failed.
+    // The only retry that shrinks the allocation, back to the context every load got before this
+    // was sized per device; the f16 retry above cannot, costing per token what it saved in tokens.
+    // Guarded on size alone: at the same n_ctx nothing left to change makes the attempt cheaper.
     // n_ctx is unsigned; every value compared here is a clamped positive.
     const int current_ctx = (int) ctx_params.n_ctx;
     const int floor_ctx = std::min(current_ctx, DEFAULT_N_CTX);
-    if (!context && (floor_ctx < current_ctx ||
-                     ctx_params.flash_attn_type != LLAMA_FLASH_ATTN_TYPE_DISABLED)) {
-        LOGe("Context creation failed; retrying at the n_ctx %d floor with f16 and flash attention off",
-             floor_ctx);
+    if (!context && floor_ctx < current_ctx) {
+        LOGe("Context creation failed; retrying at the n_ctx %d floor with f16", floor_ctx);
         ctx_params.type_k = GGML_TYPE_F16;
         ctx_params.type_v = GGML_TYPE_F16;
-        ctx_params.flash_attn_type = LLAMA_FLASH_ATTN_TYPE_DISABLED;
         ctx_params.n_ctx = floor_ctx;
         context = llama_init_from_model(model, ctx_params);
         quantized_in_use = false;
@@ -483,7 +478,7 @@ Java_android_llama_cpp_LLamaAndroid_new_1context(JNIEnv *env, jobject, jlong jmo
     // n_ctx and the cache type now vary per model and device, so a wrong one is invisible in a
     // report without this.
     LOGi("Context created: n_ctx = %u (requested %d, model trained for %d), n_batch = %u, kv cache = %s",
-         llama_n_ctx(context), (int) jn_ctx, trained_ctx, llama_n_batch(context),
+         llama_n_ctx(context), requested_ctx, trained_ctx, llama_n_batch(context),
          quantized_in_use ? "q8_0" : "f16");
 
     // A fresh context has an empty KV cache, so the prefix record must start empty too.

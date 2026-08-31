@@ -56,8 +56,9 @@ object ModelMemoryEstimator {
      * the policy granted the very thing that trips the warning, and moves the "needs X to run"
      * figure between two selections of the same model (ADFA-5187).
      *
-     * The cache type comes from [ContextSizePolicy.chooseKvCache], which reads only the header, so
-     * naming it here adds no free-RAM term to the estimate.
+     * Priced at [KvCacheType.F16] and not at the type the load will pick: f16 is the dearer of the
+     * two and the type the native fallback drops to, so this stays an upper bound over both
+     * outcomes — including the refused-quantized-cache path the warning exists for (ADFA-5188).
      *
      * @param fileSizeBytes the model file's size, or null when it is unknown
      * @param header the model's metadata, or null when it could not be read
@@ -67,7 +68,7 @@ object ModelMemoryEstimator {
         fileSizeBytes,
         header,
         ContextSizePolicy.DEFAULT_CONTEXT_TOKENS,
-        ContextSizePolicy.chooseKvCache(header),
+        KvCacheType.F16,
     )
 
     /**
