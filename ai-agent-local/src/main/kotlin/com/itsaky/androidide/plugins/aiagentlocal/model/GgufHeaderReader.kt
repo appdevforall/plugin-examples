@@ -11,6 +11,9 @@ import java.io.InputStream
  * The GGUF metadata the memory estimate needs. Every field is nullable because a file may omit any
  * key; the estimator then falls back to a heuristic instead of guessing.
  *
+ * New properties are appended rather than inserted: every one of them is `Long?`, so a positional
+ * construction that shifted would still compile and silently bind the wrong value to each name.
+ *
  * @property architecture `general.architecture`; also the prefix every other key here is read under
  * @property blockCount transformer layers, `{arch}.block_count`
  * @property embeddingLength model width, `{arch}.embedding_length`
@@ -19,6 +22,8 @@ import java.io.InputStream
  * @property keyLength per-head key width, `{arch}.attention.key_length`; absent means it is the
  *   model width divided by the head count, which is only the default and not always the truth
  * @property valueLength per-head value width, `{arch}.attention.value_length`; as [keyLength]
+ * @property contextLength the context the model was trained for, `{arch}.context_length`; the
+ *   ceiling [ContextSizePolicy] sizes the KV cache against, and absent on files that omit it
  */
 data class GgufHeader(
     val architecture: String?,
@@ -28,13 +33,14 @@ data class GgufHeader(
     val headCountKv: Long?,
     val keyLength: Long? = null,
     val valueLength: Long? = null,
+    val contextLength: Long? = null,
 )
 
 /**
  * Reads the metadata block at the front of a `.gguf` file — the shape values the KV-cache estimate
- * needs. Never reads the weights, and fails closed to null: an unreadable header must mean "no
- * estimate", never a wrong one. Parses the same metadata block as [GgufModelInspector], which
- * answers a different question — chat model or embedding model.
+ * needs, plus the architecture [GgufModelInspector] classifies. Never reads the weights, and fails
+ * closed to null: an unreadable header must mean "no estimate", never a wrong one. The one parser
+ * for this block — a well-formed file is walked once, [readArchitecture] retries only after a null.
  */
 internal object GgufHeaderReader {
 
@@ -59,6 +65,7 @@ internal object GgufHeaderReader {
 
     // Matched by suffix, then attributed to the "{arch}." prefix they carry — see [readHeader].
     private const val SUFFIX_BLOCK_COUNT = ".block_count"
+    private const val SUFFIX_CONTEXT_LENGTH = ".context_length"
     private const val SUFFIX_EMBEDDING_LENGTH = ".embedding_length"
     private const val SUFFIX_HEAD_COUNT = ".attention.head_count"
     private const val SUFFIX_HEAD_COUNT_KV = ".attention.head_count_kv"
@@ -102,6 +109,23 @@ internal object GgufHeaderReader {
     }
 
     /**
+     * The architecture and nothing else, for the crash guard when [read] already returned null.
+     * Stops at the first `general.architecture` — conventionally the first entry — so nothing later
+     * in the block can defeat it. Blocking I/O, bounded by [MAX_METADATA_BYTES].
+     *
+     * @param openStream opens the candidate model, or returns null when it can't be opened
+     * @return the declared architecture, or null if the parse never reached it
+     */
+    fun readArchitecture(openStream: () -> InputStream?): String? = try {
+        openStream()?.use { stream ->
+            val budgeted = BudgetedInputStream(stream, MAX_METADATA_BYTES)
+            readArchitectureOnly(DataInputStream(BufferedInputStream(budgeted, 1 shl 16)))
+        }
+    } catch (_: Throwable) {
+        null
+    }
+
+    /**
      * Aborts the parse once [limit] bytes have been consumed, so no declared count can make the
      * read run on past the metadata. Throwing is deliberate: [read] treats it like any other parse
      * failure and returns null, which puts the estimate on its size-based fallback.
@@ -138,6 +162,7 @@ internal object GgufHeaderReader {
     /** The shape values seen under one `{arch}.` prefix. A file may carry more than one. */
     private class ArchShape {
         var blockCount: Long? = null
+        var contextLength: Long? = null
         var embeddingLength: Long? = null
         var headCount: Long? = null
         var headCountKv: Long? = null
@@ -170,6 +195,9 @@ internal object GgufHeaderReader {
                 key.endsWith(SUFFIX_BLOCK_COUNT) ->
                     shapeFor(shapes, key, SUFFIX_BLOCK_COUNT).blockCount = readInteger(input, type, wide)
 
+                key.endsWith(SUFFIX_CONTEXT_LENGTH) ->
+                    shapeFor(shapes, key, SUFFIX_CONTEXT_LENGTH).contextLength = readInteger(input, type, wide)
+
                 key.endsWith(SUFFIX_EMBEDDING_LENGTH) ->
                     shapeFor(shapes, key, SUFFIX_EMBEDDING_LENGTH).embeddingLength = readInteger(input, type, wide)
 
@@ -200,7 +228,32 @@ internal object GgufHeaderReader {
             headCountKv = shape?.headCountKv,
             keyLength = shape?.keyLength,
             valueLength = shape?.valueLength,
+            contextLength = shape?.contextLength,
         )
+    }
+
+    /**
+     * Deliberately laxer than [readHeader]: no entry-count ceiling, and it returns before reading
+     * whatever follows the architecture, so the constructs that make a full parse fail cannot make
+     * an embedding model look chat-capable. See ADFA-4388.
+     */
+    private fun readArchitectureOnly(input: DataInputStream): String? {
+        if (readU32(input) != GGUF_MAGIC) return null
+
+        val wide = readU32(input) >= 2
+        readCount(input, wide) // tensor count, unused here
+        val entryCount = readCount(input, wide)
+        if (entryCount < 0L) return null
+
+        var index = 0L
+        while (index < entryCount) {
+            val key = readString(input, wide)
+            val type = readU32(input)
+            if (key == KEY_ARCHITECTURE && type == T_STRING) return readString(input, wide)
+            skipValue(input, type, wide)
+            index++
+        }
+        return null
     }
 
     /** The shape values for the architecture [key] belongs to, created on first sight. */

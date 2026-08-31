@@ -267,6 +267,9 @@ class LocalLlmSettingsViewModel(
     /**
      * Checks the model against free RAM and, when it looks too large, asks the user whether to go
      * ahead. Fails OPEN: an unreadable size or header means no warning rather than a wrong one.
+     * Prices the KV cache at the floor context, never at one derived from the free RAM it is then
+     * compared against — that would make a larger granted context the thing that trips the warning,
+     * and would move "needs X to run" between two selections of the same model.
      *
      * @return true to continue with this model
      */
@@ -276,11 +279,11 @@ class LocalLlmSettingsViewModel(
         context: Context
     ): Boolean {
         val modelName = fileInfo.displayName
-        val estimate = ModelMemoryEstimator.estimate(
-            fileSizeBytes = fileInfo.sizeBytes,
-            header = GgufHeaderReader.read { modelFiles.openStream(context, uriString) },
-        )
-        // Read last and never cached: the user may have just closed apps to make room.
+        val header = GgufHeaderReader.read { modelFiles.openStream(context, uriString) }
+        // Prices at the floor by construction — it takes no context and no free-RAM figure at all.
+        val estimate = ModelMemoryEstimator.estimateForSelection(fileInfo.sizeBytes, header)
+        // Read last and never cached: the header parse above is blocking I/O over the model file,
+        // and the user may have just closed apps to make room.
         val availableBytes = deviceMemory.availableBytes()
 
         return when (val verdict = ModelMemoryGate.evaluate(estimate, availableBytes)) {

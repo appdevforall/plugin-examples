@@ -1,5 +1,6 @@
 #include <android/log.h>
 #include <jni.h>
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <iomanip>
@@ -12,7 +13,7 @@
 #include "llama.h"
 #include "common.h"
 
-#define TAG "llama-android.cpp"
+#define TAG "AiAgentLocal.llama-android"
 #define LOGi(...) __android_log_print(ANDROID_LOG_INFO, TAG, __VA_ARGS__)
 #define LOGe(...) __android_log_print(ANDROID_LOG_ERROR, TAG, __VA_ARGS__)
 
@@ -36,6 +37,38 @@ static std::vector<std::string> g_stop_strings;
 static std::string g_generated_text;
 static std::atomic<bool> g_stop_requested(false);
 static std::mutex g_globals_mutex;
+
+/**
+ * Raises a Java exception, tolerating a FindClass that cannot resolve the name, since ThrowNew on a
+ * null jclass is undefined behaviour. Callers still own their resources: release them first, because
+ * only Release/Delete/Exception calls are legal once an exception is pending.
+ *
+ * @param env the calling thread's JNI environment
+ * @param class_name JNI name of the exception to raise, e.g. "java/lang/IllegalStateException"
+ * @param message the exception message
+ */
+static void throw_java(JNIEnv *env, const char *class_name, const char *message) {
+    jclass exception_class = env->FindClass(class_name);
+    if (!exception_class) {
+        LOGe("jni: cannot raise %s (\"%s\"): class not found", class_name, message);
+        return;
+    }
+    env->ThrowNew(exception_class, message);
+    env->DeleteLocalRef(exception_class);
+}
+
+/**
+ * The token capacity a batch was allocated with, recorded by new_batch(). llama_batch itself only
+ * carries n_tokens (how full it is), not how large it is, so the map is the only record.
+ *
+ * @param batch a batch created by new_batch()
+ * @return its capacity in tokens, or 0 if it was not created here
+ */
+static size_t batch_capacity_of(llama_batch *batch) {
+    std::lock_guard<std::mutex> lock(g_globals_mutex);
+    auto it = g_batch_n_tokens.find(batch);
+    return it == g_batch_n_tokens.end() ? 0 : (size_t) std::max(0, it->second);
+}
 
 bool is_valid_utf8(const char *string) {
     if (!string) {
@@ -82,9 +115,25 @@ static std::atomic<int> g_n_threads_batch(-1);
 static std::atomic<float> g_temperature(0.7f);
 static std::atomic<float> g_top_p(0.9f);
 static std::atomic<int> g_top_k(40);
-static std::atomic<int> g_n_ctx(4096);
+/**
+ * Context used when the caller passes a non-positive one; mirrors ContextSizePolicy's floor. Only a
+ * guard against a bad argument — the size is chosen in Kotlin and passed to new_context per load.
+ */
+static constexpr int DEFAULT_N_CTX = 4096;
 static std::atomic<bool> g_kv_cache_reuse(true);
 static std::vector<llama_token> g_cached_tokens;
+
+/**
+ * Drops both the KV cache and the record of what it held, after a prefill that did not complete.
+ * Leaving either behind would have the next turn reuse a prefix the cache no longer matches.
+ *
+ * @param context the context whose memory to clear
+ */
+static void forget_cached_prefix(llama_context *context) {
+    llama_memory_clear(llama_get_memory(context), true);
+    std::lock_guard<std::mutex> lock(g_globals_mutex);
+    g_cached_tokens.clear();
+}
 
 // Converts standard UTF-8 to UTF-16. NewStringUTF() is unusable here because it
 // expects modified UTF-8 (CESU-8), so 4-byte sequences such as emoji would mangle.
@@ -193,15 +242,6 @@ Java_android_llama_cpp_LLamaAndroid_native_1configureSampling(JNIEnv *, jclass, 
 
 extern "C"
 JNIEXPORT void JNICALL
-Java_android_llama_cpp_LLamaAndroid_native_1configureContext(JNIEnv *, jclass, jint n_ctx) {
-    if (n_ctx <= 0) {
-        return;
-    }
-    g_n_ctx.store(n_ctx);
-}
-
-extern "C"
-JNIEXPORT void JNICALL
 Java_android_llama_cpp_LLamaAndroid_native_1configureKvCacheReuse(JNIEnv *, jclass, jboolean enabled) {
     g_kv_cache_reuse.store(enabled == JNI_TRUE);
 }
@@ -305,14 +345,14 @@ Java_android_llama_cpp_LLamaAndroid_load_1model(JNIEnv *env, jobject, jstring fi
     llama_model_params model_params = llama_model_default_params();
 
     auto path_to_model = env->GetStringUTFChars(filename, 0);
-    LOGi("Loading model from %s", path_to_model);
+    LOGi("model: loading from %s", path_to_model);
 
     auto model = llama_model_load_from_file(path_to_model, model_params);
     env->ReleaseStringUTFChars(filename, path_to_model);
 
     if (!model) {
-        LOGe("load_model() failed");
-        env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), "load_model() failed");
+        LOGe("model: load_model() failed");
+        throw_java(env, "java/lang/IllegalStateException", "load_model() failed");
         return 0;
     }
 
@@ -327,12 +367,12 @@ Java_android_llama_cpp_LLamaAndroid_free_1model(JNIEnv *, jobject, jlong model) 
 
 extern "C"
 JNIEXPORT jlong JNICALL
-Java_android_llama_cpp_LLamaAndroid_new_1context(JNIEnv *env, jobject, jlong jmodel) {
+Java_android_llama_cpp_LLamaAndroid_new_1context(JNIEnv *env, jobject, jlong jmodel, jint jn_ctx) {
     auto model = reinterpret_cast<llama_model *>(jmodel);
 
     if (!model) {
-        LOGe("new_context(): model cannot be null");
-        env->ThrowNew(env->FindClass("java/lang/IllegalArgumentException"), "Model cannot be null");
+        LOGe("context: model cannot be null");
+        throw_java(env, "java/lang/IllegalArgumentException", "Model cannot be null");
         return 0;
     }
 
@@ -345,23 +385,38 @@ Java_android_llama_cpp_LLamaAndroid_new_1context(JNIEnv *env, jobject, jlong jmo
     if (n_threads_batch <= 0) {
         n_threads_batch = n_threads;
     }
-    LOGi("Using %d threads (batch=%d)", n_threads, n_threads_batch);
+    LOGi("context: using %d threads (batch=%d)", n_threads, n_threads_batch);
 
     llama_context_params ctx_params = llama_context_default_params();
 
-    const int configured_ctx = g_n_ctx.load();
-    ctx_params.n_ctx = configured_ctx > 0 ? configured_ctx : 4096;
+    int requested_ctx = jn_ctx > 0 ? jn_ctx : DEFAULT_N_CTX;
+
+    // Backstop on Kotlin's number: a misparsed header must not exceed the trained context. Floored
+    // at DEFAULT_N_CTX, the context a 2048-trained model always got, so no prompt that fit regresses.
+    const int trained_ctx = llama_model_n_ctx_train(model);
+    const int clamp_ctx = std::max(trained_ctx, DEFAULT_N_CTX);
+    if (trained_ctx > 0 && requested_ctx > clamp_ctx) {
+        LOGi("context: requested n_ctx %d exceeds the model's trained %d; clamping to %d",
+             requested_ctx, trained_ctx, clamp_ctx);
+        requested_ctx = clamp_ctx;
+    }
+
+    ctx_params.n_ctx = requested_ctx;
     ctx_params.n_threads = n_threads;
     ctx_params.n_threads_batch = n_threads_batch;
 
     llama_context *context = llama_init_from_model(model, ctx_params);
 
     if (!context) {
-        LOGe("llama_new_context_with_model() returned null)");
-        env->ThrowNew(env->FindClass("java/lang/IllegalStateException"),
-                      "llama_new_context_with_model() returned null)");
+        LOGe("context: llama_new_context_with_model() returned null");
+        throw_java(env, "java/lang/IllegalStateException",
+                   "llama_new_context_with_model() returned null)");
         return 0;
     }
+
+    // n_ctx now varies per model and device, so a wrong size is invisible in a report without this.
+    LOGi("context: created with n_ctx = %u (requested %d, model trained for %d), n_batch = %u",
+         llama_n_ctx(context), requested_ctx, trained_ctx, llama_n_batch(context));
 
     // A fresh context has an empty KV cache, so the prefix record must start empty too.
     {
@@ -419,12 +474,12 @@ Java_android_llama_cpp_LLamaAndroid_bench_1model(
 
     const int n_ctx = llama_n_ctx(context);
 
-    LOGi("n_ctx = %d", n_ctx);
+    LOGi("bench: n_ctx = %d", n_ctx);
 
     int i, j;
     int nri;
     for (nri = 0; nri < nr; nri++) {
-        LOGi("Benchmark prompt processing (pp)");
+        LOGi("bench: prompt processing (pp)");
 
         common_batch_clear(*batch);
 
@@ -438,13 +493,13 @@ Java_android_llama_cpp_LLamaAndroid_bench_1model(
 
         const auto t_pp_start = ggml_time_us();
         if (llama_decode(context, *batch) != 0) {
-            LOGi("llama_decode() failed during prompt processing");
+            LOGi("bench: llama_decode() failed during prompt processing");
         }
         const auto t_pp_end = ggml_time_us();
 
         // bench text generation
 
-        LOGi("Benchmark text generation (tg)");
+        LOGi("bench: text generation (tg)");
 
         llama_memory_clear(llama_get_memory(context), false);
         const auto t_tg_start = ggml_time_us();
@@ -455,9 +510,9 @@ Java_android_llama_cpp_LLamaAndroid_bench_1model(
                 common_batch_add(*batch, 0, i, {j}, true);
             }
 
-            LOGi("llama_decode() text generation: %d", i);
+            LOGi("bench: llama_decode() text generation: %d", i);
             if (llama_decode(context, *batch) != 0) {
-                LOGi("llama_decode() failed during text generation");
+                LOGi("bench: llama_decode() failed during text generation");
             }
         }
 
@@ -477,7 +532,7 @@ Java_android_llama_cpp_LLamaAndroid_bench_1model(
         pp_std += speed_pp * speed_pp;
         tg_std += speed_tg * speed_tg;
 
-        LOGi("pp %f t/s, tg %f t/s", speed_pp, speed_tg);
+        LOGi("bench: pp %f t/s, tg %f t/s", speed_pp, speed_tg);
     }
 
     pp_avg /= double(nr);
@@ -737,22 +792,22 @@ Java_android_llama_cpp_LLamaAndroid_completion_1init(
 
     int n_ctx = llama_n_ctx(context);
     size_t n_kv_req = tokens_list.size() + static_cast<size_t>(n_len);
-    LOGi("n_len = %d, n_ctx = %d, n_kv_req = %zu", n_len, n_ctx, n_kv_req);
+    LOGi("prefill: n_len = %d, n_ctx = %d, n_kv_req = %zu", n_len, n_ctx, n_kv_req);
 
     if (n_kv_req > n_ctx) {
-        LOGe("error: n_kv_req > n_ctx, the required KV cache size is not big enough");
-        env->ThrowNew(env->FindClass("java/lang/IllegalArgumentException"),
-                      "Prompt is too long for the model's context size.");
+        LOGe("prefill: n_kv_req > n_ctx, the required KV cache size is not big enough");
+        // Released before returning, as on every other exit from here: jtext is pinned until it is.
+        env->ReleaseStringUTFChars(jtext, text);
+        throw_java(env, "java/lang/IllegalArgumentException",
+                   "Prompt is too long for the model's context size.");
         return 0;
     }
 
     g_prompt_tokens = static_cast<int>(tokens_list.size());
 
     for (auto id: tokens_list) {
-        LOGv("token: `%s`-> %d ", common_token_to_piece(context, id).c_str(), id);
+        LOGv("prefill: token `%s` -> %d", common_token_to_piece(context, id).c_str(), id);
     }
-
-    common_batch_clear(*batch);
 
     // Reuse the longest common prefix with the cached sequence so the unchanged prefix (system prompt) isn't re-prefilled.
     size_t lcp = 0;
@@ -780,22 +835,52 @@ Java_android_llama_cpp_LLamaAndroid_completion_1init(
         llama_memory_seq_rm(mem, 0, (llama_pos) lcp, -1);
     }
 
+    // Sliced: the batch's fixed capacity can now sit far below n_ctx, and overrunning it wrecks the heap.
+    const size_t batch_capacity = batch_capacity_of(batch);
+    const size_t chunk_limit = std::min<size_t>(batch_capacity, llama_n_batch(context));
+
+    if (chunk_limit == 0) {
+        // Not llama_n_batch(context): an untracked batch has an unknown allocation to overrun.
+        LOGe("prefill: batch was not created by new_batch(), so its capacity is unknown");
+        forget_cached_prefix(context);
+        env->ReleaseStringUTFChars(jtext, text);
+        throw_java(env, "java/lang/IllegalStateException",
+                   "Batch capacity is unknown.");
+        return 0;
+    }
+
+    const size_t prefill_tokens = tokens_list.size() - lcp;
+    const size_t slices = (prefill_tokens + chunk_limit - 1) / chunk_limit;
+    // The only direct evidence the chunked path ran rather than the old single-batch prefill.
+    LOGi("prefill: %zu tokens (%zu reused from cache) in %zu slice(s) of at most %zu",
+         prefill_tokens, lcp, slices, chunk_limit);
+
+    for (size_t start = lcp; start < tokens_list.size(); start += chunk_limit) {
+        const size_t end = std::min(start + chunk_limit, tokens_list.size());
+        common_batch_clear(*batch);
+        for (size_t i = start; i < end; i++) {
+            common_batch_add(*batch, tokens_list[i], (llama_pos) i, {0}, false);
+        }
+
+        // Only the last prompt token needs logits; earlier slices just populate the KV cache.
+        if (end == tokens_list.size() && batch->n_tokens > 0) {
+            batch->logits[batch->n_tokens - 1] = true;
+        }
+
+        if (batch->n_tokens > 0 && llama_decode(context, *batch) != 0) {
+            LOGe("prefill: llama_decode() failed for tokens %zu..%zu", start, end);
+            forget_cached_prefix(context);
+            env->ReleaseStringUTFChars(jtext, text);
+            throw_java(env, "java/lang/IllegalStateException",
+                       "Failed to process the prompt.");
+            return 0;
+        }
+    }
+
+    // Recorded only after every slice decoded, so the record matches what the KV cache holds.
     {
         std::lock_guard<std::mutex> lock(g_globals_mutex);
         g_cached_tokens.assign(tokens_list.begin(), tokens_list.end());
-    }
-
-    // Prefill only the divergent tail.
-    for (size_t i = lcp; i < tokens_list.size(); i++) {
-        common_batch_add(*batch, tokens_list[i], (llama_pos) i, {0}, false);
-    }
-
-    if (batch->n_tokens > 0) {
-        // llama_decode will output logits only for the last token of the prompt
-        batch->logits[batch->n_tokens - 1] = true;
-        if (llama_decode(context, *batch) != 0) {
-            LOGe("llama_decode() failed");
-        }
     }
 
     env->ReleaseStringUTFChars(jtext, text);
@@ -871,7 +956,7 @@ Java_android_llama_cpp_LLamaAndroid_completion_1loop(
             if (!stop_str.empty() && generated_snapshot.length() >= stop_str.length()) {
                 auto pos = generated_snapshot.find(stop_str);
                 if (pos != std::string::npos) {
-                    LOGi("Stop string matched: %s", stop_str.c_str());
+                    LOGi("generate: stop string matched: %s", stop_str.c_str());
                     size_t prefix_len = pos > prior_len ? pos - prior_len : 0;
                     if (prefix_len > 0) {
                         std::string prefix;
@@ -928,7 +1013,7 @@ Java_android_llama_cpp_LLamaAndroid_completion_1loop(
     env->CallVoidMethod(intvar_ncur, la_int_var_inc);
 
     if (llama_decode(context, *batch) != 0) {
-        LOGe("llama_decode() returned null");
+        LOGe("generate: llama_decode() returned null");
         return nullptr;
     }
 

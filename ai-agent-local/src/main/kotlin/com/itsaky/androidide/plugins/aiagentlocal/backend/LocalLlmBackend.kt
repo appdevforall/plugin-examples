@@ -11,6 +11,9 @@ import com.itsaky.androidide.plugins.aiagentlocal.feedback.ModelLoadException
 import com.itsaky.androidide.plugins.aiagentlocal.feedback.ModelNotConfiguredException
 import com.itsaky.androidide.plugins.aiagentlocal.feedback.UserActionableLlmException
 import com.itsaky.androidide.plugins.aiagentlocal.feedback.UserFeedback
+import com.itsaky.androidide.plugins.aiagentlocal.model.ContextSizePolicy
+import com.itsaky.androidide.plugins.aiagentlocal.model.GgufHeader
+import com.itsaky.androidide.plugins.aiagentlocal.model.GgufHeaderReader
 import com.itsaky.androidide.plugins.aiagentlocal.model.GgufModelInspector
 import com.itsaky.androidide.plugins.aiagentlocal.model.ModelLoadDiagnostics
 import com.itsaky.androidide.plugins.aiagentlocal.model.ModelLoadMessages
@@ -33,6 +36,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 /**
  * Local LLM backend using llama-impl for on-device inference.
@@ -287,11 +291,24 @@ class LocalLlmBackend(
             return // Already loaded
         }
 
+        // One parse of the metadata block per load, feeding both the guard below and the context
+        // sizing after the unload: it sits at the front of a multi-GB file, and a model switch
+        // used to walk it twice.
+        // Every stat is inside the block too: isFile and length() both hit the filesystem, which on
+        // a removed SD card or a stale SAF mount blocks whoever called us.
+        val openModel = { File(resolvedPath).takeIf { it.isFile }?.inputStream() }
+        val (header, modelSizeBytes) = withContext(Dispatchers.IO) {
+            GgufHeaderReader.read(openModel) to File(resolvedPath).length().takeIf { it > 0L }
+        }
+
         // Guard the chat path against encoder-only embedding models. Running causal generation on
         // one aborts natively (SIGABRT) and takes the IDE down. Classify BEFORE unloading any
         // working chat model, so a wrong selection never tears down a good one. See ADFA-4388.
-        val kind = GgufModelInspector.classify(resolvedPath)
-        if (kind.isEmbeddingOnly) {
+        // The overload rescans for the architecture alone, and only if the parse above gave up.
+        val modelKind = withContext(Dispatchers.IO) {
+            GgufModelInspector.classify(header, openModel)
+        }
+        if (modelKind.isEmbeddingOnly) {
             throw IncompatibleModelException(
                 "The selected model is an embedding model and can't be used for chat. " +
                     "Choose a chat model in AI Settings."
@@ -307,13 +324,16 @@ class LocalLlmBackend(
         }
 
         // Measured after the unload: availMem excludes the context and batch it just released.
-        ModelLoadDiagnostics.refuseBeforeLoad(availableMemoryBytes())?.let { shortfall ->
+        val availableBytes = availableMemoryBytes()
+        ModelLoadDiagnostics.refuseBeforeLoad(availableBytes)?.let { shortfall ->
             throw ModelLoadException(loadMessages.describe(shortfall), shortfall)
         }
 
+        val contextTokens = resolveContextSize(resolvedPath, availableBytes, header, modelSizeBytes)
+
         context.logger.info("Loading model: $resolvedPath")
         try {
-            llama.load(resolvedPath)
+            llama.load(resolvedPath, contextTokens)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -326,6 +346,64 @@ class LocalLlmBackend(
         modelLoaded = true
         currentModelPath = resolvedPath
         context.logger.info("Model loaded successfully")
+        reportEffectiveContextSize(contextTokens)
+    }
+
+    /**
+     * Logs the context the native side actually created. It can be smaller than what was asked for
+     * — `new_context` clamps a request above what the model was trained for — and without this the
+     * only visible number is the request, so a prompt rejected as too long looks like it fit.
+     *
+     * @param requestedTokens the context [resolveContextSize] asked for
+     */
+    private suspend fun reportEffectiveContextSize(requestedTokens: Int) {
+        val actual = try {
+            llama.getContextSize()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            context.logger.warn("Could not read the created context size: ${e.message}")
+            return
+        }
+        if (actual == requestedTokens) {
+            context.logger.info("Context size in effect: $actual tokens")
+        } else {
+            context.logger.warn(
+                "Context size in effect: $actual tokens, not the $requestedTokens requested;" +
+                    " prompt-length limits follow the smaller number"
+            )
+        }
+    }
+
+    /**
+     * Sizes the KV cache for this model on this device. Must run after any unload, so the freed
+     * context is counted as available, and the answer is passed to [LLamaAndroid.load] rather than
+     * stored anywhere. [ContextSizePolicy.choose] fails open, so this has no failure of its own.
+     *
+     * @param resolvedPath filesystem path to the model, already resolved from any content URI
+     * @param availableBytes free RAM as [availableMemoryBytes] reports it, negative if unknown
+     * @param header the model's metadata as read once by [ensureModelLoaded], null if unreadable
+     * @param modelSizeBytes the model file's size, null if unreadable
+     * @return the context size in tokens to load the model with
+     */
+    private fun resolveContextSize(
+        resolvedPath: String,
+        availableBytes: Long,
+        header: GgufHeader?,
+        modelSizeBytes: Long?,
+    ): Int {
+        val contextTokens = ContextSizePolicy.choose(
+            header = header,
+            availableBytes = availableBytes.takeIf { it >= 0L },
+            modelSizeBytes = modelSizeBytes,
+        )
+        // Unconditional: a wrongly sized context otherwise just reads as the assistant forgetting.
+        context.logger.info(
+            "Context size for $resolvedPath: $contextTokens tokens" +
+                " (model advertises ${header?.contextLength ?: "unknown"}," +
+                " ${if (availableBytes >= 0L) "$availableBytes bytes free" else "free RAM unknown"})"
+        )
+        return contextTokens
     }
 
     /**
