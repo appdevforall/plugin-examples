@@ -12,7 +12,6 @@ import com.itsaky.androidide.plugins.aiagentlocal.R
 import com.itsaky.androidide.plugins.aiagentlocal.format.ByteSize
 import com.itsaky.androidide.plugins.aiagentlocal.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aiagentlocal.model.ContentModelFileSource
-import com.itsaky.androidide.plugins.aiagentlocal.model.ContextSizePolicy
 import com.itsaky.androidide.plugins.aiagentlocal.model.DeviceMemory
 import com.itsaky.androidide.plugins.aiagentlocal.model.GgufFileInspector
 import com.itsaky.androidide.plugins.aiagentlocal.model.GgufHeaderReader
@@ -280,13 +279,9 @@ class LocalLlmSettingsViewModel(
         context: Context
     ): Boolean {
         val modelName = fileInfo.displayName
-        // The floor is the least the load can use, so also the least this model can cost.
         val header = GgufHeaderReader.read { modelFiles.openStream(context, uriString) }
-        val estimate = ModelMemoryEstimator.estimate(
-            fileSizeBytes = fileInfo.sizeBytes,
-            header = header,
-            contextTokens = ContextSizePolicy.DEFAULT_CONTEXT_TOKENS,
-        )
+        // Prices at the floor by construction — it takes no context and no free-RAM figure at all.
+        val estimate = ModelMemoryEstimator.estimateForSelection(fileInfo.sizeBytes, header)
         // Read last and never cached: the header parse above is blocking I/O over the model file,
         // and the user may have just closed apps to make room.
         val availableBytes = deviceMemory.availableBytes()

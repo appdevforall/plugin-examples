@@ -51,14 +51,10 @@ object GgufModelInspector {
      * Classifies the header [GgufHeaderReader] read, so a caller that also needs the rest of it —
      * the context sizing does — pays for one metadata parse rather than two. Never throws.
      *
-     * @param header the model's metadata, or null when it could not be read
-     */
-    fun classify(header: GgufHeader?): Result = classifyArchitecture(header?.architecture)
-
-    /**
-     * As [classify], but a header with no architecture retries via
-     * [GgufHeaderReader.readArchitecture]. A full parse rejects far more files than an
-     * architecture-only scan, and each rejection is a model this guard would wave through (ADFA-4388).
+     * A header with no architecture retries via [GgufHeaderReader.readArchitecture]: a full parse
+     * rejects far more files than an architecture-only scan, and each rejection is a model this
+     * guard would otherwise wave through (ADFA-4388). There is deliberately no header-only overload
+     * — it would fail open on exactly those files.
      *
      * @param header the model's metadata, or null when it could not be read
      * @param openStream reopens the same model for the fallback scan; blocking I/O

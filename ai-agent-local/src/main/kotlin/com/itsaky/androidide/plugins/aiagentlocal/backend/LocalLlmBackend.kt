@@ -11,10 +11,10 @@ import com.itsaky.androidide.plugins.aiagentlocal.feedback.ModelLoadException
 import com.itsaky.androidide.plugins.aiagentlocal.feedback.ModelNotConfiguredException
 import com.itsaky.androidide.plugins.aiagentlocal.feedback.UserActionableLlmException
 import com.itsaky.androidide.plugins.aiagentlocal.feedback.UserFeedback
+import com.itsaky.androidide.plugins.aiagentlocal.model.ContextSizePolicy
 import com.itsaky.androidide.plugins.aiagentlocal.model.GgufHeader
 import com.itsaky.androidide.plugins.aiagentlocal.model.GgufHeaderReader
 import com.itsaky.androidide.plugins.aiagentlocal.model.GgufModelInspector
-import com.itsaky.androidide.plugins.aiagentlocal.model.ModelContextResolver
 import com.itsaky.androidide.plugins.aiagentlocal.model.ModelLoadDiagnostics
 import com.itsaky.androidide.plugins.aiagentlocal.model.ModelLoadMessages
 import com.itsaky.androidide.plugins.aiagentlocal.preferences.LocalLlmPreferences
@@ -294,10 +294,11 @@ class LocalLlmBackend(
         // One parse of the metadata block per load, feeding both the guard below and the context
         // sizing after the unload: it sits at the front of a multi-GB file, and a model switch
         // used to walk it twice.
-        val modelFile = File(resolvedPath).takeIf { it.isFile }
-        val openModel = { modelFile?.inputStream() }
+        // Every stat is inside the block too: isFile and length() both hit the filesystem, which on
+        // a removed SD card or a stale SAF mount blocks whoever called us.
+        val openModel = { File(resolvedPath).takeIf { it.isFile }?.inputStream() }
         val (header, modelSizeBytes) = withContext(Dispatchers.IO) {
-            GgufHeaderReader.read(openModel) to modelFile?.length()?.takeIf { it > 0L }
+            GgufHeaderReader.read(openModel) to File(resolvedPath).length().takeIf { it > 0L }
         }
 
         // Guard the chat path against encoder-only embedding models. Running causal generation on
@@ -377,7 +378,7 @@ class LocalLlmBackend(
     /**
      * Sizes the KV cache for this model on this device. Must run after any unload, so the freed
      * context is counted as available, and the answer is passed to [LLamaAndroid.load] rather than
-     * stored anywhere. [ModelContextResolver] fails open, so this has no failure of its own.
+     * stored anywhere. [ContextSizePolicy.choose] fails open, so this has no failure of its own.
      *
      * @param resolvedPath filesystem path to the model, already resolved from any content URI
      * @param availableBytes free RAM as [availableMemoryBytes] reports it, negative if unknown
@@ -391,18 +392,18 @@ class LocalLlmBackend(
         header: GgufHeader?,
         modelSizeBytes: Long?,
     ): Int {
-        val resolved = ModelContextResolver.resolve(
+        val contextTokens = ContextSizePolicy.choose(
             header = header,
             availableBytes = availableBytes.takeIf { it >= 0L },
             modelSizeBytes = modelSizeBytes,
         )
         // Unconditional: a wrongly sized context otherwise just reads as the assistant forgetting.
         context.logger.info(
-            "Context size for $resolvedPath: ${resolved.contextTokens} tokens" +
-                " (model advertises ${resolved.advertisedTokens ?: "unknown"}," +
+            "Context size for $resolvedPath: $contextTokens tokens" +
+                " (model advertises ${header?.contextLength ?: "unknown"}," +
                 " ${if (availableBytes >= 0L) "$availableBytes bytes free" else "free RAM unknown"})"
         )
-        return resolved.contextTokens
+        return contextTokens
     }
 
     /**
