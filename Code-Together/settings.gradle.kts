@@ -29,4 +29,4 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "pair-programming-plugin"
+rootProject.name = "Code-Together"

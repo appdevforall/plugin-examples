@@ -33,7 +33,7 @@ See the official [plugin documentation](https://www.appdevforall.org/codeonthego
 | [`vector-search-plugin/`](vector-search-plugin/) | Semantic code search using embeddings and vector similarity. |
 | [`get-ai-models/`](get-ai-models/)                 | Bottom-drawer catalog of curated, fully-open GGUF model files; downloads one to `/sdcard/Download` and verifies its SHA-256. |
 | [`project-to-template/`](project-to-template/)     | Converts the open Android project into a Code On The Go (.cgt) template and installs it into the IDE's New Project picker. |
-| [`pair-programming-plugin/`](pair-programming-plugin/) | Real-time pair programming across two devices on the same WiFi — host or join a session and sync edits and cursor presence live over the local network. |
+| [`Code-Together/`](Code-Together/) | Real-time pair programming across two devices on the same WiFi — host or join a session and sync edits and cursor presence live over the local network. |
 
 ## Building a plugin
 

@@ -6,7 +6,7 @@ plugins {
 }
 
 pluginBuilder {
-    pluginName = "pair-programming-plugin"
+    pluginName = "code-together"
 }
 
 android {
