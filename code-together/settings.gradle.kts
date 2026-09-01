@@ -29,4 +29,4 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Code-Together"
+rootProject.name = "code-together"

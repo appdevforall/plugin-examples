@@ -7,7 +7,7 @@ It surfaces as a **Pair** tab in the editor. Host a session and an invite card s
 ## Building
 
 ```sh
-cd Code-Together
+cd code-together
 ../gradlew clean assemblePlugin
 ```
 
@@ -26,7 +26,7 @@ The `.cgp` lands in `build/plugin/`. Install it from inside CodeOnTheGo via the 
 ## Source layout
 
 ```
-Code-Together/
+code-together/
 ├── build.gradle.kts, settings.gradle.kts, proguard-rules.pro
 └── src/main/
     ├── AndroidManifest.xml        plugin id, main class, icons, permissions
