@@ -164,6 +164,10 @@ class McpSettingsFragment : Fragment() {
         // Unknown, never Absent, until the decrypt answers: guessing is what let an http:// URL
         // be saved over a token that was still stored and still sent.
         var credential = if (existing == null) Credential.ABSENT else Credential.UNKNOWN
+        // Whether the header rows on screen are what is stored. False until the decrypt answers,
+        // and for headers this device could not read: an empty list then means "never drawn", and
+        // saving it would delete headers the dialog was in no position to show.
+        var headersKnown = existing == null
         nameField.setText(server.name)
         urlField.setText(server.url)
 
@@ -179,7 +183,11 @@ class McpSettingsFragment : Fragment() {
         clearButton.setOnClickListener {
             clearButton.isEnabled = false
             viewModel.clearCredential(server.id) { cleared ->
-                if (cleared) credential = Credential.ABSENT
+                if (cleared) {
+                    credential = Credential.ABSENT
+                    // Nothing is stored now, so the empty list on screen is the stored truth again.
+                    headersKnown = true
+                }
                 whileDialogShown {
                     clearButton.isEnabled = !cleared
                     clearButton.visibility = if (cleared) View.GONE else View.VISIBLE
@@ -203,6 +211,7 @@ class McpSettingsFragment : Fragment() {
                     credential =
                         if (form.hasToken || form.hasHeaders) Credential.PRESENT
                         else Credential.ABSENT
+                    headersKnown = form.headersKnown
                 }
                 whileDialogShown {
                     // The stored token is never shown: it is decrypted only to be sent. An empty
@@ -250,7 +259,7 @@ class McpSettingsFragment : Fragment() {
                 viewModel.save(
                     candidate,
                     viewModel.tokenToStore(tokenField.text.toString()),
-                    headers,
+                    viewModel.headersToStore(headers, headersKnown),
                 ) { saved, failure ->
                     server = saved
                     if (tokenField.text.isNotBlank() || headers.isNotEmpty()) {
@@ -315,7 +324,7 @@ class McpSettingsFragment : Fragment() {
                 viewModel.save(
                     candidate,
                     viewModel.tokenToStore(tokenField.text.toString()),
-                    headers,
+                    viewModel.headersToStore(headers, headersKnown),
                 ) { _, _ -> }
                 dialog.dismiss()
             }

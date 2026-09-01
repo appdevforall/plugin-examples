@@ -240,14 +240,17 @@ object McpServerStore {
     fun setHeaders(id: String, headers: Map<String, String>): Boolean {
         val clean = McpHeaders.sanitize(headers)
         val key = KEY_HEADERS_PREFIX + id
-        if (clean.isEmpty()) {
-            prefs()?.edit()?.remove(key)?.apply()
-            fireChanged()
-            return true
+        // The empty map goes through write() as a blank, which removes the entry, rather than
+        // through a bare remove/apply: the token's clear is synchronous and says whether it landed,
+        // and headers left on disk for a credential the user just forgot are the same leak.
+        val payload = if (clean.isEmpty()) {
+            ""
+        } else {
+            val json = JSONObject()
+            clean.forEach { (name, value) -> json.put(name, value) }
+            json.toString()
         }
-        val json = JSONObject()
-        clean.forEach { (name, value) -> json.put(name, value) }
-        val stored = secureTokenStore.write(prefs(), key, json.toString())
+        val stored = secureTokenStore.write(prefs(), key, payload)
         fireChanged()
         return stored
     }

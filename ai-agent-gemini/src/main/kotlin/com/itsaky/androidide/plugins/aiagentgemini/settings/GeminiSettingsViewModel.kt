@@ -166,6 +166,14 @@ class GeminiSettingsViewModel(
         secureApiKeyStore.readAndMigrate(prefs(), KEY_API_KEY)
     }
 
+    /**
+     * True when a key is present on disk, whether or not it can still be decrypted: what the key
+     * block is dressed from, which must not collapse the moment the Keystore declines to answer.
+     * Raw pref only, so no Keystore IPC and safe on the main thread — which [getGeminiApiKey] is not.
+     */
+    fun hasStoredGeminiApiKey(): Boolean =
+        !prefs()?.getString(KEY_API_KEY, null).isNullOrBlank()
+
     fun getGeminiApiKeySaveTimestamp(): Long = prefs()?.getLong(KEY_API_KEY_TIMESTAMP, 0L) ?: 0L
 
     fun clearGeminiApiKey() {

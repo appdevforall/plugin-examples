@@ -51,6 +51,8 @@ class McpSettingsViewModel(
      *   device, which the field has to say aloud: it looks stored, but nothing can send it.
      * @property secretsUnavailable whether the keystore merely would not answer this time, which
      *   the field says differently: the credential is intact and the read is worth repeating.
+     * @property headersKnown whether [headers] is what is stored. False when the decrypt failed, in
+     *   which case an empty list on screen means "not shown" and must not be saved over them.
      * @property headers the extra headers configured for the server.
      */
     data class FormState(
@@ -58,6 +60,7 @@ class McpSettingsViewModel(
         val hasHeaders: Boolean,
         val secretsUnreadable: Boolean,
         val secretsUnavailable: Boolean,
+        val headersKnown: Boolean,
         val headers: Map<String, String>,
     )
 
@@ -105,6 +108,7 @@ class McpSettingsViewModel(
                     // credential that has to be entered again is the worse news.
                     secretsUnavailable =
                         token is KeystoreSecretStore.Stored.Unavailable || headersUnavailable,
+                    headersKnown = headers != null,
                     headers = headers.orEmpty(),
                 )
             }
@@ -120,6 +124,21 @@ class McpSettingsViewModel(
     fun tokenToStore(typed: String): String? = typed.trim().takeIf { it.isNotEmpty() }
 
     /**
+     * What the header rows mean when saving, given whether the stored ones could be read.
+     *
+     * The token's rule, applied to headers: an empty list is "leave them alone" whenever the dialog
+     * never drew what is stored, because a keystore that would not answer must not cost the user
+     * headers that are still intact. Rows the user actually typed are always an explicit
+     * replacement, and [clearCredential] is the way back to none.
+     *
+     * @param collected the header rows as they currently stand.
+     * @param headersKnown whether those rows reflect what is stored.
+     * @return the headers to store, or null to keep the stored ones.
+     */
+    fun headersToStore(collected: Map<String, String>, headersKnown: Boolean): Map<String, String>? =
+        if (headersKnown || collected.isNotEmpty()) collected else null
+
+    /**
      * Stores the edited name and URL of a server and, when given, its token.
      *
      * Only those fields are written: the tool switches are saved as they are tapped, and the
@@ -127,20 +146,21 @@ class McpSettingsViewModel(
      *
      * @param server the server to store.
      * @param token the token to store, or null to leave the stored one alone.
-     * @param headers the extra headers to store, replacing whatever was there.
+     * @param headers the extra headers to store, replacing whatever was there, or null to leave the
+     *   stored ones alone — see [headersToStore].
      * @param onDone receives the merged record and a status sentence, null when everything worked.
      */
     fun save(
         server: McpServer,
         token: String?,
-        headers: Map<String, String> = emptyMap(),
+        headers: Map<String, String>? = emptyMap(),
         onDone: (McpServer, String?) -> Unit,
     ) {
         viewModelScope.launch {
             val outcome = withContext(Dispatchers.IO) {
                 val merged = McpServerStore.saveDetails(server)
                 val tokenStored = token?.let { McpServerStore.setToken(server.id, it.trim()) } ?: true
-                val headersStored = McpServerStore.setHeaders(server.id, headers)
+                val headersStored = headers?.let { McpServerStore.setHeaders(server.id, it) } ?: true
                 // A credential change has to invalidate the session, or the old one keeps working.
                 McpConnections.invalidate(server.id)
                 val failure = when {

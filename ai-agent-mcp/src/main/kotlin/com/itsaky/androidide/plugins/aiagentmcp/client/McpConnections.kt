@@ -95,7 +95,9 @@ object McpConnections {
      */
     private fun credentialsFor(serverId: String): McpCredentials {
         val token = when (val stored = McpServerStore.token(serverId)) {
-            is KeystoreSecretStore.Stored.Value -> stored.plain
+            // Trimmed here, not by the store: the host's readAndMigrate migrates verbatim, and a
+            // legacy token saved with a stray newline is one `setRequestProperty` refuses to send.
+            is KeystoreSecretStore.Stored.Value -> stored.plain.trim()
             KeystoreSecretStore.Stored.Absent -> ""
             KeystoreSecretStore.Stored.Unreadable ->
                 throw UnreadableSecretException("The stored token for '$serverId' cannot be decrypted.")

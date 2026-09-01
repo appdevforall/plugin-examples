@@ -25,7 +25,6 @@ import com.itsaky.androidide.plugins.aicore.tool.ToolCall
 import com.itsaky.androidide.plugins.aicore.tool.ToolCallExtractor
 import com.itsaky.androidide.plugins.aicore.tool.ToolExecutionTracker
 import com.itsaky.androidide.plugins.aicore.tool.ToolHandler
-import com.itsaky.androidide.plugins.aicore.tool.isTerminalToolName
 import com.itsaky.androidide.plugins.aicore.tool.sources.ToolSourceStore
 import com.itsaky.androidide.plugins.aicore.tool.handlers.AddDependencyHandler
 import com.itsaky.androidide.plugins.aicore.tool.handlers.CreateFileHandler
@@ -1005,11 +1004,7 @@ class ChatViewModel(
                     // Per-run flag (set by executeToolCalls), not a session-wide scan.
                     val lastToolFailed = lastToolFailedThisRun
 
-                    // Matched loosely, as everywhere else: a backend that answers `Respond` would
-                    // otherwise leave the terminal call in `realCalls`, so an identical repeat
-                    // never matches and the duplicate-turn bubble is never dropped.
-                    val realCalls = toolCalls.filterNot { isTerminalToolName(it.name, RESPOND_TOOL) }
-                    if (realCalls.isNotEmpty() && realCalls == lastSucceededCalls) {
+                    if (AgentReplyRenderer.isDuplicateTurn(toolCalls, lastSucceededCalls, RESPOND_TOOL)) {
                         viewModelScope.launch(Dispatchers.Main) {
                             _messages.value = _messages.value.filter { it.id != agentMessageId }
                         }

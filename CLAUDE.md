@@ -56,19 +56,31 @@ copy that started to diverge, which is what ADFA-5255 removed.
 
 Construct it with **this plugin's own alias** (`KeystoreSecretStore(ALIAS)`) as a single
 top-level `val` in a `SecureApiKeyStore.kt`/`SecureTokenStore.kt` that holds nothing but the alias;
-callers use that instance directly. The store logs under its own name — it takes no log tag, and
-the second constructor parameter is a `SecretKeySource` override that plugins do not pass.
+callers use that instance directly. It takes no log tag — the store logs under its own name — and
+that single-argument constructor is the only one a plugin can reach: the two-argument form takes an
+`internal` `SecretKeySource`, which is not on the plugin's compile classpath at all.
 `ai-agent-mcp`, `ai-agent-gemini` and `ai-agent-openai` are the reference shape. Do **not** wrap
 it in an object of forwarding methods — that is just a second copy of the store's contract to keep
-in step. The alias must be unique per
-plugin (all plugins share the host's UID and Keystore, so a shared alias lets one plugin's
-invalidated-key recovery delete another's secret) and must never change across releases.
+in step. The alias must be unique per plugin (all plugins share the host's UID and Keystore, so a
+shared alias lets one plugin's invalidated-key recovery delete another's secret) and must never
+change across releases.
 
-`readAndMigrate` returns a three-way `Stored` (`Absent` / `Value` / `Unreadable`) rather than a
-nullable String on purpose: "never saved" and "saved but this device's Keystore can no longer open
-it" need opposite advice, and a plugin that collapses them tells a user their credential was
-refused when it was never sent. Collapse it only where the caller genuinely has one answer for
-both, and say so in a comment.
+`readAndMigrate` returns a four-way `Stored` rather than a nullable String on purpose — each state
+needs different advice, and a plugin that collapses them tells a user their credential was refused
+when it was never sent:
+
+- `Absent` — nothing was ever saved. The ordinary first run; say nothing.
+- `Value` — the plaintext. Trim it at the call site if your credential format wants it;
+  `readAndMigrate` migrates verbatim.
+- `Unreadable` — stored, but this device's Keystore can no longer open it (a restored backup, an
+  OEM Keystore reset). Permanent: the user has to enter it again.
+- `Unavailable` — the Keystore would not answer this time. **Transient: the credential is intact,
+  so retry and never re-prompt.** In particular a pane that reads `Unavailable` must not dress
+  itself as never-configured, and nothing on that screen may write over the credential it could
+  not read — an empty field then means "not shown", not "removed".
+
+Handle all four; collapse them only where the caller genuinely has one answer for every state, and
+say so in a comment.
 
 ### Plugin shape
 

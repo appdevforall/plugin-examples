@@ -79,7 +79,7 @@ Two dependencies were deliberately not taken:
   `McpToolCatalog` (what each server last advertised), `McpToolText` (sanitising)
 - `settings/` — server CRUD, per-tool toggles, the settings pane
 - `errors/` — HTTP and JSON-RPC failures reduced to one translated sentence
-- `security/` — Keystore-backed token encryption
+- `security/SecureTokenStore.kt` — this plugin's Keystore alias, over the IDE's `KeystoreSecretStore`
 
 ## Security notes
 
@@ -91,11 +91,18 @@ Two dependencies were deliberately not taken:
   pairing — the two plugins version independently — so an `ai-core` older than the
   release that flattens at its `ContributedToolHandler` boundary would take raw
   multi-line server text into the prompt.
-- Tokens are encrypted with an AES/GCM key held in the Android Keystore under
-  this plugin's own alias; only ciphertext is written to disk. A token that can no
-  longer be decrypted — a restored backup, an OEM Keystore reset — is reported as
-  exactly that, never sent as an absent one, which would surface as the server
-  refusing a token that is still stored and still correct.
+- Tokens and custom headers are encrypted with an AES/GCM key held in the Android
+  Keystore under this plugin's own alias; only ciphertext is written to disk.
+  `security/SecureTokenStore.kt` holds nothing but that alias (`cotg_ai_mcp_token_v1`);
+  the AES/GCM itself is the IDE's `KeystoreSecretStore` (`plugin-api`, since
+  **26.35** — hence this plugin's `min_ide_version`), so there is one implementation
+  in the process rather than a copy per plugin. The alias stays per plugin: they all
+  share the host's Keystore, so a shared alias would let one plugin's invalidated-key
+  recovery delete another's secret. A token that can no longer be decrypted — a
+  restored backup, an OEM Keystore reset — is reported as exactly that, never sent as
+  an absent one, which would surface as the server refusing a token that is still
+  stored and still correct; a Keystore that merely would not answer is told apart
+  again, since that token is intact and the call is only worth retrying.
 - A token or a custom header is refused on an `http://` URL: encryption at rest
   buys nothing for a credential sent in the clear.
 - Redirects are never followed automatically. A 3xx is repeated only when it

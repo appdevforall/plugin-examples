@@ -33,9 +33,6 @@
             android:name="plugin.author"
             android:value="App Dev for All" />
 
-        <!-- 26.32: matches AI Core's floor. This backend uses the ConfigurableBackend /
-             getSystemPrompt / getDefaultTemperature surface, so raise this to the release that
-             carries it once that host version is known. -->
         <meta-data
             android:name="plugin.min_ide_version"
             android:value="26.35" />

@@ -193,10 +193,18 @@ class GeminiSettingsFragment : Fragment() {
             val stored = viewModel.getGeminiApiKey()
             val savedApiKey = (stored as? KeystoreSecretStore.Stored.Value)?.plain
             val hasKey = !savedApiKey.isNullOrBlank()
-            updateUiState(isEditing = !hasKey)
-            if (hasKey) {
+            // A keystore that would not answer this time leaves the key on disk and intact, so the
+            // pane stays dressed as configured — status line, Edit, Remove. Opening edit mode
+            // instead would make it identical to a fresh install, contradicting the toast below.
+            val keptConfigured =
+                !hasKey &&
+                    stored is KeystoreSecretStore.Stored.Unavailable &&
+                    viewModel.hasStoredGeminiApiKey()
+            updateUiState(isEditing = !hasKey && !keptConfigured)
+            if (hasKey || keptConfigured) {
                 statusTextView.text = savedApiKeyStatusText()
-            } else {
+            }
+            if (!hasKey) {
                 apiKeyInput.setText("")
                 // Only for a key that is there and will not decrypt; an empty box alone looks like
                 // data loss. Nothing stored at all is the ordinary first run and says nothing.
@@ -402,18 +410,21 @@ class GeminiSettingsFragment : Fragment() {
                 // A key that is stored and will not decrypt; an empty box alone looks like data
                 // loss. Told apart from "nothing stored" here, which this button rarely sees but
                 // must not report as a lost Keystore entry when it does.
+                if (stored is KeystoreSecretStore.Stored.Unavailable) {
+                    // Said differently from an unreadable key: this one is still there and intact,
+                    // so the pane stays as it is rather than emptying the field under a status line
+                    // that just said the key is saved — it must not be re-typed to be recovered.
+                    Toast.makeText(
+                        requireContext(),
+                        getString(R.string.msg_api_key_unavailable),
+                        Toast.LENGTH_LONG
+                    ).show()
+                    return@launch
+                }
                 if (stored is KeystoreSecretStore.Stored.Unreadable) {
                     Toast.makeText(
                         requireContext(),
                         getString(R.string.msg_api_key_unreadable),
-                        Toast.LENGTH_LONG
-                    ).show()
-                } else if (stored is KeystoreSecretStore.Stored.Unavailable) {
-                    // Said differently from the above: the key is still there and intact, so this
-                    // must not send the user off to find and type it again.
-                    Toast.makeText(
-                        requireContext(),
-                        getString(R.string.msg_api_key_unavailable),
                         Toast.LENGTH_LONG
                     ).show()
                 }

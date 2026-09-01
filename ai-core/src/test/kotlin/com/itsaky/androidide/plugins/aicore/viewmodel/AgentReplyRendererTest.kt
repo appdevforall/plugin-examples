@@ -2,6 +2,8 @@ package com.itsaky.androidide.plugins.aicore.viewmodel
 
 import com.itsaky.androidide.plugins.aicore.tool.ToolCall
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -123,5 +125,42 @@ class AgentReplyRendererTest {
     @Test
     fun givenNothingAtAll_whenRendered_thenTheFallbackIsShown() {
         assertEquals(NO_RESPONSE, render("   "))
+    }
+
+    @Test
+    fun givenARepeatedCallBesideACapitalisedRespond_whenChecked_thenTheTurnIsStillADuplicate() {
+        // What `it.name == RESPOND_TOOL` got wrong: a backend that answers `Respond` left the
+        // terminal call among the real ones, so the repeat never compared equal and the agent's
+        // duplicate turn reached the transcript.
+        val succeeded = listOf(ToolCall("read_file", mapOf("file_path" to "A.kt")))
+        val repeated = succeeded + ToolCall("Respond", mapOf("message" to "Done."))
+
+        assertTrue(AgentReplyRenderer.isDuplicateTurn(repeated, succeeded, TERMINAL))
+    }
+
+    @Test
+    fun givenADifferentCall_whenChecked_thenTheTurnIsNotADuplicate() {
+        val succeeded = listOf(ToolCall("read_file", mapOf("file_path" to "A.kt")))
+        val next = listOf(ToolCall("read_file", mapOf("file_path" to "B.kt")))
+
+        assertFalse(AgentReplyRenderer.isDuplicateTurn(next, succeeded, TERMINAL))
+    }
+
+    @Test
+    fun givenOnlyATerminalCall_whenChecked_thenTheAnswerIsNeverDroppedAsADuplicate() {
+        // The answer-carrying turn has no real calls left after the filter, so it must fall through
+        // even when the run's last real call is what it is reporting on.
+        val succeeded = listOf(ToolCall("read_file", mapOf("file_path" to "A.kt")))
+
+        assertFalse(
+            AgentReplyRenderer.isDuplicateTurn(respond("message" to "Done."), succeeded, TERMINAL)
+        )
+    }
+
+    @Test
+    fun givenNothingSucceededYet_whenChecked_thenTheTurnIsNotADuplicate() {
+        val calls = listOf(ToolCall("read_file", mapOf("file_path" to "A.kt")))
+
+        assertFalse(AgentReplyRenderer.isDuplicateTurn(calls, null, TERMINAL))
     }
 }

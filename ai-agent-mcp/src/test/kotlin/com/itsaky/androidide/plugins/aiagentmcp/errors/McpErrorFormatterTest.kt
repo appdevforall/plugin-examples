@@ -1,6 +1,7 @@
 package com.itsaky.androidide.plugins.aiagentmcp.errors
 
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpProtocolException
+import com.itsaky.androidide.plugins.aiagentmcp.security.UnavailableSecretException
 import com.itsaky.androidide.plugins.aiagentmcp.security.UnreadableSecretException
 import com.itsaky.androidide.plugins.aiagentmcp.transport.McpHttpException
 import com.itsaky.androidide.plugins.aiagentmcp.transport.McpRedirectException
@@ -25,6 +26,15 @@ class McpErrorFormatterTest {
         val failure = McpErrorFormatter.classify(UnreadableSecretException("no key"))
 
         assertEquals(McpFailure.SecretUnreadable, failure)
+    }
+
+    @Test
+    fun givenAKeystoreThatWouldNotAnswer_whenClassified_thenItIsRetryableRatherThanAReachFailure() {
+        // Kept apart from the arm above and from the generic one: nothing was sent, so "Could not
+        // reach X" sends the user hunting a network problem when the answer is to try again.
+        val failure = McpErrorFormatter.classify(UnavailableSecretException("keystore busy"))
+
+        assertEquals(McpFailure.SecretUnavailable, failure)
     }
 
     @Test
