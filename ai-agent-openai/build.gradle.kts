@@ -71,6 +71,9 @@ dependencies {
     testImplementation("org.json:json:20231013")
 }
 
+// No SecureApiKeyStore parity check any more: the AES/GCM core is the host's KeystoreSecretStore
+// (plugin-api), so there is one implementation in the process rather than copies to keep in step.
+
 // AAR metadata checks are disabled by convention for these application-as-library plugins.
 tasks.matching {
     it.name.contains("checkDebugAarMetadata") ||

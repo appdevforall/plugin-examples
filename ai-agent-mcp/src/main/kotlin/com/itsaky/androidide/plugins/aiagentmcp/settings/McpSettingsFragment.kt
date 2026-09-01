@@ -256,12 +256,19 @@ class McpSettingsFragment : Fragment() {
                 // Stored first: connecting reads the URL and credentials from the store.
                 status.text = getString(R.string.mcp_status_connecting)
                 button.isEnabled = false
+                val headersToStore = viewModel.headersToStore(headers, headersKnown)
                 viewModel.save(
                     candidate,
                     viewModel.tokenToStore(tokenField.text.toString()),
-                    viewModel.headersToStore(headers, headersKnown),
+                    headersToStore,
                 ) { saved, failure ->
                     server = saved
+                    // Connect deliberately leaves the dialog open, so there can be a second save.
+                    // Once these rows have been written they are the stored truth, and a row
+                    // removed afterwards has to be a deletion rather than a skipped write.
+                    if (headersToStore != null) {
+                        headersKnown = true
+                    }
                     if (tokenField.text.isNotBlank() || headers.isNotEmpty()) {
                         credential = Credential.PRESENT
                     }

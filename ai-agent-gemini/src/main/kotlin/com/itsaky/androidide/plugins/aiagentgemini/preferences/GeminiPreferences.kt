@@ -2,6 +2,8 @@ package com.itsaky.androidide.plugins.aiagentgemini.preferences
 
 import android.content.SharedPreferences
 import com.itsaky.androidide.plugins.PluginContext
+// Imported for the KDoc link below: the alias the API key is encrypted under lives there.
+import com.itsaky.androidide.plugins.aiagentgemini.security.secureApiKeyStore
 
 /**
  * This plugin's own settings store, and the one-time move of its settings out of AI Core's.

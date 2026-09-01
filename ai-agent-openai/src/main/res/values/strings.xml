@@ -70,6 +70,7 @@
     <string name="msg_api_key_verified_on">API Key saved and verified on: %s</string>
     <string name="msg_api_key_unreadable">The stored API key could not be read on this device. Please enter it again.</string>
     <string name="msg_api_key_unavailable">The device keystore could not be reached, so the stored API key could not be read. It is still saved — please try again in a moment.</string>
+    <string name="msg_api_key_unavailable_for_test">The device keystore could not be reached, so the saved API key could not be read for this test. It is still saved — please try the test again in a moment.</string>
     <string name="msg_api_key_save_failed">Couldn\'t save the API key on this device. Please try again.</string>
     <string name="msg_verifying_key">Checking this key with the server…</string>
     <string name="msg_key_verified">Verified, your API key works</string>

@@ -299,20 +299,23 @@ class OpenAiSettingsViewModel(
     }
 
     /**
-     * The stored key, but only when it was saved for [baseUrl].
+     * What is stored for [baseUrl] — the whole four-way read, not a key-or-null.
      *
      * What the connection test sends: testing a LAN server must not hand it the key the user
-     * entered for OpenAI. A key stored before the origin was recorded is returned, matching the
-     * backend's own rule.
+     * entered for OpenAI, so a key saved for another origin reads as absent. A key stored before
+     * the origin was recorded is returned, matching the backend's own rule.
      *
-     * @return the plaintext key, or null when none is stored, it cannot be decrypted here, or it
-     *   belongs to another server. The connection test has the same answer — send no key — for
-     *   every one of them, and the pane has already said so on the read that opened it.
+     * @return the read, with a key belonging to another server reported as
+     *   [KeystoreSecretStore.Stored.Absent] — the test's answer for it is the same as for nothing
+     *   stored. [KeystoreSecretStore.Stored.Unavailable] is *not* that answer: the key is intact,
+     *   so the caller retries instead of testing without one.
      */
-    suspend fun getApiKeyFor(baseUrl: String): String? {
+    suspend fun getApiKeyFor(baseUrl: String): KeystoreSecretStore.Stored {
         val savedFor = prefs()?.getString(OpenAiPreferences.KEY_API_KEY_URL, null)
-        if (savedFor != null && !BaseUrlPolicy.sameOrigin(savedFor, baseUrl)) return null
-        return (getApiKey() as? KeystoreSecretStore.Stored.Value)?.plain
+        if (savedFor != null && !BaseUrlPolicy.sameOrigin(savedFor, baseUrl)) {
+            return KeystoreSecretStore.Stored.Absent
+        }
+        return getApiKey()
     }
 
     /**

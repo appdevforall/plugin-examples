@@ -764,12 +764,28 @@ class OpenAiSettingsFragment : Fragment() {
                 // Tests what is on screen: a typo is worth catching before it is saved.
                 val url = urlInput.text.toString().trim().ifEmpty { viewModel.getBaseUrl() }
                 val typedKey = apiKeyInput.text.toString().trim()
-                val key = if (apiKeyLayout.visibility == View.VISIBLE && typedKey.isNotEmpty()) {
+                val useTyped = apiKeyLayout.visibility == View.VISIBLE && typedKey.isNotEmpty()
+                // Scoped to the URL under test: probing a LAN server must not hand it the key the
+                // user entered for OpenAI.
+                val stored = if (useTyped) null else viewModel.getApiKeyFor(url)
+                // A keystore that would not answer is not "no key stored": the key is intact and
+                // the pane above still reads "saved on ...". Testing without it would render the
+                // 401 as a refused key, or ask for one in a field that is not even shown.
+                if (stored is KeystoreSecretStore.Stored.Unavailable) {
+                    showStatus(
+                        statusText,
+                        getString(R.string.msg_api_key_unavailable_for_test),
+                        R.drawable.ic_key_unchecked
+                    )
+                    testButton.isEnabled = true
+                    return@launch
+                }
+                // Absent and Unreadable do share one answer here — no key to send — and the read
+                // that opened the pane has already said which of the two it was.
+                val key = if (useTyped) {
                     typedKey
                 } else {
-                    // Scoped to the URL under test: probing a LAN server must not hand it the key
-                    // the user entered for OpenAI.
-                    viewModel.getApiKeyFor(url).orEmpty()
+                    (stored as? KeystoreSecretStore.Stored.Value)?.plain?.trim().orEmpty()
                 }
                 // A server with no anonymous access can only answer 401 without a key, and
                 // reporting that as "the server refused this key" when there is no key sends the

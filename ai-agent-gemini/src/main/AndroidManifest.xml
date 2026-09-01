@@ -29,6 +29,8 @@
             android:name="plugin.author"
             android:value="App Dev for All" />
 
+        <!-- 26.35: the release that ships KeystoreSecretStore in plugin-api, which this
+             plugin's SecureApiKeyStore builds on. Do not lower it. -->
         <meta-data
             android:name="plugin.min_ide_version"
             android:value="26.35" />
