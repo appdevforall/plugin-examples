@@ -5,7 +5,11 @@ import com.itsaky.androidide.plugins.aiagentmcp.testing.FakeSharedPreferences
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Job
+import java.util.concurrent.CyclicBarrier
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertTrue
@@ -83,11 +87,64 @@ class McpPluginScopeTest {
     }
 
     /**
+     * The invariant [McpPlugin.lifecycleLock] exists for, which no sequential call can break.
+     *
+     * `activate` and `deactivate` each read the scope field, install their own, and cancel what
+     * they displaced. Let those two steps interleave and both calls can displace the *same* scope:
+     * the stop cancels the one the activation replaced, and the scope the activation handed its
+     * `tools/list` refresh to is left running with nothing holding it — a socket the plugin can no
+     * longer reach, repopulating a catalogue that was just cleared.
+     *
+     * So whatever order the two land in, the scope an activation launched on is either the one
+     * still installed (and live) or cancelled. Never a live orphan, and never a cancelled scope
+     * left installed as though the plugin were activated.
+     */
+    @Test
+    fun givenTwoLifecycleCallsAtOnce_whenTheyInterleave_thenNoScopeIsOrphaned() {
+        val threads = Executors.newFixedThreadPool(2)
+        try {
+            repeat(ITERATIONS) { iteration ->
+                val barrier = CyclicBarrier(2)
+                // Both orders: which call reaches the field first is the whole question.
+                val activateFirst = iteration % 2 == 0
+                val first = threads.submit {
+                    barrier.await(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                    if (activateFirst) plugin.activate() else plugin.deactivate()
+                }
+                val second = threads.submit {
+                    barrier.await(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                    if (activateFirst) plugin.deactivate() else plugin.activate()
+                }
+                first.get(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                second.get(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+
+                val installed = plugin.scopeJob
+                val launched = requireNotNull(plugin.activationJob)
+                assertEquals(
+                    "the scope an activation launched on must be the installed one or cancelled",
+                    installed !== launched,
+                    launched.isCancelled,
+                )
+            }
+        } finally {
+            threads.shutdownNow()
+        }
+    }
+
+    /**
      * Asserts a scope can still take work, which a cancelled one cannot.
      * @param job the activation scope's job.
      */
     private fun assertScopeUsable(job: Job) {
         assertFalse("the current activation's scope must be live", job.isCancelled)
         assertTrue("the current activation's scope must accept work", job.isActive)
+    }
+
+    private companion object {
+        /** Enough interleavings to catch a lost swap; the whole loop runs in well under a second. */
+        const val ITERATIONS = 400
+
+        /** Generous: a thread that never arrives is a deadlock, not a slow machine. */
+        const val TIMEOUT_SECONDS = 10L
     }
 }

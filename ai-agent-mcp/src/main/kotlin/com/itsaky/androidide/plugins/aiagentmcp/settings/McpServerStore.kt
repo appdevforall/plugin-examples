@@ -235,7 +235,8 @@ object McpServerStore {
      * @param id the server the headers belong to.
      * @param headers the headers to store; unusable pairs are dropped.
      * @return true once they are on disk, or removed for an empty map; false when encrypting them
-     *   or the write itself failed.
+     *   or the write itself failed. Forgetting them on a store that was never opened is success:
+     *   there is nothing on disk to remove.
      */
     fun setHeaders(id: String, headers: Map<String, String>): Boolean {
         val clean = McpHeaders.sanitize(headers)
@@ -250,7 +251,10 @@ object McpServerStore {
             clean.forEach { (name, value) -> json.put(name, value) }
             json.toString()
         }
-        val stored = secureTokenStore.write(prefs(), key, payload)
+        // A clear with no preferences behind it has nothing to remove, so it succeeded; only a
+        // write with something to store has genuinely failed.
+        val prefs = prefs() ?: return clean.isEmpty()
+        val stored = secureTokenStore.write(prefs, key, payload)
         fireChanged()
         return stored
     }

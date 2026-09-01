@@ -428,7 +428,7 @@ class GeminiSettingsFragment : Fragment() {
                         Toast.LENGTH_LONG
                     ).show()
                 }
-                revealEditMode((stored as? KeystoreSecretStore.Stored.Value)?.plain.orEmpty())
+                revealEditMode((stored as? KeystoreSecretStore.Stored.Value)?.plain?.trim().orEmpty())
             }
         }
 

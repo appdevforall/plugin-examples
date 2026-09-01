@@ -86,6 +86,8 @@
     <string name="mcp_header_value_illegal">A header value cannot contain line breaks.</string>
     <string name="mcp_header_name_duplicate">That header is already listed above. Remove one of the two.</string>
     <string name="mcp_headers_save_failed">The extra headers could not be encrypted, so they were not saved.</string>
+    <string name="mcp_headers_unavailable_no_replace">The headers already saved for this server couldn\'t be read just now, so a new one can\'t replace them. They are still stored — try again in a moment.</string>
+    <string name="mcp_headers_unreadable_no_replace">The headers already saved for this server can no longer be read on this device, so a new one can\'t replace them. Use Clear credential to replace them all.</string>
     <string name="mcp_headers_invalid">Fix the marked header before saving.</string>
     <string name="cd_mcp_back">Back</string>
 

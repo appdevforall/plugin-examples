@@ -99,7 +99,7 @@ to belong elsewhere. The connection test applies the same rule.
 
 `security/SecureApiKeyStore.kt` holds only this plugin's Keystore alias
 (`cotg_ai_openai_key_v1`); the AES/GCM itself is the IDE's `KeystoreSecretStore`
-(`plugin-api`, since **26.35** — hence this plugin's `min_ide_version`), so there
+(`plugin-api`, since **26.36** — hence this plugin's `min_ide_version`), so there
 is one implementation in the process rather than a copy per plugin. The **alias**
 is deliberately not shared: every plugin runs in the host app's process and UID
 and therefore shares one Keystore, so a shared alias would let one plugin's

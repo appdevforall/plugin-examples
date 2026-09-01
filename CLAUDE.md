@@ -49,7 +49,7 @@ Both jars are referenced via `../libs/*.jar`. **Always use the repo-root `libs/`
 ### Credentials: use the host's `KeystoreSecretStore`, never your own crypto
 
 A plugin that stores a credential encrypts it with `com.itsaky.androidide.plugins.security.KeystoreSecretStore`
-from `plugin-api.jar` (**26.35+** — set `plugin.min_ide_version` accordingly). It is `compileOnly`
+from `plugin-api.jar` (**26.36+** — set `plugin.min_ide_version` accordingly). It is `compileOnly`
 like the rest of the API, so there is one implementation in the IDE's process rather than a copy
 compiled into each `.cgp`. Do not re-implement AES/GCM in a plugin; three AI plugins each grew a
 copy that started to diverge, which is what ADFA-5255 removed.

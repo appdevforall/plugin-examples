@@ -140,6 +140,7 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
         // the running scope, and the launch below has to use this activation's scope, not whatever
         // a concurrent lifecycle call has since installed.
         val active = swapScope(newScope())
+        activationJob = active.coroutineContext[Job]
         toolSource = McpToolSource()
         McpServerStore.addChangeListener(settingsChanged)
         context.addPluginLifecycleListener(aiCoreLifecycle)
@@ -221,6 +222,17 @@ class McpPlugin : IPlugin, SettingsExtension, DocumentationExtension {
      */
     internal val scopeJob: Job?
         get() = scope.coroutineContext[Job]
+
+    /**
+     * The job of the scope the last [activate] launched its refresh on.
+     *
+     * The second half of the seam: [scopeJob] says what the field holds, and this says what an
+     * activation actually handed work to. A stop that displaces some other scope leaves the two
+     * disagreeing — a live refresh nothing can reach — which is the orphan [lifecycleLock] exists
+     * to prevent and the only way a test can see it.
+     */
+    @Volatile internal var activationJob: Job? = null
+        private set
 
     /**
      * Registers this plugin's tools with AI Core, if the registry is reachable.

@@ -53,6 +53,8 @@ class McpSettingsViewModel(
      *   the field says differently: the credential is intact and the read is worth repeating.
      * @property headersKnown whether [headers] is what is stored. False when the decrypt failed, in
      *   which case an empty list on screen means "not shown" and must not be saved over them.
+     * @property headersUnavailable why the decrypt failed, when it did: true for a keystore that
+     *   merely would not answer, so the dialog can say "try again" rather than "start over".
      * @property headers the extra headers configured for the server.
      */
     data class FormState(
@@ -61,6 +63,7 @@ class McpSettingsViewModel(
         val secretsUnreadable: Boolean,
         val secretsUnavailable: Boolean,
         val headersKnown: Boolean,
+        val headersUnavailable: Boolean,
         val headers: Map<String, String>,
     )
 
@@ -109,6 +112,7 @@ class McpSettingsViewModel(
                     secretsUnavailable =
                         token is KeystoreSecretStore.Stored.Unavailable || headersUnavailable,
                     headersKnown = headers != null,
+                    headersUnavailable = headersUnavailable,
                     headers = headers.orEmpty(),
                 )
             }
@@ -126,17 +130,18 @@ class McpSettingsViewModel(
     /**
      * What the header rows mean when saving, given whether the stored ones could be read.
      *
-     * The token's rule, applied to headers: an empty list is "leave them alone" whenever the dialog
-     * never drew what is stored, because a keystore that would not answer must not cost the user
-     * headers that are still intact. Rows the user actually typed are always an explicit
-     * replacement, and [clearCredential] is the way back to none.
+     * The token's rule, applied to headers: the rows replace what is stored only when the dialog
+     * drew what is stored. Otherwise they mean nothing about it — [setHeaders] replaces the whole
+     * map, so writing one typed row over a set nobody could read would delete headers the user was
+     * just told were intact. The dialog refuses such a save instead, and [clearCredential] is the
+     * way back to none.
      *
      * @param collected the header rows as they currently stand.
      * @param headersKnown whether those rows reflect what is stored.
-     * @return the headers to store, or null to keep the stored ones.
+     * @return the rows to store, replacing the stored set, or null to leave it alone.
      */
     fun headersToStore(collected: Map<String, String>, headersKnown: Boolean): Map<String, String>? =
-        if (headersKnown || collected.isNotEmpty()) collected else null
+        if (headersKnown) collected else null
 
     /**
      * Stores the edited name and URL of a server and, when given, its token.

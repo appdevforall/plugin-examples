@@ -95,7 +95,7 @@ Two dependencies were deliberately not taken:
   Keystore under this plugin's own alias; only ciphertext is written to disk.
   `security/SecureTokenStore.kt` holds nothing but that alias (`cotg_ai_mcp_token_v1`);
   the AES/GCM itself is the IDE's `KeystoreSecretStore` (`plugin-api`, since
-  **26.35** — hence this plugin's `min_ide_version`), so there is one implementation
+  **26.36** — hence this plugin's `min_ide_version`), so there is one implementation
   in the process rather than a copy per plugin. The alias stays per plugin: they all
   share the host's Keystore, so a shared alias would let one plugin's invalidated-key
   recovery delete another's secret. A token that can no longer be decrypted — a

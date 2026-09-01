@@ -29,7 +29,7 @@ an `x-goog-api-key` **header**, never in a URL query string.
 
 `security/SecureApiKeyStore.kt` holds only this plugin's Keystore alias
 (`cotg_ai_gemini_key_v1`); the AES/GCM itself is the IDE's `KeystoreSecretStore`
-(`plugin-api`, since **26.35** — hence this plugin's `min_ide_version`), so there
+(`plugin-api`, since **26.36** — hence this plugin's `min_ide_version`), so there
 is one implementation in the process rather than a copy per plugin. The alias
 stays per plugin: they all share the host's Keystore, so a shared alias would let
 one plugin's invalidated-key recovery delete another's secret. A key written under
