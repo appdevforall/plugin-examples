@@ -144,9 +144,13 @@ class SnippetManagerFragment : Fragment() {
         }
 
         val editDialog = MaterialAlertDialogBuilder(ctx)
-            .setTitle(if (existing != null) "Edit Snippet" else "New Snippet")
+            .setTitle(
+                ctx.getString(
+                    if (existing != null) R.string.snippet_editor_title_edit else R.string.snippet_editor_title_new
+                )
+            )
             .setView(dialogView)
-            .setPositiveButton("Save") { _, _ ->
+            .setPositiveButton(ctx.getString(R.string.snippet_action_save)) { _, _ ->
                 val prefix = prefixInput.text?.toString()?.trim() ?: ""
                 val desc = descInput.text?.toString()?.trim() ?: ""
                 val lang = langSpinner.selectedItem?.toString() ?: ""
@@ -154,7 +158,7 @@ class SnippetManagerFragment : Fragment() {
                 val body = bodyInput.text?.toString()?.split("\n") ?: emptyList()
 
                 if (prefix.isEmpty() || desc.isEmpty() || lang.isEmpty() || scope.isEmpty()) {
-                    PluginWindows.showToast(ctx, "All fields are required")
+                    PluginWindows.showToast(ctx, ctx.getString(R.string.snippet_msg_all_fields_required))
                     return@setPositiveButton
                 }
 
@@ -175,7 +179,7 @@ class SnippetManagerFragment : Fragment() {
                 save()
                 renderList()
             }
-            .setNegativeButton("Cancel", null)
+            .setNegativeButton(ctx.getString(R.string.snippet_action_cancel), null)
             .create()
         PluginWindows.showDialog(editDialog)
         applyDialogButtonColors(editDialog)
@@ -186,14 +190,14 @@ class SnippetManagerFragment : Fragment() {
         val entry = snippets.getOrNull(index) ?: return
 
         val deleteDialog = MaterialAlertDialogBuilder(ctx)
-            .setTitle("Delete Snippet")
-            .setMessage("Delete \"${entry.prefix}\"?")
-            .setPositiveButton("Delete") { _, _ ->
+            .setTitle(ctx.getString(R.string.snippet_delete_title))
+            .setMessage(ctx.getString(R.string.snippet_delete_confirm, entry.prefix))
+            .setPositiveButton(ctx.getString(R.string.snippet_action_delete)) { _, _ ->
                 snippets.removeAt(index)
                 save()
                 renderList()
             }
-            .setNegativeButton("Cancel", null)
+            .setNegativeButton(ctx.getString(R.string.snippet_action_cancel), null)
             .create()
         PluginWindows.showDialog(deleteDialog)
         applyDialogButtonColors(deleteDialog)
@@ -213,10 +217,10 @@ class SnippetManagerFragment : Fragment() {
             SnippetsConfigParser.write(file, SnippetsConfig(snippets.toList()))
             SnippetsPlugin.instance?.invalidateCache()
             SnippetsPlugin.instance?.refreshRegistry()
-            PluginWindows.showToast(requireContext(), "Snippets saved")
+            PluginWindows.showToast(requireContext(), getString(R.string.snippet_msg_saved))
         } catch (e: Exception) {
             Log.e("SnippetManager", "Failed to save snippets", e)
-            PluginWindows.showToast(requireContext(), "Failed to save")
+            PluginWindows.showToast(requireContext(), getString(R.string.snippet_msg_save_failed))
         }
     }
 
