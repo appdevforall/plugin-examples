@@ -34,17 +34,40 @@ This PRD defines the requirements for moving addon delivery to a Cloudflare R2 b
 | ID | Observation |
 |---|---|
 | **P01** | A full release run uploads roughly 1.25 GB to GitHub Actions artifact storage. Nothing outside that run ever consumes it — the artifacts exist only to pass files between jobs of the same workflow. |
-| **P02** | The per-plugin publish step re-downloads the complete multi-hundred-megabyte bundle once for every plugin, in order to extract a single file from it. This produces no new output and multiplies transfer by roughly thirty. |
+| **P02** | The per-plugin publish step re-downloads the complete bundle once for every plugin, to extract a single file from it — roughly **15 GB of transfer per run** to produce files that already existed moments earlier. Detailed below. |
 | **P03** | Three plugins account for about two-thirds of every payload, because they bundle large assets fetched at build time. |
 | **P04** | Published downloads depend on a WordPress host outside our control, reached over SSH with long-lived credentials. |
 | **P05** | Addon names have drifted. The same plugin can carry one name in its directory, another in the Plugin Manager, a third in its `.cgp` filename, and a fourth in its documentation page. Directory names mix conventions; one plugin hardcodes a version the build is supposed to inject. |
 | **P06** | All 31 plugins sit at the repository root, leaving no room for the other addon types that are coming. |
 
-### 2.3 Why now
+### 2.3 P02 in detail — the publish fan-out
+
+**Where:** `.github/workflows/build-plugins.yml`, the `publish` job, lines 116–147.
+
+The `build` job stages every `.cgp` into a directory and uploads all of them as a **single** artifact named `all-plugins-cgp` (lines 116–122). It then emits the plugin names as a JSON array (line 109) for the sole purpose of letting the next job fan out over them.
+
+The `publish` job declares a matrix with **one leg per plugin** (lines 130–133). Each leg runs exactly two steps: download `all-plugins-cgp` (lines 135–139), then upload one file out of it under that plugin's own name (lines 141–147).
+
+**Why roughly thirty times over.** The matrix width equals the number of plugins built — 29 in the most recent release. `actions/download-artifact` cannot retrieve a single file from a multi-file artifact; it fetches the whole thing. So all 29 legs each pull the complete ~530 MB bundle in order to extract one file from it:
+
+| | |
+|---|---|
+| Matrix legs | 29 (one per built plugin) |
+| Downloaded per leg | ~530 MB (the entire bundle) |
+| **Total transfer** | **~15 GB per run** |
+| New output produced | none |
+
+**Why it exists.** Every one of those files was already sitting in the `build` job's workspace moments earlier. The fan-out's only purpose is convenience: it lets a maintainer download one plugin directly from the run summary instead of the whole bundle. The workflow's own comment at lines 124–125 says exactly that.
+
+**What it costs.** Beyond the transfer, it stores a **second full copy** of every artifact — the bundle plus 29 individual extracts — both retained for seven days. That is the larger half of P01's 1.25 GB.
+
+> This is why the fan-out cannot simply be deleted: it serves a real need. R09 preserves the capability — a maintainer must still be able to obtain one addon on demand — without an artifact behind it.
+
+### 2.4 Why now
 
 The quota problem blocks releases outright, and the naming drift compounds with every addon added. Templates, snippets, and code actions are all planned; adding them to a flat root with no naming discipline would multiply both problems. Fixing distribution and organization together — while there are only plugins to migrate — is materially cheaper than fixing them later.
 
-### 2.4 Insight
+### 2.5 Insight
 
 **The artifacts are plumbing, not a deliverable.** Nothing consumes them beyond the run that creates them. Any solution that delivers built addons to their destination without an intermediate handoff eliminates the quota problem permanently, rather than managing it — and makes addon size irrelevant to it forever. This is why P03 needs no fix here.
 
