@@ -39,6 +39,7 @@ This PRD defines the requirements for moving addon delivery to a Cloudflare R2 b
 | **P04** | Published downloads depend on a WordPress host outside our control, reached over SSH with long-lived credentials. |
 | **P05** | Addon names have drifted. The same plugin can carry one name in its directory, another in the Plugin Manager, a third in its `.cgp` filename, and a fourth in its documentation page. Directory names mix conventions; one plugin hardcodes a version the build is supposed to inject. |
 | **P06** | All 31 plugins sit at the repository root, leaving no room for the other addon types that are coming. |
+| **P07** | **No addon's source is independently obtainable or buildable.** Every addon depends on a shared `libs/` directory one level up, so a single addon directory is not a standalone project — a user who wants to read, build, or modify one must clone the entire repository and infer the layout. Code On The Go is AGPL v3; publishing usable source alongside each binary is the point, not a bonus. |
 
 ### 2.3 P02 in detail — the publish fan-out
 
@@ -82,6 +83,7 @@ The quota problem blocks releases outright, and the naming drift compounds with 
 | **G03** | Make every addon's identity consistent everywhere it appears. | For each addon, directory, display name, artifact filename, and documentation filename all agree, and a check enforces it. |
 | **G04** | Make room for templates, snippets, and code actions. | Plugins occupy a dedicated area; sibling areas exist for the other types; the published catalog distinguishes addon types. |
 | **G05** | Give users one place to discover addons. | A searchable, filterable catalog page lists every published addon with its description, source, and download. |
+| **G06** | Make every addon's source independently buildable. | A user downloads one addon's source tarball, and builds it without cloning this repository. |
 
 ---
 
@@ -201,6 +203,38 @@ Every addon has two HTML pages. They are **not duplicates** and must not be merg
 | **R37** | Attribution must include a name and a link to the contributor's own source, where one exists. Publishing a personal email address requires that person's consent. |
 | **R38** | A community addon's original naming may be **preserved** even where it conflicts with first-party naming conventions. The convention binds what App Dev For All creates, not what it adopts. |
 
+### 6.8 Source distribution
+
+Each published addon ships a **source tarball** alongside its artifact and gallery page, so anyone can read, build, or modify one addon without cloning this repository.
+
+The obstacle is that **no addon directory is standalone today.** Each one references a shared `libs/` directory one level up, and the shape of that dependency varies more than it appears:
+
+| ID | Obstacle | Detail |
+|---|---|---|
+| **X1** | The shared `libs/` holds **five** jars, not two. | `layout-editor` references all five; `client-time-tracker` and `pair-programming-plugin` also need `eventbus-events`. A fixed two-jar bundle yields three tarballs that cannot build. |
+| **X2** | Two addons **already have their own `libs/`** — `ai-agent-local` (`llama-api.jar`) and `pair-programming-plugin` (`shared.jar`) — referenced without the `../` prefix. | Copying the shared `libs/` into a tarball collides with an existing directory, and rewriting paths must not disturb references that are already correct. |
+| **X3** | **Eight addons have no Gradle wrapper**, relying on the repository-root one. | Their source is unbuildable by anyone lacking the exact Gradle version. |
+| **X4** | `local.properties` is **not tracked but present on disk** in most addon directories, carrying an SDK path and a Sentry DSN. | Any tarball built from the working tree rather than from tracked content publishes developer-local and secret material. |
+| **X5** | One addon's source lives partly in a **git submodule**. | Tracked content alone yields a tarball that is present, plausible, and incomplete. |
+
+#### Requirements
+
+| ID | Requirement |
+|---|---|
+| **R39** | Every published addon must have a **source tarball** published alongside its artifact and gallery page. |
+| **R40** | A tarball must build **without cloning this repository** and without reference to anything outside itself, except where R46 applies. |
+| **R41** | A tarball must contain **every shared jar that addon actually references**. The set is derived per addon; a fixed list is not acceptable (X1). |
+| **R42** | A tarball must contain a **Gradle wrapper** (X3). |
+| **R43** | Every build path inside a tarball must resolve **within the tarball**. No path may escape its root, and paths already correct must be left alone (X2). |
+| **R44** | A tarball must contain **no developer-local or secret material** — no SDK paths, credentials, DSNs, or local configuration (X4). |
+| **R45** | Assets fetched at build time are **not bundled**. The tarball retains the fetch step, and what it fetches must come from a host App Dev For All controls. |
+| **R46** | An addon whose source **cannot** be made fully self-contained must state its prerequisite prominently within the tarball, so the gap is visible before a build is attempted, never after (X5). |
+| **R47** | Tarball generation must **fail loudly** rather than emit an incomplete or unbuildable tarball. |
+| **R48** | Every tarball must be **structurally verified** on every run: each referenced jar present, no path escaping the root, a wrapper present, and no local configuration included. |
+| **R49** | The catalog must expose each tarball with a **checksum and size**, on the same terms as the artifact itself. |
+
+> **A broken tarball is worse than no tarball.** Every obstacle above fails in the same way — the tarball is produced, looks right, and only fails when someone tries to build it. R47 and R48 exist to make those failures loud and early. Note the limit accepted in K07: structural verification proves a tarball is well-formed, not that it compiles.
+
 ---
 
 ## 7. Platform constraints
@@ -298,7 +332,12 @@ Both this addon and `pebble-custom-function-template-installer` are excluded fro
 13. All six frozen AI addons still build and publish unchanged.
 14. Neither held addon builds, publishes, or appears in the catalog.
 15. A single-addon on-demand build yields a downloadable URL and consumes no artifact storage.
-16. **Device verification.** At least one renamed addon is downloaded from the new host onto a device, installed through the Plugin Manager, and its feature exercised — including its in-app help. A successful build is not verification.
+16. Every published addon has a source tarball in the catalog, with a checksum and size.
+17. Each tarball contains every shared jar that addon references, and a Gradle wrapper.
+18. No tarball contains `local.properties`, an SDK path, or any credential.
+19. No build path inside a tarball resolves outside the tarball.
+20. An addon whose source cannot be made self-contained states its prerequisite inside the tarball.
+21. **Device verification.** At least one renamed addon is downloaded from the new host onto a device, installed through the Plugin Manager, and its feature exercised — including its in-app help. A successful build is not verification.
 
 ---
 
@@ -312,6 +351,8 @@ Both this addon and `pebble-custom-function-template-installer` are excluded fro
 | **K04** | The partial migration (R31) could become permanent. | Migrating the deferred addons is tracked as explicit follow-up work. |
 | **K05** | A renamed addon's in-app help could break silently, with a green build. | R29 prevents the known cause; acceptance criterion 15 verifies it on a device regardless. |
 | **K06** | Crediting a community contribution incorrectly is a reputational harm, not a technical one. | R36–R38; Q1 resolves the remaining detail with the contributor. |
+| **K07** | **Structural verification (R48) proves a tarball is well-formed, not that it compiles.** A tarball can pass every check and still fail to build — a missing transitive dependency, an AGP or Kotlin version the wrapper cannot satisfy, a source file referencing something outside the addon. This is an accepted limit, not an oversight. | Revisit if a broken tarball is ever reported. Building one extracted tarball per run, rotating which, would close it at roughly one extra build's cost. |
+| **K08** | R45 makes two addons' tarballs dependent on the fetched assets staying available. | Those assets move to R2 under this change, so the dependency is on a host we control — the same one serving the addons themselves. |
 
 ---
 
