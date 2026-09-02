@@ -101,7 +101,7 @@ jobs:
           # stripped; the case arms hold the legacy filenames the website already
           # links that don't follow that rule — never change an existing name.
           # Keep in sync with SKIP_PLUGINS in scripts/update-libs.sh.
-          SKIP_PLUGINS=(pebble-custom-function-template-installer)
+          SKIP_PLUGINS=(pebble-custom-function-template-installer cotg-ndk)
 
           staged=0
           for build_file in */build.gradle.kts; do

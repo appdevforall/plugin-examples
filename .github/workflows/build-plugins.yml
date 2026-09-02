@@ -67,7 +67,7 @@ jobs:
           # plugin-builder already names the artifact, so there is no rename map —
           # new plugins are picked up automatically.
           # Keep in sync with SKIP_PLUGINS in scripts/update-libs.sh.
-          SKIP_PLUGINS=(pebble-custom-function-template-installer)
+          SKIP_PLUGINS=(pebble-custom-function-template-installer cotg-ndk)
 
           staged=0
           names=()

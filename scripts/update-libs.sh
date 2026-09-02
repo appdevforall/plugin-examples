@@ -122,7 +122,7 @@ printf "  %-20s %s\n" "gradle-plugin.jar" "$(du -h "$LIBS_DIR/gradle-plugin.jar"
 # Plugins listed here are skipped by the build loop below and the staging
 # loops in .github/workflows/build-plugins.yml and
 # .github/workflows/update-libs.yml. Keep the three in sync.
-SKIP_PLUGINS=(pebble-custom-function-template-installer)
+SKIP_PLUGINS=(pebble-custom-function-template-installer cotg-ndk)
 
 PLUGINS=()
 for build_file in "$REPO_ROOT"/*/build.gradle.kts; do
