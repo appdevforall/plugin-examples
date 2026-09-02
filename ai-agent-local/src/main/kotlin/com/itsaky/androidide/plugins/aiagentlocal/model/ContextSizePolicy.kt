@@ -1,9 +1,9 @@
 package com.itsaky.androidide.plugins.aiagentlocal.model
 
 /**
- * Picks the context size (`n_ctx`) one model load gets, from what the model advertises and what the
- * device can spare — the KV cache scales linearly with it and is the largest knob we control. Pure
- * and Android-free, so every boundary is unit-testable off-device. See ADFA-5187.
+ * Picks what one model load gets: the context size (`n_ctx`) and the type the KV cache is stored as,
+ * from what the model advertises and what the device can spare. Pure and Android-free, so every
+ * boundary is unit-testable off-device. See ADFA-5187 and ADFA-5188.
  */
 object ContextSizePolicy {
 
@@ -35,6 +35,17 @@ object ContextSizePolicy {
     private const val KV_BUDGET_DIVISOR = 2L
 
     /**
+     * The cache type a load should ask for. Quantized wherever the model allows it: it halves the
+     * bytes one cached token costs, which is what lets [choose] return a longer context on the same
+     * device. Falls back to [KvCacheType.F16] rather than risking a refused context. See ADFA-5188.
+     *
+     * @param header the model's GGUF metadata, or null when it could not be read
+     * @return the type to configure natively, and to size the context against
+     */
+    fun chooseKvCache(header: GgufHeader?): KvCacheType =
+        if (KvCacheType.Q8_0.supports(header)) KvCacheType.Q8_0 else KvCacheType.F16
+
+    /**
      * The weights are charged against free RAM even though they are mmap'd: this reading is taken
      * before a load that then pages them in from the same pool. So a model whose file approaches
      * free RAM gets the floor — deliberate, since the alternative is sizing a cache it must fight.
@@ -42,11 +53,19 @@ object ContextSizePolicy {
      * @param header the model's GGUF metadata, or null when it could not be read
      * @param availableBytes free RAM right now, or null when it could not be read; a negative
      *   reading is treated as unreadable too
-     * @param modelSizeBytes the model file's size, or null when it could not be read
+     * @param modelSizeBytes the model file's size, or null when it could not be read; the weights
+     *   are charged against free RAM before the cache gets a budget
+     * @param kvType the cache type this load will ask for, from [chooseKvCache]; the budget buys
+     *   about twice the context under [KvCacheType.Q8_0], so the two have to be decided together
      * @return the context to configure, always between [DEFAULT_CONTEXT_TOKENS] and
      *   [MAX_CONTEXT_TOKENS] inclusive
      */
-    fun choose(header: GgufHeader?, availableBytes: Long?, modelSizeBytes: Long?): Int {
+    fun choose(
+        header: GgufHeader?,
+        availableBytes: Long?,
+        modelSizeBytes: Long?,
+        kvType: KvCacheType = KvCacheType.F16,
+    ): Int {
         // Each null is a distinct "we don't know"; all of them mean the same fallback.
         if (header == null) return DEFAULT_CONTEXT_TOKENS
         // A negative reading is not free RAM this can reason about, so treat it as unreadable.
@@ -56,7 +75,7 @@ object ContextSizePolicy {
         // Nothing to weigh below the floor, and no reason to price a cache we would not shrink.
         if (modelTokens <= DEFAULT_CONTEXT_TOKENS) return DEFAULT_CONTEXT_TOKENS
 
-        val perToken = ModelMemoryEstimator.kvBytesPerToken(header)?.takeIf { it > 0L }
+        val perToken = ModelMemoryEstimator.kvBytesPerToken(header, kvType)?.takeIf { it > 0L }
             ?: return DEFAULT_CONTEXT_TOKENS
 
         // Each clamped at zero: an unclamped Long underflows on an absurd size and wraps positive.
