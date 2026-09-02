@@ -1,9 +1,7 @@
 package com.itsaky.androidide.plugins.aicore.tool.handlers
 
-import android.util.Log
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aicore.logging.AgentTrace
-import com.itsaky.androidide.plugins.aicore.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aicore.models.ToolResult
 import com.itsaky.androidide.plugins.aicore.tool.ToolHandler
 import com.itsaky.androidide.plugins.services.BuildAndLaunchCallback
@@ -16,8 +14,6 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.resume
-
-private const val TAG = "$LOG_PREFIX.RunAppHandler"
 
 /** How long to wait for the build callback before reporting the build still running. */
 internal const val BUILD_TIMEOUT_MS = 10 * 60 * 1000L
@@ -49,7 +45,7 @@ class RunAppHandler(
         return try {
             val buildService = pluginContext.services.get(IdeBuildService::class.java)
             if (buildService == null) {
-                Log.w(TAG, "IdeBuildService not available - service is null")
+                AgentTrace.refusal("BUILD", "run_app rejected", "IdeBuildService not available")
                 return ToolResult.failure(
                     "Build service not available",
                     "The IDE build service is not available. This IDE instance may not support build operations."
@@ -57,14 +53,13 @@ class RunAppHandler(
             }
 
             if (buildService.isBuildInProgress()) {
-                Log.d(TAG, "A build is already in progress")
+                AgentTrace.refusal("BUILD", "run_app rejected", "a build is already in progress")
                 return ToolResult.failure(
                     "Build already running",
                     "A build is already in progress. Please wait for it to complete before running again."
                 )
             }
 
-            Log.d(TAG, "Triggering app build and launch...")
             AgentTrace.stage("BUILD", "run_app triggered; waiting for the build callback")
             val startMs = System.currentTimeMillis()
             val outcome = withTimeoutOrNull(BUILD_TIMEOUT_MS) {
@@ -80,7 +75,6 @@ class RunAppHandler(
             val waitedMs = System.currentTimeMillis() - startMs
 
             if (outcome == null) {
-                Log.w(TAG, "Build did not report back within $BUILD_TIMEOUT_MS ms")
                 AgentTrace.refusal(
                     "BUILD",
                     "run_app timed out waitedMs=$waitedMs",
@@ -100,13 +94,11 @@ class RunAppHandler(
                 AgentTrace.preview(message)
             )
             if (success) {
-                Log.i(TAG, "Build succeeded: $message")
                 ToolResult.success(
                     message = "Build succeeded",
                     data = message
                 )
             } else {
-                Log.w(TAG, "Build failed: $message")
                 ToolResult.failure(
                     "Build failed",
                     "$message\n\nCall read_build_output for the compiler errors."
@@ -116,7 +108,10 @@ class RunAppHandler(
             // An Exception on the JVM, so the catch below would report Stop as a build failure.
             throw ce
         } catch (e: Exception) {
-            Log.e(TAG, "Exception in run app tool", e)
+            // The trace stream keeps the run readable; the host log keeps the stack trace, which
+            // AgentTrace previews only in a debug build.
+            AgentTrace.refusal("BUILD", "run_app failed", e.toString())
+            pluginContext.logger.error("run_app failed", e)
             ToolResult.failure(
                 "Error: ${e.javaClass.simpleName}",
                 "${e.message ?: "Unknown error"}\n\n${e.stackTraceToString()}"
@@ -158,7 +153,7 @@ class RunAppHandler(
             try {
                 buildService.runApp(callback)
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to trigger build", e)
+                // Reported to the caller, which logs it once with the stack trace.
                 if (reported.compareAndSet(false, true)) {
                     continuation.resumeWith(Result.failure(e))
                 }

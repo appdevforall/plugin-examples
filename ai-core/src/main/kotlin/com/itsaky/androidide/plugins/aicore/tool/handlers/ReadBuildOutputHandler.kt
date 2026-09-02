@@ -1,15 +1,11 @@
 package com.itsaky.androidide.plugins.aicore.tool.handlers
 
-import android.util.Log
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aicore.logging.AgentTrace
-import com.itsaky.androidide.plugins.aicore.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aicore.models.ToolResult
 import com.itsaky.androidide.plugins.aicore.tool.ToolHandler
 import com.itsaky.androidide.plugins.services.IdeBuildService
 import kotlinx.coroutines.CancellationException
-
-private const val TAG = "$LOG_PREFIX.ReadBuildOutputHandler"
 
 /** The slice of a build log handed to the model, and whether it starts at the first error. */
 internal data class OutputWindow(
@@ -28,12 +24,14 @@ class ReadBuildOutputHandler(
     override val requiresApproval = false
 
     override suspend fun execute(args: Map<String, Any?>): ToolResult {
-        Log.d(TAG, "Reading build output")
-
         return try {
             val buildService = pluginContext.services.get(IdeBuildService::class.java)
             if (buildService == null) {
-                Log.w(TAG, "IdeBuildService not available")
+                AgentTrace.refusal(
+                    "BUILD",
+                    "read_build_output rejected",
+                    "IdeBuildService not available"
+                )
                 return ToolResult.failure(
                     "Build service not available",
                     "The IDE build service is not available."
@@ -42,7 +40,6 @@ class ReadBuildOutputHandler(
 
             val output = buildService.getBuildOutput()
             if (output.isNullOrBlank()) {
-                Log.d(TAG, "No build output available")
                 AgentTrace.detail("BUILD", "read_build_output chars=0 (host returned nothing)")
                 ToolResult.success(
                     message = "No build output available",
@@ -50,7 +47,6 @@ class ReadBuildOutputHandler(
                 )
             } else {
                 val window = windowFor(output)
-                Log.d(TAG, "Read ${window.text.length} chars, anchored=${window.anchoredOnError}")
                 AgentTrace.detail(
                     "BUILD",
                     "read_build_output chars=${window.text.length} " +
@@ -69,7 +65,10 @@ class ReadBuildOutputHandler(
             // An Exception on the JVM, so the catch below would report Stop as a read failure.
             throw ce
         } catch (e: Exception) {
-            Log.e(TAG, "Error reading build output", e)
+            // The trace stream keeps the run readable; the host log keeps the stack trace, which
+            // AgentTrace previews only in a debug build.
+            AgentTrace.refusal("BUILD", "read_build_output failed", e.toString())
+            pluginContext.logger.error("read_build_output failed", e)
             ToolResult.failure(
                 "Error reading build output",
                 "${e.message ?: "Unknown error"}\n\n${e.stackTraceToString()}"

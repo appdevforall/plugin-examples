@@ -1,6 +1,7 @@
 package com.itsaky.androidide.plugins.aicore.tool
 
 import android.util.Log
+import com.itsaky.androidide.plugins.aicore.logging.AgentTrace
 import com.itsaky.androidide.plugins.aicore.logging.LOG_PREFIX
 import org.json.JSONObject
 
@@ -37,10 +38,11 @@ class ToolCallExtractor {
          */
         internal fun beforeFabricatedResult(text: String): String {
             val match = FABRICATED_RESULT_REGEX.find(text) ?: return text
-            Log.w(
-                TAG,
-                "Reply writes its own tool result at offset ${match.range.first}; " +
-                    "ignoring the ${text.length - match.range.first} chars after it",
+            AgentTrace.refusal(
+                "PARSE",
+                "fabricated tool result offset=${match.range.first} " +
+                    "ignoredChars=${text.length - match.range.first}",
+                "the reply answered its own tool call"
             )
             return text.substring(0, match.range.first)
         }

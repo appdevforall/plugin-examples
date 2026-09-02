@@ -29,36 +29,20 @@ sealed class AgentState {
         val startTime: Long = System.currentTimeMillis(),
         val elapsedMillis: Long = 0
     ) : AgentState() {
-        val formattedProgress: String
-            get() = "Step ${currentStepIndex + 1} of $totalSteps: $description"
+        /** Step number as the status line counts it, from 1. */
+        val stepNumber: Int
+            get() = currentStepIndex + 1
 
-        val formattedTiming: String
+        /**
+         * Projected duration of the whole run, from the average time per step so far. The words
+         * around these figures are resources, so the rendering itself belongs to the UI layer.
+         */
+        val estimatedTotalMillis: Long
             get() {
-                val elapsed = formatTime(elapsedMillis)
-                // Estimate total time based on average time per step
-                val estimatedTotal = if (currentStepIndex > 0) {
-                    val avgPerStep = elapsedMillis / (currentStepIndex + 1)
-                    avgPerStep * totalSteps
-                } else {
-                    elapsedMillis * totalSteps
-                }
-                val total = formatTime(estimatedTotal)
-                return "($elapsed of $total)"
+                // A device clock change can put the elapsed time behind the start.
+                val elapsed = elapsedMillis.coerceAtLeast(0)
+                return (elapsed / stepNumber) * totalSteps
             }
-
-        private fun formatTime(millis: Long): String {
-            if (millis < 0) return "0.0s"
-            val minutes = java.util.concurrent.TimeUnit.MILLISECONDS.toMinutes(millis)
-            val seconds = java.util.concurrent.TimeUnit.MILLISECONDS.toSeconds(millis) -
-                         java.util.concurrent.TimeUnit.MINUTES.toSeconds(minutes)
-            val remainingMillis = millis % 1000
-            val totalSeconds = seconds + (remainingMillis / 1000.0)
-            return if (minutes > 0) {
-                String.format(java.util.Locale.US, "%dm %.1fs", minutes, totalSeconds)
-            } else {
-                String.format(java.util.Locale.US, "%.1fs", totalSeconds)
-            }
-        }
     }
 
     /**
@@ -79,7 +63,8 @@ sealed class AgentState {
 
 /**
  * Short name for the trace log: the state and what it is doing, without a data class's field dump
- * and without the error text, which is already in the transcript.
+ * and without the error text, which is already in the transcript. Logcat only — nothing here
+ * reaches the UI, which renders each state from string resources.
  */
 val AgentState.traceLabel: String
     get() = when (this) {

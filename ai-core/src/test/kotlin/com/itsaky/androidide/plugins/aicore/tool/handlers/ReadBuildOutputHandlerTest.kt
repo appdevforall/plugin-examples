@@ -29,6 +29,8 @@ class ReadBuildOutputHandlerTest {
         services = mockk()
         context = mockk()
         every { context.services } returns services
+        // The handler logs failures through the host logger.
+        every { context.logger } returns mockk(relaxed = true)
         every { services.get(IdeBuildService::class.java) } returns buildService
         handler = ReadBuildOutputHandler(context)
     }

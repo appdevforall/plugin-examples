@@ -37,6 +37,7 @@ import com.itsaky.androidide.plugins.services.IdeTooltipService
 import com.itsaky.androidide.plugins.services.IdeUIService
 import io.noties.markwon.Markwon
 import java.io.File
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.launch
 
 private const val TAG = "$LOG_PREFIX.ChatFragment"
@@ -412,9 +413,10 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
             // token, and a per-message dump here made the log unreadable during a run.
             if (messages.size != renderedMessageCount) {
                 renderedMessageCount = messages.size
-                android.util.Log.d(
-                    TAG,
-                    "rendering $renderedMessageCount messages, last=${messages.lastOrNull()?.sender}"
+                AgentTrace.detail(
+                    "UI",
+                    "rendering messages=$renderedMessageCount " +
+                        "last=${messages.lastOrNull()?.sender}"
                 )
             }
             binding.emptyChatView.isVisible = messages.isEmpty()
@@ -440,8 +442,17 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
                 is AgentState.Idle -> binding.agentStatusContainer.isVisible = false
                 is AgentState.Executing -> {
                     binding.agentStatusContainer.isVisible = true
-                    binding.agentStatusMessage.text = state.formattedProgress
-                    binding.agentStatusTimer.text = state.formattedTiming
+                    binding.agentStatusMessage.text = getString(
+                        R.string.state_executing,
+                        state.stepNumber,
+                        state.totalSteps,
+                        state.description,
+                    )
+                    binding.agentStatusTimer.text = getString(
+                        R.string.state_executing_timing,
+                        formatDuration(state.elapsedMillis),
+                        formatDuration(state.estimatedTotalMillis),
+                    )
                     viewModel.startStateTimer(state)
                 }
                 is AgentState.Processing -> {
@@ -461,6 +472,23 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
             }
             // The composer owns the send/stop button, since Stop is what pins it open.
             composer?.onAgentRunningChanged(state.isRunning)
+        }
+    }
+
+    /**
+     * Renders a duration the way the status timer reads it: `4.5s`, or `1m 4.5s` past the minute.
+     *
+     * @param millis the duration; a clock that ran backwards reads as zero.
+     * @return the localised figure, with no surrounding words.
+     */
+    private fun formatDuration(millis: Long): String {
+        val total = millis.coerceAtLeast(0)
+        val minutes = TimeUnit.MILLISECONDS.toMinutes(total)
+        val seconds = (total - TimeUnit.MINUTES.toMillis(minutes)) / 1000.0
+        return if (minutes > 0) {
+            getString(R.string.time_format_minutes, minutes, seconds)
+        } else {
+            getString(R.string.time_format_seconds, seconds)
         }
     }
 

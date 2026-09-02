@@ -39,6 +39,8 @@ class RunAppHandlerTest {
         services = mockk()
         context = mockk()
         every { context.services } returns services
+        // The handler logs failures through the host logger.
+        every { context.logger } returns mockk(relaxed = true)
         every { services.get(IdeBuildService::class.java) } returns buildService
         every { buildService.isBuildInProgress() } returns false
         handler = RunAppHandler(context)
