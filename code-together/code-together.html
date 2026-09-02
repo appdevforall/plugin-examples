@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pair Plugin Documentation</title>
+<title>Code Together</title>
 <style>
   :root {
     --bg: #fdfdfd;
@@ -89,7 +89,7 @@
 <body>
 
 <header>
-  <h1>Pair</h1>
+  <h1>Code Together</h1>
   <p class="subtitle">Real-time pair programming across two devices on the same WiFi &mdash; shared editing, live cursors, no server</p>
   <div class="meta">Version 1.0.0 &middot; Author: App Dev For All &middot; Package: <code>com.appdevforall.pair.plugin</code></div>
 </header>
@@ -111,7 +111,7 @@
 <section id="overview">
   <h2>1. Executive Overview</h2>
   <p>
-    Pair is a Code on the Go plugin that turns the IDE into a real-time
+    Code Together is a Code on the Go plugin that turns the IDE into a real-time
     collaborative editor. Two devices on the same local network share one editing
     session: one device <strong>hosts</strong>, others <strong>join</strong>, and
     from then on edits, cursor positions, and file opens flow between devices as
@@ -312,7 +312,7 @@
 <section id="integration">
   <h2>4. Integration Points</h2>
   <p>
-    Pair implements three extension interfaces and consumes five host services, all
+    Code Together implements three extension interfaces and consumes five host services, all
     through <code>plugin-api</code>.
   </p>
 
@@ -348,7 +348,7 @@
 
   <h3>4.4 EventBus subscription</h3>
   <p>
-    Local activity is observed, not polled: Pair subscribes to
+    Local activity is observed, not polled: Code Together subscribes to
     <code>DocumentChangeEvent</code>, <code>DocumentOpenEvent</code>,
     <code>DocumentCloseEvent</code>, <code>DocumentSelectedEvent</code>, and the file
     creation / deletion / rename events on the IDE's EventBus. The observer runs on
@@ -364,7 +364,7 @@
     <code>clearPeerCursors</code> (inline remote-cursor decoration). They live on the
     <code>feat/ADFA-4419-remote-peer-editor-decoration</code> branch. If
     <code>assemblePlugin</code> fails with unresolved references to those symbols, the
-    shared <code>libs/</code> jars are older than the API Pair needs &mdash; refresh
+    shared <code>libs/</code> jars are older than the API Code Together needs &mdash; refresh
     them from a CodeOnTheGo build that includes the extensions
     (<code>../scripts/update-libs.sh --local &lt;path&gt; --ref feat/ADFA-4419-remote-peer-editor-decoration</code>).
   </div>
@@ -439,7 +439,7 @@
 <section id="license">
   <h2>7. Attribution &amp; License</h2>
   <p>
-    Pair is an open-source example plugin for Code on the Go. Its source is licensed
+    Code Together is an open-source example plugin for Code on the Go. Its source is licensed
     per the surrounding <code>plugin-examples</code> repository (see
     <code>LICENSE</code> at the repo root).
   </p>
@@ -450,7 +450,7 @@
 </section>
 
 <footer>
-  Pair Plugin Documentation &middot; Version 1.0.0 &middot; com.appdevforall.pair.plugin
+  Code Together &middot; Version 1.0.0 &middot; com.appdevforall.pair.plugin
 </footer>
 
 </body>
