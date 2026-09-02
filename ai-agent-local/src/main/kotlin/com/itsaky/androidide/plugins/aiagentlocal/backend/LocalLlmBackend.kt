@@ -11,10 +11,12 @@ import com.itsaky.androidide.plugins.aiagentlocal.feedback.ModelLoadException
 import com.itsaky.androidide.plugins.aiagentlocal.feedback.ModelNotConfiguredException
 import com.itsaky.androidide.plugins.aiagentlocal.feedback.UserActionableLlmException
 import com.itsaky.androidide.plugins.aiagentlocal.feedback.UserFeedback
-import com.itsaky.androidide.plugins.aiagentlocal.model.ContextSizePolicy
 import com.itsaky.androidide.plugins.aiagentlocal.model.GgufHeader
 import com.itsaky.androidide.plugins.aiagentlocal.model.GgufHeaderReader
 import com.itsaky.androidide.plugins.aiagentlocal.model.GgufModelInspector
+import com.itsaky.androidide.plugins.aiagentlocal.model.KvCacheType
+import com.itsaky.androidide.plugins.aiagentlocal.model.ModelContextResolver
+import com.itsaky.androidide.plugins.aiagentlocal.model.ModelContextSize
 import com.itsaky.androidide.plugins.aiagentlocal.model.ModelLoadDiagnostics
 import com.itsaky.androidide.plugins.aiagentlocal.model.ModelLoadMessages
 import com.itsaky.androidide.plugins.aiagentlocal.preferences.LocalLlmPreferences
@@ -329,11 +331,16 @@ class LocalLlmBackend(
             throw ModelLoadException(loadMessages.describe(shortfall), shortfall)
         }
 
-        val contextTokens = resolveContextSize(resolvedPath, availableBytes, header, modelSizeBytes)
+        val contextSize = resolveContextSize(resolvedPath, availableBytes, header, modelSizeBytes)
 
         context.logger.info("Loading model: $resolvedPath")
         try {
-            llama.load(resolvedPath, contextTokens)
+            llama.load(
+                pathToModel = resolvedPath,
+                nCtx = contextSize.contextTokens,
+                quantizeKv = contextSize.kvType == KvCacheType.Q8_0,
+                fallbackNCtx = contextSize.fallbackContextTokens,
+            )
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -346,13 +353,13 @@ class LocalLlmBackend(
         modelLoaded = true
         currentModelPath = resolvedPath
         context.logger.info("Model loaded successfully")
-        reportEffectiveContextSize(contextTokens)
+        reportEffectiveContextSize(contextSize.contextTokens)
     }
 
     /**
      * Logs the context the native side actually created. It can be smaller than what was asked for
-     * — `new_context` clamps a request above what the model was trained for — and without this the
-     * only visible number is the request, so a prompt rejected as too long looks like it fit.
+     * — clamped to the trained context, or dropped to the shorter f16 fallback when a quantized
+     * cache was refused — and a prompt rejected as too long otherwise looks like it fit.
      *
      * @param requestedTokens the context [resolveContextSize] asked for
      */
@@ -376,34 +383,37 @@ class LocalLlmBackend(
     }
 
     /**
-     * Sizes the KV cache for this model on this device. Must run after any unload, so the freed
-     * context is counted as available, and the answer is passed to [LLamaAndroid.load] rather than
-     * stored anywhere. [ContextSizePolicy.choose] fails open, so this has no failure of its own.
+     * Sizes the KV cache for this model on this device and picks the type it is stored as. Must run
+     * after any unload, so the freed context is counted as available. Answers rather than applies:
+     * every part of the shape is an argument to [LLamaAndroid.load], so nothing can drift between
+     * being chosen here and being used natively. [ModelContextResolver] fails open, so this has no
+     * failure of its own.
      *
      * @param resolvedPath filesystem path to the model, already resolved from any content URI
      * @param availableBytes free RAM as [availableMemoryBytes] reports it, negative if unknown
      * @param header the model's metadata as read once by [ensureModelLoaded], null if unreadable
      * @param modelSizeBytes the model file's size, null if unreadable
-     * @return the context size in tokens to load the model with
+     * @return the context size, cache type and f16 fallback size to load the model with
      */
     private fun resolveContextSize(
         resolvedPath: String,
         availableBytes: Long,
         header: GgufHeader?,
         modelSizeBytes: Long?,
-    ): Int {
-        val contextTokens = ContextSizePolicy.choose(
+    ): ModelContextSize {
+        val resolved = ModelContextResolver.resolve(
             header = header,
             availableBytes = availableBytes.takeIf { it >= 0L },
             modelSizeBytes = modelSizeBytes,
         )
         // Unconditional: a wrongly sized context otherwise just reads as the assistant forgetting.
         context.logger.info(
-            "Context size for $resolvedPath: $contextTokens tokens" +
-                " (model advertises ${header?.contextLength ?: "unknown"}," +
+            "Context size for $resolvedPath: ${resolved.contextTokens} tokens," +
+                " ${resolved.kvType} KV cache" +
+                " (model advertises ${resolved.advertisedTokens ?: "unknown"}," +
                 " ${if (availableBytes >= 0L) "$availableBytes bytes free" else "free RAM unknown"})"
         )
-        return contextTokens
+        return resolved
     }
 
     /**
