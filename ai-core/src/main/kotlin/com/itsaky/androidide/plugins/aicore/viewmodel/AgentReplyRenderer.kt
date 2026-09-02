@@ -15,9 +15,11 @@ object AgentReplyRenderer {
     /**
      * Whether this turn only repeats the calls that already succeeded, so its bubble is dropped.
      *
-     * The terminal call is filtered out by the same loose match a handler is routed by, not by
-     * equality: a backend answering `Respond` would otherwise leave it among the real calls, so an
-     * identical repeat never compares equal and the duplicate bubble is never dropped.
+     * A turn carrying the terminal call is never a duplicate, whatever else it repeats: that bubble
+     * is the only place the answer is rendered. `AgentLoop` runs the real calls first and so never
+     * reaches `onFinalAnswer`, and dropping the turn here would end the run "completed" with
+     * nothing on screen. The match is the loose one a handler is routed by, so a backend answering
+     * `Respond` is recognised as terminal too.
      *
      * @param toolCalls the calls parsed out of this turn.
      * @param lastSucceededCalls the calls this run last executed successfully, null when none did.
@@ -29,8 +31,8 @@ object AgentReplyRenderer {
         lastSucceededCalls: List<ToolCall>?,
         terminalTool: String,
     ): Boolean {
-        val realCalls = toolCalls.filterNot { isTerminalToolName(it.name, terminalTool) }
-        return realCalls.isNotEmpty() && realCalls == lastSucceededCalls
+        if (toolCalls.any { isTerminalToolName(it.name, terminalTool) }) return false
+        return toolCalls.isNotEmpty() && toolCalls == lastSucceededCalls
     }
 
     /**

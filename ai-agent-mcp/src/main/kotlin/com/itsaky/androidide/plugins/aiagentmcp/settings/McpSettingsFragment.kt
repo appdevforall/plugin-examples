@@ -215,15 +215,23 @@ class McpSettingsFragment : Fragment() {
                 whileDialogShown {
                     // The stored token is never shown: it is decrypted only to be sent. An empty
                     // field on an existing server means "leave it alone", which the placeholder
-                    // says aloud — unless nothing on this device can read it any more.
-                    if (form.secretsUnreadable) {
-                        tokenField.hint = getString(R.string.mcp_hint_token_unreadable)
-                        status.text = getString(R.string.mcp_secrets_unreadable)
-                    } else if (form.secretsUnavailable) {
-                        tokenField.hint = getString(R.string.mcp_hint_token_unavailable)
-                        status.text = getString(R.string.mcp_secrets_unavailable)
-                    } else if (form.hasToken) {
-                        tokenField.hint = getString(R.string.mcp_hint_token_stored)
+                    // says aloud — unless nothing on this device can read it any more. The hint
+                    // speaks for the token alone; headers that failed have their own sentence.
+                    tokenField.hint = getString(
+                        when {
+                            form.tokenUnreadable -> R.string.mcp_hint_token_unreadable
+                            form.tokenUnavailable -> R.string.mcp_hint_token_unavailable
+                            form.hasToken -> R.string.mcp_hint_token_stored
+                            else -> R.string.mcp_hint_token
+                        }
+                    )
+                    // The status line covers whichever credential failed. Unreadable first: a
+                    // credential that has to be entered again is the worse news.
+                    when {
+                        form.tokenUnreadable || form.headersUnreadable ->
+                            status.text = getString(R.string.mcp_secrets_unreadable)
+                        form.tokenUnavailable || form.headersUnavailable ->
+                            status.text = getString(R.string.mcp_secrets_unavailable)
                     }
                     // Offered only once something is known to be stored; there is nothing to
                     // clear otherwise, and an unreadable secret is exactly what it is for.
@@ -237,7 +245,10 @@ class McpSettingsFragment : Fragment() {
                         form.headersUnavailable -> Headers.UNAVAILABLE
                         else -> Headers.UNREADABLE
                     }
-                    renderHeaders(view, form.headers)
+                    // Only the stored set replaces what is on screen. A failed decrypt has nothing
+                    // to draw, and clearing the list would take with it any row typed while it was
+                    // in flight — rows the save guard below then refuses to let be retyped.
+                    if (form.headersKnown) renderHeaders(view, form.headers)
                 }
             }
         }
@@ -311,7 +322,8 @@ class McpSettingsFragment : Fragment() {
         serverDialog = dialog
         dialog.setOnDismissListener { serverDialog = null }
         dialog.setOnShowListener {
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setOnClickListener {
+            val saveButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE) ?: return@setOnShowListener
+            saveButton.setOnClickListener {
                 val candidate = server.copy(
                     name = nameField.text.toString().trim(),
                     url = urlField.text.toString().trim(),
@@ -328,12 +340,24 @@ class McpSettingsFragment : Fragment() {
                     status.text = problem
                     return@setOnClickListener
                 }
+                saveButton.isEnabled = false
                 viewModel.save(
                     candidate,
                     viewModel.tokenToStore(tokenField.text.toString()),
                     viewModel.headersToStore(headers, headersState == Headers.KNOWN),
-                ) { _, _ -> }
-                dialog.dismiss()
+                ) { _, failure ->
+                    // Dismissed only once the credential is stored, as Connect already does: a
+                    // keystore that will not encrypt would otherwise lose the token behind a
+                    // dialog that closed as though it had saved.
+                    if (failure == null) {
+                        whileDialogShown { dialog.dismiss() }
+                        return@save
+                    }
+                    whileDialogShown {
+                        status.text = failure
+                        saveButton.isEnabled = true
+                    }
+                }
             }
         }
         dialog.show()

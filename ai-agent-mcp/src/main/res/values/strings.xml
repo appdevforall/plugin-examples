@@ -67,7 +67,7 @@
     <string name="mcp_error_cancelled">The call to %1$s was cancelled.</string>
     <string name="mcp_error_redirect_refused">%1$s redirected the request to another address, so it was not sent — it carries your token. Check the endpoint URL.</string>
     <string name="mcp_error_secret_unreadable">%1$s\'s saved token can no longer be read on this device. Open MCP server settings and enter it again.</string>
-    <string name="mcp_error_secret_unavailable">%1$s\'s saved token could not be read just now. It is still stored — try again in a moment.</string>
+    <string name="mcp_error_secret_unavailable">%1$s\'s saved credentials could not be read just now. They are still stored — try again in a moment.</string>
     <string name="mcp_error_failed">Could not reach %1$s.</string>
     <string name="mcp_error_failed_reason">Could not reach %1$s: %2$s</string>
     <string name="mcp_error_tool_gone">\'%1$s\' is no longer offered by any configured MCP server.</string>

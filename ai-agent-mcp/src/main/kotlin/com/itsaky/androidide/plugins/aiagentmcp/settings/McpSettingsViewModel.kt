@@ -47,22 +47,25 @@ class McpSettingsViewModel(
      * @property hasHeaders whether headers are stored, from key presence rather than a decrypt:
      *   [headers] comes back empty for headers this device can no longer read, and "stored but
      *   unreadable" has to count as a stored credential or the control that clears it hides.
-     * @property secretsUnreadable whether a stored token or header cannot be decrypted on this
-     *   device, which the field has to say aloud: it looks stored, but nothing can send it.
-     * @property secretsUnavailable whether the keystore merely would not answer this time, which
-     *   the field says differently: the credential is intact and the read is worth repeating.
+     * @property tokenUnreadable whether the stored token cannot be decrypted on this device, which
+     *   the field has to say aloud: it looks stored, but nothing can send it.
+     * @property tokenUnavailable whether the keystore merely would not answer for the token, which
+     *   the field says differently: it is intact and the read is worth repeating.
      * @property headersKnown whether [headers] is what is stored. False when the decrypt failed, in
      *   which case an empty list on screen means "not shown" and must not be saved over them.
-     * @property headersUnavailable why the decrypt failed, when it did: true for a keystore that
-     *   merely would not answer, so the dialog can say "try again" rather than "start over".
+     * @property headersUnreadable why the header decrypt failed, when it did: true when nothing on
+     *   this device can read them again.
+     * @property headersUnavailable why the header decrypt failed, when it did: true for a keystore
+     *   that merely would not answer, so the dialog can say "try again" rather than "start over".
      * @property headers the extra headers configured for the server.
      */
     data class FormState(
         val hasToken: Boolean,
         val hasHeaders: Boolean,
-        val secretsUnreadable: Boolean,
-        val secretsUnavailable: Boolean,
+        val tokenUnreadable: Boolean,
+        val tokenUnavailable: Boolean,
         val headersKnown: Boolean,
+        val headersUnreadable: Boolean,
         val headersUnavailable: Boolean,
         val headers: Map<String, String>,
     )
@@ -102,16 +105,16 @@ class McpSettingsViewModel(
                     headersUnavailable = true
                     null
                 }
+                // Reported per credential, never folded together: a token that decrypts beside
+                // headers that do not must not put "could not be read" on the token's own field,
+                // which is the mis-attribution this pane exists to avoid.
                 FormState(
                     hasToken = McpServerStore.hasToken(id),
                     hasHeaders = McpServerStore.hasHeaders(id),
-                    secretsUnreadable =
-                        token is KeystoreSecretStore.Stored.Unreadable || headersUnreadable,
-                    // Both can be true; the dialog shows the unreadable message first, since a
-                    // credential that has to be entered again is the worse news.
-                    secretsUnavailable =
-                        token is KeystoreSecretStore.Stored.Unavailable || headersUnavailable,
+                    tokenUnreadable = token is KeystoreSecretStore.Stored.Unreadable,
+                    tokenUnavailable = token is KeystoreSecretStore.Stored.Unavailable,
                     headersKnown = headers != null,
+                    headersUnreadable = headersUnreadable,
                     headersUnavailable = headersUnavailable,
                     headers = headers.orEmpty(),
                 )

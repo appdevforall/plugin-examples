@@ -128,14 +128,22 @@ class AgentReplyRendererTest {
     }
 
     @Test
-    fun givenARepeatedCallBesideACapitalisedRespond_whenChecked_thenTheTurnIsStillADuplicate() {
-        // What `it.name == RESPOND_TOOL` got wrong: a backend that answers `Respond` left the
-        // terminal call among the real ones, so the repeat never compared equal and the agent's
-        // duplicate turn reached the transcript.
+    fun givenARepeatedCallBesideACapitalisedRespond_whenChecked_thenTheAnswerIsKept() {
+        // The turn repeats a call that already succeeded, but it also carries the answer, and this
+        // bubble is the only place that text is ever rendered: dropping it ends the run
+        // "completed" with nothing on screen. `Respond` counts as terminal by the loose match.
         val succeeded = listOf(ToolCall("read_file", mapOf("file_path" to "A.kt")))
-        val repeated = succeeded + ToolCall("Respond", mapOf("message" to "Done."))
+        val repeated = succeeded + ToolCall("Respond", mapOf("message" to "Here is the answer"))
 
-        assertTrue(AgentReplyRenderer.isDuplicateTurn(repeated, succeeded, TERMINAL))
+        assertFalse(AgentReplyRenderer.isDuplicateTurn(repeated, succeeded, TERMINAL))
+    }
+
+    @Test
+    fun givenOnlyRepeatedRealCalls_whenChecked_thenTheTurnIsADuplicate() {
+        // Nothing terminal, nothing new: the bubble would say what the last one already did.
+        val succeeded = listOf(ToolCall("read_file", mapOf("file_path" to "A.kt")))
+
+        assertTrue(AgentReplyRenderer.isDuplicateTurn(succeeded.toList(), succeeded, TERMINAL))
     }
 
     @Test

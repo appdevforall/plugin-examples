@@ -87,17 +87,22 @@ class McpPluginScopeTest {
     }
 
     /**
-     * The invariant [McpPlugin.lifecycleLock] exists for, which no sequential call can break.
+     * What the swap onto [McpPlugin.stoppedScope] buys, under two lifecycle calls at once.
      *
      * `activate` and `deactivate` each read the scope field, install their own, and cancel what
-     * they displaced. Let those two steps interleave and both calls can displace the *same* scope:
-     * the stop cancels the one the activation replaced, and the scope the activation handed its
-     * `tools/list` refresh to is left running with nothing holding it — a socket the plugin can no
-     * longer reach, repopulating a catalogue that was just cleared.
+     * they displaced. Cancelling the field in place instead — the shape before this commit — leaves
+     * a cancelled scope installed as though the plugin were activated, so the scope an activation
+     * handed its `tools/list` refresh to is left running with nothing holding it: a socket the
+     * plugin can no longer reach, repopulating a catalogue that was just cleared.
      *
      * So whatever order the two land in, the scope an activation launched on is either the one
      * still installed (and live) or cancelled. Never a live orphan, and never a cancelled scope
      * left installed as though the plugin were activated.
+     *
+     * What this does *not* pin is [McpPlugin.lifecycleLock]: removing the `synchronized` from
+     * `swapScope` leaves every case here green, because the read-then-write window is too narrow
+     * for these threads to land inside. Reverting the swap fails it deterministically — including
+     * on the sequential activate-then-deactivate case above, which is the failure it really covers.
      */
     @Test
     fun givenTwoLifecycleCallsAtOnce_whenTheyInterleave_thenNoScopeIsOrphaned() {
