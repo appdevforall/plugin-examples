@@ -13,7 +13,6 @@ import android.widget.LinearLayout
 import android.widget.ArrayAdapter
 import android.widget.Spinner
 import android.widget.TextView
-import android.widget.Toast
 import androidx.fragment.app.Fragment
 import com.codeonthego.snippets.R
 import com.codeonthego.snippets.SnippetEntry
@@ -23,6 +22,7 @@ import com.codeonthego.snippets.SnippetsPlugin
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.textfield.TextInputEditText
+import com.itsaky.androidide.plugins.base.PluginWindows
 import com.itsaky.androidide.plugins.base.PluginFragmentHelper
 
 class SnippetManagerFragment : Fragment() {
@@ -154,7 +154,7 @@ class SnippetManagerFragment : Fragment() {
                 val body = bodyInput.text?.toString()?.split("\n") ?: emptyList()
 
                 if (prefix.isEmpty() || desc.isEmpty() || lang.isEmpty() || scope.isEmpty()) {
-                    Toast.makeText(ctx, "All fields are required", Toast.LENGTH_SHORT).show()
+                    PluginWindows.showToast(ctx, "All fields are required")
                     return@setPositiveButton
                 }
 
@@ -176,7 +176,8 @@ class SnippetManagerFragment : Fragment() {
                 renderList()
             }
             .setNegativeButton("Cancel", null)
-            .show()
+            .create()
+        PluginWindows.showDialog(editDialog)
         applyDialogButtonColors(editDialog)
     }
 
@@ -193,7 +194,8 @@ class SnippetManagerFragment : Fragment() {
                 renderList()
             }
             .setNegativeButton("Cancel", null)
-            .show()
+            .create()
+        PluginWindows.showDialog(deleteDialog)
         applyDialogButtonColors(deleteDialog)
     }
 
@@ -211,10 +213,10 @@ class SnippetManagerFragment : Fragment() {
             SnippetsConfigParser.write(file, SnippetsConfig(snippets.toList()))
             SnippetsPlugin.instance?.invalidateCache()
             SnippetsPlugin.instance?.refreshRegistry()
-            Toast.makeText(requireContext(), "Snippets saved", Toast.LENGTH_SHORT).show()
+            PluginWindows.showToast(requireContext(), "Snippets saved")
         } catch (e: Exception) {
             Log.e("SnippetManager", "Failed to save snippets", e)
-            Toast.makeText(requireContext(), "Failed to save", Toast.LENGTH_SHORT).show()
+            PluginWindows.showToast(requireContext(), "Failed to save")
         }
     }
 
