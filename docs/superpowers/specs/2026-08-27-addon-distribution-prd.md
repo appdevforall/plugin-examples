@@ -199,9 +199,11 @@ Verified against Cloudflare documentation on 2026-08-27. These bound any design 
 
 ## 8. Addon inventory and naming
 
-31 plugin directories exist. **24 are in scope** for renaming and relocation.
+31 plugin directories exist. **23 are in scope** for renaming and relocation.
 
-**Deferred (7):** the six AI plugins (`ai-agent-gemini`, `ai-agent-local`, `ai-agent-mcp`, `ai-agent-openai`, `ai-core`, `ai-literacy-course`) are frozen in place because other work is in flight against them; they must continue to build and publish unchanged. `pebble-custom-function-template-installer` is excluded — it is already skipped by the build, never ships, and has no real name or description.
+**Frozen in place (6):** the AI plugins — `ai-agent-gemini`, `ai-agent-local`, `ai-agent-mcp`, `ai-agent-openai`, `ai-core`, `ai-literacy-course` — because other work is in flight against them. They must continue to build and publish unchanged.
+
+**Held out of the build (2):** `pebble-custom-function-template-installer` is excluded permanently — never ships, no real name or description. `cotg-ndk` is held **temporarily** pending Q1 (§8.3). Both are skipped by the build and neither appears in the catalog.
 
 ### 8.1 Names
 
@@ -213,7 +215,7 @@ Verified against Cloudflare documentation on 2026-08-27. These bound any design 
 | `client-time-tracker` | `Client-Time-Tracker` | Client Time Tracker | `client-time-tracker` |
 | `code-suggestions-plugin` | `Code-Suggestions` | Code Suggestions | `code-suggestions` |
 | `compose-preview` | `Jetpack-Compose-Preview` | Jetpack Compose Preview | `jetpack-compose-preview` |
-| `cotg-ndk` | *see §8.3* | *see §8.3* | *see §8.3* |
+| `cotg-ndk` | *held — see §8.3* | — | — |
 | `flutter-template` | `Flutter-Templates` | Flutter Templates | `flutter-templates` |
 | `get-ai-models` | `Get-AI-Models` | Get AI Models | `get-ai-models` |
 | `icons-repository` | `Icons-Repository` | Icons Repository | `icons-repository` |
@@ -241,14 +243,18 @@ Verified against Cloudflare documentation on 2026-08-27. These bound any design 
 
 ### 8.3 The two NDK addons
 
-Both ship. They are different products with a shared purpose.
+They are different products with a shared purpose. One ships now; one is held.
 
 | Addon | Origin | Disposition |
 |---|---|---|
-| `ndk-installer-plugin` | First-party. Introduced 2026-04-23 by Joel Menchavez. | Ours and first. Becomes `NDK-Installer`, follows the naming standard. |
-| `cotg-ndk` | **Community — Aman Khan** (`github.com/aman-khan-786/cotgx-ndk`). | Preserved. Its original naming is retained under R38. |
+| `ndk-installer-plugin` | First-party. Introduced 2026-04-23 by Joel Menchavez. | Ours and first. Becomes `NDK-Installer`, follows the naming standard. Ships. |
+| `cotg-ndk` | **Community — Aman Khan** (`github.com/aman-khan-786/cotgx-ndk`). | **Held out of the build** pending Q1. Not renamed, not relocated, not published, not in the catalog. |
 
-**Provenance.** Aman Khan built and released a custom NDK engine for the Code On The Go community, announced in the project's Telegram discussion group. App Dev For All could not accept an outside pull request at the time, so a staff engineer implemented it on his behalf. The work is his; the commit authorship is an artifact of that process and must not be mistaken for origin. See open question Q1.
+**Provenance.** Aman Khan built and released a custom NDK engine for the Code On The Go community, announced in the project's Telegram discussion group. App Dev For All could not accept an outside pull request at the time, so a staff engineer implemented it on his behalf. The work is his; the commit authorship is an artifact of that process and must not be mistaken for origin.
+
+**Why it is held.** Publishing a contributor's work under a name and attribution we have not confirmed with them is the wrong order of operations. Holding it costs nothing — the first-party `NDK-Installer` still ships, so users are not left without the capability. The hold is released by answering Q1 with Aman, not by a technical change; the naming and attribution requirements (R36–R38) are already in place to receive the answer.
+
+Both this addon and `pebble-custom-function-template-installer` are excluded from the build by the same mechanism, but for different reasons and with different lifespans: one is a permanent exclusion, the other a temporary hold. That distinction should survive into the design.
 
 ---
 
@@ -266,9 +272,10 @@ Both ship. They are different products with a shared purpose.
 10. Type, tag, and text filters each work and combine; a filtered view is reproducible from its URL.
 11. For every in-scope addon, directory, display name, artifact filename, and documentation filename agree, and a check fails on drift.
 12. No addon's plugin id, namespace, or application id has changed.
-13. All seven deferred addons still build and publish unchanged.
-14. A single-addon on-demand build yields a downloadable URL and consumes no artifact storage.
-15. **Device verification.** At least one renamed addon is downloaded from the new host onto a device, installed through the Plugin Manager, and its feature exercised — including its in-app help. A successful build is not verification.
+13. All six frozen AI addons still build and publish unchanged.
+14. Neither held addon builds, publishes, or appears in the catalog.
+15. A single-addon on-demand build yields a downloadable URL and consumes no artifact storage.
+16. **Device verification.** At least one renamed addon is downloaded from the new host onto a device, installed through the Plugin Manager, and its feature exercised — including its in-app help. A successful build is not verification.
 
 ---
 
@@ -295,7 +302,7 @@ Provisioning that must happen outside the repository before this can ship: bucke
 
 | ID | Question |
 |---|---|
-| **Q1** | Aman Khan's project is **`cotgx-ndk`** ("COTGX"); our directory dropped the X. Under R38 we preserve his naming — should the addon be **CotGX NDK** (matching his project) rather than **CotG NDK**? His plugin id is frozen either way. This is his name to get right; worth asking him, along with how he wants to be credited and whether he wants a contact address published. |
+| **Q1** | **Blocks releasing the hold on `cotg-ndk` (§8.3).** Aman Khan's project is **`cotgx-ndk`** ("COTGX"); our directory dropped the X. Under R38 we preserve his naming — should the addon be **CotGX NDK** rather than **CotG NDK**? Also: how does he want to be credited, and does he want a contact address published? His plugin id is frozen either way. Answering this is a conversation with him, not a decision we make for him. |
 | **Q2** | Should the catalog carry a **version** per addon, and if so, is it displayed to users or only recorded? |
 | **Q3** | Community contributions currently arrive by proxy because outside pull requests could not be accepted. Is that still true, and does it change what R36–R38 need to support? |
 | **Q4** | Do templates, snippets, and code actions belong in **this** repository alongside plugins, or in their own? This PRD reserves room for them here; it does not settle where they live. |
