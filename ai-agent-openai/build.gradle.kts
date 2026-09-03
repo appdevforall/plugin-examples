@@ -71,9 +71,8 @@ dependencies {
     testImplementation("org.json:json:20231013")
 }
 
-// This plugin carries its own copy of SecureApiKeyStore under its own Keystore alias. No parity
-// check against ai-agent-gemini's copy: the two never read each other's ciphertext, and a shared
-// alias would let one plugin's invalidation recovery delete the other plugin's key.
+// No SecureApiKeyStore parity check any more: the AES/GCM core is the host's KeystoreSecretStore
+// (plugin-api), so there is one implementation in the process rather than copies to keep in step.
 
 // AAR metadata checks are disabled by convention for these application-as-library plugins.
 tasks.matching {

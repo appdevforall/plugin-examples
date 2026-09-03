@@ -3,6 +3,7 @@ package com.itsaky.androidide.plugins.aiagentopenai.security
 import android.content.SharedPreferences
 import android.os.Looper
 import com.itsaky.androidide.plugins.PluginLogger
+import com.itsaky.androidide.plugins.security.KeystoreSecretStore
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.isActive
@@ -90,8 +91,28 @@ internal class ApiKeyCache(
      */
     private fun refresh(): String? {
         val prefs = prefs()
-        val plain = SecureApiKeyStore.readAndMigrate(prefs, prefKey)
-            ?.trim()?.takeIf { it.isNotBlank() }
+        val plain = when (val stored = secureApiKeyStore.readAndMigrate(prefs, prefKey)) {
+            is KeystoreSecretStore.Stored.Value -> stored.plain.trim().takeIf { it.isNotBlank() }
+            KeystoreSecretStore.Stored.Absent -> null
+            // Reported here rather than passed on as "no key": generation fails either way, but a
+            // lost Keystore entry needs the key entering again, and the log is all that says so.
+            KeystoreSecretStore.Stored.Unreadable -> {
+                logger.warn(
+                    "ApiKeyCache: the saved API key cannot be decrypted on this device; " +
+                        "it has to be entered again in settings"
+                )
+                null
+            }
+            // Transient, so it returns without caching: the key is very likely intact, and caching
+            // this answer would freeze "no key" until the stored value itself changed.
+            KeystoreSecretStore.Stored.Unavailable -> {
+                logger.warn(
+                    "ApiKeyCache: the keystore could not be reached to read the saved API key; " +
+                        "retrying on the next read"
+                )
+                return null
+            }
+        }
         val raw = prefs?.getString(prefKey, null)
         cached = raw?.let { it to plain }
         return plain

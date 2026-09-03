@@ -4,9 +4,11 @@ import android.content.SharedPreferences
 import android.util.Log
 import com.itsaky.androidide.plugins.aiagentmcp.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aiagentmcp.plugin.McpPlugin
-import com.itsaky.androidide.plugins.aiagentmcp.security.SecureTokenStore
+import com.itsaky.androidide.plugins.aiagentmcp.security.UnavailableSecretException
 import com.itsaky.androidide.plugins.aiagentmcp.security.UnreadableSecretException
+import com.itsaky.androidide.plugins.aiagentmcp.security.secureTokenStore
 import com.itsaky.androidide.plugins.aiagentmcp.transport.McpHeaders
+import com.itsaky.androidide.plugins.security.KeystoreSecretStore
 import java.util.UUID
 import java.util.concurrent.CopyOnWriteArrayList
 import org.json.JSONArray
@@ -164,10 +166,11 @@ object McpServerStore {
      *
      * @param id the server the token belongs to.
      * @param token the token, or blank to remove it.
-     * @return true when it was stored.
+     * @return true once it is on disk, or removed for a blank one; false when encrypting it or the
+     *   write itself failed, which is what the pane must not report as saved.
      */
     fun setToken(id: String, token: String): Boolean {
-        val stored = SecureTokenStore.write(prefs(), KEY_TOKEN_PREFIX + id, token)
+        val stored = secureTokenStore.write(prefs(), KEY_TOKEN_PREFIX + id, token)
         // Like every other mutator: a new credential has to reach the agent, or it keeps calling
         // with the old one until something else happens to touch the store.
         fireChanged()
@@ -180,10 +183,11 @@ object McpServerStore {
      * Keystore work, so call this off the main thread.
      *
      * @param id the server.
-     * @return what is stored: nothing, the token, or a token this device can no longer read.
+     * @return what is stored: nothing, the token, a token this device can no longer read, or one
+     *   the keystore would not open just now.
      */
-    fun token(id: String): SecureTokenStore.Stored =
-        SecureTokenStore.readAndMigrate(prefs(), KEY_TOKEN_PREFIX + id)
+    fun token(id: String): KeystoreSecretStore.Stored =
+        secureTokenStore.readAndMigrate(prefs(), KEY_TOKEN_PREFIX + id)
 
     /** True when a token is stored for [id], without decrypting it. */
     fun hasToken(id: String): Boolean = prefs()?.contains(KEY_TOKEN_PREFIX + id) == true
@@ -200,13 +204,18 @@ object McpServerStore {
      * @return the headers in the order they were entered; empty when there are none.
      */
     fun headers(id: String): Map<String, String> {
-        val stored = SecureTokenStore.readAndMigrate(prefs(), KEY_HEADERS_PREFIX + id)
-        if (stored is SecureTokenStore.Stored.Unreadable) {
+        val stored = secureTokenStore.readAndMigrate(prefs(), KEY_HEADERS_PREFIX + id)
+        if (stored is KeystoreSecretStore.Stored.Unreadable) {
             // Same failure as an unreadable token, and reported the same way: sending the request
             // without them would look like the server refusing a credential that is still correct.
             throw UnreadableSecretException("The stored headers for '$id' cannot be decrypted.")
         }
-        val raw = (stored as? SecureTokenStore.Stored.Value)?.plain ?: return emptyMap()
+        if (stored is KeystoreSecretStore.Stored.Unavailable) {
+            // Kept apart from the above: these headers are very likely intact, so the caller is
+            // told to retry instead of asking the user to enter them again.
+            throw UnavailableSecretException("The stored headers for '$id' could not be read just now.")
+        }
+        val raw = (stored as? KeystoreSecretStore.Stored.Value)?.plain ?: return emptyMap()
         return try {
             val json = JSONObject(raw)
             val parsed = LinkedHashMap<String, String>()
@@ -225,24 +234,32 @@ object McpServerStore {
      *
      * @param id the server the headers belong to.
      * @param headers the headers to store; unusable pairs are dropped.
-     * @return true when they were stored.
+     * @return true once they are on disk, or removed for an empty map; false when encrypting them
+     *   or the write itself failed. Forgetting them on a store that was never opened is success:
+     *   there is nothing on disk to remove.
      */
     fun setHeaders(id: String, headers: Map<String, String>): Boolean {
         val clean = McpHeaders.sanitize(headers)
         val key = KEY_HEADERS_PREFIX + id
-        if (clean.isEmpty()) {
-            prefs()?.edit()?.remove(key)?.apply()
-            fireChanged()
-            return true
+        // The empty map goes through write() as a blank, which removes the entry, rather than
+        // through a bare remove/apply: the token's clear is synchronous and says whether it landed,
+        // and headers left on disk for a credential the user just forgot are the same leak.
+        val payload = if (clean.isEmpty()) {
+            ""
+        } else {
+            val json = JSONObject()
+            clean.forEach { (name, value) -> json.put(name, value) }
+            json.toString()
         }
-        val json = JSONObject()
-        clean.forEach { (name, value) -> json.put(name, value) }
-        val stored = SecureTokenStore.write(prefs(), key, json.toString())
+        // A clear with no preferences behind it has nothing to remove, so it succeeded; only a
+        // write with something to store has genuinely failed.
+        val prefs = prefs() ?: return clean.isEmpty()
+        val stored = secureTokenStore.write(prefs, key, payload)
         fireChanged()
         return stored
     }
 
-    /** How many extra headers are configured for [id], without decrypting them. */
+    /** Whether any extra header is configured for [id], without decrypting them. */
     fun hasHeaders(id: String): Boolean = prefs()?.contains(KEY_HEADERS_PREFIX + id) == true
 
     /**

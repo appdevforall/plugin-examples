@@ -1004,8 +1004,7 @@ class ChatViewModel(
                     // Per-run flag (set by executeToolCalls), not a session-wide scan.
                     val lastToolFailed = lastToolFailedThisRun
 
-                    val realCalls = toolCalls.filterNot { it.name == RESPOND_TOOL }
-                    if (realCalls.isNotEmpty() && realCalls == lastSucceededCalls) {
+                    if (AgentReplyRenderer.isDuplicateTurn(toolCalls, lastSucceededCalls, RESPOND_TOOL)) {
                         viewModelScope.launch(Dispatchers.Main) {
                             _messages.value = _messages.value.filter { it.id != agentMessageId }
                         }

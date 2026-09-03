@@ -8,7 +8,8 @@ import com.itsaky.androidide.plugins.aiagentgemini.errors.GeminiErrorFormatter
 import com.itsaky.androidide.plugins.aiagentgemini.errors.GeminiFailure
 import com.itsaky.androidide.plugins.aiagentgemini.preferences.GeminiPreferences
 import com.itsaky.androidide.plugins.aiagentgemini.prompt.GeminiSystemPrompt
-import com.itsaky.androidide.plugins.aiagentgemini.security.SecureApiKeyStore
+import com.itsaky.androidide.plugins.aiagentgemini.security.secureApiKeyStore
+import com.itsaky.androidide.plugins.security.KeystoreSecretStore
 import com.itsaky.androidide.plugins.services.LlmInferenceService.*
 import java.io.IOException
 import java.net.HttpURLConnection
@@ -116,8 +117,28 @@ class GeminiBackend(
      */
     private fun refreshKeyCache(): String? {
         val prefs = agentPrefs()
-        val plain = SecureApiKeyStore.readAndMigrate(prefs, GeminiPreferences.KEY_API_KEY)
-            ?.trim()?.takeIf { it.isNotBlank() }
+        val plain = when (val stored = secureApiKeyStore.readAndMigrate(prefs, GeminiPreferences.KEY_API_KEY)) {
+            is KeystoreSecretStore.Stored.Value -> stored.plain.trim().takeIf { it.isNotBlank() }
+            KeystoreSecretStore.Stored.Absent -> null
+            // Reported here rather than passed on as "no key": generation fails either way, but a
+            // lost Keystore entry needs the key entering again, and the log is all that says so.
+            KeystoreSecretStore.Stored.Unreadable -> {
+                context.logger.warn(
+                    "GeminiBackend: the saved API key cannot be decrypted on this device; " +
+                        "it has to be entered again in settings"
+                )
+                null
+            }
+            // Transient, so it returns without caching: the key is very likely intact, and caching
+            // this answer would freeze "no key" until the stored value itself changed.
+            KeystoreSecretStore.Stored.Unavailable -> {
+                context.logger.warn(
+                    "GeminiBackend: the keystore could not be reached to read the saved API key; " +
+                        "retrying on the next read"
+                )
+                return null
+            }
+        }
         val raw = prefs?.getString(GeminiPreferences.KEY_API_KEY, null)
         keyCache = raw?.let { it to plain }
         return plain

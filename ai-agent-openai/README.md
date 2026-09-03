@@ -97,14 +97,15 @@ after configuring OpenAI cannot put that bearer token on the network in the clea
 A key stored before the origin was recorded is still sent, since it cannot be shown
 to belong elsewhere. The connection test applies the same rule.
 
-`security/SecureApiKeyStore.kt` is this plugin's **own copy**, under its own
-Keystore alias (`cotg_ai_openai_key_v1`). It is deliberately not shared with
-ai-agent-gemini's copy: every plugin runs in the host app's process and UID and
-therefore shares one Keystore, so a shared alias would let one plugin's
+`security/SecureApiKeyStore.kt` holds only this plugin's Keystore alias
+(`cotg_ai_openai_key_v1`); the AES/GCM itself is the IDE's `KeystoreSecretStore`
+(`plugin-api`, since **26.36** — hence this plugin's `min_ide_version`), so there
+is one implementation in the process rather than a copy per plugin. The **alias**
+is deliberately not shared: every plugin runs in the host app's process and UID
+and therefore shares one Keystore, so a shared alias would let one plugin's
 invalidated-key recovery (`deleteEntry`) destroy the other backend's stored key.
-The two never read each other's ciphertext, so they have no reason to share an
-alias — and there is therefore nothing to keep in parity. Extracting the shared
-*source* is tracked separately.
+The plugins never read each other's ciphertext, so they have no reason to share
+one.
 
 ## Installation
 
@@ -135,7 +136,7 @@ root of `com/itsaky/androidide/plugins/aiagentopenai/`.
 - `backend/SseChunk.kt` — one line of the token stream (pure)
 - `backend/ChatModelFilter.kt` — keeps non-chat models out of the picker (pure)
 - `errors/OpenAiErrorFormatter.kt` — turns a failure into one translated sentence
-- `security/SecureApiKeyStore.kt` — AES/GCM at rest
+- `security/SecureApiKeyStore.kt` — this plugin's Keystore alias, over the IDE's `KeystoreSecretStore`
 - `preferences/OpenAiPreferences.kt` — this plugin's settings store
 - `prompt/OpenAiSystemPrompt.kt` — the system prompt this cloud model is given
 - `settings/BaseUrlPolicy.kt` — URL normalization and the cleartext rule (pure)

@@ -33,6 +33,7 @@ import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aiagentopenai.R
 import com.itsaky.androidide.plugins.aiagentopenai.plugin.OpenAiPlugin
 import com.itsaky.androidide.plugins.base.PluginFragmentHelper
+import com.itsaky.androidide.plugins.security.KeystoreSecretStore
 import com.itsaky.androidide.plugins.services.IdeTooltipService
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -347,18 +348,37 @@ class OpenAiSettingsFragment : Fragment() {
         }
 
         viewLifecycleOwner.lifecycleScope.launch {
-            val savedApiKey = viewModel.getApiKey()
+            val stored = viewModel.getApiKey()
+            val savedApiKey = (stored as? KeystoreSecretStore.Stored.Value)?.plain
             val hasKey = !savedApiKey.isNullOrBlank()
-            updateUiState(isEditing = !hasKey)
-            if (hasKey) {
+            // A keystore that would not answer this time leaves the key on disk and intact, so the
+            // pane stays dressed as configured. Opening edit mode instead would make it identical
+            // to a fresh install, and for a server that needs no key a blank Save from there runs
+            // clearApiKey() over the key this same read just called recoverable.
+            val keptConfigured =
+                !hasKey &&
+                    stored is KeystoreSecretStore.Stored.Unavailable &&
+                    viewModel.hasStoredApiKey()
+            updateUiState(isEditing = !hasKey && !keptConfigured)
+            if (hasKey || keptConfigured) {
                 statusTextView.text = savedApiKeyStatusText()
-            } else {
+            }
+            if (!hasKey) {
                 apiKeyInput.setText("")
-                // A stored-but-undecryptable key also reads as null; warn as the Edit path does.
-                if (viewModel.hasStoredApiKey()) {
+                // Only for a key that is there and will not decrypt; an empty box alone looks like
+                // data loss. Nothing stored at all is the ordinary first run and says nothing.
+                if (stored is KeystoreSecretStore.Stored.Unreadable) {
                     Toast.makeText(
                         requireContext(),
                         getString(R.string.msg_api_key_unreadable),
+                        Toast.LENGTH_LONG
+                    ).show()
+                } else if (stored is KeystoreSecretStore.Stored.Unavailable) {
+                    // Said differently from the above: the key is still there and intact, so this
+                    // must not send the user off to find and type it again.
+                    Toast.makeText(
+                        requireContext(),
+                        getString(R.string.msg_api_key_unavailable),
                         Toast.LENGTH_LONG
                     ).show()
                 }
@@ -566,20 +586,33 @@ class OpenAiSettingsFragment : Fragment() {
         editButton.setOnClickListener {
             editButton.isEnabled = false
             viewLifecycleOwner.lifecycleScope.launch {
-                val apiKey = try {
+                val stored = try {
                     viewModel.getApiKey()
                 } finally {
                     editButton.isEnabled = true
                 }
-                // null = a key IS stored but won't decrypt; an empty box alone looks like data loss.
-                if (apiKey == null) {
+                // A key that is stored and will not decrypt; an empty box alone looks like data
+                // loss. Told apart from "nothing stored" here, which this button rarely sees but
+                // must not report as a lost Keystore entry when it does.
+                if (stored is KeystoreSecretStore.Stored.Unavailable) {
+                    // Said differently from an unreadable key: this one is still there and intact,
+                    // so the pane stays as it is rather than opening an empty field the user would
+                    // Save over it — it must not send them off to find and type it again.
+                    Toast.makeText(
+                        requireContext(),
+                        getString(R.string.msg_api_key_unavailable),
+                        Toast.LENGTH_LONG
+                    ).show()
+                    return@launch
+                }
+                if (stored is KeystoreSecretStore.Stored.Unreadable) {
                     Toast.makeText(
                         requireContext(),
                         getString(R.string.msg_api_key_unreadable),
                         Toast.LENGTH_LONG
                     ).show()
                 }
-                revealEditMode(apiKey.orEmpty())
+                revealEditMode((stored as? KeystoreSecretStore.Stored.Value)?.plain?.trim().orEmpty())
             }
         }
 
@@ -731,12 +764,28 @@ class OpenAiSettingsFragment : Fragment() {
                 // Tests what is on screen: a typo is worth catching before it is saved.
                 val url = urlInput.text.toString().trim().ifEmpty { viewModel.getBaseUrl() }
                 val typedKey = apiKeyInput.text.toString().trim()
-                val key = if (apiKeyLayout.visibility == View.VISIBLE && typedKey.isNotEmpty()) {
+                val useTyped = apiKeyLayout.visibility == View.VISIBLE && typedKey.isNotEmpty()
+                // Scoped to the URL under test: probing a LAN server must not hand it the key the
+                // user entered for OpenAI.
+                val stored = if (useTyped) null else viewModel.getApiKeyFor(url)
+                // A keystore that would not answer is not "no key stored": the key is intact and
+                // the pane above still reads "saved on ...". Testing without it would render the
+                // 401 as a refused key, or ask for one in a field that is not even shown.
+                if (stored is KeystoreSecretStore.Stored.Unavailable) {
+                    showStatus(
+                        statusText,
+                        getString(R.string.msg_api_key_unavailable_for_test),
+                        R.drawable.ic_key_unchecked
+                    )
+                    testButton.isEnabled = true
+                    return@launch
+                }
+                // Absent and Unreadable do share one answer here — no key to send — and the read
+                // that opened the pane has already said which of the two it was.
+                val key = if (useTyped) {
                     typedKey
                 } else {
-                    // Scoped to the URL under test: probing a LAN server must not hand it the key
-                    // the user entered for OpenAI.
-                    viewModel.getApiKeyFor(url).orEmpty()
+                    (stored as? KeystoreSecretStore.Stored.Value)?.plain?.trim().orEmpty()
                 }
                 // A server with no anonymous access can only answer 401 without a key, and
                 // reporting that as "the server refused this key" when there is no key sends the
