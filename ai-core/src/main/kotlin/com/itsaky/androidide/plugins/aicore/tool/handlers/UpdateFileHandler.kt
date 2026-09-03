@@ -5,6 +5,7 @@ import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aicore.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aicore.models.ToolResult
 import com.itsaky.androidide.plugins.aicore.tool.ToolHandler
+import com.itsaky.androidide.plugins.aicore.tool.ToolSchema
 
 private const val TAG = "$LOG_PREFIX.UpdateFileHandler"
 
@@ -15,6 +16,11 @@ class UpdateFileHandler(
     private val pluginContext: PluginContext
 ) : ToolHandler {
     override val toolName = "update_file"
+    override val parametersSchema = ToolSchema.objectOf(
+        "file_path" to ToolSchema.string("Project-relative path of the file to overwrite."),
+        "content" to ToolSchema.string("The file's new full contents."),
+        required = listOf("file_path", "content"),
+    )
     override val description = "Update an existing file with new content"
     override val requiresApproval = true  // Requires approval for file modification
     override val pathArgs = listOf("file_path")

@@ -5,6 +5,7 @@ import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aicore.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aicore.models.ToolResult
 import com.itsaky.androidide.plugins.aicore.tool.ToolHandler
+import com.itsaky.androidide.plugins.aicore.tool.ToolSchema
 
 private const val TAG = "$LOG_PREFIX.CreateFileHandler"
 
@@ -15,6 +16,11 @@ class CreateFileHandler(
     private val pluginContext: PluginContext
 ) : ToolHandler {
     override val toolName = "create_file"
+    override val parametersSchema = ToolSchema.objectOf(
+        "file_path" to ToolSchema.string("Project-relative path of the file to create."),
+        "content" to ToolSchema.string("The file's full contents."),
+        required = listOf("file_path", "content"),
+    )
     override val description = "Create a new file with given content"
     override val requiresApproval = true  // Requires approval for file creation
     override val pathArgs = listOf("file_path")

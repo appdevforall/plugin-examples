@@ -1,12 +1,14 @@
 package com.itsaky.androidide.plugins.aiagentopenai.backend
 
 import android.content.SharedPreferences
+import android.util.Log
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aiagentopenai.R
 import com.itsaky.androidide.plugins.aiagentopenai.errors.OpenAiErrorFormatter
 import com.itsaky.androidide.plugins.aiagentopenai.errors.OpenAiFailure
 import com.itsaky.androidide.plugins.aiagentopenai.errors.OpenAiFailureMessages
 import com.itsaky.androidide.plugins.aiagentopenai.errors.OpenAiHttpException
+import com.itsaky.androidide.plugins.aiagentopenai.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aiagentopenai.preferences.OpenAiPreferences
 import com.itsaky.androidide.plugins.aiagentopenai.prompt.OpenAiSystemPrompt
 import com.itsaky.androidide.plugins.aiagentopenai.security.ApiKeyCache
@@ -29,6 +31,15 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
+ * Tool-protocol tracing, under the tag suffix `ai-core` uses for the other half of the same run:
+ * `adb logcat -s AiCore.AgentTrace:V AiAgentOpenAi.AgentTrace:V` reads a run end to end.
+ *
+ * Through [Log] rather than `context.logger`, which the host funnels into its own class's tag with
+ * only a `[pluginId]` prefix — unfilterable, and so absent from a captured log of an agent run.
+ */
+private const val TAG = "$LOG_PREFIX.AgentTrace"
+
+/**
  * OpenAI-compatible backend: one transport for every server that speaks `chat/completions`.
  *
  * The base URL is a setting, defaulting to OpenAI's own API. Across OpenAI, Ollama, LM Studio,
@@ -41,7 +52,7 @@ import org.json.JSONObject
  */
 class OpenAiBackend(
     private val context: PluginContext
-) : HistoryCapableBackend, CancellableBackend, ConfigurableBackend {
+) : HistoryCapableBackend, CancellableBackend, ConfigurableBackend, ToolCallingBackend {
 
     private val scope = CoroutineScope(Dispatchers.IO)
 
@@ -54,6 +65,13 @@ class OpenAiBackend(
 
     @Volatile
     private var currentJob: Job? = null
+
+    /**
+     * Base URL that answered a tool declaration with a refusal, so the next turn does not pay the
+     * same round trip. Keyed by the URL itself, so pointing the setting elsewhere re-probes.
+     */
+    @Volatile
+    private var toolsRejectedBy: String? = null
 
     companion object {
         /** Backend id, as persisted by AI Core when the user selects this backend. */
@@ -197,7 +215,8 @@ class OpenAiBackend(
         streamMessages(
             OpenAiRequestBuilder.messages(emptyList(), prompt, config.systemPrompt),
             config,
-            callback
+            emptyList(),
+            callback.asToolCallback()
         )
     }
 
@@ -253,8 +272,51 @@ class OpenAiBackend(
         streamMessages(
             OpenAiRequestBuilder.messages(history, prompt, config.systemPrompt),
             config,
+            emptyList(),
+            callback.asToolCallback()
+        )
+    }
+
+    /**
+     * Streams a turn with [tools] declared to the server, reporting each `tool_calls` entry through
+     * [ToolStreamCallback.onToolCall].
+     *
+     * This is the path the agent takes. Declaring the tools is what stops the model writing a call
+     * as prose the caller has to parse back: the arguments arrive already structured, so a file
+     * whose contents contain quotes or newlines can no longer break the call carrying it
+     * (ADFA-5410).
+     *
+     * @param prompt the current user turn
+     * @param history the conversation so far, oldest first
+     * @param config sampling settings; its system prompt becomes the leading `system` turn
+     * @param tools the tools to declare; an empty list streams plain text
+     * @param callback receives tokens, tool calls, completion, and errors
+     */
+    override fun generateStreamingWithTools(
+        prompt: String,
+        history: List<ChatMessage>,
+        config: LlmConfig,
+        tools: List<ToolDefinition>,
+        callback: ToolStreamCallback
+    ) {
+        streamMessages(
+            OpenAiRequestBuilder.messages(history, prompt, config.systemPrompt),
+            config,
+            tools,
             callback
         )
+    }
+
+    /**
+     * Adapts a plain stream callback to the tool-aware one [streamMessages] takes.
+     *
+     * @return a [ToolStreamCallback] that forwards every event and reports no tool calls
+     */
+    private fun StreamCallback.asToolCallback(): ToolStreamCallback = object : ToolStreamCallback {
+        override fun onToken(token: String) = this@asToolCallback.onToken(token)
+        override fun onToolCall(request: ToolCallRequest) = Unit
+        override fun onComplete(response: LlmResponse) = this@asToolCallback.onComplete(response)
+        override fun onError(error: String) = this@asToolCallback.onError(error)
     }
 
     /**
@@ -262,44 +324,80 @@ class OpenAiBackend(
      *
      * @param messages the request's `messages[]` turns
      * @param config sampling settings for this request
-     * @param callback receives tokens, completion, and errors
+     * @param tools the tools to declare, or empty to stream plain text
+     * @param callback receives tokens, tool calls, completion, and errors
      */
     private fun streamMessages(
         messages: JSONArray,
         config: LlmConfig,
-        callback: StreamCallback
+        tools: List<ToolDefinition>,
+        callback: ToolStreamCallback
     ) {
         currentJob = scope.launch {
             try {
                 val startTime = System.currentTimeMillis()
-                context.logger.info("OpenAiBackend: Streaming over ${messages.length()} turns")
 
                 val fullText = StringBuilder()
                 var chunkCount = 0
                 var outcome = StreamOutcome()
-                // The retry exists because reasoning models and third-party servers disagree about
-                // max_tokens/temperature; see RequestTuning.
-                withParameterRetry(config) { tuning ->
-                    fullText.clear()
-                    chunkCount = 0
-                    val body = OpenAiRequestBuilder.body(
-                        messages, getModelName(), stream = true, config = config, tuning = tuning
-                    )
-                    outcome = streamOnce(body) { chunk ->
-                        chunkCount++
-                        fullText.append(chunk)
-                        callback.onToken(chunk)
+                var calls = emptyList<ToolCallRequest>()
+                withToolRetry(tools) { declared ->
+                    // The retry exists because reasoning models and third-party servers disagree
+                    // about max_tokens/temperature; see RequestTuning.
+                    withParameterRetry(config) { tuning ->
+                        fullText.clear()
+                        chunkCount = 0
+                        val accumulator = OpenAiToolProtocol.CallAccumulator()
+                        val body = OpenAiRequestBuilder.body(
+                            messages,
+                            getModelName(),
+                            stream = true,
+                            config = config,
+                            tuning = tuning,
+                            tools = declared,
+                        )
+                        Log.i(
+                            TAG,
+                            "REQUEST | model=${getModelName()} turns=${messages.length()} " +
+                                "tools=${declared.size} " +
+                                declared.joinToString(",") { it.name }
+                        )
+                        outcome = streamOnce(body, accumulator) { chunk ->
+                            chunkCount++
+                            fullText.append(chunk)
+                            callback.onToken(chunk)
+                        }
+                        calls = accumulator.requests()
+                        outcome.droppedCalls = accumulator.droppedCalls
                     }
                 }
 
                 val finalText = fullText.toString()
-                if (finalText.isBlank()) {
+                Log.i(
+                    TAG,
+                    "STREAM | chars=${finalText.length} chunks=$chunkCount calls=${calls.size} " +
+                        "dropped=${outcome.droppedCalls} finish=${outcome.finishReason}"
+                )
+                // Reported after the stream, so a call the retry replaced never reaches the caller.
+                for (call in calls) {
+                    Log.i(
+                        TAG,
+                        "FUNCTION_CALL | tool=${call.name} " +
+                            "args=${call.args.orEmpty().keys.joinToString(",")}"
+                    )
+                    callback.onToolCall(call)
+                }
+
+                // A turn that called a tool and said nothing is the normal agent turn, so only a
+                // reply with neither text nor a call is empty.
+                if (calls.isEmpty() && finalText.isBlank()) {
                     // The request succeeded and the stream ended, so this is not a failed request;
                     // say which of the empty-reply cases it was instead of a generic error.
                     context.logger.warn(
                         "OpenAiBackend: stream produced no reply text " +
                             "(skipped=${outcome.skippedChunks}, " +
                             "reasoningChars=${outcome.reasoningChars}, " +
+                            "droppedCalls=${outcome.droppedCalls}, " +
                             "finishReason=${outcome.finishReason})"
                     )
                     callback.onError(failureMessages.of(emptyReplyFailure(outcome)))
@@ -312,6 +410,7 @@ class OpenAiBackend(
                 throw e
             } catch (e: Exception) {
                 ensureActive()
+                Log.e(TAG, "STREAM | failed: ${e.message}", e)
                 context.logger.error("OpenAiBackend: Error in streaming", e)
                 callback.onError(formatErrorMessage(e))
             }
@@ -328,11 +427,13 @@ class OpenAiBackend(
      * @param skippedChunks payloads the parser could not use
      * @param reasoningChars thinking text seen, which is never part of the reply
      * @param finishReason the last `finish_reason` the server sent, if any
+     * @param droppedCalls tool calls whose arguments never parsed, i.e. arrived half-written
      */
     private data class StreamOutcome(
         var skippedChunks: Int = 0,
         var reasoningChars: Int = 0,
         var finishReason: String? = null,
+        var droppedCalls: Int = 0,
     )
 
     /**
@@ -341,10 +442,12 @@ class OpenAiBackend(
      * Tokens already delivered before a mid-stream failure stay delivered; the caller resets its
      * buffer before a retry, which only ever happens on a 400 raised before any token arrived.
      *
+     * @param accumulator collects the native tool-call fragments the stream carries
      * @return what else the stream carried, for diagnosing an empty reply
      */
     private suspend fun streamOnce(
         body: JSONObject,
+        accumulator: OpenAiToolProtocol.CallAccumulator,
         onChunk: (String) -> Unit
     ): StreamOutcome {
         val outcome = StreamOutcome()
@@ -367,6 +470,12 @@ class OpenAiBackend(
                     requestContext.ensureActive()
                     when (val event = SseChunk.parse(line)) {
                         is SseChunk.Event.Token -> onChunk(event.text)
+
+                        is SseChunk.Event.ToolCalls -> {
+                            accumulator.accept(event.deltas)
+                            // Prose the same chunk carried; usually empty, never dropped.
+                            if (event.text.isNotEmpty()) onChunk(event.text)
+                        }
 
                         // Not shown, but proof the model was working; see StreamOutcome.
                         is SseChunk.Event.Reasoning ->
@@ -407,7 +516,47 @@ class OpenAiBackend(
     private fun emptyReplyFailure(outcome: StreamOutcome): OpenAiFailure = when {
         outcome.reasoningChars > 0 -> OpenAiFailure.ReasoningOnly
         outcome.finishReason == "length" -> OpenAiFailure.TruncatedBeforeReply
+        // Arguments that stop mid-JSON are a cut-off reply, whatever the server said stopped it.
+        outcome.droppedCalls > 0 -> OpenAiFailure.TruncatedBeforeReply
         else -> OpenAiFailure.EmptyReply(outcome.skippedChunks)
+    }
+
+    /**
+     * Run [attempt] with [tools] declared and, if this server refuses a tool declaration, run it
+     * once more with none.
+     *
+     * The refusal is remembered per server so only the first turn pays for it. What it costs is
+     * real: the system prompt for this run was built for native calling, so it teaches no envelope
+     * and the model has no other way to reach a tool — the turn answers in prose. Servers that
+     * take `tools` are the overwhelming majority, and this keeps the rest chatting rather than
+     * failing outright.
+     *
+     * @param tools the tools this turn wants declared; an empty list skips straight through
+     * @param attempt the request to make, given the tools to actually declare
+     */
+    private suspend fun withToolRetry(
+        tools: List<ToolDefinition>,
+        attempt: suspend (List<ToolDefinition>) -> Unit
+    ) {
+        val baseUrl = getBaseUrl()
+        if (tools.isEmpty() || toolsRejectedBy == baseUrl) {
+            attempt(emptyList())
+            return
+        }
+        try {
+            attempt(tools)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: OpenAiHttpException) {
+            if (!UnsupportedTools.rejectedIn(e.statusCode, e.body)) throw e
+            toolsRejectedBy = baseUrl
+            Log.w(TAG, "REQUEST | server refused a tool declaration; retrying with none")
+            context.logger.warn(
+                "OpenAiBackend: $baseUrl does not accept tool declarations; " +
+                    "the agent cannot call tools on this server"
+            )
+            attempt(emptyList())
+        }
     }
 
     /**

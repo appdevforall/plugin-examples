@@ -15,6 +15,8 @@ class AgentLoop(
     private val toolOutputCharLimit: Int = DEFAULT_TOOL_OUTPUT_CHAR_LIMIT,
     private val maxConsecutiveRepeats: Int = DEFAULT_MAX_CONSECUTIVE_REPEATS,
     private val extractToolCalls: (String) -> List<ToolCall> = ToolCallExtractor::extractToolCalls,
+    private val diagnoseUnparsedReply: (String) -> ToolCallExtractor.UnparsedReply? =
+        ToolCallExtractor::diagnoseUnparsedReply,
     private val terminalTool: String? = null,
 ) {
 
@@ -66,18 +68,62 @@ class AgentLoop(
         suspend fun onRepeatedToolCalls(turns: Int) {}
 
         /**
+         * The model re-issued the batch it had just run successfully, which the loop reads as the
+         * work being finished rather than as a repeat to abort on.
+         *
+         * The only completion that reaches the user with nothing said: it fires instead of
+         * [onFinalAnswer], because the model never called the terminal tool.
+         *
+         * @param turn 1-based turn index.
+         */
+        suspend fun onRepeatAfterSuccess(turn: Int) {}
+
+        /**
          * The model called the terminal tool to finish.
          * @param turn 1-based turn index.
          * @param message the model's final answer.
          */
         suspend fun onFinalAnswer(turn: Int, message: String) {}
+
+        /**
+         * The reply read like a tool call but none could be parsed out of it, so nothing ran.
+         * @param turn 1-based turn index.
+         * @param reason why the call could not be read.
+         */
+        suspend fun onUnparsedReply(turn: Int, reason: ToolCallExtractor.UnparsedReply) {}
+
+        /**
+         * The model stopped calling tools with the last batch's failure unaddressed.
+         *
+         * Distinct from [onFinalAnswer]: the task did not finish, so a run that ends here must not
+         * be reported as completed.
+         *
+         * @param turn 1-based turn index.
+         */
+        suspend fun onAbandonedAfterFailure(turn: Int) {}
     }
 
     /** Why the loop stopped. */
-    enum class StopReason { COMPLETED, MAX_ITERATIONS, REPEATED }
+    enum class StopReason {
+        /** The model ended the run itself, with nothing outstanding. */
+        COMPLETED,
+
+        /** The step budget ran out first. */
+        MAX_ITERATIONS,
+
+        /** The model kept re-issuing a batch that was not working. */
+        REPEATED,
+
+        /** A reply meant to call a tool and no call could be read out of it. */
+        UNPARSABLE,
+
+        /** The model gave up: it stopped calling tools with a failed one unaddressed. */
+        ABANDONED,
+    }
 
     /**
-     * Outcome of a run; [completed] is true when the model ended on its own.
+     * Outcome of a run; [completed] is true when the model ended on its own with nothing left
+     * outstanding, which is not the same as the loop simply having stopped.
      * @property turns model turns executed.
      * @property reason why the loop stopped.
      */
@@ -104,7 +150,8 @@ class AgentLoop(
         var turn = 0
         var previousSignature: String? = null
         var consecutiveRepeats = 0
-        var previousBatchSucceeded = false
+        // Null until a batch has run: "no tools yet" and "the tools failed" end a run differently.
+        var previousBatchSucceeded: Boolean? = null
         while (turn < maxIterations) {
             turn++
 
@@ -114,6 +161,19 @@ class AgentLoop(
 
             val calls = extractToolCalls(text)
             if (calls.isEmpty()) {
+                // A reply with no call is an ordinary answer; one that meant to call and failed to
+                // is a silent dead end, and reporting it COMPLETED is what hid it from the user.
+                val unparsed = diagnoseUnparsedReply(text)
+                if (unparsed != null) {
+                    events.onUnparsedReply(turn, unparsed)
+                    return Result(turn, StopReason.UNPARSABLE)
+                }
+                // Prose after a failed batch is the model giving up, not finishing: the run ends
+                // with the user's request unmet, so reporting it COMPLETED overstates the outcome.
+                if (previousBatchSucceeded == false) {
+                    events.onAbandonedAfterFailure(turn)
+                    return Result(turn, StopReason.ABANDONED)
+                }
                 return Result(turn, StopReason.COMPLETED)
             }
 
@@ -131,7 +191,8 @@ class AgentLoop(
 
             val signature = signatureOf(realCalls)
             if (signature == previousSignature) {
-                if (previousBatchSucceeded) {
+                if (previousBatchSucceeded == true) {
+                    events.onRepeatAfterSuccess(turn)
                     return Result(turn, StopReason.COMPLETED)
                 }
                 consecutiveRepeats++

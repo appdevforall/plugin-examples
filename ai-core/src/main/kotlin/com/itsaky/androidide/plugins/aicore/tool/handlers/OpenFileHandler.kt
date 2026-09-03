@@ -5,6 +5,7 @@ import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aicore.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aicore.models.ToolResult
 import com.itsaky.androidide.plugins.aicore.tool.ToolHandler
+import com.itsaky.androidide.plugins.aicore.tool.ToolSchema
 import com.itsaky.androidide.plugins.services.IdeEditorService
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -22,6 +23,10 @@ class OpenFileHandler(
     private val mainDispatcher: CoroutineDispatcher = Dispatchers.Main
 ) : ToolHandler {
     override val toolName = "open_file"
+    override val parametersSchema = ToolSchema.objectOf(
+        "file_path" to ToolSchema.string("Project-relative path of the file to open."),
+        required = listOf("file_path"),
+    )
     override val description = "Open a file in the IDE editor"
     override val requiresApproval = false
     override val pathArgs = listOf("file_path")

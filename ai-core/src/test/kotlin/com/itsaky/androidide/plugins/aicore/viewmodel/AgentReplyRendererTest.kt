@@ -1,6 +1,7 @@
 package com.itsaky.androidide.plugins.aicore.viewmodel
 
 import com.itsaky.androidide.plugins.aicore.tool.ToolCall
+import com.itsaky.androidide.plugins.aicore.tool.ToolCallExtractor
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -17,6 +18,8 @@ class AgentReplyRendererTest {
         const val TERMINAL = "respond"
         const val FAILED = "(action failed)"
         const val NO_RESPONSE = "(no response)"
+        const val TRUNCATED = "(truncated)"
+        const val MALFORMED = "(malformed)"
     }
 
     private fun render(
@@ -30,6 +33,12 @@ class AgentReplyRendererTest {
         lastToolFailed = lastToolFailed,
         actionFailedText = FAILED,
         noResponseText = NO_RESPONSE,
+        unparsedReplyText = {
+            when (it) {
+                ToolCallExtractor.UnparsedReply.TRUNCATED -> TRUNCATED
+                ToolCallExtractor.UnparsedReply.MALFORMED -> MALFORMED
+            }
+        },
     ) { call -> "🔧 ${call.name}" }
 
     private fun respond(vararg args: Pair<String, Any?>) =
@@ -170,5 +179,27 @@ class AgentReplyRendererTest {
         val calls = listOf(ToolCall("read_file", mapOf("file_path" to "A.kt")))
 
         assertFalse(AgentReplyRenderer.isDuplicateTurn(calls, null, TERMINAL))
+    }
+
+    @Test
+    fun givenAReplyWhoseEnvelopeDidNotParse_whenRendered_thenTheAdviceReplacesTheRawJson() {
+        val raw = """<tool_call>{"tool":"edit_file","args":{"new_string":"<View a="b"/>"}}</tool_call>"""
+
+        val text = render(raw)
+
+        // The bug this pins down: the unreadable call was pasted into the transcript verbatim.
+        assertEquals(MALFORMED, text)
+    }
+
+    @Test
+    fun givenAReplyCutOffMidEnvelope_whenRendered_thenTheTruncationAdviceIsShown() {
+        val text = render("""<tool_call>{"tool":"edit_file","args":{"file_path":"A.kt",""")
+
+        assertEquals(TRUNCATED, text)
+    }
+
+    @Test
+    fun givenAnOrdinaryProseReply_whenRendered_thenItIsShownUnchanged() {
+        assertEquals("Hi! What shall we build?", render("Hi! What shall we build?"))
     }
 }

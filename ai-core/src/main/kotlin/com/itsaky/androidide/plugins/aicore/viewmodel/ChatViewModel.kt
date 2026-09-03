@@ -27,6 +27,7 @@ import com.itsaky.androidide.plugins.aicore.tool.ToolCall
 import com.itsaky.androidide.plugins.aicore.tool.ToolCallExtractor
 import com.itsaky.androidide.plugins.aicore.tool.ToolExecutionTracker
 import com.itsaky.androidide.plugins.aicore.tool.ToolHandler
+import com.itsaky.androidide.plugins.aicore.tool.ToolSchema
 import com.itsaky.androidide.plugins.aicore.tool.sources.ToolSourceStore
 import com.itsaky.androidide.plugins.aicore.tool.handlers.AddDependencyHandler
 import com.itsaky.androidide.plugins.aicore.tool.handlers.CreateFileHandler
@@ -482,10 +483,21 @@ class ChatViewModel(
     private suspend fun buildSystemPrompt(tools: AgentTools): String {
         // One editor read serves both the IDE CONTEXT block and the paths in the examples.
         val ide = readIdeSnapshot()
+        val modules = withContext(Dispatchers.IO) {
+            ProjectLayout.describe(File(PathGuard.projectRoot()))
+        }
+        // Paths, not a count: an empty or wrong one here is what sends the agent walking the tree,
+        // and these are project-relative directory names rather than the user's content.
+        AgentTrace.stage(
+            "LAYOUT",
+            "modules=${modules.size}" + modules.joinToString("") {
+                " ${it.name}[src=${it.sourceDir} layout=${it.layoutDir} manifest=${it.manifest}]"
+            },
+        )
         val examplePath = ide.exampleFilePath()
         val base = backendSystemPrompt(tools, examplePath)
             ?: buildDefaultSystemPrompt(tools, examplePath)
-        return base + ide.contextBlock()
+        return base + ide.contextBlock(modules)
     }
 
     /**
@@ -508,7 +520,8 @@ class ChatViewModel(
             backend.getSystemPrompt(
                 LlmInferenceService.SystemPromptRequest(
                     promptToolDefinitions(tools),
-                    TOOL_CALL_SYNTAX,
+                    // Null tells the backend this side parses no envelope; see SystemPromptRequest.
+                    TOOL_CALL_SYNTAX.takeUnless { callsToolsNatively() },
                     examplePath,
                 )
             )?.takeIf { it.isNotBlank() }
@@ -519,6 +532,22 @@ class ChatViewModel(
             )
             null
         }
+    }
+
+    /**
+     * Whether the active backend carries tool calls in its provider's own function-calling API
+     * rather than in the reply text.
+     *
+     * Decides both halves of the protocol at once — the schemas sent with the request and the
+     * envelope the prompt teaches — so the two can never disagree about which one is live.
+     *
+     * @return true when the backend declares [LlmInferenceService.ToolCallingBackend]
+     */
+    private fun callsToolsNatively(): Boolean = try {
+        getLlmService()?.getBackend(currentBackendId) is LlmInferenceService.ToolCallingBackend
+    } catch (e: Throwable) {
+        logWarn("could not resolve backend '$currentBackendId'", e)
+        false
     }
 
     /**
@@ -549,7 +578,12 @@ class ChatViewModel(
             RESPOND_TOOL,
             "Send the user your reply or final answer. It MUST carry a \"message\" holding the " +
                 "text itself — a respond call with no \"message\" shows the user nothing.",
-            emptyMap(),
+            // Schema, not emptyMap(): under native calling a parameterless declaration is one the
+            // model cannot put the answer in, which is the empty respond the description warns of.
+            ToolSchema.objectOf(
+                "message" to ToolSchema.string("The reply to show the user."),
+                required = listOf("message"),
+            ),
         )
     }
 
@@ -564,7 +598,7 @@ class ChatViewModel(
         val toolDescriptions = promptToolDefinitions(tools)
             .joinToString("\n") { "- ${it.name}: ${it.description}" }
 
-        return """
+        val head = """
         You are a coding assistant inside CodeOnTheGo.
 
         Reply with exactly ONE tool call and nothing else. After a tool call, stop and wait — the
@@ -574,13 +608,30 @@ class ChatViewModel(
 
         Tools:
         $toolDescriptions
+        """.trimIndent()
 
+        // Under native calling the provider carries the call; teaching an envelope as well invites
+        // the model to emit both, and the text one would then run the tool a second time.
+        if (callsToolsNatively()) return head
+
+        return head + "\n\n" + """
         TOOL CALL FORMAT — emit a single line in EXACTLY this format and nothing after it:
         $TOOL_CALL_SYNTAX
 
         Example:
         <tool_call>{"tool":"open_file","args":{"file_path":"$examplePath"}}</tool_call>
         """.trimIndent()
+    }
+
+    /**
+     * The advice for a reply that meant to call a tool and produced nothing runnable.
+     *
+     * @param reason how the call failed to parse.
+     * @return the string resource to show the user.
+     */
+    private fun unparsedReplyMessage(reason: ToolCallExtractor.UnparsedReply): Int = when (reason) {
+        ToolCallExtractor.UnparsedReply.TRUNCATED -> R.string.agent_reply_truncated
+        ToolCallExtractor.UnparsedReply.MALFORMED -> R.string.agent_reply_malformed
     }
 
     /**
@@ -627,19 +678,41 @@ class ChatViewModel(
         currentFile ?: otherFiles.firstOrNull() ?: FALLBACK_EXAMPLE_PATH
 
     /**
-     * Describes what the user is looking at: the focused file and other open tabs, project-relative.
-     * Most requests are about the file on screen and the IDE knows that path exactly; without it the
-     * model reconstructs one, which is where invented `.java` paths for Kotlin files came from.
-     * @return a prompt block, or empty when nothing is open.
+     * Describes what the user is looking at: the focused file and other open tabs, project-relative,
+     * plus where [modules] keep their code. Most requests are about the file on screen and the IDE
+     * knows that path exactly; without it the model reconstructs one, which is where invented
+     * `.java` paths for Kotlin files came from.
+     *
+     * @param modules the project's modules, so the agent spends no turns rediscovering them.
+     * @return a prompt block, or empty when there is nothing to say.
      */
-    private fun IdeSnapshot.contextBlock(): String {
-        if (currentFile == null && otherFiles.isEmpty()) return ""
+    private fun IdeSnapshot.contextBlock(modules: List<ProjectLayout.Module>): String {
+        if (currentFile == null && otherFiles.isEmpty() && modules.isEmpty()) return ""
 
         return buildString {
             append("\n\nIDE CONTEXT (real paths — use these verbatim, do not rewrite them):\n")
             currentFile?.let { append("- File the user is viewing: ").append(it).append("\n") }
             if (otherFiles.isNotEmpty()) {
                 append("- Other open files: ").append(otherFiles.joinToString(", ")).append("\n")
+            }
+            for (module in modules) {
+                module.sourceDir?.let {
+                    append("- New classes for module '").append(module.name).append("' go in: ")
+                        .append(it).append("\n")
+                }
+                module.layoutDir?.let {
+                    append("- Layouts for module '").append(module.name).append("': ")
+                        .append(it).append("\n")
+                }
+                module.manifest?.let {
+                    append("- Manifest for module '").append(module.name).append("': ")
+                        .append(it).append("\n")
+                }
+            }
+            if (modules.isNotEmpty()) {
+                append(
+                    "These directories already exist — do not call list_files to rediscover them.\n"
+                )
             }
             append(
                 "If the user names a file that appears above, use that exact path and do not " +
@@ -865,16 +938,33 @@ class ChatViewModel(
                 )
 
                 try {
+                    // The same list the system prompt describes, so a native declaration and the
+                    // prose the model reads can never name different tools.
+                    val toolDefinitions = promptToolDefinitions(tools)
+                    // Which protocol is live for this run. `native=false` against a backend that
+                    // should call natively is the first thing to check when a call reaches the chat
+                    // as text instead of running.
+                    AgentTrace.stage(
+                        "PROTOCOL",
+                        "native=${callsToolsNatively()} tools=${toolDefinitions.size} " +
+                            toolDefinitions.joinToString(",") { it.name },
+                    )
                     val loopResult = agentLoop.run(
                         history = history,
                         generate = { turns ->
                             withContext(Dispatchers.Main) {
                                 setState(AgentState.Processing(str(R.string.msg_generating)))
                             }
-                            runModelTurn(llmService, turns, config, epoch)
+                            runModelTurn(llmService, turns, config, toolDefinitions, epoch)
                         },
                         executeTools = { calls -> executeToolCalls(tools, calls) },
                         events = object : AgentLoop.Events {
+                            // Numbers the turn between its reply and the tools it runs, so the step
+                            // budget a run spent on one tool is counted off the trace, not guessed.
+                            override suspend fun onModelTurn(turn: Int, text: String) {
+                                AgentTrace.stage("TURN", "turn=$turn chars=${text.length}")
+                            }
+
                             override suspend fun onToolResults(
                                 turn: Int,
                                 calls: List<ToolCall>,
@@ -903,6 +993,38 @@ class ChatViewModel(
                                 addSystemMessage(
                                     str(R.string.agent_max_steps_reached, turns),
                                     MessageStatus.SENT
+                                )
+                            }
+
+                            override suspend fun onUnparsedReply(
+                                turn: Int,
+                                reason: ToolCallExtractor.UnparsedReply,
+                            ) {
+                                AgentTrace.refusal(
+                                    "PARSE",
+                                    "turn=$turn reason=$reason",
+                                    "reply carried no readable tool call",
+                                )
+                                addSystemMessage(
+                                    str(unparsedReplyMessage(reason)),
+                                    MessageStatus.ERROR
+                                )
+                            }
+
+                            override suspend fun onAbandonedAfterFailure(turn: Int) {
+                                // No system message: the reply itself already carries the model's
+                                // account of the failure, rendered as such by AgentReplyRenderer.
+                                AgentTrace.refusal(
+                                    "LOOP",
+                                    "turn=$turn",
+                                    "stopped with a failed tool unaddressed",
+                                )
+                            }
+
+                            override suspend fun onRepeatAfterSuccess(turn: Int) {
+                                AgentTrace.stage(
+                                    "LOOP",
+                                    "turn=$turn assumed-complete=repeat-after-success",
                                 )
                             }
 
@@ -972,6 +1094,7 @@ class ChatViewModel(
      * @param llmService the inference service.
      * @param turns the conversation so far; the last entry is the current user turn.
      * @param config the generation config.
+     * @param toolDefinitions the tools to offer a natively-calling backend; see [callsToolsNatively].
      * @param epoch this run's epoch, for staleness checks against Stop/newer sends.
      * @return the final response text (raw, for tool-call extraction).
      */
@@ -979,6 +1102,7 @@ class ChatViewModel(
         llmService: LlmInferenceService,
         turns: List<LlmInferenceService.ChatMessage>,
         config: LlmInferenceService.LlmConfig,
+        toolDefinitions: List<LlmInferenceService.ToolDefinition>,
         epoch: Int
     ): String {
         val deferred = CompletableDeferred<String>()
@@ -1063,6 +1187,7 @@ class ChatViewModel(
                         lastToolFailed = lastToolFailed,
                         actionFailedText = str(R.string.agent_action_failed),
                         noResponseText = str(R.string.agent_no_response),
+                        unparsedReplyText = { str(unparsedReplyMessage(it)) },
                     ) { c ->
                         // Capped: edit_file snippets would turn the badge into a wall of source.
                         "🔧 ${c.name}(${c.args.entries.joinToString(", ") { "${it.key}=${abbreviate(it.value)}" }})"
@@ -1096,20 +1221,41 @@ class ChatViewModel(
                 }
             }
 
+        // Appended to the reply on completion, so a natively-called tool reaches extraction,
+        // the transcript badge and the loop's repeat guard by the one path text calls use.
+        val nativeCalls = mutableListOf<LlmInferenceService.ToolCallRequest>()
+
         try {
             // Every backend takes the structured form: the last turn as the prompt, the rest as
-            // history. Tools are empty because tool calls travel in the reply text (TOOL_CALL_SYNTAX),
-            // not through native function calling.
+            // history. A backend that reports no native calls simply never calls onToolCall, and
+            // its calls arrive in the reply text as TOOL_CALL_SYNTAX instead.
             llmService.generateStreamingWithTools(
                 turns.lastOrNull()?.content.orEmpty(),
                 turns.dropLast(1),
                 config,
-                emptyList(),
+                toolDefinitions,
                 object : LlmInferenceService.ToolStreamCallback {
                     override fun onToken(token: String) = streamCallback.onToken(token)
-                    override fun onToolCall(request: LlmInferenceService.ToolCallRequest) = Unit
-                    override fun onComplete(response: LlmInferenceService.LlmResponse) =
-                        streamCallback.onComplete(response)
+
+                    override fun onToolCall(request: LlmInferenceService.ToolCallRequest) {
+                        if (isStale()) return
+                        // The proof a call came through the provider's API rather than the reply
+                        // text: the PARSE line that follows reports the envelope this one becomes.
+                        AgentTrace.stage(
+                            "NATIVE",
+                            "tool=${request.name} args=${request.args.orEmpty().keys.joinToString(",")}",
+                            AgentTrace.previewArgs(request.args.orEmpty()),
+                        )
+                        synchronized(nativeCalls) { nativeCalls.add(request) }
+                    }
+
+                    override fun onComplete(response: LlmInferenceService.LlmResponse) {
+                        val calls = synchronized(nativeCalls) { nativeCalls.toList() }
+                        streamCallback.onComplete(
+                            if (calls.isEmpty()) response else response.withNativeCalls(calls)
+                        )
+                    }
+
                     override fun onError(error: String) = streamCallback.onError(error)
                 }
             )
@@ -1123,6 +1269,26 @@ class ChatViewModel(
         }
 
         return deferred.await()
+    }
+
+    /**
+     * This response with [calls] appended as canonical `<tool_call>` envelopes.
+     *
+     * The model never writes these: [ToolCallExtractor.renderEnvelope] encodes them from arguments
+     * the provider already parsed, so the mis-escaping that loses a text-mode call cannot lose one.
+     *
+     * @param calls the native calls reported during this turn.
+     * @return a response whose text carries the calls in the form extraction reads back.
+     */
+    private fun LlmInferenceService.LlmResponse.withNativeCalls(
+        calls: List<LlmInferenceService.ToolCallRequest>,
+    ): LlmInferenceService.LlmResponse {
+        val envelopes = calls.joinToString("\n") {
+            ToolCallExtractor.renderEnvelope(it.name, it.args.orEmpty())
+        }
+        val prose = text?.trim().orEmpty()
+        val merged = if (prose.isEmpty()) envelopes else prose + "\n" + envelopes
+        return LlmInferenceService.LlmResponse(success, merged, error, tokensGenerated, timeMs)
     }
 
     /**

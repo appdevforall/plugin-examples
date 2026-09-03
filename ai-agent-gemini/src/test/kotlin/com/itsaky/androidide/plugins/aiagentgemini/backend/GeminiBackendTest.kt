@@ -22,11 +22,12 @@ class GeminiBackendTest {
     }
 
     @Test
-    fun givenTheBackend_whenAskedForItsCapabilities_thenItDeclaresHistoryButNotToolCalling() {
-        // Dropping HistoryCapableBackend compiles and silently turns chat into one-shot prompting.
+    fun givenTheBackend_whenAskedForItsCapabilities_thenItDeclaresBothHistoryAndToolCalling() {
+        // Dropping either compiles and degrades silently: history turns chat into one-shot
+        // prompting, and tool calling drops the agent back to parsing calls out of the reply text.
         val declared: LlmBackend = backend
 
         assertTrue(declared is HistoryCapableBackend)
-        assertFalse(declared is ToolCallingBackend)
+        assertTrue(declared is ToolCallingBackend)
     }
 }

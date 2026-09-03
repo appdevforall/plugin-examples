@@ -5,6 +5,7 @@ import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aicore.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aicore.models.ToolResult
 import com.itsaky.androidide.plugins.aicore.tool.ToolHandler
+import com.itsaky.androidide.plugins.aicore.tool.ToolSchema
 
 private const val TAG = "$LOG_PREFIX.ReadFileHandler"
 
@@ -15,6 +16,10 @@ class ReadFileHandler(
     private val pluginContext: PluginContext
 ) : ToolHandler {
     override val toolName = "read_file"
+    override val parametersSchema = ToolSchema.objectOf(
+        "file_path" to ToolSchema.string("Project-relative path of the file to read."),
+        required = listOf("file_path"),
+    )
     override val description = "Read the contents of a file"
     override val requiresApproval = false
     override val pathArgs = listOf("file_path", "path")

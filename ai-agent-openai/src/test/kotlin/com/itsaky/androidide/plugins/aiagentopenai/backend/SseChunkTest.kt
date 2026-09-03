@@ -148,4 +148,43 @@ class SseChunkTest {
             """data: {"choices":[{"delta":{"content":"a"}},{"delta":{"content":"b"}}]}"""
         assertEquals(SseChunk.Event.Token("ab"), SseChunk.parse(line))
     }
+
+    @Test
+    fun givenAToolCallDelta_whenParsed_thenItsFragmentsComeBackInsteadOfBeingIgnored() {
+        // Such a delta carries no `content`, so it used to fall through to Ignored and the turn
+        // came back empty — which is how a declared tool call ran nothing (ADFA-5410).
+        val line = """data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1",""" +
+            """"type":"function","function":{"name":"read_file","arguments":"{\"a\":1}"}}]}}]}"""
+
+        val event = SseChunk.parse(line)
+
+        assertTrue("expected ToolCalls, got $event", event is SseChunk.Event.ToolCalls)
+        val deltas = (event as SseChunk.Event.ToolCalls).deltas
+        assertEquals(1, deltas.size)
+        assertEquals("read_file", deltas[0].name)
+        assertEquals("call_1", deltas[0].id)
+        assertEquals("""{"a":1}""", deltas[0].arguments)
+    }
+
+    @Test
+    fun givenAChunkCarryingBothProseAndACall_whenParsed_thenNeitherIsLost() {
+        val line = """data: {"choices":[{"delta":{"content":"On it. ","tool_calls":""" +
+            """[{"index":0,"function":{"name":"run_app","arguments":"{}"}}]}}]}"""
+
+        val event = SseChunk.parse(line) as SseChunk.Event.ToolCalls
+
+        assertEquals("On it. ", event.text)
+        assertEquals("run_app", event.deltas[0].name)
+    }
+
+    @Test
+    fun givenAWholesaleAnswerCarryingACall_whenParsed_thenTheCallIsStillRead() {
+        // The same servers that ignore stream:true answer a tool call in `message` too.
+        val line = """data: {"choices":[{"message":{"role":"assistant","tool_calls":""" +
+            """[{"index":0,"id":"c1","function":{"name":"gradle_sync","arguments":"{}"}}]}}]}"""
+
+        val event = SseChunk.parse(line) as SseChunk.Event.ToolCalls
+
+        assertEquals("gradle_sync", event.deltas[0].name)
+    }
 }

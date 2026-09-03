@@ -414,4 +414,93 @@ class AgentLoopTest {
         // Must not append a trailing "Assistant:" cue (the backend adds its own).
         assertFalse("must not append a trailing Assistant cue", transcript.trimEnd().endsWith("Assistant:"))
     }
+
+    @Test
+    fun givenAReplyWhoseToolCallCouldNotBeParsed_whenTheLoopRuns_thenItStopsUnparsableRatherThanCompleted() = runTest {
+        // ADFA-5410: this returned COMPLETED, so a run that did nothing looked like a finished one.
+        val model = ScriptedModel(
+            listOf("""<tool_call>{"tool":"edit_file","args":{"new_string":"<View a="b"/>"}}</tool_call>""")
+        )
+        val history = mutableListOf(ChatMessage(Role.USER, "add a view"))
+        var reported: ToolCallExtractor.UnparsedReply? = null
+
+        val result = AgentLoop().run(
+            history = history,
+            generate = model::generate,
+            executeTools = { emptyList() },
+            events = object : AgentLoop.Events {
+                override suspend fun onUnparsedReply(turn: Int, reason: ToolCallExtractor.UnparsedReply) {
+                    reported = reason
+                }
+            }
+        )
+
+        assertFalse(result.completed)
+        assertEquals(AgentLoop.StopReason.UNPARSABLE, result.reason)
+        assertEquals(ToolCallExtractor.UnparsedReply.MALFORMED, reported)
+    }
+
+    @Test
+    fun givenAnOrdinaryProseReply_whenTheLoopRuns_thenItStillCompletesWithoutReportingAFailure() = runTest {
+        val model = ScriptedModel(listOf("Hi! What shall we build?"))
+        var reported = false
+
+        val result = AgentLoop().run(
+            history = mutableListOf(ChatMessage(Role.USER, "hi")),
+            generate = model::generate,
+            executeTools = { emptyList() },
+            events = object : AgentLoop.Events {
+                override suspend fun onUnparsedReply(turn: Int, reason: ToolCallExtractor.UnparsedReply) {
+                    reported = true
+                }
+            }
+        )
+
+        assertEquals(AgentLoop.StopReason.COMPLETED, result.reason)
+        assertFalse(reported)
+    }
+
+    @Test
+    fun givenTheModelGivesUpAfterAFailedTool_whenTheLoopRuns_thenTheRunIsNotReportedComplete() =
+        runTest {
+            val model = ScriptedModel(listOf(toolCall("open_file"), "I could not open that file."))
+            var abandonedTurn = 0
+
+            val result = AgentLoop().run(
+                history = mutableListOf(ChatMessage(Role.USER, "open nope")),
+                generate = model::generate,
+                executeTools = { listOf(ToolResult.failure("File not found", "does not exist")) },
+                events = object : AgentLoop.Events {
+                    override suspend fun onAbandonedAfterFailure(turn: Int) {
+                        abandonedTurn = turn
+                    }
+                }
+            )
+
+            assertFalse("the request was never met", result.completed)
+            assertEquals(AgentLoop.StopReason.ABANDONED, result.reason)
+            assertEquals(2, abandonedTurn)
+        }
+
+    @Test
+    fun givenTheModelStopsAfterASucceedingTool_whenTheLoopRuns_thenTheRunIsComplete() = runTest {
+        // The other side of the rule above: nothing is outstanding, so this really is done.
+        val model = ScriptedModel(listOf(toolCall("open_file"), "Opened it."))
+        var abandoned = false
+
+        val result = AgentLoop().run(
+            history = mutableListOf(ChatMessage(Role.USER, "open A.kt")),
+            generate = model::generate,
+            executeTools = { listOf(ToolResult.success("Opened", "A.kt")) },
+            events = object : AgentLoop.Events {
+                override suspend fun onAbandonedAfterFailure(turn: Int) {
+                    abandoned = true
+                }
+            }
+        )
+
+        assertEquals(AgentLoop.StopReason.COMPLETED, result.reason)
+        assertTrue(result.completed)
+        assertFalse(abandoned)
+    }
 }
