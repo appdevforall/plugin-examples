@@ -31,9 +31,9 @@ interface ModelSourceWatcher {
 /**
  * [ModelSourceWatcher] over the document provider and the filesystem.
  *
- * Callbacks arrive on a private [HandlerThread] — never the main thread, and never a thread the
- * caller owns — started with the first watch and stopped with the last, so an idle plugin holds
- * no thread. See ADFA-5253.
+ * Never the main thread, and never a thread the caller owns: a document watch arrives on a private
+ * [HandlerThread], started with the first such watch and stopped with the last so an idle plugin
+ * holds no thread, and a filesystem watch on [FileObserver]'s own. See ADFA-5253.
  *
  * @param onError reports a failed registration, so a silently unwatched model can be explained
  */

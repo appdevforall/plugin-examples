@@ -23,6 +23,7 @@ internal class ModelLoadMessages(private val context: Context) {
     fun describe(diagnosis: Diagnosis): String = when (diagnosis) {
         Diagnosis.FileMissing -> context.getString(R.string.llm_load_error_missing)
         Diagnosis.SourceUnavailable -> context.getString(R.string.llm_load_error_unavailable)
+        Diagnosis.SourceNotSeekable -> context.getString(R.string.llm_load_error_not_seekable)
         Diagnosis.FileEmpty -> context.getString(R.string.llm_load_error_empty)
         Diagnosis.NotGguf -> context.getString(R.string.llm_load_error_not_gguf)
         is Diagnosis.LowMemory -> context.getString(

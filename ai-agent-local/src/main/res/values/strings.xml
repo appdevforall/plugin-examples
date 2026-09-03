@@ -4,6 +4,7 @@
     <!-- Local model load failures (see ModelLoadDiagnostics) -->
     <string name="llm_load_error_missing">The model file could not be found. Re-select the .gguf model in AI Settings.</string>
     <string name="llm_load_error_unavailable">The selected model can no longer be reached. It may have been moved, deleted, or saved to storage that isn\'t connected right now, or the IDE\'s permission to read it was withdrawn. Select the .gguf model again in AI Settings.</string>
+    <string name="llm_load_error_not_seekable">This model is streamed from its storage location rather than stored on this device, so it can\'t be read in place. Download the .gguf to the device — for example to Downloads — and select it from there.</string>
     <string name="llm_load_error_empty">The model file is empty — the download may have been interrupted. Re-download the .gguf model and select it again.</string>
     <string name="llm_load_error_not_gguf">This file isn\'t a valid .gguf model (it may be corrupt or only partially downloaded). Re-download the model and select it again.</string>
     <string name="llm_load_error_low_memory">Loading this model needs at least %1$s of free memory, but only %2$s is available on this device. Close other apps and try again, or pick a smaller or more heavily quantized model (for example a Q4_K_M build of a 1–3B model).</string>

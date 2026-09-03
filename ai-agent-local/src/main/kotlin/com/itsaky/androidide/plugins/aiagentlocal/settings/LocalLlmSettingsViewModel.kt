@@ -224,6 +224,27 @@ class LocalLlmSettingsViewModel(
     }
 
     /**
+     * Publishes a selection that was not kept: the model line says what went wrong with the pick,
+     * the engine line keeps describing the *configured* model. A pick of another file hands the
+     * engine back untouched; "Load from saved" re-picks the configured one, so its failure counts.
+     *
+     * @param uriString the pick that was abandoned
+     * @param model what to say about it
+     * @param engineBefore the engine status from before the selection started
+     */
+    private fun publishAbandonedSelection(
+        uriString: String,
+        model: ModelLoadingState,
+        engineBefore: EngineState,
+    ) {
+        val engine =
+            if (uriString == getLocalModelPath()) engineStateFor(model) ?: engineBefore
+            else engineBefore
+
+        update { it.copy(model = model, engine = engine) }
+    }
+
+    /**
      * Engine readiness implied by a model status, or null to leave the engine's status alone.
      *
      * @param state the model status just published
@@ -322,6 +343,9 @@ class LocalLlmSettingsViewModel(
             return
         }
 
+        // Taken before the Loading below overwrites it; an abandoned pick puts it back.
+        val stateBefore = current
+
         viewModelScope.launch(ioDispatcher) {
             publishModelState(ModelLoadingState.Loading)
 
@@ -341,17 +365,23 @@ class LocalLlmSettingsViewModel(
                 // saved" case after the file was deleted — is not reported as a corrupt one.
                 if (!modelFiles.isReadable(context, uriString)) {
                     releaseUnkeptGrant(context, uriString)
-                    publishModelState(ModelLoadingState.Unavailable(fileName))
+                    publishAbandonedSelection(
+                        uriString,
+                        ModelLoadingState.Unavailable(fileName),
+                        stateBefore.engine,
+                    )
                     return@launch
                 }
 
                 // Rejected up front, so no bad path is persisted or shown as "Loaded".
                 if (!GgufFileInspector.looksLikeGguf(context.contentResolver, uriString)) {
                     releaseUnkeptGrant(context, uriString)
-                    publishModelState(
+                    publishAbandonedSelection(
+                        uriString,
                         ModelLoadingState.Error(
                             context.getString(R.string.error_model_not_gguf, fileName)
-                        )
+                        ),
+                        stateBefore.engine,
                     )
                     return@launch
                 }
@@ -359,7 +389,7 @@ class LocalLlmSettingsViewModel(
                 if (!confirmMemoryHeadroom(uriString, fileInfo, context)) {
                     logger?.info("$TAG: model declined at the memory warning: $fileName")
                     releaseUnkeptGrant(context, uriString)
-                    restoreSavedModelState()
+                    restoreStateBefore(stateBefore)
                     return@launch
                 }
 
@@ -381,10 +411,12 @@ class LocalLlmSettingsViewModel(
                 throw e
             } catch (e: Exception) {
                 logger?.error("$TAG: error saving model path", e)
-                publishModelState(
+                publishAbandonedSelection(
+                    uriString,
                     ModelLoadingState.Error(
                         context.getString(R.string.error_model_save_failed, e.message.orEmpty())
-                    )
+                    ),
+                    stateBefore.engine,
                 )
             }
         }
@@ -465,10 +497,13 @@ class LocalLlmSettingsViewModel(
     }
 
     /**
-     * Republishes the model that is actually configured, so abandoning a selection leaves the
-     * screen describing the previous model rather than the one that was never stored.
+     * Puts the screen back as it was before a selection the user declined outright. Restores both
+     * lines rather than re-deriving them: a configured model that was already unreachable must
+     * stay reported that way.
+     *
+     * @param stateBefore the state captured before the selection started
      */
-    private fun restoreSavedModelState() {
-        publishModelState(modelStateFor(getLocalModelPath()))
+    private fun restoreStateBefore(stateBefore: LocalLlmSettingsState) {
+        update { stateBefore }
     }
 }

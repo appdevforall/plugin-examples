@@ -64,7 +64,8 @@
       header and refuses embedding-only models for chat, with a clear error
       instead of a native crash.</li>
     <li><b>Actionable load failures</b> — a failed load is classified (no longer
-      reachable, empty, not a GGUF, out of memory, unsupported quantization) and
+      reachable, streamed rather than local, empty, not a GGUF, out of memory,
+      unsupported quantization) and
       reported as a message that says what to do next.</li>
     <li><b>Direct storage access</b> — a model chosen as a <code>content://</code>
       document is read in place, through the read grant the picker persisted.
@@ -112,7 +113,9 @@
     <li>Tap <b>Browse</b> and pick a <code>.gguf</code> model file. It is loaded
       from wherever you saved it, with no copy made; a model larger than the free
       RAM asks you to confirm first. Leave the file in place — moving or deleting
-      it breaks the selection.</li>
+      it breaks the selection. The picker offers device-local documents only: a
+      model still in a cloud folder can only be read as a stream, which the
+      in-place loader cannot use.</li>
     <li>Optionally record the model's published <b>SHA-256</b>, or use <b>Load
       from saved</b> to return to the model you already selected.</li>
   </ol>

@@ -116,19 +116,13 @@ class LocalLlmBackend(
     @Volatile private var openModel: OpenModelFile? = null
 
     /**
-     * The reference last found unreachable, so the chat is told the backend is unavailable
-     * instead of being sent to a model that is gone.
-     *
-     * Held as the reference rather than a flag so picking a different model clears it by itself;
-     * a successful load clears it for the same one.
-     */
-    @Volatile private var unreachableModelRef: String? = null
-
-    /**
      * Stops the delete watch on the resident model. Follows residency exactly: taken when a model
      * is adopted, closed when it is released.
      */
     @Volatile private var modelWatch: Closeable? = null
+
+    /** Whether a watch-triggered reachability check is already queued; see [onModelSourceGone]. */
+    private val sourceCheckInFlight = AtomicBoolean(false)
 
     /**
      * Opens the configured model for the native loader. Lazy so construction touches no Android
@@ -237,12 +231,8 @@ class LocalLlmBackend(
         // Kept ahead of the check below so a model the user restores is picked up on the next ask.
         maybeWarmUp(configuredPath)
 
-        // A model whose file has gone away is not available, however resident its pages still are.
-        // Answered from the memo rather than probed here: this runs on the caller's thread, which
-        // may be the main one, and a document probe is a binder round trip.
-        if (!configuredPath.isNullOrBlank() && configuredPath == unreachableModelRef) return false
-
-        // Available if model is loaded OR if a path is configured
+        // Unreachability is left to ensureModelLoaded: a memo here goes stale the moment the user
+        // restores the file, refusing their first message, and that path advises them properly.
         return modelLoaded || !configuredPath.isNullOrBlank()
     }
 
@@ -305,6 +295,14 @@ class LocalLlmBackend(
         // file descriptor per failed attempt, and warm-up retries make that a loop.
         var adopted = false
         try {
+            // Before the first read: the openStream calls below would each eat bytes off a pipe
+            // llama.cpp never gets to read, leaving a fine model diagnosed as corrupt (ADFA-5253).
+            if (!opened.isSeekable) {
+                context.logger.warn("The selected model is not a local file: $modelRef")
+                val diagnosis = ModelLoadDiagnostics.Diagnosis.SourceNotSeekable
+                throw ModelLoadException(loadMessages.describe(diagnosis), diagnosis)
+            }
+
             // One parse of the metadata block per load, feeding both the guard below and the
             // context sizing after the unload: it sits at the front of a multi-GB file, and a
             // model switch used to walk it twice.
@@ -370,7 +368,6 @@ class LocalLlmBackend(
             modelLoaded = true
             currentModelRef = modelRef
             openModel = opened
-            unreachableModelRef = null
             adopted = true
             startWatching(modelRef)
             context.logger.info("Model loaded successfully")
@@ -467,12 +464,11 @@ class LocalLlmBackend(
     }
 
     /**
-     * Records [modelRef] as unreachable and builds the failure to report for it.
+     * Builds the failure to report for a model that could not be opened at all.
      *
      * @return the exception to throw; never thrown here, so the caller's control flow stays visible
      */
     private fun unopenable(modelRef: String): ModelLoadException {
-        unreachableModelRef = modelRef
         val diagnosis = ModelLoadDiagnostics.diagnoseUnopenable(modelRef)
         return ModelLoadException(loadMessages.describe(diagnosis), diagnosis)
     }
@@ -507,15 +503,22 @@ class LocalLlmBackend(
      *
      * Runs under [generationMutex] on [cleanupScope]: a generation already in flight finishes on
      * the model it started with, and this survives the cancellation of [scope].
+     *
+     * Coalesced through [sourceCheckInFlight]: a chatty provider would otherwise queue one
+     * coroutine and one binder probe per notification behind [generationMutex].
      */
     private fun onModelSourceGone(modelRef: String) {
+        if (!sourceCheckInFlight.compareAndSet(false, true)) return
         cleanupScope.launch {
-            generationMutex.withLock {
-                if (!modelLoaded || currentModelRef != modelRef) return@withLock
-                if (modelSource.isReachable(modelRef)) return@withLock
-                context.logger.info("Selected model was deleted; releasing it: $modelRef")
-                evictResidentModel()
-                unreachableModelRef = modelRef
+            try {
+                generationMutex.withLock {
+                    if (!modelLoaded || currentModelRef != modelRef) return@withLock
+                    if (modelSource.isReachable(modelRef)) return@withLock
+                    context.logger.info("Selected model was deleted; releasing it: $modelRef")
+                    evictResidentModel()
+                }
+            } finally {
+                sourceCheckInFlight.set(false)
             }
         }
     }

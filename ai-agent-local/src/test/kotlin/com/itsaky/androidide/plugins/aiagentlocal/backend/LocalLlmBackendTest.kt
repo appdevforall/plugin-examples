@@ -45,13 +45,18 @@ class LocalLlmBackendTest {
         /** Flipped to simulate the user deleting the file out from under a resident model. */
         var reachable = true
 
+        /** Reachability probes served, so a burst of watch notifications can be counted. */
+        @Volatile var probeCount = 0
+
         override fun open(modelReference: String): OpenModelFile? {
             openCount++
             return handles[modelReference].takeIf { reachable }
         }
 
-        override fun isReachable(modelReference: String): Boolean =
-            reachable && handles.containsKey(modelReference)
+        override fun isReachable(modelReference: String): Boolean {
+            probeCount++
+            return reachable && handles.containsKey(modelReference)
+        }
     }
 
     /** Stands in for the native engine, recording residency without loading any weights. */
@@ -169,6 +174,44 @@ class LocalLlmBackendTest {
         }
 
         assertEquals(Diagnosis.FileMissing, error.diagnosis)
+    }
+
+    @Test
+    fun givenAStreamingDocument_whenLoading_thenRefusedAsNotSeekableWithoutReadingIt() {
+        // A cloud provider hands back a pipe, whose bytes the header reads would consume before
+        // llama.cpp sees any: refuse it with its own advice rather than call it corrupt.
+        val descriptor = RecordingDescriptor()
+        val pipe = OpenModelFile("/proc/self/fd/7", -1L, descriptor)
+        val source = FakeModelSource(mapOf(CONTENT_URI to pipe))
+        val engine = FakeEngine()
+
+        val error = assertThrows(ModelLoadException::class.java) {
+            runBlocking { backendWith(source, engine).ensureModelLoaded(CONTENT_URI) }
+        }
+
+        assertEquals(Diagnosis.SourceNotSeekable, error.diagnosis)
+        assertEquals("nothing may reach the engine", 0, engine.loadCount)
+        assertTrue("the refused descriptor must not leak", descriptor.closed)
+    }
+
+    @Test
+    fun givenAResidentModel_whenItsWatchFiresRepeatedly_thenOnlyOneCheckIsQueued() {
+        // One coroutine per notification would pile up behind generationMutex, each waking to
+        // issue its own binder probe; the gate collapses a burst to a single check.
+        val source = FakeModelSource(mapOf(CONTENT_URI to handleFor(chatModel())))
+        val engine = FakeEngine()
+        val watcher = FakeWatcher()
+        val backend = backendWith(source, engine, watcher)
+
+        runBlocking { backend.ensureModelLoaded(CONTENT_URI) }
+        val before = source.probeCount
+        repeat(50) { watcher.onGone!!.invoke() }
+
+        Thread.sleep(300)
+        val probes = source.probeCount - before
+        // Not exactly one: a notification arriving just after a check rightly starts another.
+        assertTrue("a burst of 50 notifications cost $probes probes", probes in 1..5)
+        assertEquals("a reachable model must stay loaded", 0, engine.unloadCount)
     }
 
     @Test

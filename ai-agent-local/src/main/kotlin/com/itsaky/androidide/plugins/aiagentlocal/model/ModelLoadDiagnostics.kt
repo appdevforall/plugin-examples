@@ -33,6 +33,13 @@ object ModelLoadDiagnostics {
          */
         data object SourceUnavailable : Diagnosis
 
+        /**
+         * The picked document is streamed rather than stored on the device, so its descriptor is a
+         * pipe the loader cannot `mmap` or re-open. Its own case because the alternative is
+         * reporting a perfectly good model as corrupt; the fix is to download it (ADFA-5253).
+         */
+        data object SourceNotSeekable : Diagnosis
+
         data object FileEmpty : Diagnosis
         data object NotGguf : Diagnosis
         /**
@@ -100,14 +107,6 @@ object ModelLoadDiagnostics {
     }
 
     /**
-     * Whether to refuse a load outright, before ggml aborts the process trying it. Weighs only the
-     * compute buffers, so it stays far more permissive than [diagnose]'s attribution headroom:
-     * the memory-warning dialog lets the user proceed, and a refusal here must not overrule that.
-     *
-     * @param availableMemoryBytes free RAM reported by the OS, or negative if unknown
-     * @return the shortfall to refuse with, or null to attempt the load
-     */
-    /**
      * Why a model could not be opened at all, before any load was attempted.
      *
      * @param modelReference the configured model, as a `content://` URI or a filesystem path
@@ -116,6 +115,14 @@ object ModelLoadDiagnostics {
         if (modelReference.startsWith(CONTENT_SCHEME)) Diagnosis.SourceUnavailable
         else Diagnosis.FileMissing
 
+    /**
+     * Whether to refuse a load outright, before ggml aborts the process trying it. Weighs only the
+     * compute buffers, so it stays far more permissive than [diagnose]'s attribution headroom:
+     * the memory-warning dialog lets the user proceed, and a refusal here must not overrule that.
+     *
+     * @param availableMemoryBytes free RAM reported by the OS, or negative if unknown
+     * @return the shortfall to refuse with, or null to attempt the load
+     */
     fun refuseBeforeLoad(availableMemoryBytes: Long): Diagnosis.LowMemory? =
         // Only a NEGATIVE reading means "unknown"; 0 is a genuine out-of-memory reading.
         if (availableMemoryBytes in 0L until MIN_RUN_BYTES) {

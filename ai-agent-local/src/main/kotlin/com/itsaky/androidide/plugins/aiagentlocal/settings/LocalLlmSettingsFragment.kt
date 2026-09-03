@@ -1,5 +1,7 @@
 package com.itsaky.androidide.plugins.aiagentlocal.settings
 
+import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.view.LayoutInflater
@@ -36,7 +38,7 @@ class LocalLlmSettingsFragment : Fragment(), MemoryWarningDialogFragment.Host {
     private var tooltipService: IdeTooltipService? = null
 
     private val filePickerLauncher =
-        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        registerForActivityResult(PickLocalDocument) { uri: Uri? ->
             uri?.let {
                 try {
                     // The durable read grant is taken by the view model, with the rest of the
@@ -175,7 +177,9 @@ class LocalLlmSettingsFragment : Fragment(), MemoryWarningDialogFragment.Host {
             val savedName = state.savedModelName
             if (savedName != null) {
                 modelPathTextView.visibility = View.VISIBLE
-                modelPathTextView.text = if (state.model is ModelLoadingState.Unavailable) {
+                // Off the engine status, which describes the configured model; the model status
+                // also carries the outcome of a rejected pick, which says nothing about it.
+                modelPathTextView.text = if (state.engine is EngineState.ModelUnavailable) {
                     getString(R.string.model_saved_path_unavailable, savedName)
                 } else {
                     getString(R.string.model_saved_path, savedName)
@@ -251,6 +255,16 @@ class LocalLlmSettingsFragment : Fragment(), MemoryWarningDialogFragment.Host {
                 .show()
         }
     }
+}
+
+/**
+ * The document picker, asked for documents already on the device: a streaming provider hands back
+ * a pipe the in-place loader cannot `mmap`. Advisory only, so the load path still refuses a
+ * non-seekable descriptor as `Diagnosis.SourceNotSeekable` (ADFA-5253).
+ */
+private object PickLocalDocument : ActivityResultContracts.OpenDocument() {
+    override fun createIntent(context: Context, input: Array<String>): Intent =
+        super.createIntent(context, input).putExtra(Intent.EXTRA_LOCAL_ONLY, true)
 }
 
 /**

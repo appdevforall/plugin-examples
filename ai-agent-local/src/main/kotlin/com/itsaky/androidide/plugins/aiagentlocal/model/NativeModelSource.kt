@@ -20,13 +20,20 @@ import java.io.InputStream
  * model alive after that. [close] is therefore the unload path's job, not the load path's.
  *
  * @property nativePath the path to hand the native loader
- * @property sizeBytes the model's size, or -1 when the source could not report one
+ * @property sizeBytes the model's size, or -1 when the descriptor names no regular file
  */
 class OpenModelFile(
     val nativePath: String,
     val sizeBytes: Long,
     private val descriptor: Closeable?,
 ) : Closeable {
+
+    /**
+     * Whether [nativePath] can be `mmap`ed and re-opened, which everything above assumes. A
+     * streaming provider (Drive, OneDrive) hands back a pipe instead, for which `statSize` is -1
+     * and each [openStream] eats bytes the loader never sees, so the caller must refuse it.
+     */
+    val isSeekable: Boolean get() = sizeBytes >= 0
 
     /**
      * Opens an independent read stream over the same bytes the native loader sees — header
@@ -91,7 +98,8 @@ class ContentNativeModelSource(
 
     /**
      * Takes the document's descriptor and hands the native loader its procfs path. `"r"` is the
-     * only mode asked for, which is all the persisted grant covers.
+     * only mode asked for, which is all the persisted grant covers. The descriptor need not be a
+     * file — a pipe is reported through [OpenModelFile.isSeekable] for the caller to refuse.
      */
     private fun openDocument(uriString: String): OpenModelFile? = try {
         context.contentResolver.openFileDescriptor(Uri.parse(uriString), "r")

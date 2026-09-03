@@ -101,6 +101,49 @@ class ContentNativeModelSourceTest {
     }
 
     @Test
+    fun givenADocument_whenOpened_thenTheLoaderGetsItsProcfsPathAndSize() {
+        // The contract the read-in-place change rests on: llama.cpp gets the procfs entry for the
+        // descriptor this handle owns, and the size comes from statSize, not File.length().
+        val descriptor = mockk<ParcelFileDescriptor>(relaxed = true)
+        every { descriptor.fd } returns 42
+        every { descriptor.statSize } returns 4_294_967_296L
+        every { resolver.openFileDescriptor(any(), "r") } returns descriptor
+
+        val opened = source.open(CONTENT_URI)
+
+        assertNotNull(opened)
+        assertEquals("/proc/self/fd/42", opened!!.nativePath)
+        assertEquals(4_294_967_296L, opened.sizeBytes)
+        assertTrue(opened.isSeekable)
+        // The descriptor belongs to the handle now: closing it here would invalidate the path.
+        io.mockk.verify(exactly = 0) { descriptor.close() }
+    }
+
+    @Test
+    fun givenAStreamingProvider_whenOpened_thenTheHandleIsNotSeekable() {
+        // A cloud provider hands back a pipe, for which statSize is -1: the caller has to be able
+        // to tell, or a perfectly good model is reported as corrupt.
+        val descriptor = mockk<ParcelFileDescriptor>(relaxed = true)
+        every { descriptor.fd } returns 7
+        every { descriptor.statSize } returns -1L
+        every { resolver.openFileDescriptor(any(), "r") } returns descriptor
+
+        assertFalse(source.open(CONTENT_URI)!!.isSeekable)
+    }
+
+    @Test
+    fun givenAPathThatExists_whenOpened_thenItIsSeekableAtItsOwnPath() {
+        // A filesystem path has no descriptor to keep, and must not read as a pipe.
+        val model = temporaryFolder.newFile("model.gguf").apply { writeBytes(ByteArray(64)) }
+
+        val opened = source.open(model.absolutePath)
+
+        assertEquals(model.absolutePath, opened!!.nativePath)
+        assertEquals(64L, opened.sizeBytes)
+        assertTrue(opened.isSeekable)
+    }
+
+    @Test
     fun givenADeletedPath_whenOpened_thenNoHandleIsReturned() {
         val model = temporaryFolder.newFile("model.gguf")
         assertTrue(model.delete())

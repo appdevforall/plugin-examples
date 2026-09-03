@@ -61,8 +61,10 @@
       picked and reads it where it is — on internal storage, an SD card or a USB
       volume. Nothing is copied, so a multi-gigabyte model costs no extra device
       storage. Keep the file where it is: moving or deleting it breaks the
-      selection. If the file is larger than the device's free RAM, a warning asks
-      you to confirm before loading.</li>
+      selection. The picker offers only documents already stored on the device,
+      because a model still in a cloud folder has to be read as a stream and
+      cannot be loaded in place. If the file is larger than the device's free RAM,
+      a warning asks you to confirm before loading.</li>
     <li><b>Load from saved</b> — reloads the model you already selected without
       picking it again. Use this after restarting the IDE, or when a load
       failed for a transient reason such as low memory.</li>
@@ -99,6 +101,11 @@
       the file, or removing the SD card it lives on, breaks the selection.
       Clearing the IDE's app data also withdraws the permission to read it. Pick
       the model again with <b>Browse</b>.</li>
+    <li><b>"This model is streamed from its storage location"</b> &mdash; the file
+      you picked lives in a cloud folder (Google Drive, OneDrive) rather than on
+      the device, and can only be read as a stream. Download the
+      <code>.gguf</code> to the device &mdash; Downloads is fine &mdash; and pick
+      it from there.</li>
   </ul>
 </body>
 </html>
