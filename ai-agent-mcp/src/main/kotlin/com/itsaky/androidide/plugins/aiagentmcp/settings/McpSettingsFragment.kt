@@ -164,6 +164,10 @@ class McpSettingsFragment : Fragment() {
         // Unknown, never Absent, until the decrypt answers: guessing is what let an http:// URL
         // be saved over a token that was still stored and still sent.
         var credential = if (existing == null) Credential.ABSENT else Credential.UNKNOWN
+        // What the header rows on screen are: the stored set, or not that. Anything but
+        // [Headers.KNOWN] means an empty list is "never drawn" rather than "none", and a typed row
+        // is no basis for replacing a set the dialog was in no position to show.
+        var headersState = if (existing == null) Headers.KNOWN else Headers.UNKNOWN
         nameField.setText(server.name)
         urlField.setText(server.url)
 
@@ -179,7 +183,11 @@ class McpSettingsFragment : Fragment() {
         clearButton.setOnClickListener {
             clearButton.isEnabled = false
             viewModel.clearCredential(server.id) { cleared ->
-                if (cleared) credential = Credential.ABSENT
+                if (cleared) {
+                    credential = Credential.ABSENT
+                    // Nothing is stored now, so the empty list on screen is the stored truth again.
+                    headersState = Headers.KNOWN
+                }
                 whileDialogShown {
                     clearButton.isEnabled = !cleared
                     clearButton.visibility = if (cleared) View.GONE else View.VISIBLE
@@ -207,18 +215,40 @@ class McpSettingsFragment : Fragment() {
                 whileDialogShown {
                     // The stored token is never shown: it is decrypted only to be sent. An empty
                     // field on an existing server means "leave it alone", which the placeholder
-                    // says aloud — unless nothing on this device can read it any more.
-                    if (form.secretsUnreadable) {
-                        tokenField.hint = getString(R.string.mcp_hint_token_unreadable)
-                        status.text = getString(R.string.mcp_secrets_unreadable)
-                    } else if (form.hasToken) {
-                        tokenField.hint = getString(R.string.mcp_hint_token_stored)
+                    // says aloud — unless nothing on this device can read it any more. The hint
+                    // speaks for the token alone; headers that failed have their own sentence.
+                    tokenField.hint = getString(
+                        when {
+                            form.tokenUnreadable -> R.string.mcp_hint_token_unreadable
+                            form.tokenUnavailable -> R.string.mcp_hint_token_unavailable
+                            form.hasToken -> R.string.mcp_hint_token_stored
+                            else -> R.string.mcp_hint_token
+                        }
+                    )
+                    // The status line covers whichever credential failed. Unreadable first: a
+                    // credential that has to be entered again is the worse news.
+                    when {
+                        form.tokenUnreadable || form.headersUnreadable ->
+                            status.text = getString(R.string.mcp_secrets_unreadable)
+                        form.tokenUnavailable || form.headersUnavailable ->
+                            status.text = getString(R.string.mcp_secrets_unavailable)
                     }
                     // Offered only once something is known to be stored; there is nothing to
                     // clear otherwise, and an unreadable secret is exactly what it is for.
                     clearButton.visibility =
                         if (credential == Credential.PRESENT) View.VISIBLE else View.GONE
-                    renderHeaders(view, form.headers)
+                    // Recorded beside the render that draws them, not behind the credential guard
+                    // above: these rows appear whatever that guard decided, and a deletion made
+                    // once they are on screen must not be dropped as "never drawn".
+                    headersState = when {
+                        form.headersKnown -> Headers.KNOWN
+                        form.headersUnavailable -> Headers.UNAVAILABLE
+                        else -> Headers.UNREADABLE
+                    }
+                    // Only the stored set replaces what is on screen. A failed decrypt has nothing
+                    // to draw, and clearing the list would take with it any row typed while it was
+                    // in flight — rows the save guard below then refuses to let be retyped.
+                    if (form.headersKnown) renderHeaders(view, form.headers)
                 }
             }
         }
@@ -236,7 +266,7 @@ class McpSettingsFragment : Fragment() {
                     return@setOnClickListener
                 }
                 val validation =
-                    validate(candidate, tokenField.text.toString(), credential, headers)
+                    validate(candidate, tokenField.text.toString(), credential, headers, headersState)
                 if (validation != null) {
                     status.text = validation
                     return@setOnClickListener
@@ -247,7 +277,7 @@ class McpSettingsFragment : Fragment() {
                 viewModel.save(
                     candidate,
                     viewModel.tokenToStore(tokenField.text.toString()),
-                    headers,
+                    viewModel.headersToStore(headers, headersState == Headers.KNOWN),
                 ) { saved, failure ->
                     server = saved
                     if (tokenField.text.isNotBlank() || headers.isNotEmpty()) {
@@ -292,7 +322,8 @@ class McpSettingsFragment : Fragment() {
         serverDialog = dialog
         dialog.setOnDismissListener { serverDialog = null }
         dialog.setOnShowListener {
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setOnClickListener {
+            val saveButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE) ?: return@setOnShowListener
+            saveButton.setOnClickListener {
                 val candidate = server.copy(
                     name = nameField.text.toString().trim(),
                     url = urlField.text.toString().trim(),
@@ -304,17 +335,29 @@ class McpSettingsFragment : Fragment() {
                     return@setOnClickListener
                 }
                 val problem =
-                    validate(candidate, tokenField.text.toString(), credential, headers)
+                    validate(candidate, tokenField.text.toString(), credential, headers, headersState)
                 if (problem != null) {
                     status.text = problem
                     return@setOnClickListener
                 }
+                saveButton.isEnabled = false
                 viewModel.save(
                     candidate,
                     viewModel.tokenToStore(tokenField.text.toString()),
-                    headers,
-                ) { _, _ -> }
-                dialog.dismiss()
+                    viewModel.headersToStore(headers, headersState == Headers.KNOWN),
+                ) { _, failure ->
+                    // Dismissed only once the credential is stored, as Connect already does: a
+                    // keystore that will not encrypt would otherwise lose the token behind a
+                    // dialog that closed as though it had saved.
+                    if (failure == null) {
+                        whileDialogShown { dialog.dismiss() }
+                        return@save
+                    }
+                    whileDialogShown {
+                        status.text = failure
+                        saveButton.isEnabled = true
+                    }
+                }
             }
         }
         dialog.show()
@@ -507,12 +550,21 @@ class McpSettingsFragment : Fragment() {
         typedToken: String,
         credential: Credential,
         headers: Map<String, String>,
+        headersState: Headers,
     ): String? = when {
         server.name.isBlank() -> getString(R.string.mcp_name_required)
         server.url.isBlank() -> getString(R.string.mcp_url_required)
         !server.url.startsWith("http://") && !server.url.startsWith("https://") ->
             getString(R.string.mcp_url_scheme_invalid)
         !McpHeaders.isSendableToken(typedToken.trim()) -> getString(R.string.mcp_token_illegal)
+        // Saving a typed row would replace the whole stored set, so it is refused while the dialog
+        // cannot show what that set is — each state with the advice that actually helps it.
+        headers.isNotEmpty() && headersState == Headers.UNKNOWN ->
+            getString(R.string.mcp_credentials_loading)
+        headers.isNotEmpty() && headersState == Headers.UNAVAILABLE ->
+            getString(R.string.mcp_headers_unavailable_no_replace)
+        headers.isNotEmpty() && headersState == Headers.UNREADABLE ->
+            getString(R.string.mcp_headers_unreadable_no_replace)
         server.url.startsWith("http://") && credential == Credential.UNKNOWN ->
             getString(R.string.mcp_credentials_loading)
         server.url.startsWith("http://") &&
@@ -537,6 +589,28 @@ class McpSettingsFragment : Fragment() {
 
         /** Nothing is stored — a new server, or one just cleared. */
         ABSENT,
+    }
+
+    /**
+     * What the header rows on screen are, which decides what saving them may do.
+     *
+     * The host's own four-way secret read, as this dialog sees it: only [KNOWN] rows may replace
+     * the stored set, and the three others each need their own sentence rather than one "could not
+     * be read" that sends a user with intact headers off to enter them again.
+     */
+    private enum class Headers {
+
+        /** The decrypt has not answered yet. */
+        UNKNOWN,
+
+        /** Stored headers this device's Keystore can no longer open. Permanent: clear and re-enter. */
+        UNREADABLE,
+
+        /** Stored headers the Keystore would not answer for this time. Transient: retry. */
+        UNAVAILABLE,
+
+        /** The rows on screen are the stored set — a new server, a successful read, or just cleared. */
+        KNOWN,
     }
 
     /**

@@ -8,9 +8,10 @@ import com.itsaky.androidide.plugins.aiagentmcp.R
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpConnections
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpTool
 import com.itsaky.androidide.plugins.aiagentmcp.errors.McpErrorFormatter
-import com.itsaky.androidide.plugins.aiagentmcp.security.SecureTokenStore
+import com.itsaky.androidide.plugins.aiagentmcp.security.UnavailableSecretException
 import com.itsaky.androidide.plugins.aiagentmcp.security.UnreadableSecretException
 import com.itsaky.androidide.plugins.aiagentmcp.tools.McpToolCatalog
+import com.itsaky.androidide.plugins.security.KeystoreSecretStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -46,14 +47,26 @@ class McpSettingsViewModel(
      * @property hasHeaders whether headers are stored, from key presence rather than a decrypt:
      *   [headers] comes back empty for headers this device can no longer read, and "stored but
      *   unreadable" has to count as a stored credential or the control that clears it hides.
-     * @property secretsUnreadable whether a stored token or header cannot be decrypted on this
-     *   device, which the field has to say aloud: it looks stored, but nothing can send it.
+     * @property tokenUnreadable whether the stored token cannot be decrypted on this device, which
+     *   the field has to say aloud: it looks stored, but nothing can send it.
+     * @property tokenUnavailable whether the keystore merely would not answer for the token, which
+     *   the field says differently: it is intact and the read is worth repeating.
+     * @property headersKnown whether [headers] is what is stored. False when the decrypt failed, in
+     *   which case an empty list on screen means "not shown" and must not be saved over them.
+     * @property headersUnreadable why the header decrypt failed, when it did: true when nothing on
+     *   this device can read them again.
+     * @property headersUnavailable why the header decrypt failed, when it did: true for a keystore
+     *   that merely would not answer, so the dialog can say "try again" rather than "start over".
      * @property headers the extra headers configured for the server.
      */
     data class FormState(
         val hasToken: Boolean,
         val hasHeaders: Boolean,
-        val secretsUnreadable: Boolean,
+        val tokenUnreadable: Boolean,
+        val tokenUnavailable: Boolean,
+        val headersKnown: Boolean,
+        val headersUnreadable: Boolean,
+        val headersUnavailable: Boolean,
         val headers: Map<String, String>,
     )
 
@@ -81,16 +94,28 @@ class McpSettingsViewModel(
         viewModelScope.launch {
             val state = withContext(Dispatchers.IO) {
                 val token = McpServerStore.token(id)
+                var headersUnreadable = false
+                var headersUnavailable = false
                 val headers = try {
                     McpServerStore.headers(id)
                 } catch (e: UnreadableSecretException) {
+                    headersUnreadable = true
+                    null
+                } catch (e: UnavailableSecretException) {
+                    headersUnavailable = true
                     null
                 }
+                // Reported per credential, never folded together: a token that decrypts beside
+                // headers that do not must not put "could not be read" on the token's own field,
+                // which is the mis-attribution this pane exists to avoid.
                 FormState(
                     hasToken = McpServerStore.hasToken(id),
                     hasHeaders = McpServerStore.hasHeaders(id),
-                    secretsUnreadable =
-                        token is SecureTokenStore.Stored.Unreadable || headers == null,
+                    tokenUnreadable = token is KeystoreSecretStore.Stored.Unreadable,
+                    tokenUnavailable = token is KeystoreSecretStore.Stored.Unavailable,
+                    headersKnown = headers != null,
+                    headersUnreadable = headersUnreadable,
+                    headersUnavailable = headersUnavailable,
                     headers = headers.orEmpty(),
                 )
             }
@@ -106,6 +131,22 @@ class McpSettingsViewModel(
     fun tokenToStore(typed: String): String? = typed.trim().takeIf { it.isNotEmpty() }
 
     /**
+     * What the header rows mean when saving, given whether the stored ones could be read.
+     *
+     * The token's rule, applied to headers: the rows replace what is stored only when the dialog
+     * drew what is stored. Otherwise they mean nothing about it — [setHeaders] replaces the whole
+     * map, so writing one typed row over a set nobody could read would delete headers the user was
+     * just told were intact. The dialog refuses such a save instead, and [clearCredential] is the
+     * way back to none.
+     *
+     * @param collected the header rows as they currently stand.
+     * @param headersKnown whether those rows reflect what is stored.
+     * @return the rows to store, replacing the stored set, or null to leave it alone.
+     */
+    fun headersToStore(collected: Map<String, String>, headersKnown: Boolean): Map<String, String>? =
+        if (headersKnown) collected else null
+
+    /**
      * Stores the edited name and URL of a server and, when given, its token.
      *
      * Only those fields are written: the tool switches are saved as they are tapped, and the
@@ -113,20 +154,21 @@ class McpSettingsViewModel(
      *
      * @param server the server to store.
      * @param token the token to store, or null to leave the stored one alone.
-     * @param headers the extra headers to store, replacing whatever was there.
+     * @param headers the extra headers to store, replacing whatever was there, or null to leave the
+     *   stored ones alone — see [headersToStore].
      * @param onDone receives the merged record and a status sentence, null when everything worked.
      */
     fun save(
         server: McpServer,
         token: String?,
-        headers: Map<String, String> = emptyMap(),
+        headers: Map<String, String>? = emptyMap(),
         onDone: (McpServer, String?) -> Unit,
     ) {
         viewModelScope.launch {
             val outcome = withContext(Dispatchers.IO) {
                 val merged = McpServerStore.saveDetails(server)
                 val tokenStored = token?.let { McpServerStore.setToken(server.id, it.trim()) } ?: true
-                val headersStored = McpServerStore.setHeaders(server.id, headers)
+                val headersStored = headers?.let { McpServerStore.setHeaders(server.id, it) } ?: true
                 // A credential change has to invalidate the session, or the old one keeps working.
                 McpConnections.invalidate(server.id)
                 val failure = when {

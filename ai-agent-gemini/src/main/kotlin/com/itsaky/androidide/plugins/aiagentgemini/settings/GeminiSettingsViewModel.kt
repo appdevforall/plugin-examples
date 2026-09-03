@@ -10,7 +10,8 @@ import com.itsaky.androidide.plugins.PluginLogger
 import com.itsaky.androidide.plugins.aiagentgemini.backend.GeminiBackend
 import com.itsaky.androidide.plugins.aiagentgemini.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aiagentgemini.preferences.GeminiPreferences
-import com.itsaky.androidide.plugins.aiagentgemini.security.SecureApiKeyStore
+import com.itsaky.androidide.plugins.aiagentgemini.security.secureApiKeyStore
+import com.itsaky.androidide.plugins.security.KeystoreSecretStore
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -112,7 +113,7 @@ class GeminiSettingsViewModel(
     }
 
     /**
-     * Encrypts [apiKey] via [SecureApiKeyStore] and persists only the ciphertext to private prefs,
+     * Encrypts [apiKey] via [secureApiKeyStore] and persists only the ciphertext to private prefs,
      * off the main thread. Nothing is written on failure. Kept separate from [verifyGeminiKey]: a
      * rejected key never reaches here, and an unverifiable one only after the user says so.
      *
@@ -130,7 +131,7 @@ class GeminiSettingsViewModel(
                 return@withContext false
             }
             val encrypted = try {
-                SecureApiKeyStore.encrypt(apiKey.trim())
+                secureApiKeyStore.encrypt(apiKey.trim())
             } catch (e: Exception) {
                 logger?.error("$TAG: failed to encrypt Gemini API key", e)
                 return@withContext false
@@ -156,15 +157,19 @@ class GeminiSettingsViewModel(
      * Decrypt the stored key off the main thread (Keystore IPC + AES/GCM), upgrading a
      * pre-encryption plaintext key to ciphertext in passing so existing installs actually
      * end up encrypted rather than waiting for the user to re-enter the key.
+     *
+     * @return what is on disk: nothing, the key, a key this device's Keystore can no longer open,
+     *   or one it would not open just now. Those are not the same — a lost Keystore entry has to be
+     *   entered again, a keystore that did not answer only retried — so the caller says which.
      */
-    suspend fun getGeminiApiKey(): String? = withContext(ioDispatcher) {
-        SecureApiKeyStore.readAndMigrate(prefs(), KEY_API_KEY)
+    suspend fun getGeminiApiKey(): KeystoreSecretStore.Stored = withContext(ioDispatcher) {
+        secureApiKeyStore.readAndMigrate(prefs(), KEY_API_KEY)
     }
 
     /**
-     * True when a key is present on disk, whether or not it can still be decrypted. Lets the UI
-     * tell "nothing was saved" from "the Keystore entry is gone" — [getGeminiApiKey] is null for
-     * both. Raw pref only, so no Keystore IPC and safe on the main thread.
+     * True when a key is present on disk, whether or not it can still be decrypted: what the key
+     * block is dressed from, which must not collapse the moment the Keystore declines to answer.
+     * Raw pref only, so no Keystore IPC and safe on the main thread — which [getGeminiApiKey] is not.
      */
     fun hasStoredGeminiApiKey(): Boolean =
         !prefs()?.getString(KEY_API_KEY, null).isNullOrBlank()
@@ -199,9 +204,11 @@ class GeminiSettingsViewModel(
             _geminiModelsLoading.postValue(true)
 
             try {
-                val apiKey = getGeminiApiKey()?.trim()
+                // The fallback list is the answer to any key it cannot read, whatever the reason,
+                // so this is one of the few callers that has no use for the difference.
+                val apiKey = (getGeminiApiKey() as? KeystoreSecretStore.Stored.Value)?.plain?.trim()
                 if (apiKey.isNullOrBlank()) {
-                    logger?.warn("$TAG: no Gemini API key saved; showing fallback models")
+                    logger?.warn("$TAG: no usable Gemini API key saved; showing fallback models")
                     _geminiModels.postValue(GeminiModelOptions(FALLBACK_MODELS, isLive = false))
                     return@launch
                 }

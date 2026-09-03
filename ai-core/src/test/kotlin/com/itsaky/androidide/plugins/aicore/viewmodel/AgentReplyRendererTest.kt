@@ -2,6 +2,8 @@ package com.itsaky.androidide.plugins.aicore.viewmodel
 
 import com.itsaky.androidide.plugins.aicore.tool.ToolCall
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -123,5 +125,50 @@ class AgentReplyRendererTest {
     @Test
     fun givenNothingAtAll_whenRendered_thenTheFallbackIsShown() {
         assertEquals(NO_RESPONSE, render("   "))
+    }
+
+    @Test
+    fun givenARepeatedCallBesideACapitalisedRespond_whenChecked_thenTheAnswerIsKept() {
+        // The turn repeats a call that already succeeded, but it also carries the answer, and this
+        // bubble is the only place that text is ever rendered: dropping it ends the run
+        // "completed" with nothing on screen. `Respond` counts as terminal by the loose match.
+        val succeeded = listOf(ToolCall("read_file", mapOf("file_path" to "A.kt")))
+        val repeated = succeeded + ToolCall("Respond", mapOf("message" to "Here is the answer"))
+
+        assertFalse(AgentReplyRenderer.isDuplicateTurn(repeated, succeeded, TERMINAL))
+    }
+
+    @Test
+    fun givenOnlyRepeatedRealCalls_whenChecked_thenTheTurnIsADuplicate() {
+        // Nothing terminal, nothing new: the bubble would say what the last one already did.
+        val succeeded = listOf(ToolCall("read_file", mapOf("file_path" to "A.kt")))
+
+        assertTrue(AgentReplyRenderer.isDuplicateTurn(succeeded.toList(), succeeded, TERMINAL))
+    }
+
+    @Test
+    fun givenADifferentCall_whenChecked_thenTheTurnIsNotADuplicate() {
+        val succeeded = listOf(ToolCall("read_file", mapOf("file_path" to "A.kt")))
+        val next = listOf(ToolCall("read_file", mapOf("file_path" to "B.kt")))
+
+        assertFalse(AgentReplyRenderer.isDuplicateTurn(next, succeeded, TERMINAL))
+    }
+
+    @Test
+    fun givenOnlyATerminalCall_whenChecked_thenTheAnswerIsNeverDroppedAsADuplicate() {
+        // The answer-carrying turn has no real calls left after the filter, so it must fall through
+        // even when the run's last real call is what it is reporting on.
+        val succeeded = listOf(ToolCall("read_file", mapOf("file_path" to "A.kt")))
+
+        assertFalse(
+            AgentReplyRenderer.isDuplicateTurn(respond("message" to "Done."), succeeded, TERMINAL)
+        )
+    }
+
+    @Test
+    fun givenNothingSucceededYet_whenChecked_thenTheTurnIsNotADuplicate() {
+        val calls = listOf(ToolCall("read_file", mapOf("file_path" to "A.kt")))
+
+        assertFalse(AgentReplyRenderer.isDuplicateTurn(calls, null, TERMINAL))
     }
 }

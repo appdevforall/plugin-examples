@@ -46,6 +46,42 @@ There is also **one shared Gradle wrapper at the repo root** (`gradlew` + `gradl
 
 Both jars are referenced via `../libs/*.jar`. **Always use the repo-root `libs/` jars and the repo-root Gradle wrapper — never bundle per-plugin copies.** A plugin that ships its own `libs/plugin-api.jar` / `libs/gradle-plugin.jar` (e.g. copied from another plugin) can drift out of sync with the rest of the repo; point `build.gradle.kts` (`compileOnly`) and `settings.gradle.kts` (buildscript `classpath`) at `../libs/*.jar` and delete any local `libs/`. The root `plugin-api.jar` already carries the full API surface (including `IdeTemplateService`/`CgtTemplateBuilder`), so newer sub-APIs do not justify a local copy. **A plugin folder is not standalone in isolation** — copy the root `libs/` along if you move one elsewhere. When CoGo's API changes, refresh via the script above or the **Update libs from CodeOnTheGo** GitHub Action (which also commits the refreshed jars, cuts a release, and deploys `.cgp` files to the website).
 
+### Credentials: use the host's `KeystoreSecretStore`, never your own crypto
+
+A plugin that stores a credential encrypts it with `com.itsaky.androidide.plugins.security.KeystoreSecretStore`
+from `plugin-api.jar` (**26.36+** — set `plugin.min_ide_version` accordingly). It is `compileOnly`
+like the rest of the API, so there is one implementation in the IDE's process rather than a copy
+compiled into each `.cgp`. Do not re-implement AES/GCM in a plugin; three AI plugins each grew a
+copy that started to diverge, which is what ADFA-5255 removed.
+
+Construct it with **this plugin's own alias** (`KeystoreSecretStore(ALIAS)`) as a single
+top-level `val` in a `SecureApiKeyStore.kt`/`SecureTokenStore.kt` that holds nothing but the alias;
+callers use that instance directly. It takes no log tag — the store logs under its own name — and
+that single-argument constructor is the only one a plugin can reach: the two-argument form takes an
+`internal` `SecretKeySource`, which is not on the plugin's compile classpath at all.
+`ai-agent-mcp`, `ai-agent-gemini` and `ai-agent-openai` are the reference shape. Do **not** wrap
+it in an object of forwarding methods — that is just a second copy of the store's contract to keep
+in step. The alias must be unique per plugin (all plugins share the host's UID and Keystore, so a
+shared alias lets one plugin's invalidated-key recovery delete another's secret) and must never
+change across releases.
+
+`readAndMigrate` returns a four-way `Stored` rather than a nullable String on purpose — each state
+needs different advice, and a plugin that collapses them tells a user their credential was refused
+when it was never sent:
+
+- `Absent` — nothing was ever saved. The ordinary first run; say nothing.
+- `Value` — the plaintext. Trim it at the call site if your credential format wants it;
+  `readAndMigrate` migrates verbatim.
+- `Unreadable` — stored, but this device's Keystore can no longer open it (a restored backup, an
+  OEM Keystore reset). Permanent: the user has to enter it again.
+- `Unavailable` — the Keystore would not answer this time. **Transient: the credential is intact,
+  so retry and never re-prompt.** In particular a pane that reads `Unavailable` must not dress
+  itself as never-configured, and nothing on that screen may write over the credential it could
+  not read — an empty field then means "not shown", not "removed".
+
+Handle all four; collapse them only where the caller genuinely has one answer for every state, and
+say so in a comment.
+
 ### Plugin shape
 
 A plugin is an Android *application* module (despite installing as a library) with:
