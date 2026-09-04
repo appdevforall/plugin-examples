@@ -5,13 +5,17 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.speech.RecognitionListener
+import android.speech.RecognitionSupport
+import android.speech.RecognitionSupportCallback
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.widget.Toast
+import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import com.itsaky.androidide.plugins.IPlugin
 import com.itsaky.androidide.plugins.PluginContext
@@ -35,6 +39,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import java.util.Locale
 import java.util.concurrent.CompletableFuture
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -64,9 +69,33 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
     /** Held only between startListening() and the terminal result/error callback. */
     private var speechRecognizer: SpeechRecognizer? = null
 
+    /** Locale the in-flight attempt asked for, so an error can name the failing language. */
+    @Volatile
+    private var activeLocale: Locale = Locale.getDefault()
+
+    /**
+     * True once this capture has spent its single language fallback. Main-thread only, like
+     * every other capture field here: the toolbar action, the recognizer callbacks and the
+     * recovery runnables all run on the main looper, so no synchronization is needed.
+     */
+    private var languageFallbackSpent = false
+
+    /** Held only across a checkRecognitionSupport / triggerModelDownload call. */
+    private var supportRecognizer: SpeechRecognizer? = null
+
+    /** Everything recognizer-related is posted here; [SpeechRecognizer] is main-thread only. */
+    private val mainHandler = Handler(Looper.getMainLooper())
+
+    /** Tags the delayed recovery work so teardown can cancel exactly that and nothing else. */
+    private val recoveryToken = Any()
+
+    /** When the current non-idle capture started, so a wedged state can't kill the button. */
+    private var captureStartedAt = 0L
+
     /** Drives the toolbar icon via [ToolbarAction.iconProvider]. */
     private enum class RecordingState { IDLE, RECORDING, PROCESSING }
 
+    /** Volatile, unlike the fields above: the host may evaluate the icon provider off-main. */
     @Volatile
     private var recordingState = RecordingState.IDLE
 
@@ -165,7 +194,7 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
 
     override fun deactivate(): Boolean {
         logger?.info("Plugin deactivating")
-        destroyRecognizer()
+        endCapture()
         return true
     }
 
@@ -175,10 +204,23 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
             context.removePluginLifecycleListener(aiCoreLifecycleListener)
         }
         llmService = null
-        destroyRecognizer()
+        endCapture()
         // Tear down the transcript-processing scope so no LLM/generation coroutine
         // outlives the plugin after unload.
         scope.cancel()
+    }
+
+    /**
+     * Stops the capture machinery. The pending recovery work is dropped first, so a queued
+     * retry cannot build a recognizer for a plugin that is going away, and the state is reset
+     * because nothing else will: a teardown mid-recovery would otherwise leave the toolbar
+     * spinning on a capture that no longer exists.
+     */
+    private fun endCapture() {
+        mainHandler.removeCallbacksAndMessages(recoveryToken)
+        destroyRecognizer()
+        destroySupportRecognizer()
+        recordingState = RecordingState.IDLE
     }
 
     /**
@@ -246,6 +288,15 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
     private fun startVoiceCapture() {
         val ctx = hostContext()
 
+        // One capture at a time: a second recognizer would race the first for the microphone
+        // and for the transcript. A capture stuck past the LLM timeout is treated as over.
+        val elapsed = System.currentTimeMillis() - captureStartedAt
+        if (recordingState != RecordingState.IDLE && elapsed < STALE_CAPTURE_MS) {
+            logger?.info("Ignoring the tap: a capture is already $recordingState")
+            toast(str(R.string.stt_error_busy))
+            return
+        }
+
         // Belt-and-suspenders: the toolbar already disables the button when no file is open,
         // but guard here too so a stale enabled state can't start a pointless recording.
         if (!hasOpenFile()) {
@@ -264,23 +315,34 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
             return
         }
 
+        languageFallbackSpent = false
+        captureStartedAt = System.currentTimeMillis()
+        beginRecognition(preferOffline = true, announcement = str(R.string.stt_listening))
+    }
+
+    /**
+     * Runs one recognition attempt. Pre-flight checks live in [startVoiceCapture]; the
+     * language fallbacks re-enter here with another locale or with [preferOffline] false.
+     *
+     * @param preferOffline true to ask for on-device recognition, false to force the network one
+     * @param announcement toast shown once the attempt is about to start listening
+     * @param locale language to recognize; defaults to the host's configured one
+     */
+    private fun beginRecognition(
+        preferOffline: Boolean,
+        announcement: String,
+        locale: Locale = recognitionLocale(),
+    ) {
+        val ctx = hostContext()
         try {
             destroyRecognizer()
             val recognizer = SpeechRecognizer.createSpeechRecognizer(ctx)
             recognizer.setRecognitionListener(recognitionListener)
             speechRecognizer = recognizer
 
-            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                putExtra(
-                    RecognizerIntent.EXTRA_LANGUAGE_MODEL,
-                    RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
-                )
-                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
-                // Prefer on-device recognition; falls back to network if unsupported.
-                putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
-            }
-            toast(str(R.string.stt_listening))
-            recognizer.startListening(intent)
+            activeLocale = locale
+            toast(announcement)
+            recognizer.startListening(recognitionIntent(locale, preferOffline))
             setState(RecordingState.RECORDING)
         } catch (e: Exception) {
             logger?.error("Failed to start speech recognition", e)
@@ -289,6 +351,25 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
             setState(RecordingState.IDLE)
         }
     }
+
+    /**
+     * The recognition request, also used to ask about and to download language support so all
+     * three questions are asked about the same language.
+     *
+     * @param locale language to recognize, named so a pack failure reports the language we asked
+     *   for rather than whatever the recognizer happened to default to
+     * @param preferOffline true to ask for on-device recognition, false to force the network one
+     */
+    private fun recognitionIntent(locale: Locale, preferOffline: Boolean): Intent =
+        Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(
+                RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
+            )
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, locale.toLanguageTag())
+            putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, preferOffline)
+        }
 
     private val recognitionListener = object : RecognitionListener {
         override fun onResults(results: Bundle?) {
@@ -308,6 +389,28 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
 
         override fun onError(error: Int) {
             destroyRecognizer()
+            // A language the recognizer can't serve is recoverable, so spend the capture's one
+            // fallback rather than ending the dictation session.
+            val isLanguageError = error == SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE ||
+                error == SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED
+            if (isLanguageError && !languageFallbackSpent) {
+                languageFallbackSpent = true
+                logger?.info(
+                    "Recognizer rejected ${activeLocale.toLanguageTag()} (error $error) - " +
+                        "asking which languages it does support"
+                )
+                setState(RecordingState.PROCESSING)
+                guardRecovery {
+                    // checkRecognitionSupport arrived in API 33 and the IDE itself runs on 28,
+                    // so an older device gets the network retry directly.
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        checkLanguageSupport()
+                    } else {
+                        retryOnline()
+                    }
+                }
+                return
+            }
             toast(describeError(error))
             setState(RecordingState.IDLE)
         }
@@ -320,6 +423,219 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
         override fun onPartialResults(partialResults: Bundle?) {}
         override fun onEvent(eventType: Int, params: Bundle?) {}
     }
+
+    /**
+     * Runs one step of the language recovery. The expected failures are handled inside each
+     * step, which retries; this is for the rest. A step reaches into the device's speech
+     * service, so it can fail with something that is not an [Exception] - an OEM framework can
+     * throw a linkage or execution error - and every step runs either from a recognizer
+     * callback or from a handler post, where letting that out would take the IDE down and leave
+     * the toolbar spinning on a capture that is over. So: end the capture, and say so.
+     *
+     * [VirtualMachineError] is rethrown: the process is already lost and pretending otherwise
+     * only hides it.
+     */
+    private fun guardRecovery(step: () -> Unit) {
+        try {
+            step()
+        } catch (e: VirtualMachineError) {
+            throw e
+        } catch (e: Throwable) {
+            logger?.error("Language recovery failed", e)
+            destroyRecognizer()
+            destroySupportRecognizer()
+            toast(str(R.string.stt_recovery_failed))
+            setState(RecordingState.IDLE)
+        }
+    }
+
+    /**
+     * Asks the recognizer which languages it actually has, because the error code alone can't
+     * say: code 13 means "no pack for this language" whether the pack is one download away or
+     * the language is unsupported outright.
+     */
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
+    private fun checkLanguageSupport() {
+        val locale = activeLocale
+        val recognizer = try {
+            SpeechRecognizer.createSpeechRecognizer(hostContext())
+        } catch (e: Exception) {
+            logger?.warn("Could not create a recognizer to check language support", e)
+            retryOnline()
+            return
+        }
+        destroySupportRecognizer()
+        supportRecognizer = recognizer
+
+        // Speech Services by Google answers one query with an error and then the same result
+        // twice, and each answer used to start its own recognizer. First answer wins.
+        var handled = false
+        val giveUp = Runnable {
+            if (!handled) {
+                handled = true
+                destroySupportRecognizer()
+                logger?.info("No support answer in ${SUPPORT_TIMEOUT_MS}ms - retrying online")
+                guardRecovery { retryOnline() }
+            }
+        }
+
+        try {
+            recognizer.checkRecognitionSupport(
+                recognitionIntent(locale, preferOffline = true),
+                ContextCompat.getMainExecutor(hostContext()),
+                object : RecognitionSupportCallback {
+                    override fun onSupportResult(support: RecognitionSupport) {
+                        if (handled) return
+                        handled = true
+                        mainHandler.removeCallbacks(giveUp)
+                        destroySupportRecognizer()
+                        logger?.info(
+                            "Support for ${locale.toLanguageTag()}: " +
+                                "installed=${support.installedOnDeviceLanguages}, " +
+                                "downloadable=${support.supportedOnDeviceLanguages}, " +
+                                "pending=${support.pendingOnDeviceLanguages}, " +
+                                "online=${support.onlineLanguages}"
+                        )
+                        guardRecovery { recoverFromSupport(support) }
+                    }
+
+                    override fun onError(code: Int) {
+                        // Not terminal: this service reports 14 (can't report download events)
+                        // and then answers anyway, so let [giveUp] decide when to stop waiting.
+                        logger?.info("Support check reported error $code")
+                    }
+                },
+            )
+            mainHandler.postDelayed(giveUp, recoveryToken, SUPPORT_TIMEOUT_MS)
+        } catch (e: Exception) {
+            handled = true
+            destroySupportRecognizer()
+            logger?.warn("checkRecognitionSupport is not usable here", e)
+            retryOnline()
+        }
+    }
+
+    /**
+     * Applies the best recovery [support] allows: an installed pack for the same language is
+     * used at once, and a missing one is requested for next time while this capture carries on
+     * over the network, which is the only recovery that can serve the words already spoken.
+     *
+     * @param support what the recognizer reported for [activeLocale]
+     */
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
+    private fun recoverFromSupport(support: RecognitionSupport) {
+        val locale = activeLocale
+        val requested = languageLabel()
+
+        val installed = usableTag(support.installedOnDeviceLanguages, locale)
+        if (installed != null) {
+            val fallback = Locale.forLanguageTag(installed)
+            logger?.info("Retrying offline with the installed pack $installed")
+            restartRecognition(
+                preferOffline = true,
+                announcement = str(
+                    R.string.stt_language_using_installed,
+                    requested,
+                    fallback.displayName,
+                ),
+                locale = fallback,
+            )
+            return
+        }
+
+        val missing = usableTag(support.supportedOnDeviceLanguages, locale)
+            ?: usableTag(support.pendingOnDeviceLanguages, locale)
+        if (missing != null) {
+            requestLanguagePack(Locale.forLanguageTag(missing))
+            restartRecognition(
+                preferOffline = false,
+                announcement = str(R.string.stt_language_downloading_retrying, requested),
+                locale = locale,
+            )
+            return
+        }
+
+        retryOnline()
+    }
+
+    /**
+     * Asks the recognizer to fetch the missing pack for next time. Best effort by contract, and
+     * silent by choice: this service answers the support check with code 14, meaning it cannot
+     * report download events, so any promise made to the user here could not be kept.
+     *
+     * @param locale pack to fetch, spelled the way the recognizer spells it
+     */
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
+    private fun requestLanguagePack(locale: Locale) {
+        val recognizer = try {
+            SpeechRecognizer.createSpeechRecognizer(hostContext())
+        } catch (e: Exception) {
+            logger?.warn("Could not create a recognizer to request the pack", e)
+            return
+        }
+        destroySupportRecognizer()
+        supportRecognizer = recognizer
+        try {
+            recognizer.triggerModelDownload(recognitionIntent(locale, preferOffline = true))
+            logger?.info("Requested pack download for ${locale.toLanguageTag()}")
+        } catch (e: Exception) {
+            logger?.warn("Could not request the pack download", e)
+            destroySupportRecognizer(recognizer)
+            return
+        }
+        // triggerModelDownload only queues the request: the recognizer binds to the service
+        // first and drops everything still queued when it is destroyed, so destroying it in
+        // this same tick cancelled the download we just asked for. Hold it a moment instead.
+        mainHandler.postDelayed(
+            { destroySupportRecognizer(recognizer) },
+            recoveryToken,
+            PACK_REQUEST_HOLD_MS,
+        )
+    }
+
+    /**
+     * The network recognizer, tried once the on-device options are exhausted. It is never gated
+     * on [RecognitionSupport.getOnlineLanguages], which this service reports empty even though
+     * its network path works; a language it really cannot serve fails on the next error instead.
+     */
+    private fun retryOnline() {
+        restartRecognition(
+            preferOffline = false,
+            announcement = str(R.string.stt_error_language_retrying, languageLabel()),
+            locale = activeLocale,
+        )
+    }
+
+    /**
+     * Starts the next attempt off the current callback and after the failed session is torn
+     * down: restarting straight from [RecognitionListener.onError] reached the platform while
+     * it still held the old session open, and failed within milliseconds.
+     */
+    private fun restartRecognition(preferOffline: Boolean, announcement: String, locale: Locale) {
+        mainHandler.postDelayed(
+            { guardRecovery { beginRecognition(preferOffline, announcement, locale) } },
+            recoveryToken,
+            RESTART_DELAY_MS,
+        )
+    }
+
+    /**
+     * Finds the entry in [tags] that can recognize [locale]: the same tag when it is there, and
+     * otherwise another region of the same language, which still understands the user (an es-US
+     * pack transcribes es-ES speech).
+     *
+     * @return the recognizer's own spelling of the tag, or null when the language is absent
+     */
+    private fun usableTag(tags: List<String>?, locale: Locale): String? {
+        if (tags.isNullOrEmpty()) return null
+        val wanted = normalizeTag(locale.toLanguageTag())
+        val language = locale.language.lowercase(Locale.ROOT)
+        return tags.firstOrNull { normalizeTag(it) == wanted }
+            ?: tags.firstOrNull { normalizeTag(it).substringBefore('-') == language }
+    }
+
+    /** Services spell tags inconsistently (`es_ES`, `es-es`), so compare them normalized. */
+    private fun normalizeTag(tag: String): String = tag.replace('_', '-').lowercase(Locale.ROOT)
 
     /**
      * Takes the recognized text, optionally runs it through the LLM to produce
@@ -533,6 +849,27 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
     }
 
     /**
+     * Releases the short-lived recognizer used for support checks and pack downloads. The
+     * destroy is always posted, so it can be called from inside that recognizer's own callback
+     * without tearing it down mid-dispatch.
+     *
+     * @param expected when given, does nothing unless this is still the recognizer being held,
+     *   so a delayed release cannot destroy the one a later capture has since put in its place
+     */
+    private fun destroySupportRecognizer(expected: SpeechRecognizer? = null) {
+        val recognizer = supportRecognizer ?: return
+        if (expected != null && expected !== recognizer) return
+        supportRecognizer = null
+        mainHandler.post {
+            try {
+                recognizer.destroy()
+            } catch (e: Exception) {
+                logger?.warn("Failed to destroy the support SpeechRecognizer", e)
+            }
+        }
+    }
+
+    /**
      * Maps a [SpeechRecognizer] error code to a full, user-facing message that says
      * what went wrong and what the user can do about it.
      */
@@ -540,6 +877,11 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
         SpeechRecognizer.ERROR_AUDIO -> str(R.string.stt_error_audio)
         SpeechRecognizer.ERROR_CLIENT -> str(R.string.stt_error_client)
         SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> str(R.string.stt_error_permissions)
+        // Error 12/13 without these two branches is what surfaced as "unknown error 12".
+        SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED ->
+            str(R.string.stt_error_language_not_supported, languageLabel())
+        SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE ->
+            str(R.string.stt_error_language_unavailable, languageLabel())
         SpeechRecognizer.ERROR_NETWORK -> str(R.string.stt_error_network)
         SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> str(R.string.stt_error_network_timeout)
         SpeechRecognizer.ERROR_NO_MATCH -> str(R.string.stt_error_no_match)
@@ -547,6 +889,30 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
         SpeechRecognizer.ERROR_SERVER -> str(R.string.stt_error_server)
         SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> str(R.string.stt_error_speech_timeout)
         else -> str(R.string.stt_error_unknown, error)
+    }
+
+    /**
+     * The language recognition should run in: the host's configured locale, which honours a
+     * per-app language the process-wide default would miss.
+     */
+    private fun recognitionLocale(): Locale = try {
+        hostContext().resources.configuration.locales
+            .takeIf { !it.isEmpty }?.get(0) ?: Locale.getDefault()
+    } catch (e: Exception) {
+        logger?.warn("Could not read the host locale", e)
+        Locale.getDefault()
+    }
+
+    /**
+     * Names the recognition language for a user-facing message, pairing the display name with
+     * the BCP-47 tag the user will see in Android's on-device recognition settings.
+     *
+     * @return e.g. "English (United States) (en-US)"
+     */
+    private fun languageLabel(): String {
+        val locale = activeLocale
+        val display = locale.displayName.takeIf { it.isNotBlank() } ?: locale.toLanguageTag()
+        return "$display (${locale.toLanguageTag()})"
     }
 
     /**
@@ -584,7 +950,7 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
         if (Looper.myLooper() == Looper.getMainLooper()) {
             block()
         } else {
-            Handler(Looper.getMainLooper()).post(block)
+            mainHandler.post(block)
         }
     }
 
@@ -628,6 +994,18 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
             "You are a code generator inside a code editor. Reply with the raw code that " +
                 "fulfils the request and nothing else. Do not explain. Do not use markdown or " +
                 "code fences ($FENCE). Do not name the language."
+
+        /** Lets the failed session finish tearing down before the next attempt starts. */
+        private const val RESTART_DELAY_MS = 400L
+
+        /** How long to wait for a support answer before falling back to the network. */
+        private const val SUPPORT_TIMEOUT_MS = 1_200L
+
+        /** How long a pack-download request keeps its recognizer alive so the request survives. */
+        private const val PACK_REQUEST_HOLD_MS = 5_000L
+
+        /** A capture idle this long is assumed dead, so the microphone button works again. */
+        private const val STALE_CAPTURE_MS = 90_000L
 
         /** Used only when the host cannot name the open file's language. */
         private const val DEFAULT_LANGUAGE = "kotlin"
