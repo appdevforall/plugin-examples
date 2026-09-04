@@ -13,6 +13,10 @@ import org.json.JSONObject
  * `okhttp3` resolves to the host's older OkHttp and an SDK bundling its own copy crashes with a
  * NoSuchMethodError. Kept apart from the backend so the backend is about generating, not sockets.
  *
+ * Both entry points tag their sockets ([NetworkTags]): the host installs
+ * `StrictMode.VmPolicy.detectAll()` process-wide, and an untagged socket trips
+ * `detectUntaggedSockets()` from inside plugin code.
+ *
  * @param connectTimeoutMs how long to wait for the connection itself
  * @param readTimeoutMs how long a generation may take to answer
  */
@@ -31,7 +35,8 @@ internal class OpenAiHttpClient(
     /**
      * POST [body] to [url] and hand the response's reader to [readResponse].
      *
-     * The connection is closed before this returns, whatever [readResponse] did with it.
+     * The connection is closed before this returns, whatever [readResponse] did with it. Its
+     * socket is tagged [NetworkTags.INFERENCE].
      *
      * @param apiKey bearer token, or blank for a server that needs none
      * @param sse true to ask for the server-sent-events stream
@@ -46,7 +51,7 @@ internal class OpenAiHttpClient(
         sse: Boolean = false,
         onConnected: (HttpURLConnection) -> Unit = {},
         readResponse: (BufferedReader) -> T,
-    ): T {
+    ): T = withTrafficTag(NetworkTags.INFERENCE) {
         val conn = open(url, "POST", apiKey).apply {
             readTimeout = readTimeoutMs
             doOutput = true
@@ -54,7 +59,7 @@ internal class OpenAiHttpClient(
             if (sse) setRequestProperty("Accept", "text/event-stream")
         }
         onConnected(conn)
-        return try {
+        try {
             conn.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
             conn.failIfNotOk()
             conn.inputStream.bufferedReader().use(readResponse)
@@ -64,14 +69,14 @@ internal class OpenAiHttpClient(
     }
 
     /**
-     * GET [url] and return its response body.
+     * GET [url] and return its response body, over a socket tagged [NetworkTags.CATALOG].
      *
      * @param apiKey bearer token, or blank for a server that needs none
      * @throws OpenAiHttpException on a non-2xx answer, carrying the server's error body
      */
-    fun get(url: String, apiKey: String): String {
+    fun get(url: String, apiKey: String): String = withTrafficTag(NetworkTags.CATALOG) {
         val conn = open(url, "GET", apiKey)
-        return try {
+        try {
             conn.failIfNotOk()
             conn.inputStream.bufferedReader().use { it.readText() }
         } finally {
