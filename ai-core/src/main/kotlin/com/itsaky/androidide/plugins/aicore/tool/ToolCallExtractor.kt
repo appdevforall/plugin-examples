@@ -1,6 +1,7 @@
 package com.itsaky.androidide.plugins.aicore.tool
 
 import android.util.Log
+import com.itsaky.androidide.plugins.aicore.logging.AgentTrace
 import com.itsaky.androidide.plugins.aicore.logging.LOG_PREFIX
 import org.json.JSONObject
 
@@ -17,6 +18,36 @@ class ToolCallExtractor {
             Regex("""<tool_call>\s*(.+?)\s*</tool_call>""", RegexOption.DOT_MATCHES_ALL)
 
         /**
+         * A tool result written by the model itself, as a ```tool_response fence or a
+         * `<tool_response>` tag. Both system prompts forbid these and promise such output is
+         * ignored; [beforeFabricatedResult] is where that promise is kept.
+         */
+        private val FABRICATED_RESULT_REGEX =
+            Regex("""```+\s*tool_response|<tool_response>""", RegexOption.IGNORE_CASE)
+
+        /**
+         * [text] up to the first tool result the model wrote for itself.
+         *
+         * A model that answers its own tool call has stopped reporting and started role-playing
+         * the rest of the conversation, so every call after that point belongs to an invented
+         * transcript: one reply once yielded 13 calls against a project that did not exist. The
+         * calls before it were still real, so the reply is truncated rather than discarded.
+         *
+         * @param text the model's raw reply.
+         * @return the leading real portion, or [text] unchanged when nothing was fabricated.
+         */
+        internal fun beforeFabricatedResult(text: String): String {
+            val match = FABRICATED_RESULT_REGEX.find(text) ?: return text
+            AgentTrace.refusal(
+                "PARSE",
+                "fabricated tool result offset=${match.range.first} " +
+                    "ignoredChars=${text.length - match.range.first}",
+                "the reply answered its own tool call"
+            )
+            return text.substring(0, match.range.first)
+        }
+
+        /**
          * The prose left once the tool-call envelopes are removed. Worth showing when a `respond`
          * call carries no message, which usually means the model wrote the answer as prose and
          * emitted an empty envelope beside it.
@@ -25,7 +56,7 @@ class ToolCallExtractor {
          *   (untagged) tool call rather than something meant for the user to read.
          */
         fun proseOutsideToolCalls(text: String): String? {
-            val remainder = TOOL_CALL_REGEX.replace(text, "\n").trim()
+            val remainder = TOOL_CALL_REGEX.replace(beforeFabricatedResult(text), "\n").trim()
             if (remainder.isEmpty()) return null
             // A leftover `"tool"` key is an unenveloped call; raw JSON is worse than nothing.
             if (remainder.contains("\"tool\"")) return null
@@ -43,18 +74,21 @@ class ToolCallExtractor {
             Log.d(TAG, "Extracting tool calls from response (${text.length} chars)")
             Log.d(TAG, "Response preview: ${text.take(300)}")
 
+            // Anything past a tool result the model wrote itself is an invented continuation.
+            val body = beforeFabricatedResult(text)
+
             // Strategy 1: Explicit XML tags
-            toolCalls.addAll(extractFromXmlTags(text))
+            toolCalls.addAll(extractFromXmlTags(body))
 
             // Strategy 2: Bare JSON objects if no XML found
             if (toolCalls.isEmpty()) {
-                toolCalls.addAll(extractFromJsonObjects(text))
+                toolCalls.addAll(extractFromJsonObjects(body))
             }
 
-            Log.d(TAG, "Extracted ${toolCalls.size} tool calls from response (${text.length} chars)")
+            Log.d(TAG, "Extracted ${toolCalls.size} tool calls from response (${body.length} chars)")
 
             // Warn if we found incomplete tool calls
-            if (text.contains("<tool_call>") && text.count { it == '<' } > text.count { it == '>' }) {
+            if (body.contains("<tool_call>") && body.count { it == '<' } > body.count { it == '>' }) {
                 Log.w(TAG, "WARNING: Found incomplete tool call tags in response. Response may have been truncated.")
                 Log.w(TAG, "Full response: $text")
             }

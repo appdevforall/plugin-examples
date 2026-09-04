@@ -15,6 +15,8 @@ import com.itsaky.androidide.plugins.aicore.models.ChatMessage
 import com.itsaky.androidide.plugins.aicore.models.ChatSession
 import com.itsaky.androidide.plugins.aicore.models.MessageStatus
 import com.itsaky.androidide.plugins.aicore.models.Sender
+import com.itsaky.androidide.plugins.aicore.models.isRunning
+import com.itsaky.androidide.plugins.aicore.models.traceLabel
 import com.itsaky.androidide.plugins.aicore.models.ToolResult
 import com.itsaky.androidide.plugins.aicore.tool.AgentLoop
 import com.itsaky.androidide.plugins.aicore.tool.AgentTools
@@ -47,6 +49,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -120,6 +123,22 @@ class ChatViewModel(
 
     private val _agentState = MutableStateFlow<AgentState>(AgentState.Idle)
     val agentState: StateFlow<AgentState> = _agentState.asStateFlow()
+
+    /**
+     * Publishes an agent state and traces the transition, so the shape of a run — generating,
+     * executing which tool, idle, cancelled — reads as one `STATE` line per change in the trace.
+     *
+     * Every transition goes through here except the timer's own elapsed-time updates in
+     * [startStateTimer], which fire ten times a second and would bury everything else.
+     *
+     * @param state the state to publish; an unchanged state is neither published nor logged.
+     */
+    private fun setState(state: AgentState) {
+        val previous = _agentState.value
+        if (previous == state) return
+        _agentState.value = state
+        AgentTrace.stage("STATE", "${previous.traceLabel} -> ${state.traceLabel}")
+    }
 
     private val _backendStatus = MutableStateFlow(BackendStatus(AiBackend.DEFAULT_ID, false))
     val isBackendAvailable: StateFlow<Boolean> = _backendStatus
@@ -240,7 +259,10 @@ class ChatViewModel(
     /** The tool awaiting approval, straight from [approvalManager] — no polling in between. */
     val pendingApprovalRequest: StateFlow<ApprovalRequest?> = approvalManager.currentApprovalRequest
 
-    private var contextFiles = listOf<File>()
+    private var _contextFiles = listOf<File>()
+
+    /** Files the user attached; read back by the fragment to rebuild its chips on re-attach. */
+    val contextFiles: List<File> get() = _contextFiles
 
     private var stateUpdateJob: Job? = null
 
@@ -347,6 +369,24 @@ class ChatViewModel(
         }
     }
 
+    /**
+     * Writes the transcript to disk if storage is up. Public because this ViewModel now outlives
+     * the fragment, so [onCleared] fires only on plugin dispose and can no longer be the only
+     * writer.
+     */
+    fun persistState() {
+        if (!isStorageInitialized()) {
+            AgentTrace.detail("PERSIST", "skipped=storage not initialized")
+            return
+        }
+        persistSessions()
+        AgentTrace.detail(
+            "PERSIST",
+            "sessions=${_sessions.value.size} messages=${_messages.value.size} " +
+                "session=${_currentSessionId.value}"
+        )
+    }
+
     private fun persistSessions() {
         storageManager.saveSessions(_sessions.value)
         storageManager.saveCurrentSessionId(_currentSessionId.value)
@@ -363,7 +403,8 @@ class ChatViewModel(
      * Set context files to include in prompts.
      */
     fun setContextFiles(files: List<File>) {
-        contextFiles = files
+        // Copied: the caller passes its own mutable list, which it keeps editing.
+        _contextFiles = files.toList()
     }
 
     /**
@@ -401,7 +442,7 @@ class ChatViewModel(
         )
         _messages.value = _messages.value + errorMessage
         syncMessageToSession(errorMessage)
-        _agentState.value = AgentState.Error(text)
+        setState(AgentState.Error(text))
     }
 
     /**
@@ -626,7 +667,7 @@ class ChatViewModel(
             totalSteps = toolCalls.size,
             description = toolCalls.first().name
         )
-        withContext(Dispatchers.Main) { _agentState.value = executingState }
+        withContext(Dispatchers.Main) { setState(executingState) }
         startStateTimer(executingState)
 
         val results = tools.executor.execute(toolCalls)
@@ -799,7 +840,7 @@ class ChatViewModel(
                 withContext(Dispatchers.Main) {
                     _messages.value = _messages.value + userChatMessage
                     syncMessageToSession(userChatMessage)
-                    _agentState.value = AgentState.Processing(str(R.string.msg_generating))
+                    setState(AgentState.Processing(str(R.string.msg_generating)))
                 }
 
                 val config = LlmInferenceService.LlmConfig(currentBackendId).apply {
@@ -828,7 +869,7 @@ class ChatViewModel(
                         history = history,
                         generate = { turns ->
                             withContext(Dispatchers.Main) {
-                                _agentState.value = AgentState.Processing(str(R.string.msg_generating))
+                                setState(AgentState.Processing(str(R.string.msg_generating)))
                             }
                             runModelTurn(llmService, turns, config, epoch)
                         },
@@ -883,7 +924,7 @@ class ChatViewModel(
                     stopStateTimer()
                 }
 
-                withContext(Dispatchers.Main) { _agentState.value = AgentState.Idle }
+                withContext(Dispatchers.Main) { setState(AgentState.Idle) }
             } catch (ce: CancellationException) {
                 AgentTrace.endRun("cancelled")
                 stopStateTimer()
@@ -892,11 +933,14 @@ class ChatViewModel(
                 logError("sendMessage failed", e)
                 AgentTrace.endRun("error: ${e.message}")
                 stopStateTimer()
-                _agentState.value = AgentState.Error(str(R.string.state_error, e.message))
+                setState(AgentState.Error(str(R.string.state_error, e.message)))
                 addSystemMessage(str(R.string.state_error, e.message), MessageStatus.ERROR)
             } finally {
                 // Allow re-entry once the coroutine unwinds.
                 isGenerating.set(false)
+                // The run can finish with the chat off screen, where nothing else writes.
+                // NonCancellable so a Stop still saves what the run produced before it.
+                withContext(NonCancellable + Dispatchers.Main) { persistState() }
             }
         }
     }
@@ -1170,6 +1214,10 @@ class ChatViewModel(
      */
     fun clearMessages() {
         // Clear Chat must also stop any in-flight run, not just wipe the list.
+        AgentTrace.stage(
+            "CANCEL",
+            "reason=clear chat wasRunning=${_agentState.value.isRunning}"
+        )
         generationEpoch.incrementAndGet()
         approvalManager.cancelPendingApproval()
         generationJob?.cancel()
@@ -1179,7 +1227,7 @@ class ChatViewModel(
         _messages.value = emptyList()
         _history.value = emptyList()
         forgetRetryPoint()
-        _agentState.value = AgentState.Idle
+        setState(AgentState.Idle)
     }
 
     /**
@@ -1232,11 +1280,30 @@ class ChatViewModel(
     }
 
     /**
-     * Stop any ongoing processing.
+     * Drops a delivered [AgentState.Error] back to [AgentState.Idle]. The state now outlives the
+     * fragment, so without this every re-attach would raise the same error snackbar again — the
+     * transcript already keeps the error as a message.
      */
-    fun stopProcessing() {
+    fun clearErrorState() {
+        if (_agentState.value is AgentState.Error) {
+            setState(AgentState.Idle)
+        }
+    }
+
+    /**
+     * Stop any ongoing processing.
+     *
+     * @param reason who asked, for the trace: a run that ends without a `CANCEL` line ended on its
+     *   own, and one that ends with it names the gesture that stopped it.
+     */
+    fun stopProcessing(reason: String = "unspecified") {
+        AgentTrace.stage(
+            "CANCEL",
+            "reason=$reason wasRunning=${_agentState.value.isRunning} " +
+                "state=${_agentState.value.traceLabel}"
+        )
         generationEpoch.incrementAndGet()
-        _agentState.value = AgentState.Cancelling
+        setState(AgentState.Cancelling)
         // Cancelling the job alone would strand an open approval dialog with nothing awaiting it.
         approvalManager.cancelPendingApproval()
         generationJob?.cancel()
@@ -1244,7 +1311,7 @@ class ChatViewModel(
         getLlmService()?.cancelGeneration()
         stopStateTimer()
         finalizeInProgressMessages()
-        _agentState.value = AgentState.Idle
+        setState(AgentState.Idle)
     }
 
     /**
@@ -1283,6 +1350,8 @@ class ChatViewModel(
                 delay(100)
                 val current = _agentState.value
                 if (current !is AgentState.Executing) break
+                // Straight to the flow, not through setState: ten traced lines a second would
+                // bury the run's actual steps.
                 _agentState.value = current.copy(
                     elapsedMillis = System.currentTimeMillis() - current.startTime
                 )
@@ -1301,8 +1370,8 @@ class ChatViewModel(
     override fun onCleared() {
         super.onCleared()
         ToolSourceStore.shared.removeChangeListener(toolSourcesChanged)
-        persistSessions()
-        stopProcessing()
+        persistState()
+        stopProcessing(reason = "viewModel cleared")
         stopStateTimer()
     }
 }

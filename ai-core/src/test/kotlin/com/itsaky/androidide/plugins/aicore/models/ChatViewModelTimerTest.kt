@@ -99,21 +99,20 @@ class ChatViewModelTimerTest {
     }
 
     @Test
-    fun testFormattedProgressFormat() {
+    fun givenAStepInFlight_whenReadForTheStatusLine_thenItExposesTheStepAndItsDescription() {
         val state = AgentState.Executing(
             currentStepIndex = 0,
             totalSteps = 3,
             description = "Loading model"
         )
 
-        val formattedProgress = state.formattedProgress
-        assertTrue(formattedProgress.contains("Step"))
-        assertTrue(formattedProgress.contains("of"))
-        assertTrue(formattedProgress.contains("Loading model"))
+        assertEquals(1, state.stepNumber)
+        assertEquals(3, state.totalSteps)
+        assertEquals("Loading model", state.description)
     }
 
     @Test
-    fun testFormattedTimingFormat() {
+    fun givenAStepInFlight_whenTheTimerTicks_thenTheEstimateFollowsTheAveragePerStep() {
         val state = AgentState.Executing(
             currentStepIndex = 1,
             totalSteps = 3,
@@ -121,21 +120,14 @@ class ChatViewModelTimerTest {
             elapsedMillis = 2000
         )
 
-        val formattedTiming = state.formattedTiming
-        assertTrue(formattedTiming.startsWith("("))
-        assertTrue(formattedTiming.endsWith(")"))
-        assertTrue(formattedTiming.contains("of"))
+        assertEquals(3000L, state.estimatedTotalMillis)
     }
 
     @Test
-    fun testFormattedProgressMultipleSteps() {
-        val state1 = AgentState.Executing(0, 5, "First")
-        val state2 = AgentState.Executing(2, 5, "Middle")
-        val state3 = AgentState.Executing(4, 5, "Last")
-
-        assertEquals("Step 1 of 5: First", state1.formattedProgress)
-        assertEquals("Step 3 of 5: Middle", state2.formattedProgress)
-        assertEquals("Step 5 of 5: Last", state3.formattedProgress)
+    fun givenSeveralSteps_whenCounted_thenEachReportsItsOwnOneBasedNumber() {
+        assertEquals(1, AgentState.Executing(0, 5, "First").stepNumber)
+        assertEquals(3, AgentState.Executing(2, 5, "Middle").stepNumber)
+        assertEquals(5, AgentState.Executing(4, 5, "Last").stepNumber)
     }
 
     @Test
