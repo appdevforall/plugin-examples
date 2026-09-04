@@ -6,8 +6,10 @@ import android.net.Uri
 import android.os.FileObserver
 import android.os.Handler
 import android.os.HandlerThread
+import android.provider.DocumentsContract
 import java.io.Closeable
 import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Watches the file behind a resident model and reports when it goes away, so its gigabytes are
@@ -63,9 +65,9 @@ class PlatformModelSourceWatcher(
     }
 
     /**
-     * Providers notify on their own terms — often for the parent tree rather than the document,
-     * and often for edits rather than deletion — so this registers for descendants too and lets
-     * the callback decide. `onGone` is a hint, never a verdict.
+     * Registers on the document URI *and* on [parentChildrenUriOf] it, which is where a provider
+     * actually notifies a delete and is no descendant of the document URI. Both stay hints, never
+     * verdicts — the parent's URI fires for every sibling too — so the callback confirms first.
      */
     private fun watchDocument(uriString: String, onGone: () -> Unit): Closeable {
         val uri = Uri.parse(uriString)
@@ -74,12 +76,17 @@ class PlatformModelSourceWatcher(
         }
         try {
             context.contentResolver.registerContentObserver(uri, true, observer)
+            // Null for a document at the root of its volume; the direct watch then stands alone.
+            parentChildrenUriOf(uri)?.let {
+                context.contentResolver.registerContentObserver(it, true, observer)
+            }
         } catch (e: Exception) {
             // The handler is already counted; give it back or the thread outlives every watch.
             releaseHandler()
             throw e
         }
-        return Closeable {
+        // One unregister covers both registrations — the resolver keys them by observer.
+        return closeOnce {
             try {
                 context.contentResolver.unregisterContentObserver(observer)
             } finally {
@@ -101,7 +108,16 @@ class PlatformModelSourceWatcher(
         // The framework holds FileObserver weakly and stops watching once it is collected, so the
         // returned handle keeps the only strong reference alive for as long as the watch is wanted.
         observer.startWatching()
-        return Closeable { observer.stopWatching() }
+        return closeOnce { observer.stopWatching() }
+    }
+
+    /**
+     * A handle whose second [Closeable.close] is a no-op. [releaseHandler] counts live watches, so
+     * a double close would stop the delivery thread out from under the watches still using it.
+     */
+    private fun closeOnce(release: () -> Unit): Closeable {
+        val closed = AtomicBoolean(false)
+        return Closeable { if (closed.compareAndSet(false, true)) release() }
     }
 
     /** Starts the delivery thread on the first watch. */
@@ -132,3 +148,23 @@ class PlatformModelSourceWatcher(
         const val THREAD_NAME = "LocalLlm-ModelWatch"
     }
 }
+
+/**
+ * The children URI of [uri]'s parent document, which is where a `DocumentsProvider` notifies a
+ * delete. Drops the last element of the document id — `primary:Download/model.gguf` gives
+ * `primary:Download`. Top-level so it is testable without a `ContentObserver` and a `HandlerThread`.
+ *
+ * @return the parent's children URI, or null when the id names no parent to derive
+ */
+internal fun parentChildrenUriOf(uri: Uri): Uri? = try {
+    val documentId = DocumentsContract.getDocumentId(uri)
+    documentId.substringBeforeLast(DOCUMENT_ID_SEPARATOR, "")
+        .takeIf { it.isNotEmpty() && it != documentId }
+        ?.let { DocumentsContract.buildChildDocumentsUri(uri.authority, it) }
+} catch (_: Exception) {
+    // Not a document URI, or an id this provider shapes some other way.
+    null
+}
+
+/** How every provider that nests documents separates the elements of a document id. */
+private const val DOCUMENT_ID_SEPARATOR = '/'

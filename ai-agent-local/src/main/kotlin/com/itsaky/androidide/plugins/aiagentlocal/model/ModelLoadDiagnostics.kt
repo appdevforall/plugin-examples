@@ -40,6 +40,13 @@ object ModelLoadDiagnostics {
          */
         data object SourceNotSeekable : Diagnosis
 
+        /**
+         * The document opened, but the path standing in for it cannot be opened by name — the only
+         * way the native loader uses it. Its own case because "pick the model again" is useless
+         * advice for a file sitting where the user left it; see [OpenModelFile.isReopenable].
+         */
+        data object SourceNotReopenable : Diagnosis
+
         data object FileEmpty : Diagnosis
         data object NotGguf : Diagnosis
         /**

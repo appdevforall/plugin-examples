@@ -41,8 +41,13 @@ class LocalLlmSettingsViewModelTest {
         /** References the provider will not serve, standing in for a deleted document. */
         val unreadable = mutableSetOf<String>()
 
-        override fun info(context: Context, uriString: String) =
-            ModelFileInfo(fallbackDisplayName(uriString), 1_024L)
+        /** Makes the lookup blow up, standing in for a provider that fails mid-selection. */
+        var failInfo = false
+
+        override fun info(context: Context, uriString: String): ModelFileInfo {
+            if (failInfo) throw IllegalStateException("provider failed")
+            return ModelFileInfo(fallbackDisplayName(uriString), 1_024L)
+        }
 
         override fun openStream(context: Context, uriString: String): InputStream? = null
 
@@ -103,12 +108,13 @@ class LocalLlmSettingsViewModelTest {
      * Unconfined, so every launch runs inline: nothing here suspends on a real dispatcher, and the
      * memory pre-flight fails open on the fake's unreadable header.
      */
-    private fun viewModel() = LocalLlmSettingsViewModel(
-        getContext = { pluginContext },
-        ioDispatcher = Dispatchers.Unconfined,
-        deviceMemory = DeviceMemory { null },
-        modelFiles = modelFiles,
-    )
+    private fun viewModel(deviceMemory: DeviceMemory = DeviceMemory { null }) =
+        LocalLlmSettingsViewModel(
+            getContext = { pluginContext },
+            ioDispatcher = Dispatchers.Unconfined,
+            deviceMemory = deviceMemory,
+            modelFiles = modelFiles,
+        )
 
     @Test
     fun givenASelection_whenItIsKept_thenItsGrantIsPersistedAndStored() {
@@ -231,6 +237,71 @@ class LocalLlmSettingsViewModelTest {
 
         assertEquals(ModelLoadingState.Loaded("a.gguf"), viewModel.state.value?.model)
         assertEquals(EngineState.Initialized, viewModel.state.value?.engine)
+    }
+
+    @Test
+    fun givenARejectedPicksError_whenTheScreenReturnsAndTheModelReadsBack_thenItClears() {
+        // The error described the pick; left standing it shows on every return to the screen.
+        val viewModel = viewModel()
+        viewModel.loadModelFromUri(MODEL_A)
+        every { resolver.openInputStream(any()) } answers { ByteArrayInputStream("NOPE".toByteArray()) }
+        viewModel.loadModelFromUri(MODEL_B)
+        assertTrue(viewModel.state.value?.model is ModelLoadingState.Error)
+
+        viewModel.refreshSavedModelAvailability()
+
+        assertEquals(ModelLoadingState.Loaded("a.gguf"), viewModel.state.value?.model)
+        assertEquals(EngineState.Initialized, viewModel.state.value?.engine)
+    }
+
+    @Test
+    fun givenAPickAbandonedBeforeItWasStored_thenItsGrantIsGivenBackByTheFinally() {
+        // Grants are capped, and only the finally covers every way out of the selection.
+        val viewModel = viewModel()
+
+        every { resolver.openInputStream(any()) } answers { ByteArrayInputStream("NOPE".toByteArray()) }
+        viewModel.loadModelFromUri(MODEL_B)
+
+        assertEquals(listOf(MODEL_B), modelFiles.persisted)
+        assertEquals(listOf(MODEL_B), modelFiles.released)
+        assertEquals(null, viewModel.getLocalModelPath())
+    }
+
+    @Test
+    fun givenASelectionThatThrows_thenItsGrantIsStillGivenBack() {
+        // Leaves through code no abandon path runs, as a cancellation at the dialog would.
+        modelFiles.failInfo = true
+        val viewModel = viewModel()
+
+        viewModel.loadModelFromUri(MODEL_B)
+
+        assertEquals(listOf(MODEL_B), modelFiles.persisted)
+        assertEquals(listOf(MODEL_B), modelFiles.released)
+        assertTrue(viewModel.state.value?.model is ModelLoadingState.Error)
+    }
+
+    @Test
+    fun givenAModelDeclinedAtTheMemoryWarning_thenItsGrantIsGivenBackAndNothingIsStored() {
+        val viewModel = viewModel(deviceMemory = DeviceMemory { 1L })
+        viewModel.loadModelFromUri(MODEL_B)
+        assertTrue("the pre-flight must be waiting on an answer", viewModel.hasPendingMemoryWarning)
+
+        viewModel.onMemoryWarningDecision(false)
+
+        assertEquals(listOf(MODEL_B), modelFiles.released)
+        assertEquals(null, viewModel.getLocalModelPath())
+    }
+
+    @Test
+    fun givenADeclineAtTheMemoryWarning_whenSomethingWasStoredMeanwhile_thenItIsNotReverted() {
+        // The decline owns the two status lines and nothing else in the state.
+        val viewModel = viewModel(deviceMemory = DeviceMemory { 1L })
+        viewModel.loadModelFromUri(MODEL_B)
+        viewModel.saveLocalModelPath(MODEL_A)
+
+        viewModel.onMemoryWarningDecision(false)
+
+        assertEquals(MODEL_A, viewModel.state.value?.savedModelPath)
     }
 
     private companion object {

@@ -9,6 +9,7 @@ import com.itsaky.androidide.plugins.aiagentlocal.model.ModelLoadDiagnostics.Dia
 import com.itsaky.androidide.plugins.aiagentlocal.model.ModelSourceWatcher
 import com.itsaky.androidide.plugins.aiagentlocal.model.NativeModelSource
 import com.itsaky.androidide.plugins.aiagentlocal.model.OpenModelFile
+import com.itsaky.androidide.plugins.aiagentlocal.model.SourceReachability
 import com.itsaky.androidide.plugins.services.LlmInferenceService.*
 import io.mockk.every
 import io.mockk.mockk
@@ -45,6 +46,9 @@ class LocalLlmBackendTest {
         /** Flipped to simulate the user deleting the file out from under a resident model. */
         var reachable = true
 
+        /** What the probe answers when [reachable] is false: a deletion, or a provider that died. */
+        var whenUnreachable = SourceReachability.GONE
+
         /** Reachability probes served, so a burst of watch notifications can be counted. */
         @Volatile var probeCount = 0
 
@@ -53,9 +57,10 @@ class LocalLlmBackendTest {
             return handles[modelReference].takeIf { reachable }
         }
 
-        override fun isReachable(modelReference: String): Boolean {
+        override fun reachabilityOf(modelReference: String): SourceReachability {
             probeCount++
-            return reachable && handles.containsKey(modelReference)
+            return if (reachable && handles.containsKey(modelReference)) SourceReachability.REACHABLE
+            else whenUnreachable
         }
     }
 
@@ -293,6 +298,88 @@ class LocalLlmBackendTest {
     }
 
     @Test
+    fun givenAResidentModel_whenTheProviderStopsAnswering_thenItKeepsServing() {
+        // A dead provider process says nothing about the document; evicting costs a GB reload.
+        val descriptor = RecordingDescriptor()
+        val source = FakeModelSource(mapOf(CONTENT_URI to handleFor(chatModel(), descriptor)))
+        val engine = FakeEngine()
+        val backend = backendWith(source, engine)
+
+        runBlocking { backend.ensureModelLoaded(CONTENT_URI) }
+        source.reachable = false
+        source.whenUnreachable = SourceReachability.UNKNOWN
+
+        runBlocking { backend.ensureModelLoaded(CONTENT_URI) }
+
+        assertEquals("a silent provider must not cost a reload", 1, engine.loadCount)
+        assertEquals("a silent provider must not evict the model", 0, engine.unloadCount)
+        assertFalse("the descriptor must stay open", descriptor.closed)
+    }
+
+    @Test
+    fun givenAResidentModel_whenItsWatchFiresAndTheProviderIsSilent_thenItStaysLoaded() {
+        // The same distinction on the watch path, where a burst of notifications arrives.
+        val source = FakeModelSource(mapOf(CONTENT_URI to handleFor(chatModel())))
+        val engine = FakeEngine()
+        val watcher = FakeWatcher()
+        val backend = backendWith(source, engine, watcher)
+
+        runBlocking { backend.ensureModelLoaded(CONTENT_URI) }
+        source.reachable = false
+        source.whenUnreachable = SourceReachability.UNKNOWN
+        watcher.onGone!!.invoke()
+
+        Thread.sleep(200)
+        assertEquals("an unanswered probe must not unload the model", 0, engine.unloadCount)
+    }
+
+    @Test
+    fun givenADocumentThatCannotBeReopenedByPath_whenLoading_thenRefusedWithItsOwnAdvice() {
+        // Refused before native code, or it lands on "pick the model again" for a file that is there.
+        val descriptor = RecordingDescriptor()
+        val unreadable = OpenModelFile("/proc/self/fd/99", 4_096L, descriptor)
+        val source = FakeModelSource(mapOf(CONTENT_URI to unreadable))
+        val engine = FakeEngine()
+
+        val error = assertThrows(ModelLoadException::class.java) {
+            runBlocking { backendWith(source, engine).ensureModelLoaded(CONTENT_URI) }
+        }
+
+        assertEquals(Diagnosis.SourceNotReopenable, error.diagnosis)
+        assertEquals("nothing may reach the engine", 0, engine.loadCount)
+        assertTrue("the refused descriptor must not leak", descriptor.closed)
+    }
+
+    @Test
+    fun givenAConfiguredModelThatFailsToLoad_whenAvailabilityIsAskedRepeatedly_thenItIsTriedOnce() {
+        // A warm-up re-armed on failure launches one doomed load per isAvailable() call.
+        configureModelPath(CONTENT_URI)
+        // Not in the fake's handles, so the warm-up fails the way an unreachable model does.
+        val source = FakeModelSource(emptyMap())
+        val backend = backendWith(source, FakeEngine())
+
+        repeat(5) { backend.isAvailable() }
+
+        Thread.sleep(300)
+        assertEquals("five asks must cost one warm-up attempt", 1, source.openCount)
+    }
+
+    @Test
+    fun givenAFailedWarmUp_whenAnotherModelIsSelected_thenTheWarmUpIsTriedAgain() {
+        // Keyed on the reference, not disabled outright: a new selection has to be warmed.
+        configureModelPath(CONTENT_URI)
+        val source = FakeModelSource(emptyMap())
+        val backend = backendWith(source, FakeEngine())
+        backend.isAvailable()
+
+        configureModelPath(OTHER_CONTENT_URI)
+        backend.isAvailable()
+
+        Thread.sleep(300)
+        assertEquals("a different selection must re-arm the warm-up", 2, source.openCount)
+    }
+
+    @Test
     fun givenAResidentModelStillOnDisk_whenGenerating_thenItIsServedWithoutReloading() {
         // The check must not cost a reload: a document's procfs path differs on every open, and
         // reloading gigabytes per message would be far worse than the bug it fixes.
@@ -355,10 +442,18 @@ class LocalLlmBackendTest {
     /** A minimal GGUF that passes the ADFA-4388 embedding guard, so loads reach the engine. */
     private fun chatModel(): File = GgufTestFiles.withArchitecture("qwen2")
 
+    /** Points the backend's preferences at [modelRef], the way a saved selection does. */
+    private fun configureModelPath(modelRef: String) {
+        val prefs = mockk<android.content.SharedPreferences>(relaxed = true)
+        every { prefs.getString("local_llm_model_path", any()) } returns modelRef
+        every { pluginContext.getPluginSharedPreferences(any()) } returns prefs
+    }
+
     private fun handleFor(file: File, descriptor: Closeable? = null) =
         OpenModelFile(file.absolutePath, file.length(), descriptor)
 
     private companion object {
         const val CONTENT_URI = "content://com.android.externalstorage.documents/document/model.gguf"
+        const val OTHER_CONTENT_URI = "content://com.android.externalstorage.documents/document/other.gguf"
     }
 }

@@ -133,8 +133,9 @@ class ContentModelFileSource(
                 Uri.parse(uriString),
                 Intent.FLAG_GRANT_READ_URI_PERMISSION,
             )
+        } catch (_: SecurityException) {
+            // Nothing was held, or it was already released: the no-op this documents.
         } catch (e: Exception) {
-            // Never held, or already released — nothing is broken either way.
             onError("could not release the read grant for $uriString", e)
         }
     }

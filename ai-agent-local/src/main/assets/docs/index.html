@@ -58,12 +58,14 @@
   <ul>
     <li><b>Browse</b> — opens the system file picker to choose a
       <code>.gguf</code> model. The plugin keeps read access to the document you
-      picked and reads it where it is — on internal storage, an SD card or a USB
-      volume. Nothing is copied, so a multi-gigabyte model costs no extra device
-      storage. Keep the file where it is: moving or deleting it breaks the
-      selection. The picker offers only documents already stored on the device,
-      because a model still in a cloud folder has to be read as a stream and
-      cannot be loaded in place. If the file is larger than the device's free RAM,
+      picked and reads it where it is, so nothing is copied and a multi-gigabyte
+      model costs no extra device storage. Internal storage always works; a
+      removable volume such as an SD card or a USB drive normally does too, and
+      when one won't allow a direct read the plugin says so and asks you to copy
+      the model to internal storage. Keep the file where it is: moving or
+      deleting it breaks the selection. The picker offers only documents already
+      stored on the device, because a model still in a cloud folder has to be
+      read as a stream and cannot be loaded in place. If the file is larger than the device's free RAM,
       a warning asks you to confirm before loading.</li>
     <li><b>Load from saved</b> — reloads the model you already selected without
       picking it again. Use this after restarting the IDE, or when a load
@@ -101,6 +103,11 @@
       the file, or removing the SD card it lives on, breaks the selection.
       Clearing the IDE's app data also withdraws the permission to read it. Pick
       the model again with <b>Browse</b>.</li>
+    <li><b>"This model can't be read from where it is stored"</b> &mdash; the
+      volume the file sits on doesn't let the IDE open it directly, which can
+      happen on some removable storage. Copy the <code>.gguf</code> to the
+      device's internal storage &mdash; Downloads is fine &mdash; and pick it from
+      there.</li>
     <li><b>"This model is streamed from its storage location"</b> &mdash; the file
       you picked lives in a cloud folder (Google Drive, OneDrive) rather than on
       the device, and can only be read as a stream. Download the

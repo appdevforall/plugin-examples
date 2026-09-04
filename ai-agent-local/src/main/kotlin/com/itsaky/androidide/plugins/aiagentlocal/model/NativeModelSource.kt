@@ -5,6 +5,7 @@ import android.net.Uri
 import java.io.Closeable
 import java.io.File
 import java.io.FileInputStream
+import java.io.FileNotFoundException
 import java.io.InputStream
 
 /**
@@ -36,6 +37,17 @@ class OpenModelFile(
     val isSeekable: Boolean get() = sizeBytes >= 0
 
     /**
+     * Whether [nativePath] can be opened *by name*, which is all the native loader ever does with
+     * it. That open re-resolves to the real inode against this app's own credentials rather than
+     * the SAF grant, so removable storage can refuse it where the descriptor was not. ADFA-5253.
+     */
+    fun isReopenable(): Boolean = try {
+        openStream()?.use { true } ?: false
+    } catch (_: Exception) {
+        false
+    }
+
+    /**
      * Opens an independent read stream over the same bytes the native loader sees — header
      * inspection must never disturb the loader's own file offset.
      *
@@ -54,6 +66,22 @@ class OpenModelFile(
             // Already closed, or the provider died with it — there is nothing left to release.
         }
     }
+}
+
+/**
+ * What a reachability probe found. [GONE] and [UNKNOWN] must never be collapsed: a resident
+ * multi-gigabyte model is the memory pressure that gets a `DocumentsProvider` process killed, and
+ * reading that silence as a deletion evicts a model that is fine. Only [GONE] evicts. ADFA-5253.
+ */
+enum class SourceReachability {
+    /** The source answered, and the model is there. */
+    REACHABLE,
+
+    /** The source answered: the model is gone — deleted, unmounted, or the read grant was revoked. */
+    GONE,
+
+    /** The source did not answer, which says nothing about the model. */
+    UNKNOWN,
 }
 
 /**
@@ -76,9 +104,9 @@ interface NativeModelSource {
      * deleted inode alive, so the mapped pages outlive the file and the model keeps replying from
      * a document the user has thrown away. Only a fresh open off the reference can tell.
      *
-     * @return true when the model is still there; false for deleted, unmounted, or revoked
+     * @return what the probe found; [SourceReachability.UNKNOWN] when the source stayed silent
      */
-    fun isReachable(modelReference: String): Boolean
+    fun reachabilityOf(modelReference: String): SourceReachability
 }
 
 /**
@@ -110,20 +138,37 @@ class ContentNativeModelSource(
     }
 
     /**
-     * One binder round trip for a document, one stat for a path — nothing is read, so this is
-     * cheap enough to ask before every generation. A failure here is the routine answer "it is
-     * gone", not an error worth reporting through [onError].
+     * One binder round trip for a document, one stat for a path — nothing is read, so this is cheap
+     * enough to ask before every generation. [SourceReachability.GONE] is only ever what the source
+     * itself said; a call that failed is [SourceReachability.UNKNOWN], which is not evidence.
      */
-    override fun isReachable(modelReference: String): Boolean = try {
-        if (modelReference.startsWith(CONTENT_SCHEME)) {
-            context.contentResolver
-                .openFileDescriptor(Uri.parse(modelReference), "r")
-                ?.use { true } ?: false
-        } else {
-            File(modelReference).isFile
-        }
-    } catch (_: Exception) {
-        false
+    override fun reachabilityOf(modelReference: String): SourceReachability =
+        if (modelReference.startsWith(CONTENT_SCHEME)) documentReachability(modelReference)
+        else fileReachability(modelReference)
+
+    private fun documentReachability(uriString: String): SourceReachability = try {
+        context.contentResolver
+            .openFileDescriptor(Uri.parse(uriString), "r")
+            ?.use { SourceReachability.REACHABLE }
+        // No descriptor and no failure is not the provider saying the document is gone.
+            ?: SourceReachability.UNKNOWN
+    } catch (_: FileNotFoundException) {
+        // The routine answer for a deleted or renamed document, and not worth reporting.
+        SourceReachability.GONE
+    } catch (_: SecurityException) {
+        // The persisted grant is gone, which is as final as a deletion from here.
+        SourceReachability.GONE
+    } catch (e: Exception) {
+        // DeadObjectException and friends: the provider died, which is not the routine case.
+        onError("could not reach the selected model $uriString", e)
+        SourceReachability.UNKNOWN
+    }
+
+    private fun fileReachability(path: String): SourceReachability = try {
+        if (File(path).isFile) SourceReachability.REACHABLE else SourceReachability.GONE
+    } catch (e: Exception) {
+        onError("could not stat the model file $path", e)
+        SourceReachability.UNKNOWN
     }
 
     private fun openFile(path: String): OpenModelFile? = try {

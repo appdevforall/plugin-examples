@@ -22,6 +22,7 @@ import com.itsaky.androidide.plugins.aiagentlocal.model.ModelSourceWatcher
 import com.itsaky.androidide.plugins.aiagentlocal.model.NativeModelSource
 import com.itsaky.androidide.plugins.aiagentlocal.model.OpenModelFile
 import com.itsaky.androidide.plugins.aiagentlocal.model.PlatformModelSourceWatcher
+import com.itsaky.androidide.plugins.aiagentlocal.model.SourceReachability
 import com.itsaky.androidide.plugins.aiagentlocal.preferences.LocalLlmPreferences
 import com.itsaky.androidide.plugins.aiagentlocal.prompt.LocalSystemPrompt
 import com.itsaky.androidide.plugins.services.LlmInferenceService
@@ -31,6 +32,7 @@ import java.io.Closeable
 import java.io.File
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -165,8 +167,12 @@ class LocalLlmBackend(
         }
     }
 
-    /** Ensures the background warm-up load is launched at most once. */
-    private val warmUpStarted = AtomicBoolean(false)
+    /**
+     * The reference the background warm-up has already been launched for. Keyed on the reference
+     * rather than a flag: a failed warm-up leaves the same path configured, so re-arming it would
+     * launch one doomed load per [isAvailable] call, which the chat screen makes on open.
+     */
+    private val warmedUpRef = AtomicReference<String?>(null)
 
     init {
         scope.launch { deleteLegacyModelCache() }
@@ -228,7 +234,7 @@ class LocalLlmBackend(
         context.logger.debug("LocalLlmBackend.isAvailable() - configured path: $configuredPath, modelLoaded: $modelLoaded")
 
         // Chat-open hits this; start loading now so the first message isn't gated on a cold load.
-        // Kept ahead of the check below so a model the user restores is picked up on the next ask.
+        // Only ever the first ask for a given selection — a restored file is loaded by the send.
         maybeWarmUp(configuredPath)
 
         // Unreachability is left to ensureModelLoaded: a memo here goes stale the moment the user
@@ -237,16 +243,17 @@ class LocalLlmBackend(
     }
 
     /**
-     * Preloads the configured model in the background, once, so the first generation
-     * doesn't pay the cold-load cost. No-op unless this backend is the selected one — warming a
-     * multi-gigabyte model for a user who picked a cloud backend would be pure waste.
+     * Preloads the configured model in the background, once per selection, so the first generation
+     * doesn't pay the cold-load cost. No-op unless this backend is the selected one, and never
+     * retried for a reference that failed — the generation path loads and diagnoses that one.
      *
      * @param configuredPath the configured model path/URI, or null/blank if unset.
      */
     private fun maybeWarmUp(configuredPath: String?) {
         if (configuredPath.isNullOrBlank() || modelLoaded) return
         if (!isSelectedBackend()) return
-        if (!warmUpStarted.compareAndSet(false, true)) return
+        // A different selection re-arms it; the same one, failed or not, does not.
+        if (warmedUpRef.getAndSet(configuredPath) == configuredPath) return
 
         scope.launch {
             try {
@@ -254,9 +261,8 @@ class LocalLlmBackend(
                 generationMutex.withLock { ensureModelLoaded(configuredPath) }
                 context.logger.info("Local model warm-up complete")
             } catch (e: Exception) {
-                // Stay silent (the real send surfaces config errors); allow a later retry.
+                // Stay silent and do not re-arm: the real send surfaces config errors.
                 context.logger.warn("Local model warm-up failed: ${e.message}")
-                warmUpStarted.set(false)
             }
         }
     }
@@ -283,7 +289,8 @@ class LocalLlmBackend(
             // Residency is not evidence the file still exists. The descriptor this backend holds
             // keeps a deleted inode alive, so an unchecked early return keeps answering from a
             // model the user threw away — and keeps its gigabytes mapped. Confirm, then serve.
-            if (modelSource.isReachable(modelRef)) return
+            // Anything but GONE is served: a silent provider is no reason to pay a GB reload.
+            if (modelSource.reachabilityOf(modelRef) != SourceReachability.GONE) return
             context.logger.info("Resident model is no longer reachable; unloading: $modelRef")
             evictResidentModel()
             throw unopenable(modelRef)
@@ -300,6 +307,13 @@ class LocalLlmBackend(
             if (!opened.isSeekable) {
                 context.logger.warn("The selected model is not a local file: $modelRef")
                 val diagnosis = ModelLoadDiagnostics.Diagnosis.SourceNotSeekable
+                throw ModelLoadException(loadMessages.describe(diagnosis), diagnosis)
+            }
+
+            // Or it arrives as the loader's null handle: "pick it again" for a file that is there.
+            if (!withContext(Dispatchers.IO) { opened.isReopenable() }) {
+                context.logger.warn("The selected model cannot be re-opened by path: $modelRef")
+                val diagnosis = ModelLoadDiagnostics.Diagnosis.SourceNotReopenable
                 throw ModelLoadException(loadMessages.describe(diagnosis), diagnosis)
             }
 
@@ -447,8 +461,6 @@ class LocalLlmBackend(
         currentModelRef = null
         openModel?.close()
         openModel = null
-        // Re-arm the warm-up: a model that becomes reachable again is loaded without a restart.
-        warmUpStarted.set(false)
     }
 
     /**
@@ -513,7 +525,8 @@ class LocalLlmBackend(
             try {
                 generationMutex.withLock {
                     if (!modelLoaded || currentModelRef != modelRef) return@withLock
-                    if (modelSource.isReachable(modelRef)) return@withLock
+                    // Only what the provider itself called gone may cost a model its pages.
+                    if (modelSource.reachabilityOf(modelRef) != SourceReachability.GONE) return@withLock
                     context.logger.info("Selected model was deleted; releasing it: $modelRef")
                     evictResidentModel()
                 }
