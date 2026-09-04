@@ -13,7 +13,6 @@ import android.widget.LinearLayout
 import android.widget.ArrayAdapter
 import android.widget.Spinner
 import android.widget.TextView
-import android.widget.Toast
 import androidx.fragment.app.Fragment
 import com.codeonthego.snippets.R
 import com.codeonthego.snippets.SnippetEntry
@@ -23,6 +22,7 @@ import com.codeonthego.snippets.SnippetsPlugin
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.textfield.TextInputEditText
+import com.itsaky.androidide.plugins.base.PluginWindows
 import com.itsaky.androidide.plugins.base.PluginFragmentHelper
 
 class SnippetManagerFragment : Fragment() {
@@ -144,9 +144,13 @@ class SnippetManagerFragment : Fragment() {
         }
 
         val editDialog = MaterialAlertDialogBuilder(ctx)
-            .setTitle(if (existing != null) "Edit Snippet" else "New Snippet")
+            .setTitle(
+                ctx.getString(
+                    if (existing != null) R.string.snippet_editor_title_edit else R.string.snippet_editor_title_new
+                )
+            )
             .setView(dialogView)
-            .setPositiveButton("Save") { _, _ ->
+            .setPositiveButton(ctx.getString(R.string.snippet_action_save)) { _, _ ->
                 val prefix = prefixInput.text?.toString()?.trim() ?: ""
                 val desc = descInput.text?.toString()?.trim() ?: ""
                 val lang = langSpinner.selectedItem?.toString() ?: ""
@@ -154,7 +158,7 @@ class SnippetManagerFragment : Fragment() {
                 val body = bodyInput.text?.toString()?.split("\n") ?: emptyList()
 
                 if (prefix.isEmpty() || desc.isEmpty() || lang.isEmpty() || scope.isEmpty()) {
-                    Toast.makeText(ctx, "All fields are required", Toast.LENGTH_SHORT).show()
+                    PluginWindows.showToast(ctx, ctx.getString(R.string.snippet_msg_all_fields_required))
                     return@setPositiveButton
                 }
 
@@ -175,8 +179,9 @@ class SnippetManagerFragment : Fragment() {
                 save()
                 renderList()
             }
-            .setNegativeButton("Cancel", null)
-            .show()
+            .setNegativeButton(ctx.getString(R.string.snippet_action_cancel), null)
+            .create()
+        PluginWindows.showDialog(editDialog)
         applyDialogButtonColors(editDialog)
     }
 
@@ -185,15 +190,16 @@ class SnippetManagerFragment : Fragment() {
         val entry = snippets.getOrNull(index) ?: return
 
         val deleteDialog = MaterialAlertDialogBuilder(ctx)
-            .setTitle("Delete Snippet")
-            .setMessage("Delete \"${entry.prefix}\"?")
-            .setPositiveButton("Delete") { _, _ ->
+            .setTitle(ctx.getString(R.string.snippet_delete_title))
+            .setMessage(ctx.getString(R.string.snippet_delete_confirm, entry.prefix))
+            .setPositiveButton(ctx.getString(R.string.snippet_action_delete)) { _, _ ->
                 snippets.removeAt(index)
                 save()
                 renderList()
             }
-            .setNegativeButton("Cancel", null)
-            .show()
+            .setNegativeButton(ctx.getString(R.string.snippet_action_cancel), null)
+            .create()
+        PluginWindows.showDialog(deleteDialog)
         applyDialogButtonColors(deleteDialog)
     }
 
@@ -211,10 +217,10 @@ class SnippetManagerFragment : Fragment() {
             SnippetsConfigParser.write(file, SnippetsConfig(snippets.toList()))
             SnippetsPlugin.instance?.invalidateCache()
             SnippetsPlugin.instance?.refreshRegistry()
-            Toast.makeText(requireContext(), "Snippets saved", Toast.LENGTH_SHORT).show()
+            PluginWindows.showToast(requireContext(), getString(R.string.snippet_msg_saved))
         } catch (e: Exception) {
             Log.e("SnippetManager", "Failed to save snippets", e)
-            Toast.makeText(requireContext(), "Failed to save", Toast.LENGTH_SHORT).show()
+            PluginWindows.showToast(requireContext(), getString(R.string.snippet_msg_save_failed))
         }
     }
 
