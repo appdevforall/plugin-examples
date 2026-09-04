@@ -27,7 +27,8 @@
     <string name="state_initializing">Initializing…</string>
     <string name="state_thinking">Thinking…</string>
     <string name="state_processing">Processing…</string>
-    <string name="state_executing">Executing step %1$d of %2$d: %3$s</string>
+    <string name="state_executing">Step %1$d of %2$d: %3$s</string>
+    <string name="state_executing_timing">(%1$s of %2$s)</string>
     <string name="state_cancelling">Cancelling…</string>
 
     <!-- Backend Status -->
