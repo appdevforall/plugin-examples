@@ -5,6 +5,7 @@ import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aicore.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aicore.models.ToolResult
 import com.itsaky.androidide.plugins.aicore.tool.ToolHandler
+import com.itsaky.androidide.plugins.aicore.tool.ToolSchema
 import java.io.File
 
 private const val TAG = "$LOG_PREFIX.ListFilesHandler"
@@ -16,6 +17,11 @@ class ListFilesHandler(
     private val pluginContext: PluginContext
 ) : ToolHandler {
     override val toolName = "list_files"
+    override val parametersSchema = ToolSchema.objectOf(
+        "directory" to ToolSchema.string(
+            "Project-relative directory to list. Empty or omitted lists the project root."
+        ),
+    )
     override val description = "List files and directories in a given path"
     override val requiresApproval = false
     override val pathArgs = listOf("directory")

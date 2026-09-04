@@ -2,10 +2,12 @@ package com.itsaky.androidide.plugins.aiagentgemini.backend
 
 import android.content.SharedPreferences
 import android.os.Looper
+import android.util.Log
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aiagentgemini.R
 import com.itsaky.androidide.plugins.aiagentgemini.errors.GeminiErrorFormatter
 import com.itsaky.androidide.plugins.aiagentgemini.errors.GeminiFailure
+import com.itsaky.androidide.plugins.aiagentgemini.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aiagentgemini.preferences.GeminiPreferences
 import com.itsaky.androidide.plugins.aiagentgemini.prompt.GeminiSystemPrompt
 import com.itsaky.androidide.plugins.aiagentgemini.security.secureApiKeyStore
@@ -28,6 +30,16 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
+ * Tool-protocol tracing, under the tag suffix `ai-core` uses for the other half of the same run:
+ * `adb logcat -s AiCore.AgentTrace:V AiAgentGemini.AgentTrace:V` reads a run end to end.
+ *
+ * These lines go through [Log] rather than `context.logger`, which the host funnels into its own
+ * class's tag with only a `[pluginId]` prefix — unfilterable, and why a captured log of an agent
+ * run showed nothing from this plugin at all.
+ */
+private const val TAG = "$LOG_PREFIX.AgentTrace"
+
+/**
  * Gemini API backend for cloud-based LLM inference.
  *
  * Talks to the Generative Language REST API directly over [HttpURLConnection] rather than the
@@ -38,7 +50,7 @@ import org.json.JSONObject
  */
 class GeminiBackend(
     private val context: PluginContext
-) : HistoryCapableBackend, CancellableBackend, ConfigurableBackend {
+) : HistoryCapableBackend, CancellableBackend, ConfigurableBackend, ToolCallingBackend {
 
     private val scope = CoroutineScope(Dispatchers.IO)
 
@@ -66,6 +78,9 @@ class GeminiBackend(
 
         /** Server-sent-events streaming variant of [METHOD_GENERATE_CONTENT]. */
         private const val METHOD_STREAM_GENERATE_CONTENT = "streamGenerateContent"
+
+        /** `finishReason` for a reply the model's output cap cut short. */
+        private const val FINISH_REASON_MAX_TOKENS = "MAX_TOKENS"
     }
 
     /** This plugin's own settings, written by its settings pane and read here at request time. */
@@ -232,7 +247,8 @@ class GeminiBackend(
         config: LlmConfig,
         callback: StreamCallback
     ) {
-        streamContents(JSONArray().put(contentJson("user", buildPrompt(prompt, config))), config, callback)
+        val contents = JSONArray().put(contentJson("user", buildPrompt(prompt, config)))
+        streamContents(contents, config, emptyList(), callback.asToolCallback())
     }
 
     /**
@@ -262,7 +278,8 @@ class GeminiBackend(
                 ChatMessage.Role.ASSISTANT -> "model"
                 // Gemini has no system role; a mid-conversation system note goes as a user turn.
                 ChatMessage.Role.SYSTEM -> "user"
-                // No native function calling here, so a tool result rides in as a user turn.
+                // A functionResponse part pairs with a functionCall one, and the assistant turn
+                // in history is text, so a tool result rides in as a user turn instead.
                 ChatMessage.Role.TOOL -> "user"
             }
             contents.put(contentJson(role, msg.content))
@@ -276,12 +293,14 @@ class GeminiBackend(
      *
      * @param contents the request's `contents[]` turns
      * @param config sampling settings for this request
-     * @param callback receives tokens, completion, and errors
+     * @param tools the tools to declare, or empty to stream plain text
+     * @param callback receives tokens, tool calls, completion, and errors
      */
     private fun streamContents(
         contents: JSONArray,
         config: LlmConfig,
-        callback: StreamCallback
+        tools: List<ToolDefinition>,
+        callback: ToolStreamCallback
     ) {
         currentJob = scope.launch {
             try {
@@ -292,12 +311,21 @@ class GeminiBackend(
                     }
 
                 val startTime = System.currentTimeMillis()
-                context.logger.info("GeminiBackend: Streaming response over ${contents.length()} turns")
-
-                val body = buildRequestJson(contents, config)
+                val body = buildRequestJson(contents, config, tools)
+                // `declared` counts what reached the body, not what was asked for: a schema
+                // [buildRequestJson] had to drop falls back to text calls without saying so here.
+                Log.i(
+                    TAG,
+                    "REQUEST | model=${getModelName()} turns=${contents.length()} " +
+                        "tools=${tools.size} declared=${declaredToolCount(body)} " +
+                        tools.joinToString(",") { it.name }
+                )
 
                 val fullText = StringBuilder()
                 var chunkCount = 0
+                var toolCallCount = 0
+                // Last chunk's reason wins: only the final one carries why generation stopped.
+                var finishReason: String? = null
                 val conn = openConnection(getModelName(), METHOD_STREAM_GENERATE_CONTENT, sse = true, apiKey = apiKey)
                 val cancelHandle = coroutineContext[Job]?.invokeOnCompletion { cause ->
                     if (cause != null) conn.disconnect()
@@ -313,14 +341,24 @@ class GeminiBackend(
                             val payload = line.substringAfter("data:").trim()
                             if (payload.isEmpty() || payload == "[DONE]") continue
                             // A malformed/non-JSON chunk must not abort the whole stream; skip it.
-                            val chunk = runCatching { extractText(JSONObject(payload)) }.getOrElse {
-                                context.logger.warn("GeminiBackend: skipping malformed SSE chunk: ${it.message}")
-                                ""
+                            val chunk = runCatching { GeminiToolProtocol.parseChunk(JSONObject(payload)) }.getOrElse {
+                                Log.w(TAG, "CHUNK | skipped malformed SSE chunk: ${it.message}")
+                                GeminiToolProtocol.StreamChunk.EMPTY
                             }
-                            if (chunk.isNotEmpty()) {
+                            chunk.finishReason?.let { finishReason = it }
+                            if (chunk.text.isNotEmpty()) {
                                 chunkCount++
-                                fullText.append(chunk)
-                                callback.onToken(chunk)
+                                fullText.append(chunk.text)
+                                callback.onToken(chunk.text)
+                            }
+                            for (call in chunk.calls) {
+                                toolCallCount++
+                                Log.i(
+                                    TAG,
+                                    "FUNCTION_CALL | tool=${call.name} " +
+                                        "args=${call.args.orEmpty().keys.joinToString(",")}"
+                                )
+                                callback.onToolCall(call)
                             }
                         }
                     }
@@ -330,18 +368,32 @@ class GeminiBackend(
                 }
 
                 val finalText = fullText.toString()
-                if (finalText.isBlank()) {
-                    callback.onError("Empty response from Gemini API")
-                } else {
-                    val tokenCount = finalText.split("\\s+".toRegex()).size
-                    context.logger.info("GeminiBackend: Streamed ${finalText.length} chars in $chunkCount chunks, ~$tokenCount tokens")
-                    callback.onComplete(LlmResponse.success(finalText, tokenCount, System.currentTimeMillis() - startTime))
+                Log.i(
+                    TAG,
+                    "STREAM | chars=${finalText.length} chunks=$chunkCount calls=$toolCallCount " +
+                        "finish=$finishReason"
+                )
+                when {
+                    // Truncation is why a request to write a whole file came back unusable, and it
+                    // reads as an empty or half-finished reply unless the reason is reported.
+                    toolCallCount == 0 && finishReason == FINISH_REASON_MAX_TOKENS ->
+                        callback.onError(userMessage(GeminiFailure.ReplyTruncated))
+
+                    toolCallCount == 0 && finalText.isBlank() ->
+                        callback.onError("Empty response from Gemini API")
+
+                    else -> {
+                        val tokenCount = finalText.split("\\s+".toRegex()).size
+                        callback.onComplete(
+                            LlmResponse.success(finalText, tokenCount, System.currentTimeMillis() - startTime)
+                        )
+                    }
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 ensureActive()
-                context.logger.error("GeminiBackend: Error in streaming", e)
+                Log.e(TAG, "STREAM | failed: ${e.message}", e)
                 callback.onError(formatErrorMessage(e))
             }
         }
@@ -553,7 +605,31 @@ User: $userPrompt"""
         config: LlmConfig,
         callback: StreamCallback
     ) {
-        streamContents(buildContents(history, prompt, config), config, callback)
+        streamContents(buildContents(history, prompt, config), config, emptyList(), callback.asToolCallback())
+    }
+
+    /**
+     * Streams a turn with [tools] declared to the API, reporting each `functionCall` part through
+     * [ToolStreamCallback.onToolCall].
+     *
+     * This is the path the agent takes. Declaring the tools is what stops Gemini writing a call as
+     * prose the caller has to parse back: the arguments arrive already structured, so a file whose
+     * contents contain quotes or newlines can no longer break the call carrying it (ADFA-5410).
+     *
+     * @param prompt the current user turn
+     * @param history the conversation so far, oldest first
+     * @param config sampling settings; its system prompt becomes the leading turn pair
+     * @param tools the tools to declare; an empty list streams plain text
+     * @param callback receives tokens, tool calls, completion, and errors
+     */
+    override fun generateStreamingWithTools(
+        prompt: String,
+        history: List<ChatMessage>,
+        config: LlmConfig,
+        tools: List<ToolDefinition>,
+        callback: ToolStreamCallback
+    ) {
+        streamContents(buildContents(history, prompt, config), config, tools, callback)
     }
 
     /** Cancel any in-flight generation (user pressed Stop). */
@@ -645,10 +721,15 @@ User: $userPrompt"""
      *
      * @param contents the `contents` array of role/parts turns
      * @param config supplies temperature and max output tokens
+     * @param tools the tools to declare; omitted from the body when empty
      * @return the request JSON
      */
-    private fun buildRequestJson(contents: JSONArray, config: LlmConfig): JSONObject =
-        JSONObject()
+    private fun buildRequestJson(
+        contents: JSONArray,
+        config: LlmConfig,
+        tools: List<ToolDefinition> = emptyList(),
+    ): JSONObject {
+        val body = JSONObject()
             .put("contents", contents)
             .put(
                 "generationConfig",
@@ -656,6 +737,31 @@ User: $userPrompt"""
                     .put("temperature", config.temperature.toDouble())
                     .put("maxOutputTokens", config.maxTokens)
             )
+        if (tools.isEmpty()) return body
+        // A schema this side cannot express must not cost the user the whole request: dropping the
+        // declarations degrades to the text envelope the prompt still describes.
+        val declarations = runCatching { GeminiToolProtocol.functionDeclarations(tools) }.getOrElse {
+            Log.w(TAG, "REQUEST | could not declare tools, falling back to text calls", it)
+            return body
+        }
+        return body.put("tools", JSONArray().put(JSONObject().put("functionDeclarations", declarations)))
+    }
+
+    /**
+     * How many function declarations [body] ended up carrying.
+     *
+     * Read back off the body rather than counted from the tool list, so a run whose declarations
+     * were dropped is distinguishable in the trace from one that was never offered any tools.
+     *
+     * @param body a request built by [buildRequestJson]
+     * @return the declaration count, or 0 when the body declares no tools
+     */
+    private fun declaredToolCount(body: JSONObject): Int =
+        body.optJSONArray("tools")
+            ?.optJSONObject(0)
+            ?.optJSONArray("functionDeclarations")
+            ?.length()
+            ?: 0
 
     /**
      * Build a single `contents` turn.
@@ -668,6 +774,18 @@ User: $userPrompt"""
         JSONObject()
             .put("role", role)
             .put("parts", JSONArray().put(JSONObject().put("text", text)))
+
+    /**
+     * Adapts a plain stream callback to the tool-aware one [streamContents] takes.
+     *
+     * @return a [ToolStreamCallback] that forwards every event and reports no tool calls
+     */
+    private fun StreamCallback.asToolCallback(): ToolStreamCallback = object : ToolStreamCallback {
+        override fun onToken(token: String) = this@asToolCallback.onToken(token)
+        override fun onToolCall(request: ToolCallRequest) = Unit
+        override fun onComplete(response: LlmResponse) = this@asToolCallback.onComplete(response)
+        override fun onError(error: String) = this@asToolCallback.onError(error)
+    }
 
     /**
      * Extract and concatenate the text parts of the first candidate.
@@ -729,6 +847,9 @@ User: $userPrompt"""
 
             GeminiFailure.Unreachable ->
                 resources.getString(R.string.gemini_error_unreachable)
+
+            GeminiFailure.ReplyTruncated ->
+                resources.getString(R.string.gemini_error_truncated)
 
             is GeminiFailure.Failed -> failure.reason?.let {
                 resources.getString(R.string.gemini_error_failed_reason, it)

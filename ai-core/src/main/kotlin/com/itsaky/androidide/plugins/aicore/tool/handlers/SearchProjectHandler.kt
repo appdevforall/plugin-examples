@@ -5,6 +5,7 @@ import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aicore.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aicore.models.ToolResult
 import com.itsaky.androidide.plugins.aicore.tool.ToolHandler
+import com.itsaky.androidide.plugins.aicore.tool.ToolSchema
 import java.io.File
 
 private const val TAG = "$LOG_PREFIX.SearchProjectHandler"
@@ -16,6 +17,16 @@ class SearchProjectHandler(
     private val pluginContext: PluginContext
 ) : ToolHandler {
     override val toolName = "search_project"
+    override val parametersSchema = ToolSchema.objectOf(
+        "query" to ToolSchema.string("Text to search for; a file name unless searching contents."),
+        "project_dir" to ToolSchema.string(
+            "Project-relative directory to search under. Defaults to the whole project."
+        ),
+        "search_in_contents" to ToolSchema.boolean(
+            "Search inside files instead of matching their names."
+        ),
+        required = listOf("query"),
+    )
     override val description = "Search for files by name or content in the project"
     override val requiresApproval = false
     override val pathArgs = listOf("project_dir")

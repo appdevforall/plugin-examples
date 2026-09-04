@@ -236,11 +236,23 @@ class Executor(
         toolExecutionTracker?.logToolCall(toolName, toolDuration)
 
         Log.i(TAG, "($executionMode): Result: ${result.toResultMap()}")
-        AgentTrace.stage(
-            "EXEC",
-            "$toolName done success=${result.success} tookMs=$toolDuration",
-            AgentTrace.preview(result.message),
-        )
+        // A failure's reason goes in the head, not the preview: it is the handler's own short
+        // message rather than the user's content, and a release build drops previews — which is
+        // what left a run_app that failed in 0ms indistinguishable from one that ran and failed.
+        if (result.success) {
+            AgentTrace.stage(
+                "EXEC",
+                "$toolName done success=true tookMs=$toolDuration",
+                AgentTrace.preview(result.message),
+            )
+        } else {
+            AgentTrace.refusal(
+                "EXEC",
+                "$toolName done success=false tookMs=$toolDuration " +
+                    "reason=${AgentTrace.preview(result.message, 80)}",
+                result.error_details.orEmpty(),
+            )
+        }
         return result
     }
 

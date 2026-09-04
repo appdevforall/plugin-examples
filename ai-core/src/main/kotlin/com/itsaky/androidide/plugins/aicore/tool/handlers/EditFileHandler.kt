@@ -3,6 +3,7 @@ package com.itsaky.androidide.plugins.aicore.tool.handlers
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aicore.models.ToolResult
 import com.itsaky.androidide.plugins.aicore.tool.ToolHandler
+import com.itsaky.androidide.plugins.aicore.tool.ToolSchema
 import com.itsaky.androidide.plugins.aicore.tool.Validation
 import com.itsaky.androidide.plugins.aicore.tool.handlers.edit.AtomicFileWriter
 import com.itsaky.androidide.plugins.aicore.tool.handlers.edit.EditTargetResolver
@@ -36,6 +37,17 @@ class EditFileHandler(
 ) : ToolHandler {
 
     override val toolName = TOOL_NAME
+    override val parametersSchema = ToolSchema.objectOf(
+        ARG_PATH to ToolSchema.string("Project-relative path of the file to edit."),
+        ARG_OLD to ToolSchema.string(
+            "The exact text to find, copied byte-for-byte from the file including indentation."
+        ),
+        ARG_NEW to ToolSchema.string("What to put in its place; empty deletes it."),
+        ARG_REPLACE_ALL to ToolSchema.boolean(
+            "Replace every occurrence. When false the text must match exactly once."
+        ),
+        required = listOf(ARG_PATH, ARG_OLD, ARG_NEW),
+    )
     override val description =
         "Edit an existing file by replacing an exact snippet: give file_path, old_string " +
             "(text to find, copied exactly including indentation) and new_string (its " +

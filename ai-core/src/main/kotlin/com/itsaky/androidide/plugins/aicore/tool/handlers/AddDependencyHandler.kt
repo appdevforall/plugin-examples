@@ -5,6 +5,7 @@ import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aicore.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aicore.models.ToolResult
 import com.itsaky.androidide.plugins.aicore.tool.ToolHandler
+import com.itsaky.androidide.plugins.aicore.tool.ToolSchema
 import com.itsaky.androidide.plugins.services.IdeProjectManipulationService
 
 private const val TAG = "$LOG_PREFIX.AddDependencyHandler"
@@ -16,6 +17,15 @@ class AddDependencyHandler(
     private val pluginContext: PluginContext
 ) : ToolHandler {
     override val toolName = "add_dependency"
+    override val parametersSchema = ToolSchema.objectOf(
+        "dependency" to ToolSchema.string(
+            "Maven coordinate to add, as group:artifact:version."
+        ),
+        "build_file" to ToolSchema.string(
+            "Project-relative build file to add it to. Defaults to the app module's."
+        ),
+        required = listOf("dependency"),
+    )
     override val description = "Add a Maven dependency to the project build file"
     override val requiresApproval = true
 

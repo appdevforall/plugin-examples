@@ -43,6 +43,7 @@ object AgentReplyRenderer {
      * @param lastToolFailed whether this run's most recent tool call failed.
      * @param actionFailedText what to show when the model claims success after a failed tool.
      * @param noResponseText last-resort text when the turn carries nothing to show.
+     * @param unparsedReplyText what to show for a reply that meant to call a tool and failed to.
      * @param renderToolCall renders one tool call as a badge line.
      * @return the text to display for this turn.
      */
@@ -53,6 +54,7 @@ object AgentReplyRenderer {
         lastToolFailed: Boolean,
         actionFailedText: String,
         noResponseText: String,
+        unparsedReplyText: (ToolCallExtractor.UnparsedReply) -> String,
         renderToolCall: (ToolCall) -> String,
     ): String {
         val respondCall = toolCalls.firstOrNull { isTerminalToolName(it.name, terminalTool) }
@@ -64,7 +66,9 @@ object AgentReplyRenderer {
                     ?: ToolCallExtractor.proseOutsideToolCalls(rawText)
                     ?: noResponseText
             toolCalls.isNotEmpty() -> toolCalls.joinToString("\n", transform = renderToolCall)
-            else -> rawText.ifBlank { noResponseText }
+            // A call that failed to parse: say so, rather than pasting the raw envelope on screen.
+            else -> ToolCallExtractor.diagnoseUnparsedReply(rawText)?.let(unparsedReplyText)
+                ?: rawText.ifBlank { noResponseText }
         }
     }
 }

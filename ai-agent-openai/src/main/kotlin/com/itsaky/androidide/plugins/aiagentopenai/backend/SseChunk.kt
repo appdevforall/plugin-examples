@@ -25,6 +25,17 @@ internal object SseChunk {
         data class Token(val text: String) : Event
 
         /**
+         * Fragments of one or more native tool calls, for [OpenAiToolProtocol.CallAccumulator].
+         *
+         * @property deltas the chunk's `tool_calls` fragments.
+         * @property text prose the same chunk carried, which a call riding along must not drop.
+         */
+        data class ToolCalls(
+            val deltas: List<OpenAiToolProtocol.ToolCallDelta>,
+            val text: String,
+        ) : Event
+
+        /**
          * Thinking text, which is **not** part of the reply.
          *
          * Tracked rather than discarded: a model that spends its whole token budget reasoning
@@ -99,6 +110,7 @@ internal object SseChunk {
 
         val content = StringBuilder()
         val reasoning = StringBuilder()
+        val toolCalls = mutableListOf<OpenAiToolProtocol.ToolCallDelta>()
         var finishReason: String? = null
         for (i in 0 until choices.length()) {
             val choice = choices.optJSONObject(i) ?: continue
@@ -106,11 +118,15 @@ internal object SseChunk {
             val delta = choice.optJSONObject("delta") ?: choice.optJSONObject("message")
             content.append(delta?.optString("content").orEmpty())
             reasoning.append(reasoningOf(delta))
+            toolCalls += OpenAiToolProtocol.toolCallDeltas(delta)
             choice.optString("finish_reason").takeIf { it.isNotBlank() && it != "null" }
                 ?.let { finishReason = it }
         }
 
         return when {
+            // Ahead of the text, which rides along: a call delta carries no `content`, so a chunk
+            // of them was `Ignored` before native calling and the turn came back empty.
+            toolCalls.isNotEmpty() -> Event.ToolCalls(toolCalls, content.toString())
             content.isNotEmpty() -> Event.Token(content.toString())
             reasoning.isNotEmpty() -> Event.Reasoning(reasoning.toString())
             finishReason != null -> Event.Finish(finishReason)

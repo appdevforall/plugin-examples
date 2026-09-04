@@ -2,6 +2,7 @@ package com.itsaky.androidide.plugins.aiagentopenai.backend
 
 import com.itsaky.androidide.plugins.services.LlmInferenceService.ChatMessage
 import com.itsaky.androidide.plugins.services.LlmInferenceService.LlmConfig
+import com.itsaky.androidide.plugins.services.LlmInferenceService.ToolDefinition
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -69,7 +70,8 @@ class OpenAiRequestBuilderTest {
 
     @Test
     fun givenAToolResult_whenBuildingMessages_thenItRidesInAsAUserTurn() {
-        // This backend declares no ToolCallingBackend, so there is no tool role to send it as.
+        // A `tool` role is only legal after an assistant turn carrying the matching `tool_calls`,
+        // which ChatMessage gives the assistant turn no way to hold.
         val history = listOf(ChatMessage.toolResult("call_1", "read_file", "file contents"))
         val messages = OpenAiRequestBuilder.messages(history, "next", null)
 
@@ -156,5 +158,38 @@ class OpenAiRequestBuilderTest {
             tuning = defaultTuning,
         )
         assertFalse(body.has("stop"))
+    }
+
+    @Test
+    fun givenTools_whenBuildingTheBody_thenTheyAreDeclaredToTheServer() {
+        val body = OpenAiRequestBuilder.body(
+            OpenAiRequestBuilder.messages(emptyList(), "Hi", null),
+            "gpt-4o",
+            stream = true,
+            config = config(),
+            tuning = defaultTuning,
+            tools = listOf(ToolDefinition("read_file", "Read a file", emptyMap())),
+        )
+
+        val declared = body.getJSONArray("tools")
+        assertEquals(1, declared.length())
+        assertEquals(
+            "read_file",
+            declared.getJSONObject(0).getJSONObject("function").getString("name")
+        )
+    }
+
+    @Test
+    fun givenNoTools_whenBuildingTheBody_thenNoToolsFieldIsSent() {
+        // Plain chat, and a server that rejects an empty `tools` array would 400 on the request.
+        val body = OpenAiRequestBuilder.body(
+            OpenAiRequestBuilder.messages(emptyList(), "Hi", null),
+            "gpt-4o",
+            stream = true,
+            config = config(),
+            tuning = defaultTuning,
+        )
+
+        assertFalse(body.has("tools"))
     }
 }
