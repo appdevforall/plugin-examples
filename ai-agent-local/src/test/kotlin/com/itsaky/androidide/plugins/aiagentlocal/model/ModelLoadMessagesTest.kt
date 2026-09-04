@@ -25,6 +25,20 @@ class ModelLoadMessagesTest {
     }
 
     @Test
+    fun givenSourceUnavailable_whenDescribed_thenUnavailableString() {
+        // Must not share FileMissing's wording: one asks for a path, the other for a fresh pick.
+        messages.describe(Diagnosis.SourceUnavailable)
+        verify { context.getString(R.string.llm_load_error_unavailable) }
+    }
+
+    @Test
+    fun givenSourceNotSeekable_whenDescribed_thenNotSeekableString() {
+        // Must not share the corrupt-model wording: the model is fine, its location is the problem.
+        messages.describe(Diagnosis.SourceNotSeekable)
+        verify { context.getString(R.string.llm_load_error_not_seekable) }
+    }
+
+    @Test
     fun givenFileEmpty_whenDescribed_thenEmptyString() {
         messages.describe(Diagnosis.FileEmpty)
         verify { context.getString(R.string.llm_load_error_empty) }

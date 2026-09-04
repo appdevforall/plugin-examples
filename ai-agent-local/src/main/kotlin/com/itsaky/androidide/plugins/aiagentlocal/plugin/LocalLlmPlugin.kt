@@ -243,8 +243,12 @@ class LocalLlmPlugin : IPlugin, DocumentationExtension {
                 file is checked before it is stored: a file that isn't a valid
                 <code>.gguf</code> is rejected, and one that looks too large for
                 this device's free memory raises a warning first.</p>
-                <p><b>Load from saved</b> re-selects the model already configured,
-                which is useful after clearing app data or moving the file.</p>
+                <p>The model is read where you saved it and never copied, so leave
+                the file in place. If it is moved or deleted, if its storage is
+                disconnected, or if the IDE's app data is cleared, pick it again
+                with <b>Browse</b>.</p>
+                <p><b>Load from saved</b> reloads the model already configured
+                without opening the picker — useful after restarting the IDE.</p>
             """.trimIndent(),
         ),
         PluginTooltipEntry(

@@ -35,8 +35,25 @@ interface ModelFileSource {
     /** Opens the model for reading; null when it cannot be opened. Not for the main thread. */
     fun openStream(context: Context, uriString: String): InputStream?
 
+    /**
+     * Whether the model can still be opened right now. A configured model can go away underneath
+     * the settings screen — deleted, unmounted, or its read grant revoked — and the stored path
+     * says nothing about that, so the screen has to ask. Reports rather than logs: a model that is
+     * gone is an answer, not a lookup failure. Not for the main thread.
+     */
+    fun isReadable(context: Context, uriString: String): Boolean
+
     /** Decoded last path segment — a cheap name that at least avoids raw `%3A` escapes. */
     fun fallbackDisplayName(uriOrPath: String): String
+
+    /**
+     * Turn the picker's one-off read grant for [uriString] into a persistable one, so the model is
+     * still readable after the IDE is restarted — nothing is copied into private storage, so that
+     * grant is the only thing keeping it reachable (ADFA-5253). A no-op for a filesystem path.
+     *
+     * @return true when the model will still be readable after a restart
+     */
+    fun persistAccess(context: Context, uriString: String): Boolean
 
     /**
      * Give back the persistable read grant the picker took for [uriString], for a model the user
@@ -76,12 +93,38 @@ class ContentModelFileSource(
         null
     }
 
+    override fun isReadable(context: Context, uriString: String): Boolean = try {
+        if (uriString.startsWith(CONTENT_SCHEME)) {
+            context.contentResolver.openInputStream(Uri.parse(uriString))?.use { true } ?: false
+        } else {
+            File(uriString).let { it.isFile && it.canRead() }
+        }
+    } catch (e: Exception) {
+        // Deleted, unmounted, or the grant is gone — all of which mean the same thing here.
+        false
+    }
+
     override fun fallbackDisplayName(uriOrPath: String): String =
         (try {
             Uri.decode(uriOrPath)
         } catch (e: Exception) {
             uriOrPath
         }).substringAfterLast('/')
+
+    override fun persistAccess(context: Context, uriString: String): Boolean {
+        if (!uriString.startsWith(CONTENT_SCHEME)) return true
+        return try {
+            context.contentResolver.takePersistableUriPermission(
+                Uri.parse(uriString),
+                Intent.FLAG_GRANT_READ_URI_PERMISSION,
+            )
+            true
+        } catch (e: Exception) {
+            // A provider that hands out non-persistable grants, or a grant table that is full.
+            onError("could not persist the read grant for $uriString", e)
+            false
+        }
+    }
 
     override fun releaseAccess(context: Context, uriString: String) {
         if (!uriString.startsWith(CONTENT_SCHEME)) return
@@ -90,8 +133,9 @@ class ContentModelFileSource(
                 Uri.parse(uriString),
                 Intent.FLAG_GRANT_READ_URI_PERMISSION,
             )
+        } catch (_: SecurityException) {
+            // Nothing was held, or it was already released: the no-op this documents.
         } catch (e: Exception) {
-            // Never held, or already released — nothing is broken either way.
             onError("could not release the read grant for $uriString", e)
         }
     }

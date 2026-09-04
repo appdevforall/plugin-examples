@@ -9,7 +9,7 @@
         android:id="@+id/engine_status_text"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="@string/engine_initializing"
+        android:text="@string/engine_no_model"
         android:textAppearance="?android:attr/textAppearanceSmall"
         android:layout_marginTop="8dp"
         android:textColor="?android:attr/textColorSecondary"/>

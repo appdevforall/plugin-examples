@@ -1,5 +1,6 @@
 package com.itsaky.androidide.plugins.aiagentlocal.settings
 
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -37,12 +38,12 @@ class LocalLlmSettingsFragment : Fragment(), MemoryWarningDialogFragment.Host {
     private var tooltipService: IdeTooltipService? = null
 
     private val filePickerLauncher =
-        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        registerForActivityResult(PickLocalDocument) { uri: Uri? ->
             uri?.let {
                 try {
-                    requireContext().contentResolver
-                        .takePersistableUriPermission(it, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    viewModel.loadModelFromUri(it.toString(), requireContext())
+                    // The durable read grant is taken by the view model, with the rest of the
+                    // selection's bookkeeping — see LocalLlmSettingsViewModel.loadModelFromUri.
+                    viewModel.loadModelFromUri(it.toString())
                     Toast.makeText(
                         requireContext(),
                         getString(R.string.model_loading_toast),
@@ -131,10 +132,7 @@ class LocalLlmSettingsFragment : Fragment(), MemoryWarningDialogFragment.Host {
         wireTooltip(browseButton, LocalLlmPlugin.TOOLTIP_TAG_SETTINGS_LOCAL_MODEL)
 
         loadSavedButton.setOnClickListener {
-            val savedPath = viewModel.savedModelPath.value
-            if (savedPath != null) {
-                viewModel.loadModelFromUri(savedPath, requireContext())
-            }
+            viewModel.state.value?.savedModelPath?.let(viewModel::loadModelFromUri)
         }
         // Same concept as Browse — choosing which local model to run.
         wireTooltip(loadSavedButton, LocalLlmPlugin.TOOLTIP_TAG_SETTINGS_LOCAL_MODEL)
@@ -159,48 +157,56 @@ class LocalLlmSettingsFragment : Fragment(), MemoryWarningDialogFragment.Host {
             wireTooltip(this, LocalLlmPlugin.TOOLTIP_TAG_SETTINGS_SIMPLE_PROMPT)
         }
 
-        viewModel.engineState.observe(viewLifecycleOwner) { state ->
-            when (state) {
-                is EngineState.Initializing, EngineState.Uninitialized -> {
-                    engineStatusTextView.text = getString(R.string.engine_initializing)
-                    browseButton.isEnabled = false
-                    loadSavedButton.isEnabled = false
-                }
-                is EngineState.Initialized -> {
-                    engineStatusTextView.text = getString(R.string.engine_ready)
-                    browseButton.isEnabled = true
-                    loadSavedButton.isEnabled = viewModel.savedModelPath.value != null
-                }
-                is EngineState.Error -> {
-                    engineStatusTextView.text = state.message
-                    browseButton.isEnabled = false
-                    loadSavedButton.isEnabled = false
-                }
+        // All three lines describe the same model, so they are drawn from one state in one pass:
+        // an unreachable model must not read as ready on one line and missing on another.
+        viewModel.state.observe(viewLifecycleOwner) { state ->
+            engineStatusTextView.text = when (val engine = state.engine) {
+                is EngineState.NoModel -> getString(R.string.engine_no_model)
+                is EngineState.ModelUnavailable -> getString(R.string.engine_model_unavailable)
+                is EngineState.Initializing -> getString(R.string.engine_initializing)
+                is EngineState.Initialized -> getString(R.string.engine_ready)
+                is EngineState.Error -> engine.message
             }
-        }
 
-        viewModel.savedModelPath.observe(viewLifecycleOwner) { path ->
-            loadSavedButton.isEnabled =
-                path != null && viewModel.engineState.value is EngineState.Initialized
+            // Enabled off the model status, not off engine readiness: picking a model is exactly
+            // how the user recovers from an engine that isn't ready, so it must stay reachable.
+            val busy = state.model is ModelLoadingState.Loading
+            browseButton.isEnabled = !busy
+            loadSavedButton.isEnabled = state.savedModelPath != null && !busy
 
-            if (path != null) {
+            val savedName = state.savedModelName
+            if (savedName != null) {
                 modelPathTextView.visibility = View.VISIBLE
-                val fileName = viewModel.getSavedModelName() ?: viewModel.fallbackDisplayName(path)
-                modelPathTextView.text = getString(R.string.model_saved_path, fileName)
+                // Off the engine status, which describes the configured model; the model status
+                // also carries the outcome of a rejected pick, which says nothing about it.
+                modelPathTextView.text = if (state.engine is EngineState.ModelUnavailable) {
+                    getString(R.string.model_saved_path_unavailable, savedName)
+                } else {
+                    getString(R.string.model_saved_path, savedName)
+                }
             } else {
                 modelPathTextView.visibility = View.GONE
             }
-        }
 
-        viewModel.modelLoadingState.observe(viewLifecycleOwner) { state ->
             modelStatusTextView.visibility = View.VISIBLE
-            modelStatusTextView.text = when (state) {
+            modelStatusTextView.text = when (val model = state.model) {
                 is ModelLoadingState.Idle -> getString(R.string.model_none_loaded)
                 is ModelLoadingState.Loading -> getString(R.string.model_loading_wait)
-                is ModelLoadingState.Loaded -> getString(R.string.model_loaded, state.modelName)
-                is ModelLoadingState.Error -> getString(R.string.model_load_error, state.message)
+                is ModelLoadingState.Loaded -> getString(R.string.model_loaded, model.modelName)
+                is ModelLoadingState.Unavailable ->
+                    getString(R.string.model_unavailable, model.modelName)
+                is ModelLoadingState.Error -> getString(R.string.model_load_error, model.message)
             }
         }
+    }
+
+    /**
+     * The model file lives outside the IDE and can be deleted or unmounted while this screen is
+     * away, so its availability is re-checked on every return rather than only at first load.
+     */
+    override fun onResume() {
+        super.onResume()
+        viewModel.refreshSavedModelAvailability()
     }
 
     /**
@@ -249,6 +255,16 @@ class LocalLlmSettingsFragment : Fragment(), MemoryWarningDialogFragment.Host {
                 .show()
         }
     }
+}
+
+/**
+ * The document picker, asked for documents already on the device: a streaming provider hands back
+ * a pipe the in-place loader cannot `mmap`. Advisory only, so the load path still refuses a
+ * non-seekable descriptor as `Diagnosis.SourceNotSeekable` (ADFA-5253).
+ */
+private object PickLocalDocument : ActivityResultContracts.OpenDocument() {
+    override fun createIntent(context: Context, input: Array<String>): Intent =
+        super.createIntent(context, input).putExtra(Intent.EXTRA_LOCAL_ONLY, true)
 }
 
 /**
