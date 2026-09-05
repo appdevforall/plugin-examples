@@ -184,13 +184,13 @@ Community addons carry an author (R15, R36–R38):
 
 ### 7.1 Bootstrapping the 31 files
 
-`addons scaffold` drafts an `addon.json` for each addon by extracting the first paragraph of its existing description page and the `plugin.description` from its manifest. **The output is a draft.** Every file is reviewed by a human before commit; nothing is auto-accepted into the catalog. This is a one-time migration aid, not part of the publish path.
+The 31 files are written by hand during the migration, with the existing description page open beside them. A throwaway script may draft them first, but it is not part of the tool and it is not kept. A permanent subcommand for a job that runs once, on 31 files, costs more than it saves.
 
 ---
 
 ## 8. The tool — `tools/addons/`
 
-One `uv` project, one console entry point, seven subcommands. They share the addon model and the identity rules; splitting them into separate scripts would recreate the duplication that F06 already documents.
+One `uv` project, one console entry point, six subcommands. They share the addon model and the identity rules; splitting them into separate scripts would recreate the duplication that F06 already documents.
 
 ```
 uv run --directory tools/addons addons <subcommand> [options]
@@ -211,7 +211,6 @@ Offline. No network, no build. Verifies:
 - identity agreement across directory, `pluginName`, manifest `plugin.name`, page filename, and page `<title>` (R28);
 - `addon.json` present, parseable, and schema-valid (R16);
 - `author` present when `origin` is `community` (R15);
-- `plugin.id`, `namespace`, and `applicationId` unchanged against the merge base (R29);
 - the description page exists and is non-empty (R34).
 
 Exit non-zero with one line per failure naming the file and the disagreement. Runs on every pull request.
@@ -232,11 +231,7 @@ Wraps a description page in gallery chrome (§11.2).
 
 Uploads to R2 (§12).
 
-### 8.7 `addons scaffold`
-
-One-time metadata drafting (§7.1).
-
-### 8.8 Testing
+### 8.7 Testing
 
 `pytest` over fixtures, no network. Every subcommand except `publish` runs fully offline. `publish` is tested against a stubbed S3 client; its argument construction — keys, `Content-Type`, `Cache-Control`, `Content-Disposition` — is asserted directly, because those are the values that silently produce the wrong browser behavior (R05) and cannot be checked any other way before a real upload.
 
@@ -411,8 +406,7 @@ Adding an enum member to `type` is additive by the rules above but is a **behavi
 There is no multi-object transaction in R2, so ordering supplies the atomicity instead:
 
 1. Upload artifacts, tarballs, icons, pages, and assets.
-2. Verify every one of them (§12.7).
-3. Upload `v1/catalog.json` **last**.
+2. Upload `v1/catalog.json` **last**.
 
 The catalog therefore never references an object that is not already in place. Withdrawal runs in reverse — publish the catalog without the entry, then delete the objects — so no consumer ever holds a catalog pointing at a deleted file.
 
@@ -463,7 +457,6 @@ Changes:
 | Sort by name. There is no sort at all today; cards render in file order. | — |
 | `plugins.json` and `templates.json` dropped. Generated, committed, and served today, but consumed by nothing. | — |
 | Unused `icon` field dropped from the schema in favour of the derived `iconUrl`. | — |
-| Asset filenames carry a content hash. | §12.1 |
 
 Mobile-first layout is already the prototype's design and is retained (R19).
 
@@ -488,8 +481,8 @@ The in-IDE documentation at `src/main/assets/docs/index.html` is a different art
 | `index.html` | `text/html` | `public, max-age=60` | | No (V04) |
 | `v1/catalog.json` | `application/json` | `public, max-age=60` | | No (V04) |
 | `v1/catalog.schema.json` | `application/json` | `public, max-age=60` | | No (V04) |
-| `assets/app.<hash>.js` | `text/javascript` | `public, max-age=31536000, immutable` | | Yes |
-| `assets/styles.<hash>.css` | `text/css` | `public, max-age=31536000, immutable` | | Yes |
+| `assets/app.js` | `text/javascript` | `public, max-age=60` | | Yes |
+| `assets/styles.css` | `text/css` | `public, max-age=60` | | Yes |
 | `p/<slug>.html` | `text/html` | `public, max-age=60` | | No (V04) |
 | `p/<slug>.png` | `image/png` | `public, max-age=60` | | Yes |
 | `dl/<slug>.cgp` | `application/octet-stream` | `public, max-age=60` | `Content-Disposition: attachment; filename="<slug>.cgp"` | No |
@@ -498,8 +491,6 @@ The in-IDE documentation at `src/main/assets/docs/index.html` is a different art
 
 `Content-Type` is set explicitly on every object and never left to inference (C05). `Content-Disposition: attachment` on the two binary classes is what makes them download while pages render (R05).
 
-The content hash in the asset filenames retires the prototype's manual `?v=` bump across ten files, and means a stylesheet change is never stale and never re-fetched unnecessarily.
-
 ### 12.2 Root routing
 
 A zone Transform Rule: when `http.request.uri.path eq "/"`, rewrite path to the static value `/index.html`. Configuration only, Free plan, no regex. **Already in place and verified live** (V01).
@@ -507,8 +498,6 @@ A zone Transform Rule: when `http.request.uri.path eq "/"`, rewrite path to the 
 ### 12.3 Staging (R09)
 
 `publish-addons.yml` with `staging: true` writes under `staging/<run-id>/` and prints the URLs to the run summary. A maintainer gets one addon on demand, at a real URL, with no artifact behind it. Staging keys are never referenced by the catalog.
-
-Lifecycle: a bucket rule expires `staging/` objects after 30 days. Published keys have no expiry.
 
 ### 12.4 Freshness
 
@@ -549,10 +538,6 @@ CORS governs browsers only. A native Android download ignores it entirely; this 
 One R2 API token, scoped to **Object Read & Write on the `addons` bucket only**, with no account-level permission (R08). Stored as three repository secrets: account id, access key id, secret access key. The token cannot list other buckets, cannot alter bucket configuration, and cannot purge cache — it does not need to.
 
 No `AWS_REQUEST_CHECKSUM_CALCULATION` workaround is used. That incompatibility was resolved upstream and Cloudflare removed its own guidance about it (V08); carrying it forward would be cargo cult.
-
-### 12.7 Upload verification
-
-After uploading, the tool re-reads each object's size and `ETag` and compares against what it sent. A mismatch fails the run. This carries forward the remote-versus-local MD5 check the scp deploy already performs — the one genuinely good pattern in the code being replaced.
 
 ---
 

@@ -596,127 +596,7 @@ git commit -m "Add the addon.json schema and its check"
 
 ---
 
-## Task 4: Draft the metadata files
-
-**Files:**
-- Create: `tools/addons/src/addons/scaffold.py`
-- Modify: `tools/addons/src/addons/cli.py`
-- Test: `tools/addons/tests/test_scaffold.py`
-
-**Interfaces:**
-- Consumes: `discover.find_addons`, `model.slug`.
-- Produces: `scaffold.draft(root: Path) -> list[Path]`. It writes one `addon.json` for each addon that has none. It returns the files it wrote.
-
-This subcommand runs one time, during the migration. A person reads and corrects every file before commit.
-
-- [ ] **Step 1: Write the failing test**
-
-```python
-# tools/addons/tests/test_scaffold.py
-import json
-from pathlib import Path
-from addons import scaffold
-
-PREDICATE = "com.itsaky.androidide.plugins.build"
-
-
-def test_draft_uses_the_first_paragraph_of_the_page(tmp_path):
-    d = tmp_path / "Keystore-Generator"
-    d.mkdir()
-    (d / "build.gradle.kts").write_text(PREDICATE)
-    (d / "keystore-generator.html").write_text(
-        "<html><body><h1>Keystore Generator</h1>"
-        "<p>Creates signing keystores on the device.</p></body></html>")
-    written = scaffold.draft(tmp_path)
-    assert written == [d / "addon.json"]
-    data = json.loads((d / "addon.json").read_text())
-    assert data["summary"] == "Creates signing keystores on the device."
-    assert data["origin"] == "appdevforall"
-    assert data["tags"] == []
-
-
-def test_draft_does_not_overwrite(tmp_path):
-    d = tmp_path / "Keystore-Generator"
-    d.mkdir()
-    (d / "build.gradle.kts").write_text(PREDICATE)
-    (d / "addon.json").write_text('{"summary": "mine"}')
-    assert scaffold.draft(tmp_path) == []
-    assert json.loads((d / "addon.json").read_text())["summary"] == "mine"
-```
-
-- [ ] **Step 2: Run the test. It must fail**
-
-Run: `uv run --directory tools/addons pytest tests/test_scaffold.py -v`
-Expected: FAIL with `ModuleNotFoundError: No module named 'addons.scaffold'`
-
-- [ ] **Step 3: Write the code**
-
-```python
-# tools/addons/src/addons/scaffold.py
-import json
-import re
-from pathlib import Path
-
-from addons import discover, model
-
-
-def _first_paragraph(html: str) -> str:
-    found = re.search(r"<p[^>]*>(.*?)</p>", html, re.S | re.I)
-    if not found:
-        return ""
-    text = re.sub(r"<[^>]+>", "", found.group(1))
-    return " ".join(text.split())[:120]
-
-
-def draft(root: Path) -> list[Path]:
-    written = []
-    for path in discover.find_addons(root):
-        target = path / "addon.json"
-        if target.exists():
-            continue
-        page = path / f"{model.slug(path.name)}.html"
-        summary = _first_paragraph(page.read_text()) if page.exists() else ""
-        data = {
-            "summary": summary,
-            "description": summary,
-            "tags": [],
-            "origin": "appdevforall",
-            "license": "AGPL-3.0-or-later",
-            "author": {"name": "App Dev For All",
-                       "url": "https://www.appdevforall.org"},
-            "minAppVersion": "25.47",
-        }
-        target.write_text(json.dumps(data, indent=2) + "\n")
-        written.append(target)
-    return written
-```
-
-- [ ] **Step 4: Add the subcommand**
-
-In `cli.py`, add `from addons import scaffold` to the imports, add `sub.add_parser("scaffold")`, and add this branch:
-
-```python
-    if args.command == "scaffold":
-        for path in scaffold.draft(args.root):
-            print(f"drafted {path}")
-        return 0
-```
-
-- [ ] **Step 5: Run all tests. They must pass**
-
-Run: `uv run --directory tools/addons pytest -v`
-Expected: PASS, 17 tests
-
-- [ ] **Step 6: Commit**
-
-```bash
-git add tools/addons
-git commit -m "Add the scaffold subcommand for the one-time metadata draft"
-```
-
----
-
-## Task 5: Read the plugin id and the version from the source
+## Task 4: Read the plugin id and the version from the source
 
 **Files:**
 - Modify: `tools/addons/src/addons/model.py`
@@ -835,7 +715,7 @@ def version(addon: Path) -> str:
 - [ ] **Step 4: Run all tests. They must pass**
 
 Run: `uv run --directory tools/addons pytest -v`
-Expected: PASS, 22 tests
+Expected: PASS, 20 tests
 
 - [ ] **Step 5: Commit**
 
@@ -846,7 +726,7 @@ git commit -m "Read the plugin id and the version from the source files"
 
 ---
 
-## Task 6: Source tarballs
+## Task 5: Source tarballs
 
 **Files:**
 - Create: `tools/addons/src/addons/tarball.py`
@@ -1062,7 +942,7 @@ def build(root: Path, addon: Path, out: Path, licence: str = "AGPL-3.0-or-later"
 - [ ] **Step 4: Run all tests. They must pass**
 
 Run: `uv run --directory tools/addons pytest -v`
-Expected: PASS, 26 tests
+Expected: PASS, 24 tests
 
 - [ ] **Step 5: Commit**
 
@@ -1073,7 +953,7 @@ git commit -m "Build and verify source tarballs"
 
 ---
 
-## Task 7: The catalog
+## Task 6: The catalog
 
 **Files:**
 - Create: `site/catalog.schema.json`
@@ -1346,7 +1226,7 @@ Add `import json` to the top of `cli.py`.
 - [ ] **Step 7: Run all tests. They must pass**
 
 Run: `uv run --directory tools/addons pytest -v`
-Expected: PASS, 30 tests
+Expected: PASS, 28 tests
 
 - [ ] **Step 8: Commit**
 
@@ -1357,7 +1237,7 @@ git commit -m "Generate and validate the catalog"
 
 ---
 
-## Task 8: Add gallery chrome to a description page
+## Task 7: Add gallery chrome to a description page
 
 **Files:**
 - Create: `site/page.template.html`
@@ -1390,8 +1270,6 @@ cat > site/page.template.html <<'EOF'
 </html>
 EOF
 ```
-
-The publish step replaces `/assets/styles.css` with the hashed name. Task 9 does that.
 
 - [ ] **Step 2: Write the failing test**
 
@@ -1437,7 +1315,7 @@ def wrap(html: str, name: str, template: str) -> str:
 - [ ] **Step 5: Run all tests. They must pass**
 
 Run: `uv run --directory tools/addons pytest -v`
-Expected: PASS, 32 tests
+Expected: PASS, 30 tests
 
 - [ ] **Step 6: Commit**
 
@@ -1448,7 +1326,7 @@ git commit -m "Add gallery chrome to description pages at publish time"
 
 ---
 
-## Task 9: Upload to Cloudflare R2
+## Task 8: Upload to Cloudflare R2
 
 **Files:**
 - Create: `tools/addons/src/addons/publish.py`
@@ -1481,9 +1359,6 @@ class FakeClient:
         self.store[Key] = (Body, headers)
         self.order.append(Key)
 
-    def head_object(self, Bucket, Key):
-        return {"ContentLength": len(self.store[Key][0])}
-
 
 def test_headers_for_a_download():
     head = publish.headers_for("dl/keystore-generator.cgp")
@@ -1498,10 +1373,10 @@ def test_headers_for_a_page():
     assert "ContentDisposition" not in head
 
 
-def test_headers_for_a_hashed_asset():
-    head = publish.headers_for("assets/styles.abc123.css")
+def test_headers_for_an_asset():
+    head = publish.headers_for("assets/styles.css")
     assert head["ContentType"] == "text/css"
-    assert head["CacheControl"] == "public, max-age=31536000, immutable"
+    assert head["CacheControl"] == "public, max-age=60"
 
 
 def test_the_catalog_goes_last(tmp_path):
@@ -1514,17 +1389,6 @@ def test_the_catalog_goes_last(tmp_path):
                     ("v1/catalog.json", document))
     assert client.order == ["dl/a.cgp", "v1/catalog.json"]
 
-
-def test_a_size_mismatch_stops_the_run(tmp_path):
-    one = tmp_path / "a.cgp"
-    one.write_bytes(b"abc")
-
-    class Broken(FakeClient):
-        def head_object(self, Bucket, Key):
-            return {"ContentLength": 1}
-
-    with pytest.raises(RuntimeError, match="dl/a.cgp"):
-        publish.put(Broken(), "addons", "dl/a.cgp", one)
 ```
 
 - [ ] **Step 2: Run the test. It must fail**
@@ -1542,7 +1406,6 @@ from pathlib import Path
 import boto3
 
 SHORT = "public, max-age=60"
-IMMUTABLE = "public, max-age=31536000, immutable"
 
 CONTENT_TYPES = {
     ".html": "text/html",
@@ -1560,7 +1423,7 @@ def headers_for(key: str) -> dict:
     suffix = Path(key).suffix
     headers = {
         "ContentType": CONTENT_TYPES.get(suffix, "application/octet-stream"),
-        "CacheControl": IMMUTABLE if key.startswith("assets/") else SHORT,
+        "CacheControl": SHORT,
     }
     if suffix in ATTACHMENTS:
         headers["ContentDisposition"] = f'attachment; filename="{Path(key).name}"'
@@ -1570,9 +1433,6 @@ def headers_for(key: str) -> dict:
 def put(client, bucket: str, key: str, path: Path) -> None:
     client.put_object(Bucket=bucket, Key=key, Body=path.read_bytes(),
                       **headers_for(key))
-    head = client.head_object(Bucket=bucket, Key=key)
-    if head["ContentLength"] != path.stat().st_size:
-        raise RuntimeError(f"{key}: the uploaded size does not match the file")
 
 
 def publish(client, bucket: str, objects: list[tuple[str, Path]],
@@ -1596,11 +1456,11 @@ def client_from_env():
 - [ ] **Step 4: Run all tests. They must pass**
 
 Run: `uv run --directory tools/addons pytest -v`
-Expected: PASS, 37 tests
+Expected: PASS, 34 tests
 
 - [ ] **Step 5: Add the subcommand**
 
-The subcommand collects every object, adds the chrome to each page, hashes the two assets, and uploads. Add `import hashlib`, `import shutil`, and `from addons import model, page, publish, tarball` to `cli.py`. Add this parser:
+The subcommand collects every object, adds the chrome to each page, and uploads. Add `from addons import model, page, publish, tarball` to `cli.py`. Add this parser:
 
 ```python
     publish_parser = sub.add_parser("publish")
@@ -1615,41 +1475,24 @@ Add this branch:
         dist, prefix = args.dist, args.prefix
         site = args.root / "site"
         template = (site / "page.template.html").read_text()
-        objects = []
-
-        assets = {}
-        for name in ("styles.css", "app.js"):
-            data = (site / name).read_bytes()
-            digest = hashlib.sha256(data).hexdigest()[:8]
-            stem, suffix = name.rsplit(".", 1)
-            hashed = f"{stem}.{digest}.{suffix}"
-            target = dist / hashed
-            target.write_bytes(data)
-            assets[name] = hashed
-            objects.append((f"{prefix}assets/{hashed}", target))
-
-        index = (site / "index.html").read_text()
-        for name, hashed in assets.items():
-            index = index.replace(f"/assets/{name}", f"/assets/{hashed}")
-        index_file = dist / "index.html"
-        index_file.write_text(index)
-        objects.append((f"{prefix}index.html", index_file))
-
+        objects = [
+            (f"{prefix}assets/styles.css", site / "styles.css"),
+            (f"{prefix}assets/app.js", site / "app.js"),
+            (f"{prefix}index.html", site / "index.html"),
+        ]
         for addon in discover.find_addons(args.root):
             slug = model.slug(addon.name)
-            source = (addon / f"{slug}.html").read_text()
-            wrapped = page.wrap(source, model.display_name(addon.name), template)
-            wrapped = wrapped.replace("/assets/styles.css",
-                                      f"/assets/{assets['styles.css']}")
+            wrapped = page.wrap((addon / f"{slug}.html").read_text(),
+                                model.display_name(addon.name), template)
             page_file = dist / f"{slug}.page.html"
             page_file.write_text(wrapped)
-            icon = addon / "src" / "main" / "assets" / "icon_day.png"
-            objects.append((f"{prefix}p/{slug}.html", page_file))
-            objects.append((f"{prefix}p/{slug}.png", icon))
-            objects.append((f"{prefix}dl/{slug}.cgp", dist / f"{slug}.cgp"))
-            objects.append((f"{prefix}src/{slug}-src.tar.gz",
-                            dist / f"{slug}-src.tar.gz"))
-
+            objects += [
+                (f"{prefix}p/{slug}.html", page_file),
+                (f"{prefix}p/{slug}.png",
+                 addon / "src" / "main" / "assets" / "icon_day.png"),
+                (f"{prefix}dl/{slug}.cgp", dist / f"{slug}.cgp"),
+                (f"{prefix}src/{slug}-src.tar.gz", dist / f"{slug}-src.tar.gz"),
+            ]
         objects.append((f"{prefix}v1/catalog.schema.json",
                         site / "catalog.schema.json"))
         publish.publish(publish.client_from_env(), "addons", objects,
@@ -1667,7 +1510,7 @@ git commit -m "Upload addons, pages, and the catalog to Cloudflare R2"
 
 ---
 
-## Task 10: The gallery
+## Task 9: The gallery
 
 **Files:**
 - Create: `site/index.html`
@@ -1805,7 +1648,7 @@ fetch("/v1/catalog.json")
     return response.json();
   })
   .then((document_) => {
-    state.addons = document_.addons.sort((a, b) => a.name.localeCompare(b.name));
+    state.addons = document_.addons;
     render();
   })
   .catch(() => {
@@ -1882,7 +1725,7 @@ Two parts of the design are complete. Do not add a task for either one.
 
 ---
 
-## Task 11: Check names and metadata on every pull request
+## Task 10: Check names and metadata on every pull request
 
 **Files:**
 - Modify: `.github/workflows/check-toolchain.yml` (append two steps)
@@ -1911,7 +1754,7 @@ Append this to the end of `.github/workflows/check-toolchain.yml`, at the same i
 - [ ] **Step 2: Check it locally**
 
 Run: `uv run --directory tools/addons addons --root "$(pwd)" check`
-Expected: it prints one line for each addon that has no `addon.json`. Task 14 fixes those.
+Expected: it prints one line for each addon that has no `addon.json`. Task 13 fixes those.
 
 - [ ] **Step 3: Commit**
 
@@ -1922,7 +1765,7 @@ git commit -m "Check addon names and metadata on every pull request"
 
 ---
 
-## Task 12: The publish workflow
+## Task 11: The publish workflow
 
 **Files:**
 - Create: `.github/workflows/publish-addons.yml`
@@ -2054,7 +1897,7 @@ git commit -m "Add the publish workflow"
 
 ---
 
-## Task 13: Remove the artifact steps and the old deploy
+## Task 12: Remove the artifact steps and the old deploy
 
 **Files:**
 - Modify: `.github/workflows/build-plugins.yml:112-147`
@@ -2143,13 +1986,13 @@ git commit -m "Remove the artifact steps and the old deploy; refresh all five ja
 
 ---
 
-## Task 14: Rename the addons and move them
+## Task 13: Rename the addons and move them
 
 **Files:**
 - Modify: every addon directory name, every description page name, `README.md`, `CLAUDE.md`
 
 **Interfaces:**
-- Consumes: `addons check`, `addons scaffold`.
+- Consumes: `addons check`.
 - Produces: the final directory layout.
 
 Do this task in small commits. Do not rename `plugin.id`, `namespace`, or `applicationId`.
@@ -2204,13 +2047,9 @@ For each renamed addon, set `pluginBuilder { pluginName = "<slug>" }` in `build.
 Run: `uv run --directory tools/addons addons --root "$(pwd)" check`
 Expected: it reports only missing `addon.json` files.
 
-- [ ] **Step 3: Draft and correct the metadata**
+- [ ] **Step 3: Write the metadata**
 
-```bash
-uv run --directory tools/addons addons --root "$(pwd)" scaffold
-```
-
-Read every new `addon.json`. Correct the summary, write a real description, and add tags. Set `origin` to `community` and fill in `author` for a community addon.
+Write one `addon.json` for each addon, with its description page open beside you. Correct the summary, write a real description, and add tags. Set `origin` to `community` and fill in `author` for a community addon.
 
 Run: `uv run --directory tools/addons addons --root "$(pwd)" check`
 Expected: no output, exit code 0.
