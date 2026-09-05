@@ -1,0 +1,78 @@
+name: Publish addons
+
+on:
+  workflow_dispatch:
+    inputs:
+      addon:
+        description: One addon directory name, or "all"
+        default: all
+      staging:
+        description: Publish under staging/ instead of the live keys
+        type: boolean
+        default: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Check names and metadata
+        run: uv run --directory tools/addons addons --root "$GITHUB_WORKSPACE" check
+
+      - name: Build, package, and stage
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          if [ "${{ inputs.addon }}" = "all" ]; then
+            names="$(uv run --directory tools/addons addons --root "$GITHUB_WORKSPACE" discover)"
+          else
+            names="${{ inputs.addon }}"
+          fi
+          for name in $names; do
+            dir="$name"
+            [ -d "$dir" ] || dir="plugins/$name"
+            echo "==> $dir"
+            ( cd "$dir"
+              gradlew=../gradlew
+              if [ -x ./gradlew ]; then gradlew=./gradlew; fi
+              if grep -q downloadAssets build.gradle.kts; then
+                "$gradlew" --console=plain downloadAssets
+              fi
+              "$gradlew" --console=plain assemblePlugin )
+            slug="$(echo "$name" | tr '[:upper:]' '[:lower:]')"
+            src="$(ls "$dir"/build/plugin/*.cgp | grep -v -- '-debug\.cgp$' | head -n1)"
+            cp "$src" "dist/${slug}.cgp"
+          done
+
+      - name: Build the source tarballs
+        run: uv run --directory tools/addons addons --root "$GITHUB_WORKSPACE" tarball --out "$GITHUB_WORKSPACE/dist"
+
+      - name: Generate the catalog
+        run: uv run --directory tools/addons addons --root "$GITHUB_WORKSPACE" catalog --dist "$GITHUB_WORKSPACE/dist" --out "$GITHUB_WORKSPACE/dist/catalog.json"
+
+      - name: Publish to Cloudflare R2
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: |
+          prefix=""
+          if [ "${{ inputs.staging }}" = "true" ]; then
+            prefix="staging/${{ github.run_id }}/"
+          fi
+          uv run --directory tools/addons addons --root "$GITHUB_WORKSPACE" publish \
+            --dist "$GITHUB_WORKSPACE/dist" --prefix "$prefix"
+          {
+            echo "### Published"
+            echo "Base: https://addons.appdevforall.org/${prefix}"
+          } >> "$GITHUB_STEP_SUMMARY"

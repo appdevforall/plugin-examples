@@ -3,7 +3,7 @@ import json
 import sys
 from pathlib import Path
 
-from addons import catalog, check, discover, model, page, publish
+from addons import catalog, check, discover, model, page, publish, tarball
 
 
 def main() -> int:
@@ -20,6 +20,9 @@ def main() -> int:
     publish_parser = sub.add_parser("publish")
     publish_parser.add_argument("--dist", type=Path, required=True)
     publish_parser.add_argument("--prefix", default="")
+
+    tarball_parser = sub.add_parser("tarball")
+    tarball_parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
 
     if args.command == "discover":
@@ -38,6 +41,14 @@ def main() -> int:
         args.out.parent.mkdir(parents=True, exist_ok=True)
         args.out.write_text(json.dumps(document, indent=2) + "\n")
         print(f"wrote {args.out} with {len(document['addons'])} addons")
+        return 0
+
+    if args.command == "tarball":
+        args.out.mkdir(parents=True, exist_ok=True)
+        for addon in discover.find_addons(args.root):
+            meta = json.loads((addon / "addon.json").read_text())
+            archive = tarball.build(args.root, addon, args.out, meta["license"])
+            print(f"built {archive.name}")
         return 0
 
     if args.command == "publish":
