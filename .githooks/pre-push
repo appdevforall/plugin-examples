@@ -18,8 +18,11 @@ set -euo pipefail
 # plugin-builder Gradle plugin. Discover them dynamically so new plugins are
 # picked up automatically.
 plugin_dirs() {
-  uv run --directory "$(git rev-parse --show-toplevel)/tools/addons" \
-    addons --root "$(git rev-parse --show-toplevel)" discover
+  # < /dev/null is load bearing. git feeds the ref list to this hook on
+  # stdin and the caller reads it in a while loop; without the redirect
+  # uv inherits that stdin, blocks on it, and the push hangs forever.
+  root="$(git rev-parse --show-toplevel)"
+  uv run --directory "$root/tools/addons" addons --root "$root" discover < /dev/null
 }
 
 # Determine the set of commits being pushed. git feeds pre-push one line per
