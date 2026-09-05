@@ -44,3 +44,12 @@ jobs:
             ./scripts/check-toolchain.sh --list
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Test the addons tool
+        run: uv run --directory tools/addons pytest -q
+
+      - name: Check addon names and metadata
+        run: uv run --directory tools/addons addons --root "$GITHUB_WORKSPACE" check
