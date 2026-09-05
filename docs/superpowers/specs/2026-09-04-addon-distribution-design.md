@@ -453,7 +453,9 @@ Changes:
 | Change | Requirement |
 |---|---|
 | Type and origin indicated by a glyph or shape, not colour alone. Today they are colour-only pills. | R20 |
-| Addon icons shown on cards. | R17 |
+| Addon icons on cards, in both light and dark form. Every addon already ships `icon_day.png` and `icon_night.png`; the catalog carries both and a `<picture>` lets the browser choose. | R17 |
+| Links take an explicit colour token. The browser default `#0000EE` sits at roughly 1.4:1 against the dark card, well under the 4.5:1 minimum. | R19 |
+| Tags render on each card as buttons that filter, and combine with type and free text. | R18 |
 | Sort by name. There is no sort at all today; cards render in file order. | — |
 | `plugins.json` and `templates.json` dropped. Generated, committed, and served today, but consumed by nothing. | — |
 | Unused `icon` field dropped from the schema in favour of the derived `iconUrl`. | — |
