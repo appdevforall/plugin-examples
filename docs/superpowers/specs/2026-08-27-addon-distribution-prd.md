@@ -126,7 +126,7 @@ The quota problem blocks releases outright, and the naming drift compounds with 
 | **R01** | Built addons must reach their published destination **without being stored in GitHub Actions artifact storage**. No part of the repository may consume that storage. |
 | **R02** | The `addons` Cloudflare R2 bucket must be the single published home for every addon artifact, its description page, the catalog, and the catalog web application. |
 | **R03** | Each addon must be downloadable at a **stable, predictable URL derived from its slug**, unchanged from release to release. |
-| **R04** | A release must serve the **newly published bytes immediately**. Stale content must never be served after a publish completes. |
+| **R04** | Published content must become **current within 60 seconds** of a publish completing, **without manual intervention**. |
 | **R05** | Description pages must **render** in a browser; artifacts must **download**. Neither may be served in a way that produces the other behavior. |
 | **R06** | The catalog must be reachable at the site's root address, not only at a fully-qualified file path. |
 | **R07** | The catalog data must be readable by cross-origin consumers, so a future in-app addon browser can use it. |
@@ -244,9 +244,9 @@ Verified against Cloudflare documentation on 2026-08-27. These bound any design 
 | ID | Constraint | Consequence for requirements |
 |---|---|---|
 | **C01** | **R2 provides no static-website hosting.** There is no index-document setting; buckets are flat; a request for the site root does not resolve to an uploaded index page. | R06 is not satisfied by uploading an index page. It needs an explicit routing decision in the design. |
-| **C02** | **Overwriting an object does not clear the edge cache.** Previous bytes continue to be served until the cache expires or is purged. Cached "not found" responses persist identically. | R04 requires an explicit invalidation step on every publish. It is not automatic. |
+| **C02** | **Overwriting an object does not clear the edge cache.** Previous bytes continue to be served until the cache expires or is purged. Cached "not found" responses persist identically. | Bounded by an explicit `Cache-Control` set at upload. Cloudflare does not edge-cache HTML or JSON by default, so pages, the catalog, and artifacts are unaffected; only icons and tarballs are cached, at 60 seconds. |
 | **C03** | Caching is keyed on **file extension, not content type**, and the addon extension is not cached by default. Very large files are not cached at all on standard plans. | Accepted. Egress is unmetered, so this affects latency only. |
-| **C04** | **No federated or keyless authentication exists** for R2. Access is by API token only. Bucket-scoped tokens cannot perform account-level operations. | R08 is satisfiable, but publishing and cache invalidation need separate credentials. |
+| **C04** | **No federated or keyless authentication exists** for R2. Access is by API token only. Bucket-scoped tokens cannot perform account-level operations. | R08 is satisfiable with a single bucket-scoped token. There is no invalidation step, so no second credential is needed. |
 | **C05** | Whether content type is inferred on upload is **undocumented**. | R05 must be met by setting content type explicitly, never by relying on inference. |
 | **C06** | **Egress is unmetered and free**; expected storage and request volume fall inside the free tier. | Cost is not a constraint on this migration. |
 
