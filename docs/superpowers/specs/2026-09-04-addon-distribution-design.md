@@ -499,6 +499,13 @@ A zone Transform Rule: when `http.request.uri.path eq "/"`, rewrite path to the 
 
 `publish-addons.yml` with `staging: true` writes under `staging/<run-id>/` and prints the URLs to the run summary. A maintainer gets one addon on demand, at a real URL, with no artifact behind it. Staging keys are never referenced by the catalog.
 
+Two properties of a staging publish, both confirmed against the live bucket and both consequences of decisions made elsewhere:
+
+- **A staging URL needs the explicit `index.html`.** The Transform Rule rewrites only `/`, so `…/staging/<id>/` returns 404 while `…/staging/<id>/index.html` serves the gallery. The rule exists for the site root, not for every directory.
+- **A staging gallery shows broken icons.** Catalog URLs are absolute (§10.4), so they point at the live root, where a staging build has published nothing. This is the cost of the absolute-URL decision and it is worth paying: R09 asks for a downloadable URL, which the run summary gives, not for a browsable preview.
+
+The site's own files use relative paths, so the gallery and the description pages work correctly under any prefix.
+
 ### 12.4 Freshness
 
 Because Cloudflare does not edge-cache HTML or JSON by default (V04), the catalog, every description page, and every `.cgp` are current the instant a publish completes. Only icons, tarballs, and the hashed assets are cached, and the first two are bounded at 60 seconds by their `Cache-Control`. The hashed assets are never stale because their key changes with their content.

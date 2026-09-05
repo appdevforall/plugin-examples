@@ -73,7 +73,7 @@ state.type = params.get("type") || "";
 document.getElementById("q").value = state.q;
 document.getElementById("type").value = state.type;
 
-fetch("/v1/catalog.json")
+fetch("v1/catalog.json")
   .then((response) => {
     if (!response.ok) throw new Error(response.status);
     return response.json();
