@@ -20,7 +20,8 @@ def _file(path: Path, url: str) -> dict:
     return {"url": url, "sha256": hashlib.sha256(data).hexdigest(), "size": len(data)}
 
 
-def entry(root: Path, addon: Path, cgp: Path, archive: Path) -> dict:
+def entry(root: Path, addon: Path, cgp: Path, archive: Path,
+          base: str = BASE) -> dict:
     directory = addon.name
     slug = model.slug(directory)
     meta = json.loads((addon / "addon.json").read_text())
@@ -41,15 +42,15 @@ def entry(root: Path, addon: Path, cgp: Path, archive: Path) -> dict:
         "tags": meta["tags"],
         "author": {"name": meta["author"]["name"], "url": meta["author"]["url"]},
         "minAppVersion": model.min_app_version(addon),
-        "iconUrl": f"{BASE}/p/{slug}.png",
-        "pageUrl": f"{BASE}/p/{slug}.html",
+        "iconUrl": f"{base}/p/{slug}.png",
+        "pageUrl": f"{base}/p/{slug}.html",
         "sourceUrl": f"{SOURCE}/{relative}",
-        "download": _file(cgp, f"{BASE}/dl/{slug}.cgp"),
-        "sourceTarball": _file(archive, f"{BASE}/src/{slug}-src.tar.gz"),
+        "download": _file(cgp, f"{base}/dl/{slug}.cgp"),
+        "sourceTarball": _file(archive, f"{base}/src/{slug}-src.tar.gz"),
     }
 
 
-def build(root: Path, dist: Path) -> dict:
+def build(root: Path, dist: Path, base: str = BASE) -> dict:
     entries = []
     for addon in discover.find_addons(root):
         slug = model.slug(addon.name)
@@ -58,7 +59,7 @@ def build(root: Path, dist: Path) -> dict:
         for f in (cgp, archive):
             if not f.exists():
                 raise RuntimeError(f"{addon.name}: {f.name} is missing from {dist}")
-        entries.append(entry(root, addon, cgp, archive))
+        entries.append(entry(root, addon, cgp, archive, base.rstrip('/')))
 
     document = {
         "schemaVersion": 1,

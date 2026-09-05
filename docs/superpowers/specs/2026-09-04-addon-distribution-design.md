@@ -502,7 +502,7 @@ A zone Transform Rule: when `http.request.uri.path eq "/"`, rewrite path to the 
 Two properties of a staging publish, both confirmed against the live bucket and both consequences of decisions made elsewhere:
 
 - **A staging URL needs the explicit `index.html`.** The Transform Rule rewrites only `/`, so `…/staging/<id>/` returns 404 while `…/staging/<id>/index.html` serves the gallery. The rule exists for the site root, not for every directory.
-- **A staging gallery shows broken icons.** Catalog URLs are absolute (§10.4), so they point at the live root, where a staging build has published nothing. This is the cost of the absolute-URL decision and it is worth paying: R09 asks for a downloadable URL, which the run summary gives, not for a browsable preview.
+- **The catalog's base must match where it is published.** Catalog URLs are absolute (§10.4), so a staging build cannot simply reuse the live base — every icon and download would point at the root, where a staging build has published nothing. `addons catalog` therefore takes a `--base`, and the workflow derives it from the same prefix it publishes under. A staging catalog carries staging URLs; the live catalog carries live ones. Absolute URLs stay absolute for the app consumer, and a staging publish is genuinely browsable.
 
 The site's own files use relative paths, so the gallery and the description pages work correctly under any prefix.
 

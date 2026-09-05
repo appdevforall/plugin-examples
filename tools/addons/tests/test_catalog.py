@@ -74,3 +74,21 @@ def test_a_missing_artifact_stops_the_build(tmp_path):
     (dist / "keystore-generator.cgp").unlink()
     with pytest.raises(RuntimeError, match="keystore-generator.cgp"):
         catalog.build(tmp_path, dist)
+
+
+def test_urls_use_the_base_they_are_published_under(tmp_path):
+    dist = make(tmp_path)
+    doc = catalog.build(tmp_path, dist,
+                        base="https://addons.appdevforall.org/staging/run-7")
+    entry = doc["addons"][0]
+    for field in ("iconUrl", "pageUrl"):
+        assert entry[field].startswith("https://addons.appdevforall.org/staging/run-7/")
+    assert entry["download"]["url"].endswith("/staging/run-7/dl/keystore-generator.cgp")
+    assert entry["sourceTarball"]["url"].endswith(
+        "/staging/run-7/src/keystore-generator-src.tar.gz")
+
+
+def test_the_base_defaults_to_the_live_site(tmp_path):
+    dist = make(tmp_path)
+    entry = catalog.build(tmp_path, dist)["addons"][0]
+    assert entry["pageUrl"] == "https://addons.appdevforall.org/p/keystore-generator.html"

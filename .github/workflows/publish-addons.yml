@@ -57,8 +57,22 @@ jobs:
       - name: Build the source tarballs
         run: uv run --directory tools/addons addons --root "$GITHUB_WORKSPACE" tarball --out "$GITHUB_WORKSPACE/dist"
 
+      - name: Work out where this is being published
+        id: dest
+        run: |
+          prefix=""
+          if [ "${{ inputs.staging }}" = "true" ]; then
+            prefix="staging/${{ github.run_id }}/"
+          fi
+          echo "prefix=${prefix}" >> "$GITHUB_OUTPUT"
+          echo "base=https://addons.appdevforall.org/${prefix%/}" >> "$GITHUB_OUTPUT"
+
       - name: Generate the catalog
-        run: uv run --directory tools/addons addons --root "$GITHUB_WORKSPACE" catalog --dist "$GITHUB_WORKSPACE/dist" --out "$GITHUB_WORKSPACE/dist/catalog.json"
+        run: |
+          uv run --directory tools/addons addons --root "$GITHUB_WORKSPACE" catalog \
+            --dist "$GITHUB_WORKSPACE/dist" \
+            --out "$GITHUB_WORKSPACE/dist/catalog.json" \
+            --base "${{ steps.dest.outputs.base }}"
 
       - name: Publish to Cloudflare R2
         env:
@@ -67,13 +81,9 @@ jobs:
           R2_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_SECRET_ACCESS_KEY }}
           R2_BUCKET: ${{ vars.CLOUDFLARE_R2_BUCKET_NAME }}
         run: |
-          prefix=""
-          if [ "${{ inputs.staging }}" = "true" ]; then
-            prefix="staging/${{ github.run_id }}/"
-          fi
           uv run --directory tools/addons addons --root "$GITHUB_WORKSPACE" publish \
-            --dist "$GITHUB_WORKSPACE/dist" --prefix "$prefix"
+            --dist "$GITHUB_WORKSPACE/dist" --prefix "${{ steps.dest.outputs.prefix }}"
           {
             echo "### Published"
-            echo "Base: https://addons.appdevforall.org/${prefix}"
+            echo "${{ steps.dest.outputs.base }}/index.html"
           } >> "$GITHUB_STEP_SUMMARY"

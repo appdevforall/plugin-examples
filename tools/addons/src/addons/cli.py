@@ -16,6 +16,8 @@ def main() -> int:
     catalog_parser = sub.add_parser("catalog")
     catalog_parser.add_argument("--dist", type=Path, required=True)
     catalog_parser.add_argument("--out", type=Path, required=True)
+    catalog_parser.add_argument("--base", default=catalog.BASE,
+                                help="site base the catalog is published under")
 
     publish_parser = sub.add_parser("publish")
     publish_parser.add_argument("--dist", type=Path, required=True)
@@ -37,7 +39,7 @@ def main() -> int:
         return 1 if problems else 0
 
     if args.command == "catalog":
-        document = catalog.build(args.root, args.dist)
+        document = catalog.build(args.root, args.dist, args.base)
         args.out.parent.mkdir(parents=True, exist_ok=True)
         args.out.write_text(json.dumps(document, indent=2) + "\n")
         print(f"wrote {args.out} with {len(document['addons'])} addons")
