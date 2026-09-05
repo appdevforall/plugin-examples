@@ -2176,9 +2176,9 @@ Run this list after the last task.
 - [x] `grep -rin 'greengeeks' .github/workflows/ scripts/` prints nothing.
 - [x] `uv run --directory tools/addons pytest -q` passes.
 - [x] `uv run --directory tools/addons addons --root "$(pwd)" check` exits 0.
-- [ ] `https://addons.appdevforall.org/` shows the gallery. — NOT DONE: nothing is published yet (blocked on the R2 token).
-- [ ] `https://addons.appdevforall.org/v1/catalog.json` returns the catalog, and no field is `null`. — NOT DONE: nothing is published yet.
-- [ ] One `.cgp` downloads in a browser instead of showing as text. — NOT DONE: nothing is published yet.
+- [ ] `https://addons.appdevforall.org/` shows the gallery. — NOT DONE at the root. Verified at `.../staging/local-verify/index.html`: all 23 addons render from the live catalog. The root publish is migration step 5.
+- [ ] `https://addons.appdevforall.org/v1/catalog.json` returns the catalog, and no field is `null`. — NOT DONE at the root. Verified at the staging path: 23 addons, 26 KB, no nulls, `application/json`, `access-control-allow-origin: *`, `max-age=60`.
+- [ ] One `.cgp` downloads in a browser instead of showing as text. — NOT DONE at the root. Verified at the staging path: `application/octet-stream` with `content-disposition: attachment`.
 - [x] One tarball extracts and builds:
 
 ```bash
