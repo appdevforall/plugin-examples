@@ -38,10 +38,9 @@ Every task must obey this section.
 | File | Responsibility |
 |---|---|
 | `tools/addons/pyproject.toml` | Declares the project, its dependencies, and the `addons` command. |
-| `tools/addons/src/addons/model.py` | Holds the `Addon` type. Derives name, slug, and keys from a directory name. |
+| `tools/addons/src/addons/model.py` | Derives name, slug, and keys from a directory name. Reads the plugin id and the version from the source files. |
 | `tools/addons/src/addons/discover.py` | Finds addon directories. Applies the skip list. |
 | `tools/addons/src/addons/check.py` | Checks names and metadata. Exits non-zero on a failure. |
-| `tools/addons/src/addons/apk.py` | Reads `plugin.id` and `plugin.version` from a built `.cgp`. |
 | `tools/addons/src/addons/tarball.py` | Builds and verifies one source tarball. |
 | `tools/addons/src/addons/catalog.py` | Builds `catalog.json` and validates it. |
 | `tools/addons/src/addons/page.py` | Adds gallery chrome to a description page. |
@@ -717,101 +716,132 @@ git commit -m "Add the scaffold subcommand for the one-time metadata draft"
 
 ---
 
-## Task 5: Read identity from a built addon
+## Task 5: Read the plugin id and the version from the source
 
 **Files:**
-- Create: `tools/addons/src/addons/apk.py`
-- Test: `tools/addons/tests/test_apk.py`
+- Modify: `tools/addons/src/addons/model.py`
+- Test: `tools/addons/tests/test_model.py`
 
 **Interfaces:**
 - Consumes: nothing.
-- Produces: `apk.parse_xmltree(text: str) -> dict[str, str]`, `apk.read_meta(cgp: Path) -> dict[str, str]`.
+- Produces: `model.plugin_id(addon: Path) -> str`, `model.version(addon: Path) -> str`.
 
-A `.cgp` file holds a compiled manifest. Only `aapt2` can read it. The plan splits the code in two. `parse_xmltree` is pure and the tests cover it. `read_meta` calls `aapt2` and the tests do not cover it.
+Both values sit in plain text. `plugin.id` is a literal in `src/main/AndroidManifest.xml`. The version comes from one of three places, in this order:
+
+1. `pluginVersion` inside the `pluginBuilder { }` block of `build.gradle.kts`.
+2. `plugin.version` in the manifest, when it is a literal and not a `${...}` placeholder.
+3. `1.0.0`, which is the Gradle plugin's own default.
+
+Step 3 is what 30 of the 31 addons get today, because no addon sets `pluginVersion`. The Gradle plugin injects the same default, so the tool reports what really ships.
 
 - [ ] **Step 1: Write the failing test**
 
+Add this to `tools/addons/tests/test_model.py`:
+
 ```python
-# tools/addons/tests/test_apk.py
-from addons import apk
+from pathlib import Path
 
-XMLTREE = """N: android=http://schemas.android.com/apk/res/android
-  E: manifest (line=2)
-    E: application (line=8)
-      E: meta-data (line=9)
-        A: android:name(0x01010003)="plugin.id" (Raw: "plugin.id")
-        A: android:value(0x01010024)="com.appdevforall.keygen.plugin" (Raw: "com.appdevforall.keygen.plugin")
-      E: meta-data (line=12)
-        A: android:name(0x01010003)="plugin.version" (Raw: "plugin.version")
-        A: android:value(0x01010024)="1.3.0" (Raw: "1.3.0")
-"""
+MANIFEST = """<manifest><application>
+    <meta-data
+        android:name="plugin.id"
+        android:value="com.appdevforall.keygen.plugin" />
+    <meta-data
+        android:name="plugin.version"
+        android:value="{version}" />
+</application></manifest>"""
 
 
-def test_parses_meta_data():
-    meta = apk.parse_xmltree(XMLTREE)
-    assert meta["plugin.id"] == "com.appdevforall.keygen.plugin"
-    assert meta["plugin.version"] == "1.3.0"
+def make(tmp_path: Path, version: str, build: str = "") -> Path:
+    addon = tmp_path / "Keystore-Generator"
+    (addon / "src" / "main").mkdir(parents=True)
+    (addon / "src" / "main" / "AndroidManifest.xml").write_text(
+        MANIFEST.format(version=version))
+    (addon / "build.gradle.kts").write_text(build)
+    return addon
 
 
-def test_returns_nothing_for_empty_input():
-    assert apk.parse_xmltree("") == {}
+def test_reads_the_plugin_id(tmp_path):
+    addon = make(tmp_path, "${pluginVersion}")
+    assert model.plugin_id(addon) == "com.appdevforall.keygen.plugin"
+
+
+def test_a_placeholder_falls_back_to_the_default(tmp_path):
+    addon = make(tmp_path, "${pluginVersion}")
+    assert model.version(addon) == "1.0.0"
+
+
+def test_a_literal_in_the_manifest_wins_over_the_default(tmp_path):
+    addon = make(tmp_path, "1.0.1")
+    assert model.version(addon) == "1.0.1"
+
+
+def test_the_build_file_wins_over_everything(tmp_path):
+    addon = make(tmp_path, "1.0.1",
+                 build='pluginBuilder {\n  pluginVersion = "2.4.0"\n}\n')
+    assert model.version(addon) == "2.4.0"
+
+
+def test_a_missing_manifest_gives_an_empty_id(tmp_path):
+    addon = tmp_path / "Empty"
+    addon.mkdir()
+    assert model.plugin_id(addon) == ""
 ```
 
 - [ ] **Step 2: Run the test. It must fail**
 
-Run: `uv run --directory tools/addons pytest tests/test_apk.py -v`
-Expected: FAIL with `ModuleNotFoundError: No module named 'addons.apk'`
+Run: `uv run --directory tools/addons pytest tests/test_model.py -v`
+Expected: FAIL with `AttributeError: module 'addons.model' has no attribute 'plugin_id'`
 
 - [ ] **Step 3: Write the code**
 
+Add these lines to the top of `tools/addons/src/addons/model.py`:
+
 ```python
-# tools/addons/src/addons/apk.py
-import os
 import re
-import shutil
-import subprocess
 from pathlib import Path
 
+DEFAULT_VERSION = "1.0.0"
+```
 
-def parse_xmltree(text: str) -> dict[str, str]:
-    meta = {}
-    for block in text.split("E: meta-data")[1:]:
-        name = re.search(r'android:name\S*="([^"]*)"', block)
-        value = re.search(r'android:value\S*="([^"]*)"', block)
-        if name and value:
-            meta[name.group(1)] = value.group(1)
-    return meta
+Add these functions to the end of the same file:
 
-
-def _aapt2() -> str:
-    found = shutil.which("aapt2")
-    if found:
-        return found
-    home = os.environ.get("ANDROID_HOME") or os.environ.get("ANDROID_SDK_ROOT")
-    if home:
-        tools = sorted(Path(home, "build-tools").glob("*/aapt2"))
-        if tools:
-            return str(tools[-1])
-    raise RuntimeError("aapt2 is not available. Set ANDROID_HOME.")
+```python
+def _meta(addon: Path, key: str) -> str:
+    f = addon / "src" / "main" / "AndroidManifest.xml"
+    if not f.exists():
+        return ""
+    text = " ".join(f.read_text().split())
+    found = re.search(
+        r'android:name="%s" android:value="([^"]*)"' % re.escape(key), text)
+    return found.group(1) if found else ""
 
 
-def read_meta(cgp: Path) -> dict[str, str]:
-    result = subprocess.run(
-        [_aapt2(), "dump", "xmltree", "--file", "AndroidManifest.xml", str(cgp)],
-        capture_output=True, text=True, check=True)
-    return parse_xmltree(result.stdout)
+def plugin_id(addon: Path) -> str:
+    return _meta(addon, "plugin.id")
+
+
+def version(addon: Path) -> str:
+    build = addon / "build.gradle.kts"
+    if build.exists():
+        found = re.search(r'pluginVersion\s*=\s*"([^"]+)"', build.read_text())
+        if found:
+            return found.group(1)
+    declared = _meta(addon, "plugin.version")
+    if declared and not declared.startswith("${"):
+        return declared
+    return DEFAULT_VERSION
 ```
 
 - [ ] **Step 4: Run all tests. They must pass**
 
 Run: `uv run --directory tools/addons pytest -v`
-Expected: PASS, 19 tests
+Expected: PASS, 22 tests
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add tools/addons
-git commit -m "Read plugin id and version from a built addon"
+git commit -m "Read the plugin id and the version from the source files"
 ```
 
 ---
@@ -1032,7 +1062,7 @@ def build(root: Path, addon: Path, out: Path, licence: str = "AGPL-3.0-or-later"
 - [ ] **Step 4: Run all tests. They must pass**
 
 Run: `uv run --directory tools/addons pytest -v`
-Expected: PASS, 23 tests
+Expected: PASS, 26 tests
 
 - [ ] **Step 5: Commit**
 
@@ -1052,8 +1082,8 @@ git commit -m "Build and verify source tarballs"
 - Test: `tools/addons/tests/test_catalog.py`
 
 **Interfaces:**
-- Consumes: `discover.find_addons`, `model`, `apk.read_meta`.
-- Produces: `catalog.entry(root, addon, cgp, archive, meta) -> dict`, `catalog.build(root: Path, dist: Path, meta_reader=apk.read_meta) -> dict`.
+- Consumes: `discover.find_addons`, `model.slug`, `model.display_name`, `model.plugin_id`, `model.version`.
+- Produces: `catalog.entry(root, addon, cgp, archive) -> dict`, `catalog.build(root: Path, dist: Path) -> dict`.
 
 `build` expects `dist/<slug>.cgp` and `dist/<slug>-src.tar.gz` for every addon.
 
@@ -1142,10 +1172,21 @@ METADATA = {
 }
 
 
-def make(tmp_path: Path, version: str = "1.3.0") -> Path:
+MANIFEST = """<manifest><application>
+    <meta-data
+        android:name="plugin.id"
+        android:value="com.appdevforall.keygen.plugin" />
+    <meta-data
+        android:name="plugin.version"
+        android:value="${pluginVersion}" />
+</application></manifest>"""
+
+
+def make(tmp_path: Path, build_extra: str = "") -> Path:
     addon = tmp_path / "plugins" / "Keystore-Generator"
-    addon.mkdir(parents=True)
-    (addon / "build.gradle.kts").write_text(PREDICATE)
+    (addon / "src" / "main").mkdir(parents=True)
+    (addon / "build.gradle.kts").write_text(PREDICATE + "\n" + build_extra)
+    (addon / "src" / "main" / "AndroidManifest.xml").write_text(MANIFEST)
     (addon / "addon.json").write_text(json.dumps(METADATA))
     dist = tmp_path / "dist"
     dist.mkdir()
@@ -1154,21 +1195,16 @@ def make(tmp_path: Path, version: str = "1.3.0") -> Path:
     return dist
 
 
-def reader(version="1.3.0"):
-    return lambda path: {"plugin.id": "com.appdevforall.keygen.plugin",
-                         "plugin.version": version}
-
-
 def test_builds_a_valid_entry(tmp_path):
     dist = make(tmp_path)
-    result = catalog.build(tmp_path, dist, meta_reader=reader())
+    result = catalog.build(tmp_path, dist)
     assert result["schemaVersion"] == 1
     entry = result["addons"][0]
     assert entry["type"] == "plugin"
     assert entry["slug"] == "keystore-generator"
     assert entry["name"] == "Keystore Generator"
     assert entry["pluginId"] == "com.appdevforall.keygen.plugin"
-    assert entry["version"] == "1.3.0"
+    assert entry["version"] == "1.0.0"
     assert entry["download"]["url"].startswith("https://")
     assert entry["download"]["size"] == 3
     assert len(entry["download"]["sha256"]) == 64
@@ -1176,21 +1212,21 @@ def test_builds_a_valid_entry(tmp_path):
 
 def test_no_field_is_null(tmp_path):
     dist = make(tmp_path)
-    entry = catalog.build(tmp_path, dist, meta_reader=reader())["addons"][0]
+    entry = catalog.build(tmp_path, dist)["addons"][0]
     assert None not in entry.values()
 
 
 def test_a_bad_version_stops_the_build(tmp_path):
-    dist = make(tmp_path)
+    dist = make(tmp_path, build_extra='pluginBuilder { pluginVersion = "draft" }')
     with pytest.raises(RuntimeError, match="version"):
-        catalog.build(tmp_path, dist, meta_reader=reader("${pluginVersion}"))
+        catalog.build(tmp_path, dist)
 
 
 def test_a_missing_artifact_stops_the_build(tmp_path):
     dist = make(tmp_path)
     (dist / "keystore-generator.cgp").unlink()
     with pytest.raises(RuntimeError, match="keystore-generator.cgp"):
-        catalog.build(tmp_path, dist, meta_reader=reader())
+        catalog.build(tmp_path, dist)
 ```
 
 - [ ] **Step 3: Run the test. It must fail**
@@ -1210,7 +1246,7 @@ from pathlib import Path
 
 import jsonschema
 
-from addons import apk, discover, model
+from addons import discover, model
 
 BASE = "https://addons.appdevforall.org"
 SOURCE = "https://github.com/appdevforall/plugin-examples/tree/main"
@@ -1224,18 +1260,18 @@ def _file(path: Path, url: str) -> dict:
     return {"url": url, "sha256": hashlib.sha256(data).hexdigest(), "size": len(data)}
 
 
-def entry(root: Path, addon: Path, cgp: Path, archive: Path, built: dict) -> dict:
+def entry(root: Path, addon: Path, cgp: Path, archive: Path) -> dict:
     directory = addon.name
     slug = model.slug(directory)
     meta = json.loads((addon / "addon.json").read_text())
-    version = built.get("plugin.version", "")
+    version = model.version(addon)
     if not VERSION.match(version):
-        raise RuntimeError(f"{directory}: plugin.version '{version}' is not a number")
+        raise RuntimeError(f"{directory}: the version '{version}' is not a number")
     relative = addon.relative_to(root).as_posix()
     return {
         "type": TYPES.get(addon.parent.name, "plugin"),
         "slug": slug,
-        "pluginId": built.get("plugin.id", ""),
+        "pluginId": model.plugin_id(addon),
         "name": model.display_name(directory),
         "version": version,
         "summary": meta["summary"],
@@ -1253,7 +1289,7 @@ def entry(root: Path, addon: Path, cgp: Path, archive: Path, built: dict) -> dic
     }
 
 
-def build(root: Path, dist: Path, meta_reader=apk.read_meta) -> dict:
+def build(root: Path, dist: Path) -> dict:
     entries = []
     for addon in discover.find_addons(root):
         slug = model.slug(addon.name)
@@ -1262,7 +1298,7 @@ def build(root: Path, dist: Path, meta_reader=apk.read_meta) -> dict:
         for f in (cgp, archive):
             if not f.exists():
                 raise RuntimeError(f"{addon.name}: {f.name} is missing from {dist}")
-        entries.append(entry(root, addon, cgp, archive, meta_reader(cgp)))
+        entries.append(entry(root, addon, cgp, archive))
 
     document = {
         "schemaVersion": 1,
@@ -1310,7 +1346,7 @@ Add `import json` to the top of `cli.py`.
 - [ ] **Step 7: Run all tests. They must pass**
 
 Run: `uv run --directory tools/addons pytest -v`
-Expected: PASS, 27 tests
+Expected: PASS, 30 tests
 
 - [ ] **Step 8: Commit**
 
@@ -1401,7 +1437,7 @@ def wrap(html: str, name: str, template: str) -> str:
 - [ ] **Step 5: Run all tests. They must pass**
 
 Run: `uv run --directory tools/addons pytest -v`
-Expected: PASS, 29 tests
+Expected: PASS, 32 tests
 
 - [ ] **Step 6: Commit**
 
@@ -1560,7 +1596,7 @@ def client_from_env():
 - [ ] **Step 4: Run all tests. They must pass**
 
 Run: `uv run --directory tools/addons pytest -v`
-Expected: PASS, 34 tests
+Expected: PASS, 37 tests
 
 - [ ] **Step 5: Add the subcommand**
 

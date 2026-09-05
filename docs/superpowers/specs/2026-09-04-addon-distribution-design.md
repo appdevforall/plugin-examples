@@ -368,9 +368,9 @@ Two mechanisms, deliberately both:
 |---|---|---|---|
 | `type` | `plugin` \| `template` \| `snippet` \| `code-action` | Parent directory | Lets the other addon types join without a schema change (R13). |
 | `slug` | `^[a-z0-9]+(-[a-z0-9]+)*$` | Directory, lowercased | Distribution identity. Unique across the catalog. |
-| `pluginId` | string | Built artifact's manifest | **The app's identity key.** It names the installed file, keys the loaded-plugin map, keys the enabled-state store, and drives conflict detection. Without it the app cannot answer "do I already have this". |
+| `pluginId` | string | `AndroidManifest.xml` | **The app's identity key.** It names the installed file, keys the loaded-plugin map, keys the enabled-state store, and drives conflict detection. Without it the app cannot answer "do I already have this". |
 | `name` | string | Directory, hyphens to spaces | Display name (R25). |
-| `version` | dotted numeric | Built artifact's manifest | Answers "is mine current". Ordering defined in §10.7. |
+| `version` | dotted numeric | `build.gradle.kts`, then the manifest, then the Gradle plugin's default | Answers "is mine current". Ordering defined in §10.7. |
 | `summary` | string, 1–120 | `addon.json` | Card text. |
 | `description` | string | `addon.json` | Paragraph. |
 | `origin` | `appdevforall` \| `community` | `addon.json` | R15. |
@@ -386,7 +386,11 @@ Two properties of this table matter more than any individual row.
 
 **Every URL is absolute.** A relative path is fine for the gallery and hostile to every other consumer — an app that fetches the catalog and then needs to download an artifact would have to reconstruct a base it was never told. Absolute costs a few hundred bytes per entry and removes a whole class of consumer bug.
 
-**`version` is read from the built artifact, not the source.** One addon hardcodes a version its build is supposed to inject, so reading source would record a value that is sometimes false. Reading the packaged `.cgp` always yields what users actually receive. `addons check` flags the source-level hardcoding separately, as its own defect.
+**`version` is read from plain text, in three steps.** The tool reads `pluginVersion` from `pluginBuilder { }` in `build.gradle.kts`. If that is absent it reads `plugin.version` from the manifest and uses it when it is a literal rather than a `${...}` placeholder. If both are absent it uses `1.0.0`, the Gradle plugin's own default.
+
+This yields exactly what ships, because the Gradle plugin injects that same default. An earlier draft read the version out of the built `.cgp`. That needed `aapt2` to decompile a binary manifest and returned identical values — cost with no benefit — so it is gone.
+
+**Today every addon reports the same version.** No addon sets `pluginVersion`, so 30 of them ship `1.0.0`. Only `icons-repository` differs, at `1.0.1`, because it hardcodes the value. The catalog reports this truthfully. It does not become useful until someone sets real versions (O8).
 
 ### 10.5 Compatibility rules
 
@@ -699,3 +703,4 @@ Nothing below blocks implementation of §14 steps 1–3.
 | **O5** | `pebble-custom-function-template-installer` ships stale copies of both shared jars and is the sole skip-list entry with no recorded reason. | Cleanup during migration step 3. |
 | **O6** | A periodic job that actually builds one published tarball. | The real mitigation for K07. Out of scope here. |
 | **O7** | The app's "Discover plugins" button opens the contribute page. Repointing it at the gallery is a one-string change. | The cheapest possible integration, and app-side work. Worth filing as soon as the gallery is live. |
+| **O8** | **No addon sets its own version.** All but one report `1.0.0`, so the catalog cannot yet tell a user that an update exists. | Not caused by this change and not fixed by it. The field and its ordering ship now, so the capability works the day someone sets real versions. Setting them is separate work. |
