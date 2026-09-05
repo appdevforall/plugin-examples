@@ -18,13 +18,8 @@ set -euo pipefail
 # plugin-builder Gradle plugin. Discover them dynamically so new plugins are
 # picked up automatically.
 plugin_dirs() {
-  local f
-  for f in */build.gradle.kts; do
-    [ -e "$f" ] || continue
-    if grep -q 'com.itsaky.androidide.plugins.build' "$f"; then
-      printf '%s\n' "${f%/build.gradle.kts}"
-    fi
-  done
+  uv run --directory "$(git rev-parse --show-toplevel)/tools/addons" \
+    addons --root "$(git rev-parse --show-toplevel)" discover
 }
 
 # Determine the set of commits being pushed. git feeds pre-push one line per

@@ -2022,25 +2022,18 @@ Also delete the `PLUGINS_REMOTE_PATH` entry from the `env:` block at the top. Ke
 Run: `grep -rin 'greengeeks\|scp\|id_rsa' .github/workflows/ scripts/`
 Expected: no match.
 
-- [ ] **Step 5: Copy all five jars in `scripts/update-libs.sh`**
+- [ ] **Step 5: Report the three jars this script does not refresh**
 
-Replace the two `cp` lines near line 113 with this block:
+`libs/` holds five jars. The two Gradle tasks above produce only two of them.
+
+**Do not try to copy the other three by searching for their names.** A name search finds `composite-builds/build-logic/common/build/libs/common.jar`, which is a different 21 KB artifact. `libs/common.jar` is 355 KB. Copying it replaces the IDE's jar with an unrelated one and breaks every plugin that uses it.
+
+Add this after the two `cp` lines instead, so the staleness is loud:
 
 ```bash
-cp "$PLUGIN_API_SRC"     "$LIBS_DIR/plugin-api.jar"
-cp "$PLUGIN_BUILDER_SRC" "$LIBS_DIR/gradle-plugin.jar"
-
-# libs/ holds five jars but this script only built two of them. The other
-# three ship inside every source tarball, so stale copies now reach users.
-# Copy them when the CodeOnTheGo build produced them. Warn when it did not.
 for jar in common eventbus-events idetooltips; do
-    found="$(find "$CODEONTHEGO_PATH" -path '*/build/libs/*' -name "${jar}*.jar" \
-             -not -name '*-sources.jar' 2>/dev/null | head -n1)"
-    if [ -n "$found" ]; then
-        cp "$found" "$LIBS_DIR/${jar}.jar"
-        echo "Refreshed ${jar}.jar from $found"
-    else
-        echo "WARNING: ${jar}.jar was not rebuilt. libs/${jar}.jar may be stale." >&2
+    if [ -f "$LIBS_DIR/${jar}.jar" ]; then
+        echo "NOT REFRESHED: libs/${jar}.jar (last changed $(date -r "$LIBS_DIR/${jar}.jar" '+%Y-%m-%d'))" >&2
     fi
 done
 ```

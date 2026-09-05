@@ -9,6 +9,19 @@ function size(bytes) {
   return mb >= 1 ? mb.toFixed(1) + " MB" : Math.round(bytes / 1024) + " KB";
 }
 
+// Only http(s) and same-origin relative URLs may reach an href or src.
+// Every catalog URL is derived by the generator today, but the page renders
+// data fetched over the network, and "javascript:" in an href would run.
+function safeUrl(value) {
+  if (typeof value !== "string") return "";
+  try {
+    const url = new URL(value, location.origin);
+    return url.protocol === "http:" || url.protocol === "https:" ? url.href : "";
+  } catch {
+    return "";
+  }
+}
+
 function matches(addon) {
   if (state.type && addon.type !== state.type) return false;
   if (!state.q) return true;
@@ -31,10 +44,10 @@ function render() {
     set("version", "v" + addon.version);
     set("origin", addon.origin === "community" ? "Community" : "App Dev For All");
     set("size", size(addon.download.size));
-    node.querySelector(".icon").src = addon.iconUrl;
-    node.querySelector('[data-slot="download"]').href = addon.download.url;
-    node.querySelector('[data-slot="page"]').href = addon.pageUrl;
-    node.querySelector('[data-slot="source"]').href = addon.sourceUrl;
+    node.querySelector(".icon").src = safeUrl(addon.iconUrl);
+    node.querySelector('[data-slot="download"]').href = safeUrl(addon.download.url);
+    node.querySelector('[data-slot="page"]').href = safeUrl(addon.pageUrl);
+    node.querySelector('[data-slot="source"]').href = safeUrl(addon.sourceUrl);
     cards.append(node);
   }
   status.textContent = shown.length ? "" : "No addon matches this search.";

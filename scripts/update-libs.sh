@@ -113,36 +113,33 @@ mkdir -p "$LIBS_DIR"
 cp "$PLUGIN_API_SRC"     "$LIBS_DIR/plugin-api.jar"
 cp "$PLUGIN_BUILDER_SRC" "$LIBS_DIR/gradle-plugin.jar"
 
+# libs/ holds five jars but this script rebuilds only two of them. The other
+# three (common, eventbus-events, idetooltips) are NOT produced by the two
+# Gradle tasks above, and their true source in CodeOnTheGo is not known here.
+# Do not guess: a name search finds composite-builds/build-logic/common.jar,
+# which is a different 21 KB artifact, and copying it over the IDE's 355 KB
+# common.jar would break every plugin that uses it. Report the gap instead,
+# so stale jars are visible rather than silent. These jars now ship inside
+# every source tarball, so the drift matters.
+for jar in common eventbus-events idetooltips; do
+    if [ -f "$LIBS_DIR/${jar}.jar" ]; then
+        echo "NOT REFRESHED: libs/${jar}.jar (last changed $(date -r "$LIBS_DIR/${jar}.jar" '+%Y-%m-%d'))" >&2
+    fi
+done
+
 CODEONTHEGO_SHA="$(git -C "$CODEONTHEGO_PATH" rev-parse --short HEAD 2>/dev/null || echo unknown)"
 echo ""
 echo "Updated libs/ from CodeOnTheGo@$CODEONTHEGO_SHA"
 printf "  %-20s %s\n" "plugin-api.jar"    "$(du -h "$LIBS_DIR/plugin-api.jar" | cut -f1)"
 printf "  %-20s %s\n" "gradle-plugin.jar" "$(du -h "$LIBS_DIR/gradle-plugin.jar" | cut -f1)"
 
-# Plugins listed here are skipped by the build loop below and the staging
-# loops in .github/workflows/build-plugins.yml and
-# .github/workflows/update-libs.yml. Keep the three in sync.
-SKIP_PLUGINS=(pebble-custom-function-template-installer)
-
+# One discovery rule for the whole repository. The tool applies the skip
+# list in tools/addons/skip.txt. Do not use mapfile here: macOS ships
+# bash 3.2, which does not have it.
 PLUGINS=()
-for build_file in "$REPO_ROOT"/*/build.gradle.kts; do
-    [ -f "$build_file" ] || continue
-    if grep -qF "$PLUGIN_BUILDER_ID" "$build_file"; then
-        name="$(basename "$(dirname "$build_file")")"
-        skip=0
-        for s in "${SKIP_PLUGINS[@]}"; do
-            if [ "$s" = "$name" ]; then
-                skip=1
-                break
-            fi
-        done
-        if [ "$skip" -eq 1 ]; then
-            echo "Skipping $name (in SKIP_PLUGINS)"
-            continue
-        fi
-        PLUGINS+=("$name")
-    fi
-done
+while IFS= read -r line; do
+    PLUGINS+=("$line")
+done < <(uv run --directory "$REPO_ROOT/tools/addons" addons --root "$REPO_ROOT" discover)
 
 if [ "${#PLUGINS[@]}" -eq 0 ]; then
     echo "Error: no example plugins discovered (looked for sibling dirs whose build.gradle.kts applies $PLUGIN_BUILDER_ID)." >&2

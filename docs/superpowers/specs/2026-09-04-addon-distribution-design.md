@@ -547,7 +547,11 @@ No `AWS_REQUEST_CHECKSUM_CALCULATION` workaround is used. That incompatibility w
 
 Returns to its name: refresh `libs/`, commit, cut a release. The scp block, the SSH key setup and teardown, the remote MD5 check, the website-filename staging loop, and the `GREENGEEKS_SSH_*` secret and variables are all deleted (G02, R10, P04). The GitHub Release step is untouched.
 
-**One bug is fixed here.** `scripts/update-libs.sh` copies two jars into `libs/`, but `libs/` holds five. `common.jar`, `eventbus-events.jar`, and `idetooltips.jar` are never refreshed and can silently drift from the CodeOnTheGo build they were taken from. Since R41 now makes those jars part of a published deliverable, the drift stops being cosmetic. The script refreshes all five.
+**One bug is made visible here, not fixed.** `scripts/update-libs.sh` rebuilds two jars, but `libs/` holds five. `common.jar`, `eventbus-events.jar`, and `idetooltips.jar` are never refreshed and can silently drift. R41 makes those jars part of a published deliverable, so the drift stops being cosmetic.
+
+Refreshing them automatically was attempted and **rejected as unsafe**. The two Gradle tasks this script runs do not produce them, and their real source is not known. A search by name finds `composite-builds/build-logic/common/build/libs/common.jar` — a different 21 KB artifact with 17 files, where `libs/common.jar` is 355 KB with 224 files. Copying it would silently replace the IDE's jar with an unrelated one and break every plugin that depends on it.
+
+The script therefore prints `NOT REFRESHED` with each jar's date, so the staleness is loud rather than silent. Finding the true source is tracked as O9.
 
 ### 13.2 `build-plugins.yml`
 
@@ -688,4 +692,5 @@ Nothing below blocks implementation of §14 steps 1–3.
 | **O5** | `pebble-custom-function-template-installer` ships stale copies of both shared jars and is the sole skip-list entry with no recorded reason. | Cleanup during migration step 3. |
 | **O6** | A periodic job that actually builds one published tarball. | The real mitigation for K07. Out of scope here. |
 | **O7** | The app's "Discover plugins" button opens the contribute page. Repointing it at the gallery is a one-string change. | The cheapest possible integration, and app-side work. Worth filing as soon as the gallery is live. |
+| **O9** | The real source of `common.jar`, `eventbus-events.jar`, and `idetooltips.jar` in CodeOnTheGo is unknown, so `update-libs.sh` cannot refresh them. | It reports them as `NOT REFRESHED` on every run. Someone who knows the CodeOnTheGo build must identify the producing tasks. Until then these three jars ship inside every source tarball at whatever age they already have. |
 | **O8** | **No addon sets its own version.** All but one report `1.0.0`, so the catalog cannot yet tell a user that an update exists. | Not caused by this change and not fixed by it. The field and its ordering ship now, so the capability works the day someone sets real versions. Setting them is separate work. |

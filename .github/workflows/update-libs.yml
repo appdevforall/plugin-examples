@@ -6,9 +6,6 @@ on:
 permissions:
   contents: write
 
-env:
-  PLUGINS_REMOTE_PATH: public_html/flags/plugins
-
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -59,6 +56,9 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
@@ -90,61 +90,6 @@ jobs:
           echo "codeonthego_sha=${sha}" >> "$GITHUB_OUTPUT"
           echo "head_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
-      - name: Stage .cgp files with website filenames
-        run: |
-          mkdir -p deploy-staging
-
-          # Discover every plugin module the same way scripts/update-libs.sh does
-          # (a sibling dir whose build.gradle.kts applies the plugin-builder Gradle
-          # plugin) so new plugins deploy to the website automatically. The website
-          # filename is the lowercased module name with any trailing "-plugin"
-          # stripped; the case arms hold the legacy filenames the website already
-          # links that don't follow that rule — never change an existing name.
-          # Keep in sync with SKIP_PLUGINS in scripts/update-libs.sh.
-          SKIP_PLUGINS=(pebble-custom-function-template-installer)
-
-          staged=0
-          for build_file in */build.gradle.kts; do
-            [ -f "$build_file" ] || continue
-            grep -qF "com.itsaky.androidide.plugins.build" "$build_file" || continue
-            module="$(dirname "$build_file")"
-            skip=0
-            for s in "${SKIP_PLUGINS[@]}"; do
-              [ "$s" = "$module" ] && skip=1 && break
-            done
-            if [ "$skip" -eq 1 ]; then
-              echo "Skipping $module (in SKIP_PLUGINS)"
-              continue
-            fi
-            case "$module" in
-              apk-viewer) name="apk-analyzer" ;;
-              markdown-preview) name="markdown-previewer" ;;
-              *) name="$(echo "${module%-plugin}" | tr '[:upper:]' '[:lower:]')" ;;
-            esac
-            src="$(ls "${module}/build/plugin/"*.cgp 2>/dev/null | grep -v -- '-debug\.cgp$' | head -n1)"
-            if [ -z "$src" ]; then
-              echo "ERROR: no release .cgp found under ${module}/build/plugin/ (did assemblePlugin run?)"
-              exit 1
-            fi
-            cp "$src" "deploy-staging/${name}.cgp"
-            echo "Staged $src -> deploy-staging/${name}.cgp"
-            staged=$((staged + 1))
-          done
-
-          if [ "$staged" -eq 0 ]; then
-            echo "ERROR: no plugin modules discovered under */build.gradle.kts"
-            exit 1
-          fi
-          ls -la deploy-staging/
-
-      - name: Upload .cgp artifacts for deploy job
-        uses: actions/upload-artifact@v4
-        with:
-          name: plugins-cgp
-          path: deploy-staging/*.cgp
-          retention-days: 7
-          if-no-files-found: error
-
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
@@ -153,95 +98,3 @@ jobs:
           body: Built against CodeOnTheGo@${{ steps.commit.outputs.codeonthego_sha }}.
           fail_on_unmatched_files: true
           files: '*/build/plugin/*.cgp'
-
-  deploy:
-    needs: release
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - name: Download .cgp artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: plugins-cgp
-          path: deploy-staging
-
-      - name: List staged files
-        run: ls -la deploy-staging/
-
-      - name: Set up SSH key
-        env:
-          GREENGEEKS_HOST: ${{ vars.GREENGEEKS_SSH_HOST }}
-          GREENGEEKS_KEY: ${{ secrets.GREENGEEKS_SSH_PRIVATE_KEY }}
-          GREENGEEKS_USER: ${{ vars.GREENGEEKS_SSH_USER }}
-        run: |
-          mkdir -p ~/.ssh
-          if [ -z "$GREENGEEKS_HOST" ]; then
-            echo "Error: GREENGEEKS_SSH_HOST variable is not set"
-            exit 1
-          fi
-          echo "$GREENGEEKS_KEY" > ~/.ssh/id_rsa
-          sed -i '$ { /^$/ d; }' ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          if ! grep -q "BEGIN.*PRIVATE KEY" ~/.ssh/id_rsa; then
-            echo "Error: SSH key does not appear to be in correct format"
-            exit 1
-          fi
-          cat > ~/.ssh/config <<EOF
-          Host *
-            IdentitiesOnly yes
-            PreferredAuthentications publickey
-            StrictHostKeyChecking no
-            UserKnownHostsFile ~/.ssh/known_hosts
-            PubkeyAuthentication yes
-            PasswordAuthentication no
-          Host $GREENGEEKS_HOST
-            User $GREENGEEKS_USER
-            IdentityFile ~/.ssh/id_rsa
-            ControlMaster auto
-            ControlPath ~/.ssh/cm-%r@%h:%p
-            ControlPersist 10m
-            ConnectTimeout 60
-            ServerAliveInterval 60
-            ServerAliveCountMax 10
-          EOF
-          chmod 600 ~/.ssh/config
-          unset SSH_AUTH_SOCK
-          unset SSH_AGENT_PID
-          ssh-keyscan -H "$GREENGEEKS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
-
-      - name: Upload .cgp files via scp
-        env:
-          REMOTE: ${{ vars.GREENGEEKS_SSH_USER }}@${{ vars.GREENGEEKS_SSH_HOST }}
-        run: |
-          for f in deploy-staging/*.cgp; do
-            echo "Uploading $f -> $REMOTE:$PLUGINS_REMOTE_PATH/$(basename "$f")"
-            scp -o StrictHostKeyChecking=no "$f" "$REMOTE:$PLUGINS_REMOTE_PATH/"
-          done
-
-      - name: Verify remote MD5 checksums
-        env:
-          REMOTE: ${{ vars.GREENGEEKS_SSH_USER }}@${{ vars.GREENGEEKS_SSH_HOST }}
-        run: |
-          names=$(cd deploy-staging && ls *.cgp | tr '\n' ' ')
-          remote_sums=$(ssh "$REMOTE" "cd $PLUGINS_REMOTE_PATH && md5sum $names")
-          failures=0
-          while IFS= read -r line; do
-            remote_md5=$(echo "$line" | awk '{print $1}')
-            name=$(echo "$line" | awk '{print $2}')
-            local_md5=$(md5sum "deploy-staging/$name" | cut -d ' ' -f1)
-            if [ "$local_md5" = "$remote_md5" ]; then
-              echo "OK   $name ($local_md5)"
-            else
-              echo "FAIL $name local=$local_md5 remote=$remote_md5"
-              failures=$((failures+1))
-            fi
-          done <<< "$remote_sums"
-          if [ $failures -gt 0 ]; then
-            echo "ERROR: $failures file(s) failed MD5 verification"
-            exit 1
-          fi
-
-      - name: Cleanup SSH key
-        if: always()
-        run: |
-          rm -f ~/.ssh/id_rsa ~/.ssh/known_hosts || true

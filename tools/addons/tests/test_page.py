@@ -15,3 +15,14 @@ def test_keeps_the_body_and_drops_the_old_shell():
 def test_accepts_a_fragment_with_no_body_tag():
     result = page.wrap("<p>Text.</p>", "Name", TEMPLATE)
     assert "<p>Text.</p>" in result
+
+
+def test_the_title_is_escaped():
+    result = page.wrap("<p>x</p>", 'Ab<script>alert(1)</script>', TEMPLATE)
+    assert "<script>" not in result
+    assert "&lt;script&gt;" in result
+
+
+def test_the_title_cannot_inject_the_body_placeholder():
+    result = page.wrap("<p>real body</p>", "{{body}}", TEMPLATE)
+    assert "real body" in result
