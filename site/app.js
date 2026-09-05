@@ -1,4 +1,4 @@
-const state = { addons: [], q: "", type: "" };
+const state = { addons: [], q: "", type: "", tags: [] };
 
 const cards = document.getElementById("cards");
 const status = document.getElementById("status");
@@ -24,10 +24,49 @@ function safeUrl(value) {
 
 function matches(addon) {
   if (state.type && addon.type !== state.type) return false;
+  // every selected tag must be present, so tags narrow rather than widen
+  if (!state.tags.every((t) => addon.tags.includes(t))) return false;
   if (!state.q) return true;
   const text = [addon.name, addon.summary, addon.description, ...addon.tags]
     .join(" ").toLowerCase();
   return state.q.toLowerCase().split(/\s+/).every((word) => text.includes(word));
+}
+
+function toggleTag(tag) {
+  const i = state.tags.indexOf(tag);
+  if (i === -1) state.tags.push(tag);
+  else state.tags.splice(i, 1);
+  render();
+}
+
+function tagButton(tag) {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "tag";
+  b.textContent = "#" + tag;
+  if (state.tags.includes(tag)) {
+    b.classList.add("on");
+    b.setAttribute("aria-pressed", "true");
+  } else {
+    b.setAttribute("aria-pressed", "false");
+  }
+  b.addEventListener("click", () => toggleTag(tag));
+  return b;
+}
+
+function renderActive() {
+  const bar = document.getElementById("active");
+  bar.replaceChildren();
+  bar.hidden = state.tags.length === 0;
+  if (bar.hidden) return;
+  bar.append("Filtering by ");
+  for (const tag of state.tags) bar.append(tagButton(tag));
+  const clear = document.createElement("button");
+  clear.type = "button";
+  clear.className = "clear";
+  clear.textContent = "Clear tags";
+  clear.addEventListener("click", () => { state.tags = []; render(); });
+  bar.append(clear);
 }
 
 function render() {
@@ -44,16 +83,20 @@ function render() {
     set("version", "v" + addon.version);
     set("origin", addon.origin === "community" ? "Community" : "App Dev For All");
     set("size", size(addon.download.size));
+    const tags = node.querySelector('[data-slot="tags"]');
+    for (const tag of addon.tags) tags.append(tagButton(tag));
     node.querySelector(".icon").src = safeUrl(addon.iconUrl);
     node.querySelector('[data-slot="download"]').href = safeUrl(addon.download.url);
     node.querySelector('[data-slot="page"]').href = safeUrl(addon.pageUrl);
     node.querySelector('[data-slot="source"]').href = safeUrl(addon.sourceUrl);
     cards.append(node);
   }
-  status.textContent = shown.length ? "" : "No addon matches this search.";
+  renderActive();
+  status.textContent = shown.length ? "" : "No addon matches these filters.";
   const url = new URL(location.href);
   url.search = new URLSearchParams(
-    Object.entries({ q: state.q, type: state.type }).filter(([, v]) => v)
+    Object.entries({ q: state.q, type: state.type, tags: state.tags.join(",") })
+      .filter(([, v]) => v)
   ).toString();
   history.replaceState(null, "", url);
 }
@@ -70,6 +113,7 @@ document.getElementById("type").addEventListener("change", (event) => {
 const params = new URLSearchParams(location.search);
 state.q = params.get("q") || "";
 state.type = params.get("type") || "";
+state.tags = (params.get("tags") || "").split(",").filter(Boolean);
 document.getElementById("q").value = state.q;
 document.getElementById("type").value = state.type;
 

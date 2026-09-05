@@ -1,9 +1,11 @@
+import hashlib
 import os
 from pathlib import Path
 
 import boto3
 
 SHORT = "public, max-age=60"
+IMMUTABLE = "public, max-age=31536000, immutable"
 
 CONTENT_TYPES = {
     ".html": "text/html",
@@ -17,11 +19,24 @@ CONTENT_TYPES = {
 ATTACHMENTS = {".cgp", ".gz"}
 
 
+def hashed_name(path: Path) -> str:
+    """`app.js` -> `app.<8 hex of sha256>.js`.
+
+    The zone's Browser Cache TTL overrides our Cache-Control for the file
+    types Cloudflare caches by default, so a changed asset can sit in a
+    browser for hours. A content-derived name sidesteps that: new bytes
+    mean a new URL, and the old one is never asked for again.
+    """
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()[:8]
+    stem, _, suffix = path.name.rpartition(".")
+    return f"{stem}.{digest}.{suffix}"
+
+
 def headers_for(key: str) -> dict:
     suffix = Path(key).suffix
     headers = {
         "ContentType": CONTENT_TYPES.get(suffix, "application/octet-stream"),
-        "CacheControl": SHORT,
+        "CacheControl": IMMUTABLE if key.startswith("assets/") else SHORT,
     }
     if suffix in ATTACHMENTS:
         headers["ContentDisposition"] = f'attachment; filename="{Path(key).name}"'

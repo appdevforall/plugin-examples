@@ -57,17 +57,24 @@ def main() -> int:
         dist, prefix = args.dist, args.prefix
         site = args.root / "site"
         template = (site / "page.template.html").read_text()
-        objects = [
-            (f"{prefix}assets/styles.css", site / "styles.css"),
-            (f"{prefix}assets/app.js", site / "app.js"),
-            (f"{prefix}index.html", site / "index.html"),
-        ]
+        # content-hashed asset names, so a changed asset always gets a new URL
+        assets = {n: publish.hashed_name(site / n) for n in ("styles.css", "app.js")}
+        objects = [(f"{prefix}assets/{h}", site / n) for n, h in assets.items()]
+
+        def with_hashed_assets(text: str) -> str:
+            for name, hashed in assets.items():
+                text = text.replace(f"assets/{name}", f"assets/{hashed}")
+            return text
+
+        index_file = dist / "index.html"
+        index_file.write_text(with_hashed_assets((site / "index.html").read_text()))
+        objects.append((f"{prefix}index.html", index_file))
         for addon in discover.find_addons(args.root):
             slug = model.slug(addon.name)
             wrapped = page.wrap((addon / f"{slug}.html").read_text(),
                                 model.display_name(addon.name), template)
             page_file = dist / f"{slug}.page.html"
-            page_file.write_text(wrapped)
+            page_file.write_text(with_hashed_assets(wrapped))
             objects += [
                 (f"{prefix}p/{slug}.html", page_file),
                 (f"{prefix}p/{slug}.png",

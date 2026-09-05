@@ -26,3 +26,17 @@ main { max-width:64rem; margin:0 auto; padding:16px; }
 .links { display:flex; gap:12px; font-size:.9rem; }
 .page { max-width:48rem; }
 a:focus-visible, input:focus-visible, select:focus-visible { outline:2px solid var(--ink); outline-offset:2px; }
+.tags { display:flex; flex-wrap:wrap; gap:5px; }
+.tag {
+  font:inherit; font-size:.72rem; line-height:1.4; cursor:pointer;
+  padding:2px 7px; border-radius:999px; border:1px solid var(--rule);
+  background:transparent; color:var(--dim);
+}
+.tag:hover { border-color:var(--ink); color:var(--ink); }
+.tag.on { background:var(--ink); border-color:var(--ink); color:var(--ground); }
+#active { display:flex; flex-wrap:wrap; align-items:center; gap:6px;
+          margin:0 0 12px; color:var(--dim); font-size:.85rem; }
+.clear { font:inherit; font-size:.78rem; cursor:pointer; background:none;
+         border:0; color:var(--dim); text-decoration:underline; padding:2px 4px; }
+.clear:hover { color:var(--ink); }
+button:focus-visible { outline:2px solid var(--ink); outline-offset:2px; }

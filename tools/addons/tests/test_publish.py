@@ -25,9 +25,9 @@ def test_headers_for_a_page():
 
 
 def test_headers_for_an_asset():
-    head = publish.headers_for("assets/styles.css")
+    head = publish.headers_for("assets/styles.abc12345.css")
     assert head["ContentType"] == "text/css"
-    assert head["CacheControl"] == "public, max-age=60"
+    assert head["CacheControl"] == "public, max-age=31536000, immutable"
 
 
 def test_the_catalog_goes_last(tmp_path):
@@ -49,3 +49,19 @@ def test_bucket_comes_from_the_environment(monkeypatch):
 def test_bucket_defaults_to_addons(monkeypatch):
     monkeypatch.delenv("R2_BUCKET", raising=False)
     assert publish.bucket_from_env() == "addons"
+
+
+def test_hashed_name_is_stable_and_content_derived(tmp_path):
+    f = tmp_path / "app.js"
+    f.write_bytes(b"one")
+    first = publish.hashed_name(f)
+    assert publish.hashed_name(f) == first          # stable for same bytes
+    assert first.startswith("app.") and first.endswith(".js")
+    f.write_bytes(b"two")
+    assert publish.hashed_name(f) != first          # changes with content
+
+
+def test_hashed_assets_are_immutable():
+    head = publish.headers_for("assets/app.abc12345.js")
+    assert head["CacheControl"] == "public, max-age=31536000, immutable"
+    assert publish.headers_for("index.html")["CacheControl"] == "public, max-age=60"

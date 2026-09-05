@@ -19,6 +19,7 @@
       <option value="code-action">Code actions</option>
     </select>
   </div>
+  <p id="active" hidden></p>
   <p id="status" role="status">Loading…</p>
   <ul id="cards"></ul>
 </main>
@@ -33,6 +34,7 @@
         <span data-slot="origin"></span> ·
         <span data-slot="size"></span>
       </p>
+      <p class="tags" data-slot="tags"></p>
       <p class="links">
         <a data-slot="download">Download</a>
         <a data-slot="page">Details</a>
