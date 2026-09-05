@@ -89,7 +89,11 @@ function render() {
     node.querySelector(".icon-dark").srcset = safeUrl(addon.iconDarkUrl);
     node.querySelector('[data-slot="download"]').href = safeUrl(addon.download.url);
     node.querySelector('[data-slot="page"]').href = safeUrl(addon.pageUrl);
-    node.querySelector('[data-slot="source"]').href = safeUrl(addon.sourceUrl);
+    // the tarball is the source deliverable (R39); sourceUrl stays in the
+    // catalog as provenance for consumers that want the repository
+    const src = node.querySelector('[data-slot="source"]');
+    src.href = safeUrl(addon.sourceTarball.url);
+    src.title = `Source tarball, ${size(addon.sourceTarball.size)}`;
     cards.append(node);
   }
   renderActive();

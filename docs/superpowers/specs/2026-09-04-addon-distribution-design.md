@@ -373,7 +373,8 @@ Two mechanisms, deliberately both:
 | `tags` | array of strings | `addon.json` | Filtering (R18). |
 | `author` | `{ name, url }` | `addon.json` | Credit (R36–R38). Always present, including for first-party addons. |
 | `minAppVersion` | `YY.ww` | `addon.json` | Lets a consumer hide what it cannot run. Ordering in §10.7. |
-| `iconUrl`, `pageUrl`, `sourceUrl` | absolute URL | Derived | Display and provenance. |
+| `iconUrl`, `iconDarkUrl`, `pageUrl` | absolute URL | Derived | Display. Both icon variants ship; the gallery picks by theme. |
+| `sourceUrl` | absolute URL | Derived | **Provenance only.** The gallery's Source link points at the tarball, which is the actual source deliverable under R39. This field records where the addon lives in the repository, for consumers that want it. |
 | `download` | `{ url, sha256, size }` | Computed at publish | Integrity and progress (R14). |
 | `sourceTarball` | `{ url, sha256, size }` | Computed at publish | R49. |
 
