@@ -39,6 +39,8 @@ Each was taken during design and is recorded with its rationale so a later reade
 | **D07** | Icons publish as-is; CSS sizes the tile. | Ships icons now at no cost. The one 24×24 icon will look soft and gets a follow-up issue rather than blocking this work. |
 | **D08** | R04 is amended to bounded staleness. | Follows from D03. New text in §12.4. |
 | **D09** | Curated metadata lives in a per-addon `addon.json`; the directory name remains the sole source of identity. | R12 and R23. Anything derivable is derived, never written twice. |
+| **D11** | The catalog is a **versioned public contract**, published at a `v1/` path with a `schemaVersion` inside. | Its main consumer is an Android app that cannot be force-updated. A fielded build must keep working indefinitely, so a breaking change needs a second path rather than an edit to the first. |
+| **D12** | Every catalog field is always present; no `null`, no omission. | The app deserializes with a bare Gson instance, which silently writes `null` into non-null Kotlin properties for missing keys. A contract that never omits a field cannot trigger that. |
 | **D10** | Bucket CORS allows `GET`/`HEAD` from any origin. | The content is public, unauthenticated, and read-only, so an origin allowlist protects nothing — and an Android WebView sends `Origin: null`, which an allowlist would reject. |
 
 ---
@@ -172,7 +174,7 @@ Community addons carry an author (R15, R36–R38):
 
 `additionalProperties` is false. An unknown key is an error, not a warning — a typo that silently drops a field is exactly the failure R16 forbids.
 
-**Never in this file:** name, slug, type, any URL, any checksum, any size, or a version. Each is derived or computed. Writing one by hand creates a second source of truth, which is what P05 already cost us once.
+**Never in this file:** name, slug, type, `pluginId`, any URL, any checksum, any size, or a version. Each is derived or computed. Writing one by hand creates a second source of truth, which is what P05 already cost us once.
 
 ### 7.1 Bootstrapping the 31 files
 
@@ -214,7 +216,7 @@ Assembles one source tarball (§9).
 
 ### 8.4 `addons catalog`
 
-Generates `catalog.json` (§10).
+Generates `v1/catalog.json` (§10).
 
 ### 8.5 `addons page <slug>`
 
@@ -301,41 +303,134 @@ Any failure aborts the run (R47). Nothing partial is uploaded.
 
 ## 10. The catalog
 
-### 10.1 Generation
+The catalog is not a file the gallery reads. It is a **public data contract with an un-updatable consumer**: once Code On The Go ships a build that parses it, that build exists in the field indefinitely and can never be corrected. Everything below follows from that.
 
-`addons catalog` reads every discovered addon's `addon.json`, derives identity from the directory, computes `sha256` and `size` for the built `.cgp` **and** the tarball (R14, R49), and emits `catalog.json`. It validates the result against `site/catalog.schema.json` and fails on any invalid or missing record (R16). Nothing is hand-maintained (R11).
+### 10.1 Consumers
+
+| Consumer | Needs | Status |
+|---|---|---|
+| The gallery | Everything, rendered as cards. Same-origin. | Built here. |
+| Code On The Go | To answer three questions: *what exists*, *do I already have it*, and *is mine current*. | **Nothing exists app-side yet** — see §10.8. |
+| Third-party tools | A documented, versioned, validatable document. | Enabled by publishing the schema. |
+
+A survey of the app found no remote catalog, no listing model, no version comparison, and no HTTP stack. The format is therefore entirely ours to define — with the corresponding obligation to define it well, because there is no prior art to inherit blame from.
+
+### 10.2 Versioning
+
+Two mechanisms, deliberately both:
+
+- **A versioned path.** The catalog is published at `v1/catalog.json`. A breaking change publishes `v2/catalog.json` while `v1` keeps being written, so a fielded app build keeps working forever. Storage is free; an abandoned `v1` costs nothing.
+- **A `schemaVersion` integer inside the document.** A consumer that has cached or logged the payload alone still knows what it is holding.
+
+**The `v1/` prefix versions the contract only.** Download URLs stay at `dl/<slug>.cgp` — R03 requires those be stable and slug-derived, and revising the contract must never move an addon's download.
+
+### 10.3 The document
 
 ```json
 {
   "schemaVersion": 1,
   "generated": "2026-09-04T18:00:00Z",
-  "items": [
+  "addons": [
     {
       "type": "plugin",
       "slug": "rainbow-on-the-go",
+      "pluginId": "org.appdevforall.rainbowonthego",
       "name": "Rainbow on the Go",
+      "version": "1.3.0",
       "summary": "Colours matching brackets in the editor.",
-      "description": "…",
+      "description": "A longer paragraph shown on the card and the description page.",
       "origin": "appdevforall",
       "license": "AGPL-3.0-or-later",
       "tags": ["editor", "readability"],
-      "iconUrl": "p/rainbow-on-the-go.png",
-      "pageUrl": "p/rainbow-on-the-go.html",
+      "author": { "name": "App Dev For All", "url": "https://www.appdevforall.org" },
+      "minAppVersion": "25.47",
+      "iconUrl":   "https://addons.appdevforall.org/p/rainbow-on-the-go.png",
+      "pageUrl":   "https://addons.appdevforall.org/p/rainbow-on-the-go.html",
       "sourceUrl": "https://github.com/appdevforall/plugin-examples/tree/main/plugins/Rainbow-on-the-Go",
-      "download": { "url": "dl/rainbow-on-the-go.cgp", "sha256": "…", "size": 1234567 },
-      "sourceTarball": { "url": "src/rainbow-on-the-go-src.tar.gz", "sha256": "…", "size": 234567 }
+      "download":      { "url": "https://addons.appdevforall.org/dl/rainbow-on-the-go.cgp",     "sha256": "…", "size": 1234567 },
+      "sourceTarball": { "url": "https://addons.appdevforall.org/src/rainbow-on-the-go-src.tar.gz", "sha256": "…", "size": 234567 }
     }
   ]
 }
 ```
 
-`type` is present on every entry from the first release, so templates, snippets, and code actions join later without a schema change (R13). `schemaVersion` exists so a fielded in-app consumer can refuse a catalog it does not understand.
+### 10.4 Fields
 
-Cross-record rules enforced in code rather than schema: `slug` is unique, and `author` is present whenever `origin` is `community`.
+| Field | Type | Source | Why it exists |
+|---|---|---|---|
+| `type` | `plugin` \| `template` \| `snippet` \| `code-action` | Parent directory | Lets the other addon types join without a schema change (R13). |
+| `slug` | `^[a-z0-9]+(-[a-z0-9]+)*$` | Directory, lowercased | Distribution identity. Unique across the catalog. |
+| `pluginId` | string | Built artifact's manifest | **The app's identity key.** It names the installed file, keys the loaded-plugin map, keys the enabled-state store, and drives conflict detection. Without it the app cannot answer "do I already have this". |
+| `name` | string | Directory, hyphens to spaces | Display name (R25). |
+| `version` | dotted numeric | Built artifact's manifest | Answers "is mine current". Ordering defined in §10.7. |
+| `summary` | string, 1–120 | `addon.json` | Card text. |
+| `description` | string | `addon.json` | Paragraph. |
+| `origin` | `appdevforall` \| `community` | `addon.json` | R15. |
+| `license` | SPDX identifier | `addon.json` | AGPL obligation is visible before download. |
+| `tags` | array of strings | `addon.json` | Filtering (R18). |
+| `author` | `{ name, url }` | `addon.json` | Credit (R36–R38). Always present, including for first-party addons. |
+| `minAppVersion` | `YY.ww` | `addon.json` | Lets a consumer hide what it cannot run. Ordering in §10.7. |
+| `iconUrl`, `pageUrl`, `sourceUrl` | absolute URL | Derived | Display and provenance. |
+| `download` | `{ url, sha256, size }` | Computed at publish | Integrity and progress (R14). |
+| `sourceTarball` | `{ url, sha256, size }` | Computed at publish | R49. |
 
-### 10.2 Version
+Two properties of this table matter more than any individual row.
 
-PRD Q2 — whether the catalog carries a per-addon version — is **deferred, not answered**. No `version` field ships in `schemaVersion: 1`. Adding one later is additive and breaks nothing; adding one now would require deciding where the value comes from, and the manifest's `${pluginVersion}` injection is not yet consistent across all 31 addons. Recorded as an open item (§17).
+**Every URL is absolute.** A relative path is fine for the gallery and hostile to every other consumer — an app that fetches the catalog and then needs to download an artifact would have to reconstruct a base it was never told. Absolute costs a few hundred bytes per entry and removes a whole class of consumer bug.
+
+**`version` is read from the built artifact, not the source.** One addon hardcodes a version its build is supposed to inject, so reading source would record a value that is sometimes false. Reading the packaged `.cgp` always yields what users actually receive. `addons check` flags the source-level hardcoding separately, as its own defect.
+
+### 10.5 Compatibility rules
+
+These are the contract. They bind us, not just consumers.
+
+**The producer must not**, within a major version: remove a field, rename a field, change a field's type, change the meaning of a value, or make a previously-always-present field absent.
+
+**The producer may**, within a major version: add a field, add an enum member to `type`, add an addon, remove an addon.
+
+**Every field is always present on every entry.** Where a value is genuinely absent the field carries an explicit empty value — `""` or `[]` — never `null`, and never omitted. This is not aesthetic. The app deserializes with a bare Gson instance, which writes `null` into non-null Kotlin properties for missing keys and does so silently; the app already carries a hand-written normalizer to patch exactly this hazard for its own manifest type. A contract that never omits a field cannot trigger it.
+
+**A consumer must** ignore fields it does not recognise, and must not depend on key order. Gson ignores unknown fields by default, so additive evolution is already safe on the app's side.
+
+Adding an enum member to `type` is additive by the rules above but is a **behavioural** break for a consumer that switches exhaustively on it. Consumers must treat an unrecognised `type` as an addon they cannot install, not as an error.
+
+### 10.6 Publish ordering
+
+There is no multi-object transaction in R2, so ordering supplies the atomicity instead:
+
+1. Upload artifacts, tarballs, icons, pages, and assets.
+2. Verify every one of them (§12.7).
+3. Upload `v1/catalog.json` **last**.
+
+The catalog therefore never references an object that is not already in place. Withdrawal runs in reverse — publish the catalog without the entry, then delete the objects — so no consumer ever holds a catalog pointing at a deleted file.
+
+### 10.7 Comparability
+
+The document carries two version fields with **two different orderings**, and neither can be borrowed from an existing convention: the app never parses `plugin.version` at all, and the IDE's own version is `C-r-MMDD-HHMM` or `YY.ww`, neither of which is semver.
+
+| Field | Format | Ordering |
+|---|---|---|
+| `version` | dotted numeric, e.g. `1.3.0` | Component-wise numeric comparison, left to right. Missing components are zero. |
+| `minAppVersion` | `YY.ww`, e.g. `25.47` | Compared as an ordered pair of integers — year, then week. |
+
+`addons check` enforces both shapes. An addon whose manifest version does not parse is a generation failure, not a silent pass — otherwise "is mine current" becomes undecidable for that addon and the app has no way to say so.
+
+Note that the app does not currently compare `min_ide_version` against anything, despite an API doc claiming it does. `minAppVersion` is therefore forward-looking: it is published so the capability can be built, not because it is enforced today.
+
+### 10.8 Consumer notes
+
+The app has **no HTTP stack**: Retrofit sits on its compile classpath entirely unused, and there is no OkHttp, no response cache, and no conditional-request handling. Building the in-app browser is app-side work outside this repository. Two notes for whoever does it:
+
+- R2 returns an `ETag`, so a conditional `GET` with `If-None-Match` makes a poll cost a 304 and almost no bytes. Worth doing on mobile.
+- At 31 entries the catalog is roughly 25 KB. Fetching the whole document is correct at this size. Paging or a split index only becomes worth considering in the hundreds.
+
+**One install path already works end to end, today, with no app change.** The app registers a VIEW intent for `.cgp` files, so a browser download from the gallery reaches the installer. This means the gallery is independently useful the moment it ships, before any in-app browser exists. It should still be verified on a device rather than assumed — content-scheme URIs from a browser's download provider do not always carry a path the intent filter matches.
+
+The app's "Discover plugins" button currently opens the contribute page in a browser. Repointing it at the gallery is a one-string change and the cheapest possible integration (O7).
+
+### 10.9 Publishing the schema
+
+The JSON Schema is published beside the catalog at `v1/catalog.schema.json`, with its `$id` set to that URL. Generation validates against the same file that consumers can fetch, so the contract and its enforcement cannot drift apart.
 
 ---
 
@@ -377,7 +472,8 @@ The in-IDE documentation at `src/main/assets/docs/index.html` is a different art
 | Key | `Content-Type` | `Cache-Control` | Extra | Edge-cached? |
 |---|---|---|---|---|
 | `index.html` | `text/html` | `public, max-age=60` | | No (V04) |
-| `catalog.json` | `application/json` | `public, max-age=60` | | No (V04) |
+| `v1/catalog.json` | `application/json` | `public, max-age=60` | | No (V04) |
+| `v1/catalog.schema.json` | `application/json` | `public, max-age=60` | | No (V04) |
 | `assets/app.<hash>.js` | `text/javascript` | `public, max-age=31536000, immutable` | | Yes |
 | `assets/styles.<hash>.css` | `text/css` | `public, max-age=31536000, immutable` | | Yes |
 | `p/<slug>.html` | `text/html` | `public, max-age=60` | | No (V04) |
@@ -518,6 +614,8 @@ Carried from the PRD where still live, plus what the design introduces.
 | **K08** | Two addons' tarballs depend on fetched assets remaining available. | Those assets move to the `addons` bucket under this change, so the dependency is on infrastructure we control. |
 | **K09** | Python is a third toolchain in a bash-and-Gradle repository. | Confined to `tools/addons/`, pinned by `uv.lock`, and exercised on every PR by its own test suite. The alternative — untested shell — was rejected in D01. |
 | **K10** | Bot Fight Mode could challenge non-browser clients. | JavaScript Detections is enabled on the zone and currently detects without blocking. If Super Bot Fight Mode's block action is ever turned on, an in-app addon browser or an in-IDE download — neither of which runs JavaScript — would receive a challenge instead of the file. This hostname must stay exempt from bot challenges. |
+| **K12** | Version ordering has to be defined by us. Neither existing convention is usable — the app never parses `plugin.version`, and the IDE's own version is not semver. | §10.7 defines both orderings explicitly, and `addons check` enforces the shapes. An addon whose version does not parse fails generation rather than shipping an unorderable entry. |
+| **K13** | The contract is being frozen before its main consumer exists. | Keep v1 minimal and strictly additive (§10.5), and publish the schema so the app can be built against something checkable. The `v1/` path means a wrong guess costs a second file, not a broken fleet. |
 | **K11** | `addons check` becomes a merge blocker on unrelated work. | It only inspects addon directories and only fails on identity or metadata disagreement. A change touching neither cannot trip it. |
 
 ---
@@ -536,12 +634,12 @@ Carried from the PRD where still live, plus what the design introduces.
 | R08 | §12.6 — one bucket-scoped token, no account access |
 | R09 | §12.3, §13.2 — staging prefix with URLs in the run summary |
 | R10 | §13.1 — GreenGeeks removed from the delivery path |
-| R11 | §10.1 — catalog generated, never hand-maintained |
+| R11 | §10 — catalog generated, never hand-maintained |
 | R12 | §7 — per-addon `addon.json` |
-| R13 | §10.1 — `type` on every entry from release one |
-| R14 | §10.1 — checksum and size computed at publish |
+| R13 | §10 — `type` on every entry from release one |
+| R14 | §10 — checksum and size computed at publish |
 | R15 | §7, §8.2 — `author` required for community origin, enforced by `check` |
-| R16 | §8.2, §10.1 — schema-validated, fails loudly, `additionalProperties: false` |
+| R16 | §8.2, §10 — schema-validated, fails loudly, `additionalProperties: false` |
 | R17 | §11.1 — card fields |
 | R18 | §11.1 — combining type, tag, and free-text filters |
 | R19 | §11.1 — mobile-first layout retained |
@@ -572,9 +670,9 @@ Carried from the PRD where still live, plus what the design introduces.
 | R44 | §9.3 — file list from `git ls-files` |
 | R45 | §9.5 — fetch step retained, assets move to our host |
 | R46 | §9.4 — prerequisite stated at the top of the README |
-| R47 | §9.2, §9.6, §10.1 — every failure aborts the run |
+| R47 | §9.2, §9.6, §10 — every failure aborts the run |
 | R48 | §9.6 — five structural checks on every tarball |
-| R49 | §10.1 — tarball checksum and size in the catalog |
+| R49 | §10 — tarball checksum and size in the catalog |
 
 ---
 
@@ -590,3 +688,4 @@ Nothing below blocks implementation of §14 steps 1–3.
 | **O4** | The 24×24 icon on `sketch-to-ui-plugin`, and the two at 96×96. | Cosmetic. Follow-up issue, not a blocker (D07). |
 | **O5** | `pebble-custom-function-template-installer` ships stale copies of both shared jars and is the sole skip-list entry with no recorded reason. | Cleanup during migration step 3. |
 | **O6** | A periodic job that actually builds one published tarball. | The real mitigation for K07. Out of scope here. |
+| **O7** | The app's "Discover plugins" button opens the contribute page. Repointing it at the gallery is a one-string change. | The cheapest possible integration, and app-side work. Worth filing as soon as the gallery is live. |
