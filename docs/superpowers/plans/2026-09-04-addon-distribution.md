@@ -2176,9 +2176,9 @@ Run this list after the last task.
 - [x] `grep -rin 'greengeeks' .github/workflows/ scripts/` prints nothing.
 - [x] `uv run --directory tools/addons pytest -q` passes.
 - [x] `uv run --directory tools/addons addons --root "$(pwd)" check` exits 0.
-- [x] `https://addons.appdevforall.org/` shows the gallery.
-- [x] `https://addons.appdevforall.org/v1/catalog.json` returns the catalog, and no field is `null`.
-- [x] One `.cgp` downloads in a browser instead of showing as text.
+- [ ] `https://addons.appdevforall.org/` shows the gallery. — NOT DONE: nothing is published yet (blocked on the R2 token).
+- [ ] `https://addons.appdevforall.org/v1/catalog.json` returns the catalog, and no field is `null`. — NOT DONE: nothing is published yet.
+- [ ] One `.cgp` downloads in a browser instead of showing as text. — NOT DONE: nothing is published yet.
 - [x] One tarball extracts and builds:
 
 ```bash
@@ -2188,4 +2188,4 @@ echo "sdk.dir=$ANDROID_HOME" > local.properties
 ../gradlew assemblePlugin
 ```
 
-- [x] The GreenGeeks credentials are revoked. Do this last.
+- [ ] The GreenGeeks credentials are revoked. Do this last. — NOT DONE: owner action, and correctly the last step.
