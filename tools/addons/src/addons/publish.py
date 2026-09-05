@@ -13,6 +13,7 @@ CONTENT_TYPES = {
     ".css": "text/css",
     ".js": "text/javascript",
     ".png": "image/png",
+    ".svg": "image/svg+xml",
     ".cgp": "application/octet-stream",
     ".gz": "application/gzip",
 }

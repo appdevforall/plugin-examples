@@ -3,14 +3,37 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Addons for Code On The Go</title>
+<title>Add-ons for Code On The Go</title>
+<meta name="description" content="Free, open-source add-ons for Code On The Go from App Dev for All.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="assets/styles.css">
 </head>
 <body>
-<header class="chrome"><h1>Addons for Code On The Go</h1></header>
+<header class="site-header">
+  <div class="bar">
+    <a class="logo" href="https://appdevforall.org/"><img src="assets/adfa-logo.svg" alt="App Dev for All" width="74" height="58"></a>
+    <nav class="site-nav" aria-label="Main">
+      <a href="https://appdevforall.org/code-on-the-go/">Code on the Go</a>
+      <a href="/" aria-current="page">Add-ons</a>
+      <a href="https://appdevforall.org/knowledgetogo/">Knowledge to Go</a>
+      <a href="https://appdevforall.org/blog/">Blog</a>
+      <a class="cta" href="https://appdevforall.org/support-our-work/">Support our work</a>
+    </nav>
+  </div>
+</header>
+
+<div class="masthead">
+  <div class="bar">
+    <h1>Add-ons for Code On The Go</h1>
+    <p>Extend the editor with plugins, templates, snippets, and code actions. Every one is free and open source.</p>
+  </div>
+</div>
+
 <main>
   <div class="controls">
-    <input id="q" type="search" placeholder="Search addons" aria-label="Search addons">
+    <input id="q" type="search" placeholder="Search add-ons" aria-label="Search add-ons">
     <select id="type" aria-label="Filter by type">
       <option value="">All types</option>
       <option value="plugin">Plugins</option>
@@ -20,21 +43,22 @@
     </select>
   </div>
   <p id="active" hidden></p>
-  <p id="status" role="status">Loading…</p>
+  <p id="status" role="status">Loading&hellip;</p>
   <ul id="cards"></ul>
 </main>
+
 <template id="card">
   <li class="card">
     <picture>
       <source class="icon-dark" media="(prefers-color-scheme: dark)">
-      <img class="icon" alt="" width="64" height="64">
+      <img class="icon" alt="" width="56" height="56">
     </picture>
     <div class="body">
       <h2><span data-slot="name"></span> <span class="badge" data-slot="type"></span></h2>
-      <p data-slot="summary"></p>
+      <p class="summary" data-slot="summary"></p>
       <p class="meta">
-        <span data-slot="version"></span> ·
-        <span data-slot="origin"></span> ·
+        <span data-slot="version"></span> &middot;
+        <span data-slot="origin"></span> &middot;
         <span data-slot="size"></span>
       </p>
       <p class="tags" data-slot="tags"></p>
@@ -46,6 +70,48 @@
     </div>
   </li>
 </template>
+
 <script type="module" src="assets/app.js"></script>
+<footer class="site-footer">
+  <div class="cols">
+    <div class="about">
+      <h2>App Dev for All</h2>
+      <p>Building free, open-source app development tools that work without a traditional computer or internet access</p>
+      <div class="social">
+        <a href="mailto:info@appdevforall.org?subject=General%20inquiry" aria-label="Email"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Zm0 4.2-8 5-8-5V6l8 5 8-5Z"/></svg></a>
+        <a href="https://github.com/appdevforall" aria-label="GitHub"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2A10 10 0 0 0 8.8 21.5c.5.1.7-.2.7-.5v-1.7C6.7 20 6.1 18 6.1 18c-.4-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.6.3-1.1.6-1.3-2.2-.3-4.6-1.1-4.6-5 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.7 1a9.4 9.4 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.9-2.4 4.7-4.6 5 .3.3.7 1 .7 2v2.9c0 .3.2.6.7.5A10 10 0 0 0 12 2Z"/></svg></a>
+        <a href="https://www.linkedin.com/company/appdevforall" aria-label="LinkedIn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.98 3.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5ZM3 9h4v12H3V9Zm7 0h3.8v1.7h.1a4.2 4.2 0 0 1 3.8-2c4 0 4.8 2.6 4.8 6V21h-4v-5.6c0-1.3 0-3-1.9-3s-2.1 1.4-2.1 2.9V21h-4V9Z"/></svg></a>
+        <a href="https://www.facebook.com/AppDevForAll" aria-label="Facebook"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22 12a10 10 0 1 0-11.6 9.9v-7H7.9V12h2.5V9.8c0-2.5 1.5-3.9 3.8-3.9 1.1 0 2.2.2 2.2.2v2.4h-1.2c-1.2 0-1.6.8-1.6 1.6V12h2.7l-.4 2.9h-2.3v7A10 10 0 0 0 22 12Z"/></svg></a>
+        <a href="https://www.youtube.com/@appdevforall" aria-label="YouTube"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M23 12s0-3.2-.4-4.7a2.5 2.5 0 0 0-1.8-1.8C19.3 5 12 5 12 5s-7.3 0-8.8.5A2.5 2.5 0 0 0 1.4 7.3C1 8.8 1 12 1 12s0 3.2.4 4.7a2.5 2.5 0 0 0 1.8 1.8C4.7 19 12 19 12 19s7.3 0 8.8-.5a2.5 2.5 0 0 0 1.8-1.8C23 15.2 23 12 23 12ZM9.8 15.1V8.9l6 3.1-6 3.1Z"/></svg></a>
+      </div>
+    </div>
+    <div>
+      <h2>Projects</h2>
+      <ul>
+        <li><a href="https://appdevforall.org/code-on-the-go/">Code on the Go</a></li>
+        <li><a href="/">Add-ons</a></li>
+        <li><a href="https://appdevforall.org/knowledgetogo/">Knowledge to Go</a></li>
+      </ul>
+    </div>
+    <div>
+      <h2>About us</h2>
+      <ul>
+        <li><a href="https://appdevforall.org/mission/">Mission</a></li>
+        <li><a href="https://appdevforall.org/meet-the-team/">Team</a></li>
+        <li><a href="https://appdevforall.org/press/">Press</a></li>
+        <li><a href="https://appdevforall.org/partnerships/">Partnerships</a></li>
+      </ul>
+    </div>
+    <div>
+      <h2>More</h2>
+      <ul>
+        <li><a href="https://appdevforall.org/blog/">Blog</a></li>
+        <li><a href="https://appdevforall.org/support-our-work/">Support our work</a></li>
+        <li><a href="https://appdevforall.org/privacy-policy/">Privacy policy</a></li>
+      </ul>
+    </div>
+  </div>
+  <p class="legal">&copy; 2026 App Dev for All | All Rights Reserved</p>
+</footer>
 </body>
 </html>

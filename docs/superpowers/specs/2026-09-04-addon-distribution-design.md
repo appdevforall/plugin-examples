@@ -443,6 +443,14 @@ The JSON Schema is published beside the catalog at `v1/catalog.schema.json`, wit
 
 ## 11. The gallery
 
+### 11.0 Brand
+
+The gallery follows appdevforall.org, so it reads as part of the same site rather than a bolt-on. Taken from the live site: **Poppins**, indigo **`#233490`** for the header and footer, body text `#333`, and mint `#cce5e2` as the accent. The header carries the same logo and a condensed version of the main navigation; the footer repeats the site's four-column layout, tagline, social links, and copyright.
+
+The logo is **copied into `site/assets/` and published to R2**, not hotlinked from appdevforall.org. Hotlinking would put a GreenGeeks dependency back into the very page built to remove it.
+
+Poppins loads from Google Fonts with a full system fallback stack, which is what the main site does. It is the only external request the gallery makes.
+
 ### 11.1 The application
 
 Carried forward from the prototype, whose core decisions were right. **One plain JavaScript file that the browser runs as-is** — no framework, no bundler, no build step, so the file in git is exactly the file that executes. All record text is written with `textContent` and never `innerHTML`, so a description can never inject markup. Filters are mirrored into the URL, which makes a filtered view shareable (R21). Search is debounced. A failed load shows an error, not a blank page (R22).

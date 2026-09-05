@@ -58,8 +58,11 @@ def main() -> int:
         site = args.root / "site"
         template = (site / "page.template.html").read_text()
         # content-hashed asset names, so a changed asset always gets a new URL
-        assets = {n: publish.hashed_name(site / n) for n in ("styles.css", "app.js")}
-        objects = [(f"{prefix}assets/{h}", site / n) for n, h in assets.items()]
+        sources = {"styles.css": site / "styles.css",
+                   "app.js": site / "app.js",
+                   "adfa-logo.svg": site / "assets" / "adfa-logo.svg"}
+        assets = {n: publish.hashed_name(p) for n, p in sources.items()}
+        objects = [(f"{prefix}assets/{h}", sources[n]) for n, h in assets.items()]
 
         def with_hashed_assets(text: str) -> str:
             for name, hashed in assets.items():

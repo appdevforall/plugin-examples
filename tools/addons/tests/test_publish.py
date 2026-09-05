@@ -65,3 +65,8 @@ def test_hashed_assets_are_immutable():
     head = publish.headers_for("assets/app.abc12345.js")
     assert head["CacheControl"] == "public, max-age=31536000, immutable"
     assert publish.headers_for("index.html")["CacheControl"] == "public, max-age=60"
+
+
+def test_svg_is_served_as_an_image():
+    assert publish.headers_for("assets/adfa-logo.svg")["ContentType"] == "image/svg+xml"
+    assert "ContentDisposition" not in publish.headers_for("assets/adfa-logo.svg")
