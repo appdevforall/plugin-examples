@@ -481,8 +481,8 @@ The in-IDE documentation at `src/main/assets/docs/index.html` is a different art
 | `index.html` | `text/html` | `public, max-age=60` | | No (V04) |
 | `v1/catalog.json` | `application/json` | `public, max-age=60` | | No (V04) |
 | `v1/catalog.schema.json` | `application/json` | `public, max-age=60` | | No (V04) |
-| `assets/app.js` | `text/javascript` | `public, max-age=60` | | Yes |
-| `assets/styles.css` | `text/css` | `public, max-age=60` | | Yes |
+| `assets/app.<hash>.js` | `text/javascript` | `public, max-age=31536000, immutable` | | Yes |
+| `assets/styles.<hash>.css` | `text/css` | `public, max-age=31536000, immutable` | | Yes |
 | `p/<slug>.html` | `text/html` | `public, max-age=60` | | No (V04) |
 | `p/<slug>.png` | `image/png` | `public, max-age=60` | | Yes |
 | `dl/<slug>.cgp` | `application/octet-stream` | `public, max-age=60` | `Content-Disposition: attachment; filename="<slug>.cgp"` | No |
@@ -509,6 +509,10 @@ The site's own files use relative paths, so the gallery and the description page
 ### 12.4 Freshness
 
 Because Cloudflare does not edge-cache HTML or JSON by default (V04), the catalog, every description page, and every `.cgp` are current the instant a publish completes. Only icons, tarballs, and the hashed assets are cached, and the first two are bounded at 60 seconds by their `Cache-Control`. The hashed assets are never stale because their key changes with their content.
+
+**The zone overrides our header for exactly the cached types.** Measured against the live bucket: `.html`, `.json`, and `.cgp` are served with our `max-age=60`, but `.js`, `.css`, and `.png` come back as `max-age=14400` — the zone's Browser Cache TTL, which replaces the origin header for the file types Cloudflare caches by default. A browser can hold a stale script, stylesheet, or icon for four hours.
+
+This is why the content hash in the asset filenames is load-bearing rather than a nicety: new bytes mean a new URL, so the long TTL becomes correct instead of dangerous. Icons and tarballs stay inside that four-hour window, which is acceptable — an icon change is cosmetic, and a tarball's checksum is published in the catalog.
 
 **This requires amending R04.** Its current text — "Stale content must never be served after a publish completes" — describes a purge-based design. New text:
 
