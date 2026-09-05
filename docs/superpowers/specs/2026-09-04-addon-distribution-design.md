@@ -309,7 +309,9 @@ Any failure aborts the run (R47). Nothing partial is uploaded.
 
 ## 10. The catalog
 
-The catalog is not a file the gallery reads. It is a **public data contract with an un-updatable consumer**: once Code On The Go ships a build that parses it, that build exists in the field indefinitely and can never be corrected. Everything below follows from that.
+The gallery reads this file. So, before long, will Code On The Go — and that second consumer is what makes the catalog different from every other object we publish.
+
+The gallery ships from the same bucket as the catalog, so a mistake in the format costs one republish of both. A Code On The Go build cannot be fixed that way. Once a released build parses this document, that build exists in the field indefinitely and can never be corrected. **The catalog is therefore a public contract, not an implementation detail**, and everything below follows from that.
 
 ### 10.1 Consumers
 
