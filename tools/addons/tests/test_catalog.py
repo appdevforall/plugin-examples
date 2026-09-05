@@ -92,3 +92,10 @@ def test_the_base_defaults_to_the_live_site(tmp_path):
     dist = make(tmp_path)
     entry = catalog.build(tmp_path, dist)["addons"][0]
     assert entry["pageUrl"] == "https://addons.appdevforall.org/p/keystore-generator.html"
+
+
+def test_entry_carries_both_icon_variants(tmp_path):
+    dist = make(tmp_path)
+    entry = catalog.build(tmp_path, dist)["addons"][0]
+    assert entry["iconUrl"].endswith("/p/keystore-generator.png")
+    assert entry["iconDarkUrl"].endswith("/p/keystore-generator-night.png")

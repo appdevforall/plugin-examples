@@ -79,6 +79,8 @@ def main() -> int:
                 (f"{prefix}p/{slug}.html", page_file),
                 (f"{prefix}p/{slug}.png",
                  addon / "src" / "main" / "assets" / "icon_day.png"),
+                (f"{prefix}p/{slug}-night.png",
+                 addon / "src" / "main" / "assets" / "icon_night.png"),
                 (f"{prefix}dl/{slug}.cgp", dist / f"{slug}.cgp"),
                 (f"{prefix}src/{slug}-src.tar.gz", dist / f"{slug}-src.tar.gz"),
             ]

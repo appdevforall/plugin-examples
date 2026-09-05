@@ -1,6 +1,8 @@
-:root { --ink:#151827; --dim:#4b5268; --rule:#dce0ec; --ground:#f6f7fb; --card:#fff; }
+:root { --ink:#151827; --dim:#4b5268; --rule:#dce0ec; --ground:#f6f7fb; --card:#fff;
+        --link:#1a4fd6; --link-hover:#0d2f8f; }
 @media (prefers-color-scheme: dark) {
-  :root { --ink:#e7eaf4; --dim:#a8b0c6; --rule:#28304a; --ground:#0e111a; --card:#151a26; }
+  :root { --ink:#e7eaf4; --dim:#a8b0c6; --rule:#28304a; --ground:#0e111a; --card:#151a26;
+          --link:#93b4ff; --link-hover:#c3d4ff; }
 }
 * { box-sizing: border-box; }
 body { margin:0; background:var(--ground); color:var(--ink); font:16px/1.5 system-ui, sans-serif; }
@@ -40,3 +42,8 @@ a:focus-visible, input:focus-visible, select:focus-visible { outline:2px solid v
          border:0; color:var(--dim); text-decoration:underline; padding:2px 4px; }
 .clear:hover { color:var(--ink); }
 button:focus-visible { outline:2px solid var(--ink); outline-offset:2px; }
+
+/* Links need an explicit colour. The browser default (#0000EE) is close to
+   unreadable on the dark ground: about 1.4:1 against --card. */
+a { color: var(--link); }
+a:hover { color: var(--link-hover); }

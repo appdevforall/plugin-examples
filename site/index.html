@@ -25,7 +25,10 @@
 </main>
 <template id="card">
   <li class="card">
-    <img class="icon" alt="" width="64" height="64">
+    <picture>
+      <source class="icon-dark" media="(prefers-color-scheme: dark)">
+      <img class="icon" alt="" width="64" height="64">
+    </picture>
     <div class="body">
       <h2><span data-slot="name"></span> <span class="badge" data-slot="type"></span></h2>
       <p data-slot="summary"></p>

@@ -86,6 +86,7 @@ function render() {
     const tags = node.querySelector('[data-slot="tags"]');
     for (const tag of addon.tags) tags.append(tagButton(tag));
     node.querySelector(".icon").src = safeUrl(addon.iconUrl);
+    node.querySelector(".icon-dark").srcset = safeUrl(addon.iconDarkUrl);
     node.querySelector('[data-slot="download"]').href = safeUrl(addon.download.url);
     node.querySelector('[data-slot="page"]').href = safeUrl(addon.pageUrl);
     node.querySelector('[data-slot="source"]').href = safeUrl(addon.sourceUrl);
