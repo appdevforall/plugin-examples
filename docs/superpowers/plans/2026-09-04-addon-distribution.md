@@ -1977,6 +1977,10 @@ In GitHub, open Settings, then Secrets and variables, then Actions. Add `R2_ACCO
 
   The substance of this step was carried out locally against the live bucket, using the same tool the workflow calls: 97 objects published to `staging/local-verify/`, the gallery rendering all 23 addons, a description page rendering with its chrome, and a `.cgp` returning `content-disposition: attachment`. What remains untested is the CI wiring itself, which cannot be tested before the merge.
 
+  **Partly covered by `act`.** `check-toolchain.yml` runs end to end in a Linux container and passes, which is the first proof the tool and its 42 tests work off macOS. The secret-to-environment mapping was verified the same way: the `CLOUDFLARE_*` variables and secrets resolve to `R2_*`, and `R2_BUCKET` resolves to `addons`.
+
+  `act` cannot run `publish-addons.yml` itself. It fails to resolve `actions/setup-java@v4` and `gradle/actions/setup-gradle@v4` with "unsupported object type" — `gradle/actions` publishes two refs matching `v4`, and the other is an annotated tag. That is an `act` limitation, not a defect in the workflow. The Android build step is also out of reach, because `act` images carry no Android SDK.
+
   **To close it:** merge PR #87, then run **Publish addons** with `staging: true` from the Actions tab.
 
 Run it from the Actions tab for one addon. Expected: the run summary prints a staging URL. Open the page and the download and confirm both work.
