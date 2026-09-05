@@ -1,7 +1,12 @@
+import json
 import re
 from pathlib import Path
 
+import jsonschema
+
 from addons import discover, model
+
+SCHEMA = json.loads((Path(__file__).parent / "addon.schema.json").read_text())
 
 
 def _meta(manifest: str, key: str) -> str | None:
@@ -40,3 +45,26 @@ def check_names(root: Path) -> list[str]:
         elif f"<title>{name}</title>" not in page.read_text():
             problems.append(f"{directory}: the page title must be '{name}'")
     return problems
+
+
+def check_metadata(root: Path) -> list[str]:
+    problems = []
+    for path in discover.find_addons(root):
+        f = path / "addon.json"
+        if not f.exists():
+            problems.append(f"{path.name}: addon.json is missing")
+            continue
+        try:
+            data = json.loads(f.read_text())
+        except json.JSONDecodeError as error:
+            problems.append(f"{path.name}: addon.json is not valid JSON: {error}")
+            continue
+        try:
+            jsonschema.validate(data, SCHEMA)
+        except jsonschema.ValidationError as error:
+            problems.append(f"{path.name}: addon.json is invalid: {error.message}")
+    return problems
+
+
+def run(root: Path) -> list[str]:
+    return check_names(root) + check_metadata(root)

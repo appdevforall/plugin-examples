@@ -19,7 +19,7 @@ def main() -> int:
         return 0
 
     if args.command == "check":
-        problems = check.check_names(args.root)
+        problems = check.run(args.root)
         for problem in problems:
             print(problem, file=sys.stderr)
         return 1 if problems else 0

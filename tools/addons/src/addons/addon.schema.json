@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["summary", "description", "tags", "origin", "license", "author", "minAppVersion"],
+  "properties": {
+    "summary": { "type": "string", "minLength": 1, "maxLength": 120 },
+    "description": { "type": "string", "minLength": 1 },
+    "tags": { "type": "array", "minItems": 1,
+              "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" } },
+    "origin": { "enum": ["appdevforall", "community"] },
+    "license": { "type": "string", "minLength": 1 },
+    "minAppVersion": { "type": "string", "pattern": "^[0-9]{2}\\.[0-9]{2}$" },
+    "author": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "url"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "url": { "type": "string" },
+        "email": { "type": "string" }
+      }
+    }
+  }
+}
