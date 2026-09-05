@@ -31,6 +31,21 @@ Every task must obey this section.
 
 ---
 
+## Method
+
+Every code task follows **red, green, refactor**. Do not skip the third beat.
+
+1. **Red.** Write a test that states the behaviour. Run it. It must fail, and it must fail for the reason you expect. A test that passes the first time you run it tests nothing.
+2. **Green.** Write the smallest code that makes the test pass. Do not write code that no test asks for.
+3. **Refactor.** Remove duplication. Give an unclear name a better one. Change no behaviour, and add no abstraction, option, or layer — Global Constraint 1 still applies. Run the tests again after any change.
+
+Then commit. Each commit holds a passing test and the code that satisfies it.
+
+It is normal for the refactor step to find nothing. Say so and continue. Refactoring to add structure "for later" is the failure this step invites, not the work it asks for.
+
+**Task 9 is the exception, on purpose.** The gallery is HTML, CSS, and one plain JavaScript file. A test runner for it would mean a JavaScript toolchain and a build step, which the design rejects. Task 9 is checked in a browser instead. The plan says so at that step rather than pretending the coverage exists.
+
+
 ## File Structure
 
 **New files:**
@@ -145,7 +160,7 @@ def test_applies_the_skip_list(tmp_path):
 Run: `uv run --directory tools/addons pytest tests/test_discover.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'addons.discover'`
 
-- [ ] **Step 4: Write the code**
+- [ ] **Step 4: Write the smallest code that passes**
 
 ```python
 # tools/addons/src/addons/discover.py
@@ -210,7 +225,16 @@ if __name__ == "__main__":
 Run: `uv run --directory tools/addons pytest tests/test_discover.py -v`
 Expected: PASS, 2 tests
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 7: Refactor**
+
+Read the code you just wrote next to the code around it. Remove duplication. Rename anything unclear. Change no behaviour. Do not add an abstraction, an option, or a layer.
+
+Run: `uv run --directory tools/addons pytest -q`
+Expected: PASS, the same count as the step above.
+
+If nothing needs changing, write "nothing to refactor" in the task notes and continue. That is a normal outcome.
+
+- [ ] **Step 8: Commit**
 
 ```bash
 git add tools/addons
@@ -265,7 +289,7 @@ def test_invalid_directory_names():
 Run: `uv run --directory tools/addons pytest tests/test_model.py -v`
 Expected: FAIL with `ModuleNotFoundError`
 
-- [ ] **Step 3: Write the code**
+- [ ] **Step 3: Write the smallest code that passes**
 
 ```python
 # tools/addons/src/addons/model.py
@@ -361,7 +385,7 @@ def test_a_bad_directory_name_fails(tmp_path):
 Run: `uv run --directory tools/addons pytest tests/test_check.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'addons.check'`
 
-- [ ] **Step 7: Write the code**
+- [ ] **Step 7: Write the smallest code that passes**
 
 ```python
 # tools/addons/src/addons/check.py
@@ -426,7 +450,16 @@ In `tools/addons/src/addons/cli.py`, add `from addons import check` to the impor
 Run: `uv run --directory tools/addons pytest -v`
 Expected: PASS, 10 tests
 
-- [ ] **Step 10: Commit**
+- [ ] **Step 10: Refactor**
+
+Read the code you just wrote next to the code around it. Remove duplication. Rename anything unclear. Change no behaviour. Do not add an abstraction, an option, or a layer.
+
+Run: `uv run --directory tools/addons pytest -q`
+Expected: PASS, the same count as the step above.
+
+If nothing needs changing, write "nothing to refactor" in the task notes and continue. That is a normal outcome.
+
+- [ ] **Step 11: Commit**
 
 ```bash
 git add tools/addons
@@ -539,7 +572,7 @@ def test_bad_min_app_version_fails(tmp_path):
 Run: `uv run --directory tools/addons pytest tests/test_metadata.py -v`
 Expected: FAIL with `AttributeError: module 'addons.check' has no attribute 'check_metadata'`
 
-- [ ] **Step 4: Write the code**
+- [ ] **Step 4: Write the smallest code that passes**
 
 Add this to the top of `tools/addons/src/addons/check.py`:
 
@@ -587,7 +620,16 @@ In `tools/addons/src/addons/cli.py`, change `check.check_names(args.root)` to `c
 Run: `uv run --directory tools/addons pytest -v`
 Expected: PASS, 15 tests
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 7: Refactor**
+
+Read the code you just wrote next to the code around it. Remove duplication. Rename anything unclear. Change no behaviour. Do not add an abstraction, an option, or a layer.
+
+Run: `uv run --directory tools/addons pytest -q`
+Expected: PASS, the same count as the step above.
+
+If nothing needs changing, write "nothing to refactor" in the task notes and continue. That is a normal outcome.
+
+- [ ] **Step 8: Commit**
 
 ```bash
 git add tools/addons
@@ -672,7 +714,7 @@ def test_a_missing_manifest_gives_an_empty_id(tmp_path):
 Run: `uv run --directory tools/addons pytest tests/test_model.py -v`
 Expected: FAIL with `AttributeError: module 'addons.model' has no attribute 'plugin_id'`
 
-- [ ] **Step 3: Write the code**
+- [ ] **Step 3: Write the smallest code that passes**
 
 Add these lines to the top of `tools/addons/src/addons/model.py`:
 
@@ -717,7 +759,16 @@ def version(addon: Path) -> str:
 Run: `uv run --directory tools/addons pytest -v`
 Expected: PASS, 20 tests
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Refactor**
+
+Read the code you just wrote next to the code around it. Remove duplication. Rename anything unclear. Change no behaviour. Do not add an abstraction, an option, or a layer.
+
+Run: `uv run --directory tools/addons pytest -q`
+Expected: PASS, the same count as the step above.
+
+If nothing needs changing, write "nothing to refactor" in the task notes and continue. That is a normal outcome.
+
+- [ ] **Step 6: Commit**
 
 ```bash
 git add tools/addons
@@ -824,7 +875,7 @@ def test_a_missing_jar_stops_the_build(tmp_path):
 Run: `uv run --directory tools/addons pytest tests/test_tarball.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'addons.tarball'`
 
-- [ ] **Step 3: Write the code**
+- [ ] **Step 3: Write the smallest code that passes**
 
 ```python
 # tools/addons/src/addons/tarball.py
@@ -944,7 +995,16 @@ def build(root: Path, addon: Path, out: Path, licence: str = "AGPL-3.0-or-later"
 Run: `uv run --directory tools/addons pytest -v`
 Expected: PASS, 24 tests
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Refactor**
+
+Read the code you just wrote next to the code around it. Remove duplication. Rename anything unclear. Change no behaviour. Do not add an abstraction, an option, or a layer.
+
+Run: `uv run --directory tools/addons pytest -q`
+Expected: PASS, the same count as the step above.
+
+If nothing needs changing, write "nothing to refactor" in the task notes and continue. That is a normal outcome.
+
+- [ ] **Step 6: Commit**
 
 ```bash
 git add tools/addons
@@ -1114,7 +1174,7 @@ def test_a_missing_artifact_stops_the_build(tmp_path):
 Run: `uv run --directory tools/addons pytest tests/test_catalog.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'addons.catalog'`
 
-- [ ] **Step 4: Write the code**
+- [ ] **Step 4: Write the smallest code that passes**
 
 ```python
 # tools/addons/src/addons/catalog.py
@@ -1228,7 +1288,16 @@ Add `import json` to the top of `cli.py`.
 Run: `uv run --directory tools/addons pytest -v`
 Expected: PASS, 28 tests
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 8: Refactor**
+
+Read the code you just wrote next to the code around it. Remove duplication. Rename anything unclear. Change no behaviour. Do not add an abstraction, an option, or a layer.
+
+Run: `uv run --directory tools/addons pytest -q`
+Expected: PASS, the same count as the step above.
+
+If nothing needs changing, write "nothing to refactor" in the task notes and continue. That is a normal outcome.
+
+- [ ] **Step 9: Commit**
 
 ```bash
 git add tools/addons site/catalog.schema.json
@@ -1299,7 +1368,7 @@ def test_accepts_a_fragment_with_no_body_tag():
 Run: `uv run --directory tools/addons pytest tests/test_page.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'addons.page'`
 
-- [ ] **Step 4: Write the code**
+- [ ] **Step 4: Write the smallest code that passes**
 
 ```python
 # tools/addons/src/addons/page.py
@@ -1317,7 +1386,16 @@ def wrap(html: str, name: str, template: str) -> str:
 Run: `uv run --directory tools/addons pytest -v`
 Expected: PASS, 30 tests
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 6: Refactor**
+
+Read the code you just wrote next to the code around it. Remove duplication. Rename anything unclear. Change no behaviour. Do not add an abstraction, an option, or a layer.
+
+Run: `uv run --directory tools/addons pytest -q`
+Expected: PASS, the same count as the step above.
+
+If nothing needs changing, write "nothing to refactor" in the task notes and continue. That is a normal outcome.
+
+- [ ] **Step 7: Commit**
 
 ```bash
 git add tools/addons site/page.template.html
@@ -1396,7 +1474,7 @@ def test_the_catalog_goes_last(tmp_path):
 Run: `uv run --directory tools/addons pytest tests/test_publish.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'addons.publish'`
 
-- [ ] **Step 3: Write the code**
+- [ ] **Step 3: Write the smallest code that passes**
 
 ```python
 # tools/addons/src/addons/publish.py
@@ -1501,7 +1579,16 @@ Add this branch:
         return 0
 ```
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 6: Refactor**
+
+Read the code you just wrote next to the code around it. Remove duplication. Rename anything unclear. Change no behaviour. Do not add an abstraction, an option, or a layer.
+
+Run: `uv run --directory tools/addons pytest -q`
+Expected: PASS, the same count as the step above.
+
+If nothing needs changing, write "nothing to refactor" in the task notes and continue. That is a normal outcome.
+
+- [ ] **Step 7: Commit**
 
 ```bash
 git add tools/addons
@@ -1522,6 +1609,8 @@ git commit -m "Upload addons, pages, and the catalog to Cloudflare R2"
 - Produces: nothing that other tasks use.
 
 The gallery is one plain JavaScript file. The browser runs it without a build step. All text goes into the page with `textContent`, so a description can never add markup.
+
+**This task has no automated test, and that is a deliberate trade.** A test runner for the browser code would mean a JavaScript toolchain and a build step, which the design rejects for a page that lists 31 cards. Step 4 checks it in a browser instead. Do not add a test framework to satisfy the pattern.
 
 - [ ] **Step 1: Write the page**
 
