@@ -1,0 +1,3 @@
+# One directory name for each line. State the reason after the name.
+pebble-custom-function-template-installer  ships stale copies of the shared jars
+cotg-ndk  held until the contributor confirms the name and the credit

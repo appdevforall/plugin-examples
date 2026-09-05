@@ -10,3 +10,8 @@
 **/RecentProject_database*
 **/agent/
 .cache/
+# Python tooling
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
