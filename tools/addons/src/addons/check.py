@@ -9,12 +9,6 @@ from addons import discover, model
 SCHEMA = json.loads((Path(__file__).parent / "addon.schema.json").read_text())
 
 
-def _meta(manifest: str, key: str) -> str | None:
-    pattern = r'android:name="%s"\s+android:value="([^"]*)"' % re.escape(key)
-    found = re.search(pattern, manifest)
-    return found.group(1) if found else None
-
-
 def check_names(root: Path) -> list[str]:
     problems = []
     for path in discover.find_addons(root):
@@ -31,13 +25,10 @@ def check_names(root: Path) -> list[str]:
             problems.append(
                 f"{directory}: pluginName is '{found.group(1)}', expected '{addon_slug}'")
 
-        manifest_file = path / "src" / "main" / "AndroidManifest.xml"
-        if manifest_file.exists():
-            manifest = manifest_file.read_text()
-            plugin_name = _meta(manifest, "plugin.name")
-            if plugin_name is not None and plugin_name != name:
-                problems.append(
-                    f"{directory}: plugin.name is '{plugin_name}', expected '{name}'")
+        plugin_name = model.manifest_value(path, "plugin.name")
+        if plugin_name and plugin_name != name:
+            problems.append(
+                f"{directory}: plugin.name is '{plugin_name}', expected '{name}'")
 
         page = path / f"{addon_slug}.html"
         if not page.exists():
