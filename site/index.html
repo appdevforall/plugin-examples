@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Addons for Code On The Go</title>
+<link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body>
+<header class="chrome"><h1>Addons for Code On The Go</h1></header>
+<main>
+  <div class="controls">
+    <input id="q" type="search" placeholder="Search addons" aria-label="Search addons">
+    <select id="type" aria-label="Filter by type">
+      <option value="">All types</option>
+      <option value="plugin">Plugins</option>
+      <option value="template">Templates</option>
+      <option value="snippet">Snippets</option>
+      <option value="code-action">Code actions</option>
+    </select>
+  </div>
+  <p id="status" role="status">Loading…</p>
+  <ul id="cards"></ul>
+</main>
+<template id="card">
+  <li class="card">
+    <img class="icon" alt="" width="64" height="64">
+    <div class="body">
+      <h2><span data-slot="name"></span> <span class="badge" data-slot="type"></span></h2>
+      <p data-slot="summary"></p>
+      <p class="meta">
+        <span data-slot="version"></span> ·
+        <span data-slot="origin"></span> ·
+        <span data-slot="size"></span>
+      </p>
+      <p class="links">
+        <a data-slot="download">Download</a>
+        <a data-slot="page">Details</a>
+        <a data-slot="source">Source</a>
+      </p>
+    </div>
+  </li>
+</template>
+<script type="module" src="/assets/app.js"></script>
+</body>
+</html>

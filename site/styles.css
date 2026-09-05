@@ -1,0 +1,28 @@
+:root { --ink:#151827; --dim:#4b5268; --rule:#dce0ec; --ground:#f6f7fb; --card:#fff; }
+@media (prefers-color-scheme: dark) {
+  :root { --ink:#e7eaf4; --dim:#a8b0c6; --rule:#28304a; --ground:#0e111a; --card:#151a26; }
+}
+* { box-sizing: border-box; }
+body { margin:0; background:var(--ground); color:var(--ink); font:16px/1.5 system-ui, sans-serif; }
+.chrome { padding:16px; border-bottom:1px solid var(--rule); }
+.chrome h1 { margin:0; font-size:1.25rem; }
+main { max-width:64rem; margin:0 auto; padding:16px; }
+.controls { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; }
+.controls input { flex:1 1 12rem; }
+.controls input, .controls select {
+  padding:8px; border:1px solid var(--rule); border-radius:6px;
+  background:var(--card); color:var(--ink); font:inherit;
+}
+#cards { list-style:none; padding:0; margin:0; display:grid; gap:12px;
+         grid-template-columns:repeat(auto-fill, minmax(18rem, 1fr)); }
+.card { display:flex; gap:12px; padding:12px; background:var(--card);
+        border:1px solid var(--rule); border-radius:8px; }
+.icon { flex:none; border-radius:8px; }
+.card h2 { margin:0 0 4px; font-size:1rem; }
+.card p { margin:0 0 6px; }
+.badge { font-size:.7rem; text-transform:uppercase; letter-spacing:.06em;
+         border:1px solid var(--rule); border-radius:4px; padding:1px 5px; color:var(--dim); }
+.meta { color:var(--dim); font-size:.85rem; }
+.links { display:flex; gap:12px; font-size:.9rem; }
+.page { max-width:48rem; }
+a:focus-visible, input:focus-visible, select:focus-visible { outline:2px solid var(--ink); outline-offset:2px; }
