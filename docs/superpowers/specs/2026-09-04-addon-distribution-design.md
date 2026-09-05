@@ -93,9 +93,9 @@ plugins/<Addon-Name>/       migrated addons (R30)
   build.gradle.kts
   settings.gradle.kts
   src/main/...
-templates/                  reserved, README only (R30)
-snippets/                   reserved, README only
-code-actions/               reserved, README only
+templates/                  exists, README placeholder
+snippets/                   blocked until the addon renames, below
+code-actions/               exists, README placeholder
 libs/                       shared jars, unchanged
 site/                       gallery source (§11)
   index.html
@@ -112,7 +112,9 @@ tools/addons/               the Python tool (§8)
 scripts/                    existing bash, unchanged except §13.1
 ```
 
-The three reserved directories are created empty with a README in this change. Q4 in the PRD — whether the other addon types ultimately live in this repository at all — stays open; reserving the names costs nothing and settles nothing.
+`plugins/`, `templates/`, and `code-actions/` already exist as README-only placeholders. **All four addon types live in this repository.** That is settled, not reserved (PRD Q4).
+
+`snippets/` is the exception, and it is an ordering constraint rather than a preference. That name is currently occupied by the Favorite Snippets addon. The type directory cannot be created until that addon is renamed to `Favorite-Snippets` and moved under `plugins/`, so the rename must precede it during migration step 3.
 
 ---
 
@@ -122,15 +124,17 @@ The directory name is the only input. Everything else is computed. There is no o
 
 | Derived value | Rule | Example |
 |---|---|---|
-| Display name | Directory, hyphens replaced by spaces | `Rainbow-on-the-Go` → `Rainbow on the Go` |
-| Slug | Directory, lowercased | `Rainbow-on-the-Go` → `rainbow-on-the-go` |
-| Artifact key | `dl/<slug>.cgp` | `dl/rainbow-on-the-go.cgp` |
-| Page key | `p/<slug>.html` | `p/rainbow-on-the-go.html` |
-| Tarball key | `src/<slug>-src.tar.gz` | `src/rainbow-on-the-go-src.tar.gz` |
-| Icon key | `p/<slug>.png` | `p/rainbow-on-the-go.png` |
+| Display name | Directory, hyphens replaced by spaces | `Keystore-Generator` → `Keystore Generator` |
+| Slug | Directory, lowercased | `Keystore-Generator` → `keystore-generator` |
+| Artifact key | `dl/<slug>.cgp` | `dl/keystore-generator.cgp` |
+| Page key | `p/<slug>.html` | `p/keystore-generator.html` |
+| Tarball key | `src/<slug>-src.tar.gz` | `src/keystore-generator-src.tar.gz` |
+| Icon key | `p/<slug>.png` | `p/keystore-generator.png` |
 | Type | Parent directory, singularised | `plugins/` → `plugin` |
 
-Directory names use MixedCase words separated by hyphens, with small words left lowercase (R24). The small-word list is a constant in the tool, not a per-addon setting.
+Directory names use MixedCase words separated by hyphens, with small words left lowercase (R24) — `Project-to-Template` yields "Project to Template", not "Project To Template". The small-word list is a constant in the tool, not a per-addon setting.
+
+This example is deliberate: `Keystore-Generator`'s slug is **unchanged** by the migration, its manifest `plugin.name` already agrees with the derived display name, and it injects `${pluginVersion}` properly rather than hardcoding it. It is what compliance looks like.
 
 `addons check` fails when any of the following disagree with the directory: the `pluginName` configured in `build.gradle.kts`, the `plugin.name` in `AndroidManifest.xml`, the description-page filename, or the `<title>` of that page. This is the enforcement R28 requires, and it runs on every pull request.
 
@@ -144,9 +148,9 @@ One per addon, beside `build.gradle.kts`. It holds only what cannot be derived.
 
 ```json
 {
-  "summary": "Colours matching brackets in the editor.",
+  "summary": "Creates and manages app signing keystores on the device.",
   "description": "A longer paragraph shown on the card and the description page.",
-  "tags": ["editor", "readability"],
+  "tags": ["signing", "release"],
   "origin": "appdevforall",
   "license": "AGPL-3.0-or-later",
   "minAppVersion": "1.4.0"
@@ -175,6 +179,8 @@ Community addons carry an author (R15, R36–R38):
 `additionalProperties` is false. An unknown key is an error, not a warning — a typo that silently drops a field is exactly the failure R16 forbids.
 
 **Never in this file:** name, slug, type, `pluginId`, any URL, any checksum, any size, or a version. Each is derived or computed. Writing one by hand creates a second source of truth, which is what P05 already cost us once.
+
+**Accepting outside contributions is out of scope** (PRD Q3). How a community submission reaches this repository — pull request, proxy, or otherwise — is not designed here. The `origin` and `author` fields remain because one community-originated addon already exists and will be published once its attribution is settled. Crediting correctly is a requirement; building a submission pipeline is not.
 
 ### 7.1 Bootstrapping the 31 files
 
@@ -245,7 +251,7 @@ The test suite runs in `check-toolchain.yml` alongside `addons check`.
 A tarball is a **two-level mini-repo**: the same shape as this repository, reduced to one addon.
 
 ```
-rainbow-on-the-go-src/
+keystore-generator-src/
   README.md                    generated (§9.4)
   gradlew                      copied from the repo root
   gradlew.bat
@@ -253,13 +259,13 @@ rainbow-on-the-go-src/
   libs/
     plugin-api.jar             only the jars this addon references
     gradle-plugin.jar
-  Rainbow-on-the-Go/
+  Keystore-Generator/
     build.gradle.kts           unmodified
     settings.gradle.kts        unmodified
     src/...
 ```
 
-Build instructions are then literally the repository's own: `cd Rainbow-on-the-Go && ../gradlew assemblePlugin`.
+Build instructions are then literally the repository's own: `cd Keystore-Generator && ../gradlew assemblePlugin`.
 
 This is the point of D05. Every `../libs/plugin-api.jar` reference already resolves, so **no file is rewritten** (R43 is met by construction, not by editing). `ai-agent-local/libs/llama-api.jar` and `pair-programming-plugin/libs/shared.jar` stay where they are inside the addon directory and never collide with the shared `libs/` one level up (X2).
 
@@ -333,22 +339,22 @@ Two mechanisms, deliberately both:
   "addons": [
     {
       "type": "plugin",
-      "slug": "rainbow-on-the-go",
-      "pluginId": "org.appdevforall.rainbowonthego",
-      "name": "Rainbow on the Go",
+      "slug": "keystore-generator",
+      "pluginId": "com.appdevforall.keygen.plugin",
+      "name": "Keystore Generator",
       "version": "1.3.0",
-      "summary": "Colours matching brackets in the editor.",
+      "summary": "Creates and manages app signing keystores on the device.",
       "description": "A longer paragraph shown on the card and the description page.",
       "origin": "appdevforall",
       "license": "AGPL-3.0-or-later",
-      "tags": ["editor", "readability"],
+      "tags": ["signing", "release"],
       "author": { "name": "App Dev For All", "url": "https://www.appdevforall.org" },
       "minAppVersion": "25.47",
-      "iconUrl":   "https://addons.appdevforall.org/p/rainbow-on-the-go.png",
-      "pageUrl":   "https://addons.appdevforall.org/p/rainbow-on-the-go.html",
-      "sourceUrl": "https://github.com/appdevforall/plugin-examples/tree/main/plugins/Rainbow-on-the-Go",
-      "download":      { "url": "https://addons.appdevforall.org/dl/rainbow-on-the-go.cgp",     "sha256": "…", "size": 1234567 },
-      "sourceTarball": { "url": "https://addons.appdevforall.org/src/rainbow-on-the-go-src.tar.gz", "sha256": "…", "size": 234567 }
+      "iconUrl":   "https://addons.appdevforall.org/p/keystore-generator.png",
+      "pageUrl":   "https://addons.appdevforall.org/p/keystore-generator.html",
+      "sourceUrl": "https://github.com/appdevforall/plugin-examples/tree/main/plugins/Keystore-Generator",
+      "download":      { "url": "https://addons.appdevforall.org/dl/keystore-generator.cgp",     "sha256": "…", "size": 1234567 },
+      "sourceTarball": { "url": "https://addons.appdevforall.org/src/keystore-generator-src.tar.gz", "sha256": "…", "size": 234567 }
     }
   ]
 }
@@ -587,7 +593,7 @@ Ordered so that every step is reversible until the last one.
 
 1. **Land the tool and the checks.** `tools/addons/`, `site/`, the schema, the tests, and the `check-toolchain.yml` wiring. Nothing publishes yet. `addons check` is advisory on this pass.
 2. **Land metadata.** 31 reviewed `addon.json` files. `addons check` becomes blocking.
-3. **Rename and move.** Directories renamed to the convention, description pages renamed to `<slug>.html`, addons moved under `plugins/`. `plugin.id`, `namespace`, and `applicationId` are untouched (R29). Discovery already handles both locations (R31), so this can proceed in batches.
+3. **Rename and move.** Directories renamed to the convention, description pages renamed to `<slug>.html`, addons moved under `plugins/`. `plugin.id`, `namespace`, and `applicationId` are untouched (R29). Discovery already handles both locations (R31), so this can proceed in batches. **Rename the Favorite Snippets addon before creating `snippets/`** — the names collide until it moves (§5).
 4. **Publish to staging and verify by hand.** One addon, one page, one tarball: the page renders, the artifact downloads, the tarball extracts and builds, the catalog validates, the gallery loads. This is K03's mitigation and it is not optional.
 5. **First full publish**, and apply the CORS policy plus its one-time purge.
 6. **Repoint the website's links** at `addons.appdevforall.org`.
@@ -684,7 +690,7 @@ Nothing below blocks implementation of §14 steps 1–3.
 |---|---|---|
 | **O1** | PRD Q1 — how Aman Khan wishes to be credited, and whether the addon is CotGX NDK. | Blocks publishing `cotg-ndk`. It stays on the skip list until answered. Everything else proceeds. |
 | **O2** | PRD Q2 — a per-addon version in the catalog. | Deferred (§10.2). Additive later. |
-| **O3** | PRD Q4 — whether templates, snippets, and code actions live in this repository. | Reserved directory names cost nothing and decide nothing. |
+| **O3** | ~~PRD Q4 — where the other addon types live.~~ | **Closed.** They live here. `snippets/` is blocked only by the rename in §5. |
 | **O4** | The 24×24 icon on `sketch-to-ui-plugin`, and the two at 96×96. | Cosmetic. Follow-up issue, not a blocker (D07). |
 | **O5** | `pebble-custom-function-template-installer` ships stale copies of both shared jars and is the sole skip-list entry with no recorded reason. | Cleanup during migration step 3. |
 | **O6** | A periodic job that actually builds one published tarball. | The real mitigation for K07. Out of scope here. |

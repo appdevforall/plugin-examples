@@ -367,9 +367,9 @@ Provisioning that must happen outside the repository before this can ship: bucke
 | ID | Question |
 |---|---|
 | **Q1** | **Blocks releasing the hold on `cotg-ndk` (§8.3).** Aman Khan's project is **`cotgx-ndk`** ("COTGX"); our directory dropped the X. Under R38 we preserve his naming — should the addon be **CotGX NDK** rather than **CotG NDK**? Also: how does he want to be credited, and does he want a contact address published? His plugin id is frozen either way. Answering this is a conversation with him, not a decision we make for him. |
-| **Q2** | Should the catalog carry a **version** per addon, and if so, is it displayed to users or only recorded? |
-| **Q3** | Community contributions currently arrive by proxy because outside pull requests could not be accepted. Is that still true, and does it change what R36–R38 need to support? |
-| **Q4** | Do templates, snippets, and code actions belong in **this** repository alongside plugins, or in their own? This PRD reserves room for them here; it does not settle where they live. |
+| **Q2** | ~~Should the catalog carry a version per addon?~~ **Resolved:** yes. Read from the built artifact's manifest, displayed to users, and used by the app to answer "is mine current". |
+| **Q3** | ~~Do outside pull requests change what R36–R38 must support?~~ **Resolved:** accepting outside contributions is **out of scope**. R36–R38 stand — they govern how credit is given, not how a contribution arrives. |
+| **Q4** | ~~Do templates, snippets, and code actions belong in this repository?~~ **Resolved:** yes, all four addon types live here. `plugins/`, `templates/`, and `code-actions/` already exist as placeholders; `snippets/` is blocked until the Favorite Snippets addon vacates that name. |
 
 ---
 
