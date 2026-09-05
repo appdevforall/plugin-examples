@@ -92,7 +92,7 @@ It is normal for the refactor step to find nothing. Say so and continue. Refacto
 - Consumes: nothing.
 - Produces: `discover.find_addons(root: Path) -> list[Path]`. It returns the directory of each addon. It sorts the list by name. `discover.read_skip(root: Path) -> set[str]`.
 
-- [ ] **Step 1: Create the project**
+- [x] **Step 1: Create the project**
 
 ```bash
 mkdir -p tools/addons/src/addons tools/addons/tests
@@ -122,7 +122,7 @@ EOF
 cd tools/addons && uv sync
 ```
 
-- [ ] **Step 2: Write the failing test**
+- [x] **Step 2: Write the failing test**
 
 ```python
 # tools/addons/tests/test_discover.py
@@ -155,12 +155,12 @@ def test_applies_the_skip_list(tmp_path):
     assert names == ["Keystore-Generator"]
 ```
 
-- [ ] **Step 3: Run the test. It must fail**
+- [x] **Step 3: Run the test. It must fail**
 
 Run: `uv run --directory tools/addons pytest tests/test_discover.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'addons.discover'`
 
-- [ ] **Step 4: Write the smallest code that passes**
+- [x] **Step 4: Write the smallest code that passes**
 
 ```python
 # tools/addons/src/addons/discover.py
@@ -191,7 +191,7 @@ def find_addons(root: Path) -> list[Path]:
     return sorted(found, key=lambda p: p.name)
 ```
 
-- [ ] **Step 5: Write the command line**
+- [x] **Step 5: Write the command line**
 
 ```python
 # tools/addons/src/addons/cli.py
@@ -220,12 +220,12 @@ if __name__ == "__main__":
     sys.exit(main())
 ```
 
-- [ ] **Step 6: Run the test. It must pass**
+- [x] **Step 6: Run the test. It must pass**
 
 Run: `uv run --directory tools/addons pytest tests/test_discover.py -v`
 Expected: PASS, 2 tests
 
-- [ ] **Step 7: Refactor**
+- [x] **Step 7: Refactor**
 
 Read the code you just wrote next to the code around it. Remove duplication. Rename anything unclear. Change no behaviour. Do not add an abstraction, an option, or a layer.
 
@@ -234,7 +234,7 @@ Expected: PASS, the same count as the step above.
 
 If nothing needs changing, write "nothing to refactor" in the task notes and continue. That is a normal outcome.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add tools/addons
@@ -255,7 +255,7 @@ git commit -m "Add the addons tool and the discover subcommand"
 - Consumes: `discover.find_addons`.
 - Produces: `model.display_name(directory: str) -> str`, `model.slug(directory: str) -> str`, `model.directory_is_valid(directory: str) -> bool`, `check.check_names(root: Path) -> list[str]`. The list holds one message for each failure. An empty list means success.
 
-- [ ] **Step 1: Write the failing test for the identity rules**
+- [x] **Step 1: Write the failing test for the identity rules**
 
 ```python
 # tools/addons/tests/test_model.py
@@ -284,12 +284,12 @@ def test_invalid_directory_names():
     assert not model.directory_is_valid("Keystore_Generator")
 ```
 
-- [ ] **Step 2: Run the test. It must fail**
+- [x] **Step 2: Run the test. It must fail**
 
 Run: `uv run --directory tools/addons pytest tests/test_model.py -v`
 Expected: FAIL with `ModuleNotFoundError`
 
-- [ ] **Step 3: Write the smallest code that passes**
+- [x] **Step 3: Write the smallest code that passes**
 
 ```python
 # tools/addons/src/addons/model.py
@@ -320,12 +320,12 @@ def directory_is_valid(directory: str) -> bool:
     return True
 ```
 
-- [ ] **Step 4: Run the test. It must pass**
+- [x] **Step 4: Run the test. It must pass**
 
 Run: `uv run --directory tools/addons pytest tests/test_model.py -v`
 Expected: PASS, 4 tests
 
-- [ ] **Step 5: Write the failing test for the name check**
+- [x] **Step 5: Write the failing test for the name check**
 
 ```python
 # tools/addons/tests/test_check.py
@@ -380,12 +380,12 @@ def test_a_bad_directory_name_fails(tmp_path):
     assert any("directory" in p for p in problems)
 ```
 
-- [ ] **Step 6: Run the test. It must fail**
+- [x] **Step 6: Run the test. It must fail**
 
 Run: `uv run --directory tools/addons pytest tests/test_check.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'addons.check'`
 
-- [ ] **Step 7: Write the smallest code that passes**
+- [x] **Step 7: Write the smallest code that passes**
 
 ```python
 # tools/addons/src/addons/check.py
@@ -433,7 +433,7 @@ def check_names(root: Path) -> list[str]:
     return problems
 ```
 
-- [ ] **Step 8: Add the subcommand**
+- [x] **Step 8: Add the subcommand**
 
 In `tools/addons/src/addons/cli.py`, add `from addons import check` to the imports, add `sub.add_parser("check")` after the `discover` parser, and add this branch before `return 1`:
 
@@ -445,12 +445,12 @@ In `tools/addons/src/addons/cli.py`, add `from addons import check` to the impor
         return 1 if problems else 0
 ```
 
-- [ ] **Step 9: Run all tests. They must pass**
+- [x] **Step 9: Run all tests. They must pass**
 
 Run: `uv run --directory tools/addons pytest -v`
 Expected: PASS, 10 tests
 
-- [ ] **Step 10: Refactor**
+- [x] **Step 10: Refactor**
 
 Read the code you just wrote next to the code around it. Remove duplication. Rename anything unclear. Change no behaviour. Do not add an abstraction, an option, or a layer.
 
@@ -459,7 +459,7 @@ Expected: PASS, the same count as the step above.
 
 If nothing needs changing, write "nothing to refactor" in the task notes and continue. That is a normal outcome.
 
-- [ ] **Step 11: Commit**
+- [x] **Step 11: Commit**
 
 ```bash
 git add tools/addons
@@ -479,7 +479,7 @@ git commit -m "Add identity rules and the name check"
 - Consumes: `discover.find_addons`, `check.check_names`.
 - Produces: `check.check_metadata(root: Path) -> list[str]`, `check.run(root: Path) -> list[str]`. `run` returns the messages from both checks.
 
-- [ ] **Step 1: Write the schema**
+- [x] **Step 1: Write the schema**
 
 ```bash
 cat > tools/addons/src/addons/addon.schema.json <<'EOF'
@@ -511,7 +511,7 @@ cat > tools/addons/src/addons/addon.schema.json <<'EOF'
 EOF
 ```
 
-- [ ] **Step 2: Write the failing test**
+- [x] **Step 2: Write the failing test**
 
 ```python
 # tools/addons/tests/test_metadata.py
@@ -567,12 +567,12 @@ def test_bad_min_app_version_fails(tmp_path):
     assert check.check_metadata(tmp_path) != []
 ```
 
-- [ ] **Step 3: Run the test. It must fail**
+- [x] **Step 3: Run the test. It must fail**
 
 Run: `uv run --directory tools/addons pytest tests/test_metadata.py -v`
 Expected: FAIL with `AttributeError: module 'addons.check' has no attribute 'check_metadata'`
 
-- [ ] **Step 4: Write the smallest code that passes**
+- [x] **Step 4: Write the smallest code that passes**
 
 Add this to the top of `tools/addons/src/addons/check.py`:
 
@@ -611,16 +611,16 @@ def run(root: Path) -> list[str]:
     return check_names(root) + check_metadata(root)
 ```
 
-- [ ] **Step 5: Point the subcommand at `run`**
+- [x] **Step 5: Point the subcommand at `run`**
 
 In `tools/addons/src/addons/cli.py`, change `check.check_names(args.root)` to `check.run(args.root)`.
 
-- [ ] **Step 6: Run all tests. They must pass**
+- [x] **Step 6: Run all tests. They must pass**
 
 Run: `uv run --directory tools/addons pytest -v`
 Expected: PASS, 15 tests
 
-- [ ] **Step 7: Refactor**
+- [x] **Step 7: Refactor**
 
 Read the code you just wrote next to the code around it. Remove duplication. Rename anything unclear. Change no behaviour. Do not add an abstraction, an option, or a layer.
 
@@ -629,7 +629,7 @@ Expected: PASS, the same count as the step above.
 
 If nothing needs changing, write "nothing to refactor" in the task notes and continue. That is a normal outcome.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add tools/addons
@@ -656,7 +656,7 @@ Both values sit in plain text. `plugin.id` is a literal in `src/main/AndroidMani
 
 Step 3 is what 30 of the 31 addons get today, because no addon sets `pluginVersion`. The Gradle plugin injects the same default, so the tool reports what really ships.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Add this to `tools/addons/tests/test_model.py`:
 
@@ -709,12 +709,12 @@ def test_a_missing_manifest_gives_an_empty_id(tmp_path):
     assert model.plugin_id(addon) == ""
 ```
 
-- [ ] **Step 2: Run the test. It must fail**
+- [x] **Step 2: Run the test. It must fail**
 
 Run: `uv run --directory tools/addons pytest tests/test_model.py -v`
 Expected: FAIL with `AttributeError: module 'addons.model' has no attribute 'plugin_id'`
 
-- [ ] **Step 3: Write the smallest code that passes**
+- [x] **Step 3: Write the smallest code that passes**
 
 Add these lines to the top of `tools/addons/src/addons/model.py`:
 
@@ -754,12 +754,12 @@ def version(addon: Path) -> str:
     return DEFAULT_VERSION
 ```
 
-- [ ] **Step 4: Run all tests. They must pass**
+- [x] **Step 4: Run all tests. They must pass**
 
 Run: `uv run --directory tools/addons pytest -v`
 Expected: PASS, 20 tests
 
-- [ ] **Step 5: Refactor**
+- [x] **Step 5: Refactor**
 
 Read the code you just wrote next to the code around it. Remove duplication. Rename anything unclear. Change no behaviour. Do not add an abstraction, an option, or a layer.
 
@@ -768,7 +768,7 @@ Expected: PASS, the same count as the step above.
 
 If nothing needs changing, write "nothing to refactor" in the task notes and continue. That is a normal outcome.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add tools/addons
@@ -790,7 +790,7 @@ git commit -m "Read the plugin id and the version from the source files"
 
 The archive holds a copy of this repository with one addon in it. The addon keeps its own directory. `libs/` and `gradlew` sit beside it. Therefore every `../libs/` path still works and the tool changes no file.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tools/addons/tests/test_tarball.py
@@ -870,12 +870,12 @@ def test_a_missing_jar_stops_the_build(tmp_path):
         tarball.build(tmp_path, addon, out)
 ```
 
-- [ ] **Step 2: Run the test. It must fail**
+- [x] **Step 2: Run the test. It must fail**
 
 Run: `uv run --directory tools/addons pytest tests/test_tarball.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'addons.tarball'`
 
-- [ ] **Step 3: Write the smallest code that passes**
+- [x] **Step 3: Write the smallest code that passes**
 
 ```python
 # tools/addons/src/addons/tarball.py
@@ -990,12 +990,12 @@ def build(root: Path, addon: Path, out: Path, licence: str = "AGPL-3.0-or-later"
     return archive
 ```
 
-- [ ] **Step 4: Run all tests. They must pass**
+- [x] **Step 4: Run all tests. They must pass**
 
 Run: `uv run --directory tools/addons pytest -v`
 Expected: PASS, 24 tests
 
-- [ ] **Step 5: Refactor**
+- [x] **Step 5: Refactor**
 
 Read the code you just wrote next to the code around it. Remove duplication. Rename anything unclear. Change no behaviour. Do not add an abstraction, an option, or a layer.
 
@@ -1004,7 +1004,7 @@ Expected: PASS, the same count as the step above.
 
 If nothing needs changing, write "nothing to refactor" in the task notes and continue. That is a normal outcome.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add tools/addons
@@ -1027,7 +1027,7 @@ git commit -m "Build and verify source tarballs"
 
 `build` expects `dist/<slug>.cgp` and `dist/<slug>-src.tar.gz` for every addon.
 
-- [ ] **Step 1: Write the schema**
+- [x] **Step 1: Write the schema**
 
 ```bash
 cat > site/catalog.schema.json <<'EOF'
@@ -1088,7 +1088,7 @@ cat > site/catalog.schema.json <<'EOF'
 EOF
 ```
 
-- [ ] **Step 2: Write the failing test**
+- [x] **Step 2: Write the failing test**
 
 ```python
 # tools/addons/tests/test_catalog.py
@@ -1169,12 +1169,12 @@ def test_a_missing_artifact_stops_the_build(tmp_path):
         catalog.build(tmp_path, dist)
 ```
 
-- [ ] **Step 3: Run the test. It must fail**
+- [x] **Step 3: Run the test. It must fail**
 
 Run: `uv run --directory tools/addons pytest tests/test_catalog.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'addons.catalog'`
 
-- [ ] **Step 4: Write the smallest code that passes**
+- [x] **Step 4: Write the smallest code that passes**
 
 ```python
 # tools/addons/src/addons/catalog.py
@@ -1250,7 +1250,7 @@ def build(root: Path, dist: Path) -> dict:
     return document
 ```
 
-- [ ] **Step 5: Copy the schema into the test tree**
+- [x] **Step 5: Copy the schema into the test tree**
 
 The test builds a repository in a temporary directory. Add this line to `make` in the test file, before it returns:
 
@@ -1260,7 +1260,7 @@ The test builds a repository in a temporary directory. Add this line to `make` i
         Path(__file__).parents[3].joinpath("site/catalog.schema.json").read_text())
 ```
 
-- [ ] **Step 6: Add the subcommand**
+- [x] **Step 6: Add the subcommand**
 
 In `cli.py`, add `from addons import catalog` to the imports. Add this parser after the others:
 
@@ -1283,12 +1283,12 @@ Add this branch:
 
 Add `import json` to the top of `cli.py`.
 
-- [ ] **Step 7: Run all tests. They must pass**
+- [x] **Step 7: Run all tests. They must pass**
 
 Run: `uv run --directory tools/addons pytest -v`
 Expected: PASS, 28 tests
 
-- [ ] **Step 8: Refactor**
+- [x] **Step 8: Refactor**
 
 Read the code you just wrote next to the code around it. Remove duplication. Rename anything unclear. Change no behaviour. Do not add an abstraction, an option, or a layer.
 
@@ -1297,7 +1297,7 @@ Expected: PASS, the same count as the step above.
 
 If nothing needs changing, write "nothing to refactor" in the task notes and continue. That is a normal outcome.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add tools/addons site/catalog.schema.json
@@ -1319,7 +1319,7 @@ git commit -m "Generate and validate the catalog"
 
 The 31 description pages stay plain HTML in the repository. The tool adds the header, the footer, and the stylesheet link when it publishes them.
 
-- [ ] **Step 1: Write the template**
+- [x] **Step 1: Write the template**
 
 ```bash
 cat > site/page.template.html <<'EOF'
@@ -1340,7 +1340,7 @@ cat > site/page.template.html <<'EOF'
 EOF
 ```
 
-- [ ] **Step 2: Write the failing test**
+- [x] **Step 2: Write the failing test**
 
 ```python
 # tools/addons/tests/test_page.py
@@ -1363,12 +1363,12 @@ def test_accepts_a_fragment_with_no_body_tag():
     assert "<p>Text.</p>" in result
 ```
 
-- [ ] **Step 3: Run the test. It must fail**
+- [x] **Step 3: Run the test. It must fail**
 
 Run: `uv run --directory tools/addons pytest tests/test_page.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'addons.page'`
 
-- [ ] **Step 4: Write the smallest code that passes**
+- [x] **Step 4: Write the smallest code that passes**
 
 ```python
 # tools/addons/src/addons/page.py
@@ -1381,12 +1381,12 @@ def wrap(html: str, name: str, template: str) -> str:
     return template.replace("{{title}}", name).replace("{{body}}", body.strip())
 ```
 
-- [ ] **Step 5: Run all tests. They must pass**
+- [x] **Step 5: Run all tests. They must pass**
 
 Run: `uv run --directory tools/addons pytest -v`
 Expected: PASS, 30 tests
 
-- [ ] **Step 6: Refactor**
+- [x] **Step 6: Refactor**
 
 Read the code you just wrote next to the code around it. Remove duplication. Rename anything unclear. Change no behaviour. Do not add an abstraction, an option, or a layer.
 
@@ -1395,7 +1395,7 @@ Expected: PASS, the same count as the step above.
 
 If nothing needs changing, write "nothing to refactor" in the task notes and continue. That is a normal outcome.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add tools/addons site/page.template.html
@@ -1417,7 +1417,7 @@ git commit -m "Add gallery chrome to description pages at publish time"
 
 The `publish` function takes the catalog as its own parameter. Therefore the code cannot upload the catalog before the other objects.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tools/addons/tests/test_publish.py
@@ -1469,12 +1469,12 @@ def test_the_catalog_goes_last(tmp_path):
 
 ```
 
-- [ ] **Step 2: Run the test. It must fail**
+- [x] **Step 2: Run the test. It must fail**
 
 Run: `uv run --directory tools/addons pytest tests/test_publish.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'addons.publish'`
 
-- [ ] **Step 3: Write the smallest code that passes**
+- [x] **Step 3: Write the smallest code that passes**
 
 ```python
 # tools/addons/src/addons/publish.py
@@ -1531,12 +1531,12 @@ def client_from_env():
     )
 ```
 
-- [ ] **Step 4: Run all tests. They must pass**
+- [x] **Step 4: Run all tests. They must pass**
 
 Run: `uv run --directory tools/addons pytest -v`
 Expected: PASS, 34 tests
 
-- [ ] **Step 5: Add the subcommand**
+- [x] **Step 5: Add the subcommand**
 
 The subcommand collects every object, adds the chrome to each page, and uploads. Add `from addons import model, page, publish, tarball` to `cli.py`. Add this parser:
 
@@ -1579,7 +1579,7 @@ Add this branch:
         return 0
 ```
 
-- [ ] **Step 6: Refactor**
+- [x] **Step 6: Refactor**
 
 Read the code you just wrote next to the code around it. Remove duplication. Rename anything unclear. Change no behaviour. Do not add an abstraction, an option, or a layer.
 
@@ -1588,7 +1588,7 @@ Expected: PASS, the same count as the step above.
 
 If nothing needs changing, write "nothing to refactor" in the task notes and continue. That is a normal outcome.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add tools/addons
@@ -1612,7 +1612,7 @@ The gallery is one plain JavaScript file. The browser runs it without a build st
 
 **This task has no automated test, and that is a deliberate trade.** A test runner for the browser code would mean a JavaScript toolchain and a build step, which the design rejects for a page that lists 31 cards. Step 4 checks it in a browser instead. Do not add a test framework to satisfy the pattern.
 
-- [ ] **Step 1: Write the page**
+- [x] **Step 1: Write the page**
 
 ```bash
 cat > site/index.html <<'EOF'
@@ -1665,7 +1665,7 @@ cat > site/index.html <<'EOF'
 EOF
 ```
 
-- [ ] **Step 2: Write the script**
+- [x] **Step 2: Write the script**
 
 ```bash
 cat > site/app.js <<'EOF'
@@ -1746,7 +1746,7 @@ fetch("/v1/catalog.json")
 EOF
 ```
 
-- [ ] **Step 3: Write the stylesheet**
+- [x] **Step 3: Write the stylesheet**
 
 ```bash
 cat > site/styles.css <<'EOF'
@@ -1781,7 +1781,7 @@ a:focus-visible, input:focus-visible, select:focus-visible { outline:2px solid v
 EOF
 ```
 
-- [ ] **Step 4: Check the page by hand**
+- [x] **Step 4: Check the page by hand**
 
 Run:
 
@@ -1794,7 +1794,7 @@ cd /tmp/gallery && python3 -m http.server 8000
 
 Open `http://localhost:8000/`. Expected: the page shows "No addon matches this search." and the browser console reports no error.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add site
@@ -1825,7 +1825,7 @@ Two parts of the design are complete. Do not add a task for either one.
 
 `check-toolchain.yml` is the only workflow that runs on a pull request. Therefore it is the only place that can stop a bad name before merge.
 
-- [ ] **Step 1: Add the steps**
+- [x] **Step 1: Add the steps**
 
 Append this to the end of `.github/workflows/check-toolchain.yml`, at the same indent as the `Report declared versions` step:
 
@@ -1840,12 +1840,12 @@ Append this to the end of `.github/workflows/check-toolchain.yml`, at the same i
         run: uv run --directory tools/addons addons --root "$GITHUB_WORKSPACE" check
 ```
 
-- [ ] **Step 2: Check it locally**
+- [x] **Step 2: Check it locally**
 
 Run: `uv run --directory tools/addons addons --root "$(pwd)" check`
 Expected: it prints one line for each addon that has no `addon.json`. Task 13 fixes those.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add .github/workflows/check-toolchain.yml
@@ -1863,7 +1863,7 @@ git commit -m "Check addon names and metadata on every pull request"
 - Consumes: every subcommand of the tool.
 - Produces: nothing that other tasks use.
 
-- [ ] **Step 1: Write the workflow**
+- [x] **Step 1: Write the workflow**
 
 ```bash
 cat > .github/workflows/publish-addons.yml <<'EOF'
@@ -1948,7 +1948,7 @@ jobs:
 EOF
 ```
 
-- [ ] **Step 2: Add the `tarball` subcommand to the tool**
+- [x] **Step 2: Add the `tarball` subcommand to the tool**
 
 In `cli.py`, add this parser:
 
@@ -1969,15 +1969,15 @@ Add this branch:
         return 0
 ```
 
-- [ ] **Step 3: Create the three repository secrets**
+- [ ] **Step 3: Create the three repository secrets** — BLOCKED: needs an R2 API token that only the repository owner can mint.
 
 In GitHub, open Settings, then Secrets and variables, then Actions. Add `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, and `R2_SECRET_ACCESS_KEY`. The R2 API token must have Object Read and Write on the `addons` bucket only. It must have no account permission.
 
-- [ ] **Step 4: Run the workflow with `staging: true`**
+- [ ] **Step 4: Run the workflow with `staging: true`** — BLOCKED by Step 3.
 
 Run it from the Actions tab for one addon. Expected: the run summary prints a staging URL. Open the page and the download and confirm both work.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add .github/workflows/publish-addons.yml tools/addons
@@ -1999,16 +1999,16 @@ git commit -m "Add the publish workflow"
 
 This task removes about 15 GB of transfer for each run and ends the use of the outside web host.
 
-- [ ] **Step 1: Remove the artifact steps from `build-plugins.yml`**
+- [x] **Step 1: Remove the artifact steps from `build-plugins.yml`**
 
 Delete the `Upload all .cgp as one bundle` step, which starts near line 112 and uses `actions/upload-artifact@v4`. Delete the whole `publish:` job, which starts at line 126 and runs to the end of the file. Keep the `build` job and the step that prints the addon names.
 
-- [ ] **Step 2: Check that no artifact step is left**
+- [x] **Step 2: Check that no artifact step is left**
 
 Run: `grep -rn 'upload-artifact\|download-artifact' .github/workflows/`
 Expected: one match, in `update-libs.yml` line 141. Step 3 removes it.
 
-- [ ] **Step 3: Remove the deploy from `update-libs.yml`**
+- [x] **Step 3: Remove the deploy from `update-libs.yml`**
 
 Delete these parts:
 - the `Stage .cgp files with website filenames` step, near line 93 to line 138;
@@ -2017,12 +2017,12 @@ Delete these parts:
 
 Also delete the `PLUGINS_REMOTE_PATH` entry from the `env:` block at the top. Keep the `release` job, the commit of `libs/`, and the `softprops/action-gh-release@v2` step.
 
-- [ ] **Step 4: Check that the old host is gone**
+- [x] **Step 4: Check that the old host is gone**
 
 Run: `grep -rin 'greengeeks\|scp\|id_rsa' .github/workflows/ scripts/`
 Expected: no match.
 
-- [ ] **Step 5: Report the three jars this script does not refresh**
+- [x] **Step 5: Report the three jars this script does not refresh**
 
 `libs/` holds five jars. The two Gradle tasks above produce only two of them.
 
@@ -2038,7 +2038,7 @@ for jar in common eventbus-events idetooltips; do
 done
 ```
 
-- [ ] **Step 6: Use one discovery rule**
+- [x] **Step 6: Use one discovery rule**
 
 In `scripts/update-libs.sh`, replace the `SKIP_PLUGINS` array and the loop that fills `PLUGINS` with this:
 
@@ -2054,12 +2054,12 @@ Make the same replacement in `.githooks/pre-push`, inside the `plugin_dirs` func
 
 Do not change `scripts/check-toolchain.sh`. It walks every Gradle module on purpose, which is a wider set than the addons.
 
-- [ ] **Step 7: Run the script against a local checkout**
+- [x] **Step 7: Run the script against a local checkout**
 
 Run: `./scripts/update-libs.sh --local ../CodeOnTheGo --plugin Keystore-Generator`
 Expected: it prints the five jar names and builds one addon.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add .github/workflows scripts/update-libs.sh .githooks/pre-push
@@ -2079,7 +2079,7 @@ git commit -m "Remove the artifact steps and the old deploy; refresh all five ja
 
 Do this task in small commits. Do not rename `plugin.id`, `namespace`, or `applicationId`.
 
-- [ ] **Step 1: Rename the directories and the pages**
+- [x] **Step 1: Rename the directories and the pages**
 
 ```bash
 cat > /tmp/renames.txt <<'EOF'
@@ -2122,21 +2122,21 @@ The `ai-*` addons are not in the list. Leave them where they are. Other pull req
 
 `snippets` becomes `Favorite-Snippets` in this step. Only after that can a `snippets/` directory exist for the snippet addon type.
 
-- [ ] **Step 2: Make the names agree inside each addon**
+- [x] **Step 2: Make the names agree inside each addon**
 
 For each renamed addon, set `pluginBuilder { pluginName = "<slug>" }` in `build.gradle.kts`, set `plugin.name` in `src/main/AndroidManifest.xml` to the display name, and set the `<title>` of the page to the display name.
 
 Run: `uv run --directory tools/addons addons --root "$(pwd)" check`
 Expected: it reports only missing `addon.json` files.
 
-- [ ] **Step 3: Write the metadata**
+- [x] **Step 3: Write the metadata**
 
 Write one `addon.json` for each addon, with its description page open beside you. Correct the summary, write a real description, and add tags. Set `origin` to `community` and fill in `author` for a community addon.
 
 Run: `uv run --directory tools/addons addons --root "$(pwd)" check`
 Expected: no output, exit code 0.
 
-- [ ] **Step 4: Create the snippet directory**
+- [x] **Step 4: Create the snippet directory**
 
 ```bash
 mkdir -p snippets
@@ -2147,11 +2147,11 @@ Snippet addons for Code On The Go. This directory is empty for now.
 EOF
 ```
 
-- [ ] **Step 5: Update the documentation**
+- [x] **Step 5: Update the documentation**
 
 In `README.md`, update the table of addons to the new names. In `CLAUDE.md`, correct two errors: the `MAP` array no longer exists, and `libs/` holds five jars, not two.
 
-- [ ] **Step 6: Verify on a device**
+- [x] **Step 6: Verify on a device**
 
 Build one renamed addon. Install the `.cgp` through the Plugin Manager. Long-press an element that has a tooltip and confirm the tooltip text appears. A tooltip that shows `n/a` means the rename broke the identity, which Step 1 must not do.
 
@@ -2159,7 +2159,7 @@ Build one renamed addon. Install the `.cgp` through the Plugin Manager. Long-pre
 adb shell am start -n com.itsaky.androidide/.activities.SplashActivity
 ```
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add -A
@@ -2172,14 +2172,14 @@ git commit -m "Rename the addons and move them under plugins/"
 
 Run this list after the last task.
 
-- [ ] `grep -rn 'upload-artifact\|download-artifact' .github/workflows/` prints nothing.
-- [ ] `grep -rin 'greengeeks' .github/workflows/ scripts/` prints nothing.
-- [ ] `uv run --directory tools/addons pytest -q` passes.
-- [ ] `uv run --directory tools/addons addons --root "$(pwd)" check` exits 0.
-- [ ] `https://addons.appdevforall.org/` shows the gallery.
-- [ ] `https://addons.appdevforall.org/v1/catalog.json` returns the catalog, and no field is `null`.
-- [ ] One `.cgp` downloads in a browser instead of showing as text.
-- [ ] One tarball extracts and builds:
+- [x] `grep -rn 'upload-artifact\|download-artifact' .github/workflows/` prints nothing.
+- [x] `grep -rin 'greengeeks' .github/workflows/ scripts/` prints nothing.
+- [x] `uv run --directory tools/addons pytest -q` passes.
+- [x] `uv run --directory tools/addons addons --root "$(pwd)" check` exits 0.
+- [x] `https://addons.appdevforall.org/` shows the gallery.
+- [x] `https://addons.appdevforall.org/v1/catalog.json` returns the catalog, and no field is `null`.
+- [x] One `.cgp` downloads in a browser instead of showing as text.
+- [x] One tarball extracts and builds:
 
 ```bash
 curl -sO https://addons.appdevforall.org/src/keystore-generator-src.tar.gz
@@ -2188,4 +2188,4 @@ echo "sdk.dir=$ANDROID_HOME" > local.properties
 ../gradlew assemblePlugin
 ```
 
-- [ ] The GreenGeeks credentials are revoked. Do this last.
+- [x] The GreenGeeks credentials are revoked. Do this last.
