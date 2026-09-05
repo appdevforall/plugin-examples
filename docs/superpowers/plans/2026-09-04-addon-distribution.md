@@ -1973,7 +1973,9 @@ Add this branch:
 
 In GitHub, open Settings, then Secrets and variables, then Actions. Add `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, and `R2_SECRET_ACCESS_KEY`. The R2 API token must have Object Read and Write on the `addons` bucket only. It must have no account permission.
 
-- [ ] **Step 4: Run the workflow with `staging: true`** — BLOCKED by Step 3.
+- [ ] **Step 4: Run the workflow with `staging: true`** — BLOCKED until this branch merges. `workflow_dispatch` only triggers a workflow that exists on the default branch, so `gh workflow run` returns 404 while `publish-addons.yml` lives on a feature branch. Nothing else is missing: the secrets are configured and the workflow maps them correctly.
+
+  The substance of this step was carried out locally against the live bucket, using the same tool the workflow calls: 97 objects published to `staging/local-verify/`, the gallery rendering all 23 addons, a description page rendering with its chrome, and a `.cgp` returning `content-disposition: attachment`. What remains untested is the CI wiring itself, which cannot be tested before the merge.
 
 Run it from the Actions tab for one addon. Expected: the run summary prints a staging URL. Open the page and the download and confirm both work.
 
