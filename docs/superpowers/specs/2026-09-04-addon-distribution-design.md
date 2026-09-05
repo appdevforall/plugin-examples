@@ -446,7 +446,9 @@ The JSON Schema is published beside the catalog at `v1/catalog.schema.json`, wit
 
 ### 11.1 The application
 
-Carried forward from the prototype, whose core decisions were right: a vanilla ES module with no framework and no build step, all record text rendered through `textContent` and never `innerHTML`, filters synchronised to the URL so a filtered view is shareable (R21), debounced search, and an explicit error state instead of a blank page (R22).
+Carried forward from the prototype, whose core decisions were right. **One plain JavaScript file that the browser runs as-is** — no framework, no bundler, no build step, so the file in git is exactly the file that executes. All record text is written with `textContent` and never `innerHTML`, so a description can never inject markup. Filters are mirrored into the URL, which makes a filtered view shareable (R21). Search is debounced. A failed load shows an error, not a blank page (R22).
+
+The absence of a build step is a design choice, not an omission. A bundler would add a fourth toolchain, a dependency tree to keep patched, and a CI stage that can fail — none of which buys anything for a page that lists 31 cards and filters them.
 
 Changes:
 
