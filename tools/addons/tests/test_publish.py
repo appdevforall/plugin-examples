@@ -39,3 +39,13 @@ def test_the_catalog_goes_last(tmp_path):
     publish.publish(client, "addons", [("dl/a.cgp", one)],
                     ("v1/catalog.json", document))
     assert client.order == ["dl/a.cgp", "v1/catalog.json"]
+
+
+def test_bucket_comes_from_the_environment(monkeypatch):
+    monkeypatch.setenv("R2_BUCKET", "addons-staging")
+    assert publish.bucket_from_env() == "addons-staging"
+
+
+def test_bucket_defaults_to_addons(monkeypatch):
+    monkeypatch.delenv("R2_BUCKET", raising=False)
+    assert publish.bucket_from_env() == "addons"

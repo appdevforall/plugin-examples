@@ -75,7 +75,8 @@ def main() -> int:
             ]
         objects.append((f"{prefix}v1/catalog.schema.json",
                         site / "catalog.schema.json"))
-        publish.publish(publish.client_from_env(), "addons", objects,
+        publish.publish(publish.client_from_env(), publish.bucket_from_env(),
+                        objects,
                         (f"{prefix}v1/catalog.json", dist / "catalog.json"))
         print(f"published {len(objects) + 1} objects")
         return 0

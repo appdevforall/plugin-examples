@@ -40,6 +40,10 @@ def publish(client, bucket: str, objects: list[tuple[str, Path]],
     put(client, bucket, catalog[0], catalog[1])
 
 
+def bucket_from_env() -> str:
+    return os.environ.get("R2_BUCKET", "addons")
+
+
 def client_from_env():
     account = os.environ["R2_ACCOUNT_ID"]
     return boto3.client(

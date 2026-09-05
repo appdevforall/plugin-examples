@@ -1969,7 +1969,7 @@ Add this branch:
         return 0
 ```
 
-- [ ] **Step 3: Create the three repository secrets** — BLOCKED: needs an R2 API token that only the repository owner can mint.
+- [x] **Step 3: Create the repository secrets** — DONE by the owner, under existing names: secrets `CLOUDFLARE_ACCESS_KEY_ID` and `CLOUDFLARE_SECRET_ACCESS_KEY`, variables `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_R2_BUCKET_NAME`. The workflow maps them to the tool's `R2_*` environment, and the bucket name now comes from `R2_BUCKET` instead of being hardcoded.
 
 In GitHub, open Settings, then Secrets and variables, then Actions. Add `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, and `R2_SECRET_ACCESS_KEY`. The R2 API token must have Object Read and Write on the `addons` bucket only. It must have no account permission.
 
