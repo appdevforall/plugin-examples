@@ -1,0 +1,15 @@
+{
+  "summary": "Inspects the structure of an APK file inside the editor.",
+  "description": "Opens an APK and shows what is inside it: the manifest, the resources, the DEX classes, and the signing information. You do not need a desktop tool to look into a build.",
+  "tags": [
+    "apk",
+    "analysis",
+    "build"
+  ],
+  "origin": "appdevforall",
+  "license": "AGPL-3.0-or-later",
+  "author": {
+    "name": "App Dev For All",
+    "url": "https://www.appdevforall.org"
+  }
+}

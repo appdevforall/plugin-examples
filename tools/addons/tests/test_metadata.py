@@ -12,7 +12,6 @@ GOOD = {
     "origin": "appdevforall",
     "license": "AGPL-3.0-or-later",
     "author": {"name": "App Dev For All", "url": "https://www.appdevforall.org"},
-    "minAppVersion": "25.47",
 }
 
 

@@ -1,0 +1,15 @@
+{
+  "summary": "Adds vector icons to a project from inside the editor.",
+  "description": "Browses a library of vector drawable icons and writes the one you pick straight into the project resources.",
+  "tags": [
+    "icons",
+    "resources",
+    "design"
+  ],
+  "origin": "appdevforall",
+  "license": "AGPL-3.0-or-later",
+  "author": {
+    "name": "App Dev For All",
+    "url": "https://www.appdevforall.org"
+  }
+}

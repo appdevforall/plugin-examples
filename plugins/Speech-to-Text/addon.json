@@ -1,0 +1,15 @@
+{
+  "summary": "Dictates code and text into the editor with your voice.",
+  "description": "Adds a microphone button to the editor toolbar. Speak, and the words are written at the cursor. With the AI Core addon installed, speech becomes code.",
+  "tags": [
+    "voice",
+    "accessibility",
+    "editor"
+  ],
+  "origin": "appdevforall",
+  "license": "AGPL-3.0-or-later",
+  "author": {
+    "name": "App Dev For All",
+    "url": "https://www.appdevforall.org"
+  }
+}

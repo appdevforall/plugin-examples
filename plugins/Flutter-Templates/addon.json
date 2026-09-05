@@ -1,0 +1,15 @@
+{
+  "summary": "Adds five Flutter starter projects to the New Project screen.",
+  "description": "Installs Flutter project templates so you can start a Flutter app from the New Project screen instead of building the structure by hand.",
+  "tags": [
+    "flutter",
+    "templates",
+    "dart"
+  ],
+  "origin": "appdevforall",
+  "license": "AGPL-3.0-or-later",
+  "author": {
+    "name": "App Dev For All",
+    "url": "https://www.appdevforall.org"
+  }
+}

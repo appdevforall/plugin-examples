@@ -40,7 +40,7 @@ def entry(root: Path, addon: Path, cgp: Path, archive: Path) -> dict:
         "license": meta["license"],
         "tags": meta["tags"],
         "author": {"name": meta["author"]["name"], "url": meta["author"]["url"]},
-        "minAppVersion": meta["minAppVersion"],
+        "minAppVersion": model.min_app_version(addon),
         "iconUrl": f"{BASE}/p/{slug}.png",
         "pageUrl": f"{BASE}/p/{slug}.html",
         "sourceUrl": f"{SOURCE}/{relative}",

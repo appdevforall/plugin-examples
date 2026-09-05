@@ -8,32 +8,32 @@ See the official [plugin documentation](https://www.appdevforall.org/codeonthego
 
 | Plugin                                             | Purpose                                                           |
 | -------------------------------------------------- | ----------------------------------------------------------------- |
-| [`Beepy/`](Beepy/)                                 | Plays a sound when a build starts, succeeds, or fails.            |
-| [`apk-viewer/`](apk-viewer/)                       | Inspects an APK's contents and surfaces a structural breakdown.   |
-| [`bookshelf/`](bookshelf/)                         | Adds reference textbooks (C, C++, Java, Kotlin, Android) accessible from CoGo's in-IDE Bookshelf help page. |
-| [`markdown-preview/`](markdown-preview/)           | Renders Markdown files with a live preview pane in the editor.    |
-| [`keystore-generator/`](keystore-generator/)       | Generates signing keystores from inside the IDE.                  |
-| [`snippets/`](snippets/)                           | Adds user-managed code snippets with prefix-triggered expansions. |
-| [`random-xkcd/`](random-xkcd/)                     | Random xkcd comic in the editor bottom sheet; canonical small-plugin walkthrough with in-IDE help. |
-| [`icons-repository/`](icons-repository/)           | Browse a bundled Material icon catalog and import any icon as a Vector Drawable into the active project. |
-| [`client-time-tracker/`](client-time-tracker/)                       | Tracks billable coding sessions per project and generates PDF/Excel/CSV invoices. |
-| [`python-tools/`](python-tools/)                   | Adds Python + Flask project templates, with on-device Python install and run/install/test actions. |
-| [`rainbow-on-the-go/`](rainbow-on-the-go/)         | Colors matching parentheses, brackets, and braces by nesting depth, with light/dark palettes. |
-| [`compose-preview/`](compose-preview/)             | Renders Jetpack Compose `@Preview` functions on-device — no full app build or run. |
-| [`ai-literacy-course/`](ai-literacy-course/)       | Bundles Learn AI Anywhere's offline "Introduction to AI" course (26 videos + interactive activities) and plays it full-screen, fully offline. |
-| [`layout-editor/`](layout-editor/)                 | Visual drag-and-drop editor for Android XML layouts. |
-| [`ai-core/`](ai-core/)                             | The **Agent** chat (tool-calling assistant) plus the shared LLM inference **router** other plugins consume. Ships no model — install at least one backend plugin below. Mandatory for every AI feature. |
-| [`ai-agent-local/`](ai-agent-local/)               | On-device `.gguf` inference backend for `ai-core` (bundled llama.cpp AAR). Registers as `local`; needs no network. |
-| [`ai-agent-gemini/`](ai-agent-gemini/)             | Google Gemini API inference backend for `ai-core`. Registers as `gemini`; needs an API key and network access. |
-| [`ai-agent-openai/`](ai-agent-openai/)             | OpenAI-compatible inference backend for `ai-core`. Registers as `openai`; talks to OpenAI by default, or to Ollama / LM Studio / OpenRouter / `llama-server` by changing one URL. |
-| [`ai-agent-mcp/`](ai-agent-mcp/)                   | Connects the Agent to Model Context Protocol servers, contributing their tools through `ai-core`. Needs network access; tools are off until enabled. |
-| [`flutter-template/`](flutter-template/)           | Adds Flutter starter project templates (Basic, BLoC, Provider, GetX, Riverpod) to the New Project screen. |
-| [`code-suggestions-plugin/`](code-suggestions-plugin/) | Inline ghost-text code completions powered by AI. |
-| [`speech-to-text-plugin/`](speech-to-text-plugin/) | Voice-to-code: converts speech to code with AI generation. |
-| [`vector-search-plugin/`](vector-search-plugin/) | Semantic code search using embeddings and vector similarity. |
-| [`get-ai-models/`](get-ai-models/)                 | Bottom-drawer catalog of curated, fully-open GGUF model files; downloads one to `/sdcard/Download` and verifies its SHA-256. |
-| [`project-to-template/`](project-to-template/)     | Converts the open Android project into a Code On The Go (.cgt) template and installs it into the IDE's New Project picker. |
-| [`pair-programming-plugin/`](pair-programming-plugin/) | Real-time pair programming across two devices on the same WiFi — host or join a session and sync edits and cursor presence live over the local network. |
+| [`plugins/APK-Analyzer/`](plugins/APK-Analyzer/) | Inspects the structure of an APK file inside the editor. |
+| [`plugins/Bookshelf/`](plugins/Bookshelf/) | Offline reference textbooks inside the in-app help. |
+| [`plugins/Client-Time-Tracker/`](plugins/Client-Time-Tracker/) | Tracks billable time for each project and creates invoices. |
+| [`plugins/Code-Suggestions/`](plugins/Code-Suggestions/) | Shows inline code completions as you type. |
+| [`plugins/Code-Together/`](plugins/Code-Together/) | Pair programming between two devices on the same network. |
+| [`plugins/Favorite-Snippets/`](plugins/Favorite-Snippets/) | Saves your own code snippets and inserts them in the editor. |
+| [`plugins/Flutter-Templates/`](plugins/Flutter-Templates/) | Adds five Flutter starter projects to the New Project screen. |
+| [`plugins/Get-AI-Models/`](plugins/Get-AI-Models/) | Downloads small language models for on-device AI addons. |
+| [`plugins/Icons-Repository/`](plugins/Icons-Repository/) | Adds vector icons to a project from inside the editor. |
+| [`plugins/Jetpack-Compose-Preview/`](plugins/Jetpack-Compose-Preview/) | Renders Compose preview functions on the device. |
+| [`plugins/Keystore-Generator/`](plugins/Keystore-Generator/) | Creates and manages app signing keystores on the device. |
+| [`plugins/Layout-Editor/`](plugins/Layout-Editor/) | Edits Android XML layouts by dragging views. |
+| [`plugins/Markdown-Previewer/`](plugins/Markdown-Previewer/) | Shows a live preview of Markdown and HTML files. |
+| [`plugins/NDK-Installer/`](plugins/NDK-Installer/) | Installs the NDK and CMake, and adds a native project template. |
+| [`plugins/Project-to-Template/`](plugins/Project-to-Template/) | Turns the open project into a reusable template. |
+| [`plugins/Python-Tools/`](plugins/Python-Tools/) | Adds Python and Flask project templates, and runs them. |
+| [`plugins/Rainbow-Brackets/`](plugins/Rainbow-Brackets/) | Colours brackets by depth so pairs are easy to see. |
+| [`plugins/Random-XKCD/`](plugins/Random-XKCD/) | Shows xkcd comics in the editor's bottom sheet. |
+| [`plugins/Sketch-to-UI/`](plugins/Sketch-to-UI/) | Turns a drawing or screenshot into an Android layout. |
+| [`plugins/Speech-to-Text/`](plugins/Speech-to-Text/) | Dictates code and text into the editor with your voice. |
+| [`plugins/Template-Manager/`](plugins/Template-Manager/) | Installs, removes, and browses project templates. |
+| [`plugins/Vector-Search/`](plugins/Vector-Search/) | Searches the project by meaning, not only by exact text. |
+| [`plugins/Voice-Alerts/`](plugins/Voice-Alerts/) | Plays a sound when a build finishes or fails. |
+
+> The `ai-*` addons and `cotg-ndk` are not listed yet. They stay at the repository root until their own work lands; see `tools/addons/skip.txt`.
+
 
 ## Building a plugin
 

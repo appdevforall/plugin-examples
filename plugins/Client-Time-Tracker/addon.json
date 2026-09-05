@@ -1,0 +1,15 @@
+{
+  "summary": "Tracks billable time for each project and creates invoices.",
+  "description": "Records how long you work on each project and turns those records into an invoice. Useful when you write code for clients from the device.",
+  "tags": [
+    "time",
+    "invoicing",
+    "productivity"
+  ],
+  "origin": "appdevforall",
+  "license": "AGPL-3.0-or-later",
+  "author": {
+    "name": "App Dev For All",
+    "url": "https://www.appdevforall.org"
+  }
+}

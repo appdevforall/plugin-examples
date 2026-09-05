@@ -1,0 +1,15 @@
+{
+  "summary": "Shows a live preview of Markdown and HTML files.",
+  "description": "Renders the Markdown or HTML file you are editing beside the source, and updates the preview as you type.",
+  "tags": [
+    "markdown",
+    "preview",
+    "docs"
+  ],
+  "origin": "appdevforall",
+  "license": "AGPL-3.0-or-later",
+  "author": {
+    "name": "App Dev For All",
+    "url": "https://www.appdevforall.org"
+  }
+}

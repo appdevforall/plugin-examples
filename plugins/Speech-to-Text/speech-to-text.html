@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Speech to Text</title>
+<style>
+  body {
+    background: #ffffff;
+    color: #000000;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+    margin: 0;
+    padding: 1.25rem;
+    max-width: 820px;
+  }
+  h1 { font-size: 1.6rem; margin: 0 0 0.75rem; }
+  h2 { font-size: 1.2rem; margin: 1.75rem 0 0.5rem; border-bottom: 1px solid #e0e0e0; padding-bottom: 0.2rem; }
+  code {
+    background: #f4f4f4;
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.9em;
+  }
+  ul { padding-left: 1.25rem; }
+  li { margin: 0.3rem 0; }
+  table { border-collapse: collapse; margin: 0.5rem 0; width: 100%; }
+  th, td { border: 1px solid #ddd; padding: 0.4rem 0.6rem; text-align: left; vertical-align: top; }
+  th { background: #f4f4f4; }
+  .note {
+    border-left: 3px solid #999;
+    padding: 0.25rem 0.75rem;
+    margin: 1rem 0;
+    background: #fafafa;
+  }
+</style>
+</head>
+<body>
+  <h1>Speech to Text Plugin</h1>
+
+  <h2>Executive overview</h2>
+  <p><b>Speech to Text</b> adds voice-to-code to the CodeOnTheGo editor. It
+  contributes a <b>Voice to Code</b> button to the editor toolbar: tap it, speak,
+  and the recognized text — or code generated from it — is inserted at the
+  cursor.</p>
+  <p>Recognition uses Android's built-in <code>SpeechRecognizer</code>
+  (on-device when the device supports it). Turning the transcript into code is
+  optional and is delegated to the companion <b>AI Core</b> plugin; if AI Core
+  isn't installed, the raw transcript is inserted instead.</p>
+
+  <h2>Core functionality</h2>
+  <ul>
+    <li><b>Voice to Code toolbar button</b> — enabled only while a file is open
+      in the editor.</li>
+    <li><b>Dynamic icon</b> — microphone (idle) → waves (recording) → spinner
+      (processing).</li>
+    <li><b>Speech recognition</b> via the Android platform recognizer, preferring
+      on-device recognition.</li>
+    <li><b>Optional code generation</b> — with AI Core installed, the transcript
+      is turned into code by the local model.</li>
+    <li><b>Insert at cursor</b> — the result is written into the active editor at
+      the caret.</li>
+  </ul>
+
+  <h2>Technical architecture</h2>
+  <table>
+    <tr><th>Piece</th><th>Role</th></tr>
+    <tr><td>Toolbar action (<code>UIExtension</code>)</td><td>Registers the
+      "Voice to Code" button and drives its dynamic icon via the recording
+      state.</td></tr>
+    <tr><td><code>SpeechRecognizer</code></td><td>Android platform speech
+      recognition, created and torn down per capture on the UI thread.</td></tr>
+    <tr><td><code>IdeEditorService</code></td><td>Reports the open file and
+      inserts the transcribed/generated text at the cursor.</td></tr>
+    <tr><td><code>LlmInferenceService</code> (AI Core)</td><td>Optional. Resolved
+      at runtime; converts the transcript into code using the local backend.</td></tr>
+  </table>
+  <p>The plugin contains no bundled model and no native code of its own —
+  recognition is provided by the platform and code generation by AI Core.</p>
+
+  <h2>Usage</h2>
+  <ol>
+    <li>(Optional) Install <b>AI Core</b> first and select a local
+      <code>.gguf</code> model in <b>AI Assistant → AI Settings</b> to enable
+      voice→code.</li>
+    <li>Install <b>Speech to Text</b> via the Plugin Manager and restart the
+      IDE.</li>
+    <li>Open a file, tap the <b>microphone</b> button in the editor toolbar, and
+      grant microphone permission on first use.</li>
+    <li>Speak; the recognized text (or generated code) is inserted at the
+      cursor.</li>
+  </ol>
+  <div class="note">
+    <b>Privacy:</b> microphone audio is handled by Android's recognizer, and any
+    code generation runs on AI Core's on-device model. The plugin itself makes no
+    network calls.
+  </div>
+
+  <h2>Key benefits</h2>
+  <ul>
+    <li><b>Hands-free editing</b> — dictate code or commands without typing.</li>
+    <li><b>Lightweight</b> — no bundled model or native libraries; reuses the
+      platform recognizer and (optionally) AI Core.</li>
+    <li><b>Graceful degradation</b> — works as plain transcription when AI Core
+      isn't present, and greys out when no file is open.</li>
+    <li><b>Clear feedback</b> — the toolbar icon reflects idle / recording /
+      processing state.</li>
+  </ul>
+</body>
+</html>

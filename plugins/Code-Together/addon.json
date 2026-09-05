@@ -1,0 +1,15 @@
+{
+  "summary": "Pair programming between two devices on the same network.",
+  "description": "Two people edit the same file at the same time, over WiFi, with live cursors. There is no server and nothing leaves the local network.",
+  "tags": [
+    "collaboration",
+    "pair-programming",
+    "network"
+  ],
+  "origin": "appdevforall",
+  "license": "AGPL-3.0-or-later",
+  "author": {
+    "name": "App Dev For All",
+    "url": "https://www.appdevforall.org"
+  }
+}

@@ -69,3 +69,32 @@ def test_a_missing_manifest_gives_an_empty_id(tmp_path):
     addon = tmp_path / "Empty"
     addon.mkdir()
     assert model.plugin_id(addon) == ""
+
+
+MANIFEST_MIN = """<manifest><application>
+    <meta-data
+        android:name="plugin.min_ide_version"
+        android:value="{v}" />
+</application></manifest>"""
+
+
+def make_min(tmp_path: Path, value: str) -> Path:
+    addon = tmp_path / "Some-Addon"
+    (addon / "src" / "main").mkdir(parents=True)
+    (addon / "src" / "main" / "AndroidManifest.xml").write_text(
+        MANIFEST_MIN.format(v=value))
+    return addon
+
+
+def test_a_real_minimum_is_used(tmp_path):
+    assert model.min_app_version(make_min(tmp_path, "26.17")) == "26.17"
+
+
+def test_the_legacy_placeholder_means_no_minimum(tmp_path):
+    assert model.min_app_version(make_min(tmp_path, "1.0.0")) == ""
+
+
+def test_a_missing_minimum_is_empty(tmp_path):
+    addon = tmp_path / "Bare"
+    addon.mkdir()
+    assert model.min_app_version(addon) == ""

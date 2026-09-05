@@ -13,7 +13,7 @@ Source for the {name} addon for Code On The Go.
 ## Build
 
     cd {directory}
-    ../gradlew assemblePlugin
+    {up}gradlew assemblePlugin
 
 The plugin file appears in `{directory}/build/plugin/`.
 
@@ -51,9 +51,10 @@ def _stage(root: Path, addon: Path, out: Path, licence: str) -> Path:
     files = tracked_files(root, addon)
     if not files:
         raise RuntimeError(f"{addon.name}: git tracks no file in this directory")
-    base = addon.relative_to(root).as_posix()
+    # Mirror the repository path exactly, so every "../" in a build file
+    # resolves inside the archive without any rewriting.
     for relative in files:
-        target = top / addon.name / relative[len(base) + 1:]
+        target = top / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(root / relative, target)
 
@@ -69,12 +70,14 @@ def _stage(root: Path, addon: Path, out: Path, licence: str) -> Path:
             shutil.copy2(root / name, top / name)
     shutil.copytree(root / "gradle" / "wrapper", top / "gradle" / "wrapper")
 
+    inside = addon.relative_to(root).as_posix()
     (top / "README.md").write_text(README.format(
-        name=model.display_name(addon.name), directory=addon.name, license=licence))
+        name=model.display_name(addon.name), directory=inside,
+        up="../" * len(Path(inside).parts), license=licence))
     return top
 
 
-def verify(top: Path, directory: str, jars: list[str]) -> None:
+def verify(top: Path, inside: str, jars: list[str]) -> None:
     problems = []
     for jar in jars:
         if not (top / "libs" / jar).exists():
@@ -84,8 +87,8 @@ def verify(top: Path, directory: str, jars: list[str]) -> None:
     if not (top / "gradle" / "wrapper" / "gradle-wrapper.properties").exists():
         problems.append("the wrapper properties file is missing")
     for name in ("build.gradle.kts", "settings.gradle.kts"):
-        if not (top / directory / name).exists():
-            problems.append(f"{directory}/{name} is missing")
+        if not (top / inside / name).exists():
+            problems.append(f"{inside}/{name} is missing")
     root = top.resolve()
     for path in top.rglob("*"):
         if path.name == "local.properties":
@@ -93,7 +96,7 @@ def verify(top: Path, directory: str, jars: list[str]) -> None:
         if not str(path.resolve()).startswith(str(root)):
             problems.append(f"{path} is outside the archive root")
     if problems:
-        raise RuntimeError(f"{directory}: " + "; ".join(problems))
+        raise RuntimeError(f"{inside}: " + "; ".join(problems))
 
 
 def build(root: Path, addon: Path, out: Path,
@@ -102,7 +105,7 @@ def build(root: Path, addon: Path, out: Path,
     if not jars:
         raise RuntimeError(f"{addon.name}: it references no shared jar")
     top = _stage(root, addon, out, licence)
-    verify(top, addon.name, jars)
+    verify(top, addon.relative_to(root).as_posix(), jars)
     archive = out / f"{top.name}.tar.gz"
     with tarfile.open(archive, "w:gz") as tar:
         tar.add(top, arcname=top.name)

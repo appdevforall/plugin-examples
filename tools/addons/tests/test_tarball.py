@@ -18,12 +18,12 @@ def make_repo(tmp_path: Path) -> Path:
     (tmp_path / "gradle" / "wrapper").mkdir(parents=True)
     (tmp_path / "gradle" / "wrapper" / "gradle-wrapper.properties").write_text("x")
 
-    addon = tmp_path / "Keystore-Generator"
+    addon = tmp_path / "plugins" / "Keystore-Generator"
     (addon / "src").mkdir(parents=True)
     (addon / "build.gradle.kts").write_text(
-        PREDICATE + '\ncompileOnly(files("../libs/plugin-api.jar"))\n')
+        PREDICATE + '\ncompileOnly(files("../../libs/plugin-api.jar"))\n')
     (addon / "settings.gradle.kts").write_text(
-        'classpath(files("../libs/gradle-plugin.jar"))\n')
+        'classpath(files("../../libs/gradle-plugin.jar"))\n')
     (addon / "src" / "Main.kt").write_text("fun main() {}")
     (addon / "local.properties").write_text("sdk.dir=/Users/someone/Android")
     (tmp_path / ".gitignore").write_text("local.properties\n")
@@ -31,6 +31,20 @@ def make_repo(tmp_path: Path) -> Path:
     subprocess.run(["git", "-C", str(tmp_path), "-c", "user.email=t@t",
                     "-c", "user.name=t", "commit", "-qm", "x"], check=True)
     return addon
+
+
+def test_the_archive_mirrors_the_repository_path(tmp_path):
+    addon = make_repo(tmp_path)
+    out = tmp_path / "dist"
+    out.mkdir()
+    archive = tarball.build(tmp_path, addon, out)
+    with tarfile.open(archive) as tar:
+        names = set(tar.getnames())
+    top = "keystore-generator-src"
+    # ../../libs from plugins/<Addon> must land on the archive's own libs/
+    assert f"{top}/plugins/Keystore-Generator/settings.gradle.kts" in names
+    assert f"{top}/libs/plugin-api.jar" in names
+    assert f"{top}/Keystore-Generator" not in names
 
 
 def test_finds_only_the_jars_the_addon_uses(tmp_path):
@@ -52,7 +66,7 @@ def test_archive_has_the_two_level_shape(tmp_path):
     assert f"{top}/libs/common.jar" not in names
     assert f"{top}/gradlew" in names
     assert f"{top}/gradle/wrapper/gradle-wrapper.properties" in names
-    assert f"{top}/Keystore-Generator/build.gradle.kts" in names
+    assert f"{top}/plugins/Keystore-Generator/build.gradle.kts" in names
     assert f"{top}/README.md" in names
 
 

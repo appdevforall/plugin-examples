@@ -1,0 +1,15 @@
+{
+  "summary": "Saves your own code snippets and inserts them in the editor.",
+  "description": "Keeps a personal library of code fragments. Save a block once, then insert it into any file from the editor.",
+  "tags": [
+    "snippets",
+    "editor",
+    "productivity"
+  ],
+  "origin": "appdevforall",
+  "license": "AGPL-3.0-or-later",
+  "author": {
+    "name": "App Dev For All",
+    "url": "https://www.appdevforall.org"
+  }
+}

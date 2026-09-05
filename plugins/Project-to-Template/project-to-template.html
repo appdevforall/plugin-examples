@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project to Template</title>
+<style>
+  :root {
+    --bg: #fdfdfd;
+    --fg: #1a1a1a;
+    --accent: #485D92;
+    --accent-light: #eaeefb;
+    --border: #d0d7de;
+    --code-bg: #f4f6f8;
+    --table-stripe: #f8fafb;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--fg);
+    background: var(--bg);
+    line-height: 1.6;
+    max-width: 52rem;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+  }
+  header { border-bottom: 3px solid var(--accent); padding-bottom: 1.2rem; margin-bottom: 2rem; }
+  header h1 { font-size: 2rem; color: var(--accent); }
+  header p.subtitle { color: #555; margin-top: 0.3rem; }
+  header .meta { font-size: 0.85rem; color: #777; margin-top: 0.5rem; }
+  nav { background: var(--accent-light); border: 1px solid var(--border); border-radius: 6px; padding: 1rem 1.5rem; margin-bottom: 2.5rem; }
+  nav h2 { font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); margin-bottom: 0.5rem; }
+  nav ol { padding-left: 1.3rem; }
+  nav li { margin: 0.25rem 0; }
+  nav a { color: var(--accent); text-decoration: none; }
+  nav a:hover { text-decoration: underline; }
+  section { margin-bottom: 2.5rem; }
+  h2 { font-size: 1.4rem; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; margin-bottom: 1rem; }
+  h3 { font-size: 1.1rem; margin: 1.2rem 0 0.5rem; }
+  p, li { margin-bottom: 0.5rem; }
+  ul, ol { padding-left: 1.4rem; }
+  code {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    background: var(--code-bg);
+    padding: 0.15em 0.35em;
+    border-radius: 3px;
+    font-size: 0.9em;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1rem 1.2rem;
+    overflow-x: auto;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    margin: 0.8rem 0 1rem;
+  }
+  pre code { background: none; padding: 0; }
+  table { width: 100%; border-collapse: collapse; margin: 0.8rem 0 1rem; font-size: 0.95rem; }
+  th, td { text-align: left; padding: 0.55rem 0.8rem; border: 1px solid var(--border); }
+  th { background: var(--accent-light); font-weight: 600; }
+  tr:nth-child(even) td { background: var(--table-stripe); }
+  .diagram {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1.2rem;
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 0.85rem;
+    line-height: 1.55;
+    overflow-x: auto;
+    white-space: pre;
+    margin: 0.8rem 0 1rem;
+  }
+  .callout {
+    background: var(--accent-light);
+    border-left: 4px solid var(--accent);
+    padding: 0.8rem 1rem;
+    border-radius: 0 6px 6px 0;
+    margin: 1rem 0;
+  }
+  .file-tree { list-style: none; padding-left: 0; font-family: monospace; font-size: 0.9rem; }
+  .file-tree ul { list-style: none; padding-left: 1.5rem; }
+  footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: 0.85rem; color: #777; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Project to Template Plugin</h1>
+  <p class="subtitle">Convert the open Android project into a reusable Code On The Go template</p>
+  <div class="meta">Version 1.0.0 &middot; Author: App Dev For All &middot; Package: <code>org.appdevforall.projecttotemplate</code></div>
+</header>
+
+<nav>
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#overview">Executive Overview</a></li>
+    <li><a href="#functionality">Core Functionality</a></li>
+    <li><a href="#architecture">Technical Architecture</a></li>
+    <li><a href="#integration">Integration Points</a></li>
+    <li><a href="#deployment">Deployment &amp; Usage</a></li>
+    <li><a href="#benefits">Key Benefits</a></li>
+    <li><a href="#license">License</a></li>
+  </ol>
+</nav>
+
+<!-- ================================================================ -->
+<section id="overview">
+  <h2>1. Executive Overview</h2>
+  <p>
+    Project to Template converts the Android project currently open in Code On
+    The Go into a reusable project template &mdash; a <code>.cgt</code> bundle
+    &mdash; and can install it directly into the New Project template picker,
+    entirely from inside the IDE. It adds a <strong>Project to Template</strong>
+    item to the sidebar (under <em>tools</em>); tapping it opens a tab that
+    drives the conversion.
+  </p>
+  <p>
+    The original project is never modified. The plugin copies it into a sibling
+    <code>&lt;project&gt;-cgt</code> directory and templatizes the copy,
+    replacing concrete values (Gradle/AGP/Kotlin versions, package name, app
+    name, SDK levels, Java compatibility levels) with Pebble tokens of the form
+    <code>${{ TOKEN }}</code>, then writes the template metadata and zips the
+    result.
+  </p>
+  <p>
+    The substitution engine (<code>Templatizer.kt</code>) is pure
+    <code>java.io.File</code> logic with no dependency on the plugin API, so it
+    is easy to reason about and test in isolation. The plugin layer adds the
+    sidebar entry, the editor tab UI, and three-tier in-IDE help. It declares
+    <code>filesystem.read</code>, <code>filesystem.write</code>, and
+    <code>project.structure</code>, and does not touch the network.
+  </p>
+</section>
+
+<!-- ================================================================ -->
+<section id="functionality">
+  <h2>2. Core Functionality</h2>
+
+  <h3>The conversion tab</h3>
+  <p>
+    The tab presents a small form: a read-only <strong>Project</strong> field
+    (the project currently open, via <code>IdeProjectService.getCurrentProject()</code>),
+    a <strong>Template name</strong> input, <strong>Dry run</strong> and
+    <strong>Skip cleanup</strong> checkboxes, a <strong>Convert to Template</strong>
+    button, a progress spinner, a status line, and a monospace live log. The
+    Convert button stays disabled until a project is open and a template name is
+    entered.
+  </p>
+
+  <h3>The pipeline</h3>
+  <p>Each run performs these steps:</p>
+  <ol>
+    <li>Create the output directory <code>&lt;project&gt;-cgt</code> next to the project.</li>
+    <li>Copy the project into a subdirectory named after the template, skipping
+        <code>.git</code>, <code>.gradle</code>, <code>.cg</code>,
+        <code>.idea</code>, <code>.claude</code>, <code>.androidide</code>, and
+        <code>release.properties</code>.</li>
+    <li>Templatize the copy (see the substitution table below), saving each
+        edited file with a <code>.peb</code> suffix and removing the original.</li>
+    <li>Unless <em>Skip cleanup</em> is set: remove <code>build/</code>
+        directories, delete keystores (<code>*.jks</code>, <code>*.keystore</code>,
+        <code>*.p12</code>), and flag files that may contain machine-specific or
+        personal information for manual review.</li>
+    <li>Write <code>templates.json</code> and <code>template/template.json</code>,
+        and a placeholder <code>template/thumb.png</code>.</li>
+    <li>Zip the bundle into <code>&lt;template name&gt;.cgt</code>.</li>
+  </ol>
+
+  <h3>Substitutions</h3>
+  <table>
+    <thead><tr><th>File</th><th>Tokenized value(s)</th></tr></thead>
+    <tbody>
+      <tr><td><code>gradle/wrapper/gradle-wrapper.properties</code></td><td><code>GRADLE_VERSION</code></td></tr>
+      <tr><td><code>settings.gradle(.kts)</code></td><td><code>rootProject.name</code> &rarr; <code>APP_NAME</code></td></tr>
+      <tr><td>root <code>build.gradle(.kts)</code></td><td>AGP <code>apply false</code> version &rarr; <code>AGP_VERSION</code></td></tr>
+      <tr><td>module <code>build.gradle(.kts)</code></td><td><code>AGP_VERSION</code>, <code>KOTLIN_VERSION</code>, <code>PACKAGE_NAME</code>, <code>COMPILE_SDK</code>, <code>MIN_SDK</code>, <code>TARGET_SDK</code>, Java source/target compat, <code>JAVA_TARGET</code></td></tr>
+      <tr><td><code>strings.xml</code></td><td><code>app_name</code> &rarr; <code>APP_NAME</code></td></tr>
+      <tr><td><code>*.java</code> / <code>*.kt</code></td><td><code>package</code>/<code>import</code> &rarr; <code>PACKAGE_NAME</code>; source tree flattened under a single <code>PACKAGE_NAME</code> directory</td></tr>
+    </tbody>
+  </table>
+  <p>
+    For mixed Java + Kotlin projects, the Kotlin plugin declaration is wrapped in
+    a <code>{% if LANGUAGE == 'kotlin' %}</code> conditional so the generated
+    template can produce either a Java-only or Kotlin project.
+  </p>
+
+  <h3>Dry run</h3>
+  <p>
+    With <strong>Dry run</strong> checked, the entire pipeline runs against a
+    disposable temp copy and reports what it <em>would</em> do &mdash; no output
+    directory, <code>.cgt</code>, or deletions are produced. This is the safe way
+    to preview substitutions on an unfamiliar project.
+  </p>
+
+  <h3>Install</h3>
+  <p>
+    After a real (non-dry) conversion, an <strong>Install Template</strong>
+    button appears below the log. Tapping it calls
+    <code>IdeTemplateService.registerTemplate(cgtFile)</code>, so the template
+    appears in the New Project picker immediately.
+  </p>
+
+  <h3>The Pebble whitespace quirk</h3>
+  <p>
+    A segment ending in a Pebble token must be followed by whitespace, or the
+    parser consumes the next character (a newline, quote, semicolon, or dot).
+    The pipeline inserts a sacrificial space after every inserted token &mdash;
+    after the closing quote when the token sits directly against one &mdash; so
+    the following character survives. This is a documented gotcha for
+    Pebble-based templates in this repository.
+  </p>
+</section>
+
+<!-- ================================================================ -->
+<section id="architecture">
+  <h2>3. Technical Architecture</h2>
+
+  <h3>File layout</h3>
+  <ul class="file-tree">
+    <li>project-to-template/
+      <ul>
+        <li>build.gradle.kts &mdash; applies the plugin-builder; <code>compileOnly ../libs/plugin-api.jar</code></li>
+        <li>settings.gradle.kts &mdash; buildscript classpath on <code>../libs/*.jar</code></li>
+        <li>src/main/
+          <ul>
+            <li>AndroidManifest.xml &mdash; plugin identity metadata</li>
+            <li>assets/
+              <ul>
+                <li>docs/index.html &mdash; Tier 3 offline help page</li>
+                <li>icon_day.png / icon_night.png &mdash; Plugin Manager icons</li>
+              </ul>
+            </li>
+            <li>kotlin/org/appdevforall/projecttotemplate/
+              <ul>
+                <li><strong>ProjectToTemplatePlugin.kt</strong> &mdash; lifecycle, sidebar + tab registration, tooltip wiring</li>
+                <li><strong>Templatizer.kt</strong> &mdash; the substitution pipeline and <code>.cgt</code> writer/zipper (no plugin-API dependency)</li>
+                <li>fragments/<strong>ProjectToTemplateFragment.kt</strong> &mdash; the tab UI, background execution, live log, install flow</li>
+              </ul>
+            </li>
+            <li>res/ &mdash; layout, drawable icon, colors (day/night), styles, strings</li>
+          </ul>
+        </li>
+      </ul>
+    </li>
+  </ul>
+
+  <h3>Class overview</h3>
+  <table>
+    <thead><tr><th>Class</th><th>Role</th><th>Key interfaces</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>ProjectToTemplatePlugin</code></td>
+        <td>Entry point. Lifecycle, registers the sidebar item and the editor tab, contributes tooltip entries + the Tier 3 docs path.</td>
+        <td><code>IPlugin</code>, <code>UIExtension</code>, <code>EditorTabExtension</code>, <code>DocumentationExtension</code></td>
+      </tr>
+      <tr>
+        <td><code>ProjectToTemplateFragment</code></td>
+        <td>The tab body: form, background coroutine, streaming log, and the install-template flow.</td>
+        <td>extends <code>Fragment</code></td>
+      </tr>
+      <tr>
+        <td><code>Templatizer</code> (file)</td>
+        <td>The whole substitution/cleanup/bundle pipeline as pure file I/O. Testable in isolation.</td>
+        <td>&mdash;</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Data flow</h3>
+  <div class="diagram">
+  user taps "Convert to Template"
+        |
+        v
+  ProjectToTemplateFragment.onConvertClicked()
+        |  reads IdeProjectService.getCurrentProject()
+        |  Dispatchers.IO
+        v
+  createTemplateBundle(projectDir, module, templateName, ...)
+   ├─ copyProject()          copy into &lt;project&gt;-cgt/&lt;name&gt;
+   ├─ runPipeline()          tokenize gradle / sources / strings
+   ├─ cleanup                remove build/, keystores; flag secrets
+   ├─ write templates.json, template/template.json, thumb.png
+   └─ zipDirectory()         -> &lt;name&gt;.cgt
+        |
+        | streams [OK]/[SKIP]/[REMOVED]/[REVIEW] lines to the log
+        v
+  "Install Template" button
+        |
+        v
+  IdeTemplateService.registerTemplate(cgtFile)</div>
+
+  <h3>Build configuration</h3>
+  <table>
+    <tr><th>Setting</th><th>Value</th></tr>
+    <tr><td>Gradle plugin</td><td><code>com.itsaky.androidide.plugins.build</code></td></tr>
+    <tr><td>Compile / Target SDK</td><td>34</td></tr>
+    <tr><td>Min SDK</td><td>26</td></tr>
+    <tr><td>Java / Kotlin target</td><td>17</td></tr>
+    <tr><td>ProGuard</td><td>Disabled (<code>isMinifyEnabled = false</code>)</td></tr>
+    <tr><td>Plugin API</td><td><code>compileOnly</code> via <code>../libs/plugin-api.jar</code> (shared repo-root jar)</td></tr>
+    <tr><td>Output format</td><td><code>.cgp</code> package</td></tr>
+  </table>
+</section>
+
+<!-- ================================================================ -->
+<section id="integration">
+  <h2>4. Integration Points</h2>
+  <p>
+    The plugin touches the host IDE through four extension interfaces and three
+    host services.
+  </p>
+
+  <h3>4.1 Lifecycle (<code>IPlugin</code>)</h3>
+  <p>
+    <code>initialize()</code> stores the <code>PluginContext</code> inside a
+    <code>try/catch</code> so a setup exception can't crash the host;
+    <code>activate()</code>, <code>deactivate()</code>, and <code>dispose()</code>
+    log transitions. There is no long-lived per-project state to clean up.
+  </p>
+
+  <h3>4.2 Sidebar + editor tab (<code>UIExtension</code>, <code>EditorTabExtension</code>)</h3>
+  <p>
+    <code>getSideMenuItems()</code> contributes one <code>NavigationItem</code>
+    (group <code>tools</code>) whose action selects the plugin's editor tab via
+    <code>IdeEditorTabService.selectPluginTab()</code>.
+    <code>getMainEditorTabs()</code> contributes the <code>EditorTabItem</code>
+    that hosts <code>ProjectToTemplateFragment</code>. Both carry a tooltip so
+    the in-IDE help is reachable by long-press.
+  </p>
+
+  <h3>4.3 Current project + template registration (host services)</h3>
+  <table>
+    <thead><tr><th>Service</th><th>Use</th></tr></thead>
+    <tbody>
+      <tr><td><code>IdeProjectService</code></td><td>Resolve the currently open project and its modules.</td></tr>
+      <tr><td><code>IdeEditorTabService</code></td><td>Select/open the plugin's editor tab from the sidebar.</td></tr>
+      <tr><td><code>IdeTemplateService</code></td><td>Register the produced <code>.cgt</code> so it appears in the template picker.</td></tr>
+    </tbody>
+  </table>
+  <p>
+    Services are obtained through <code>PluginFragmentHelper.getServiceRegistry(PLUGIN_ID)</code>
+    from the fragment and through <code>context.services</code> from the plugin
+    class.
+  </p>
+
+  <h3>4.4 Three-tier docs (<code>DocumentationExtension</code>)</h3>
+  <p>
+    <code>getTooltipCategory()</code> returns
+    <code>"plugin_org.appdevforall.projecttotemplate"</code> &mdash; the literal
+    <code>"plugin_"</code> prefix plus the full plugin id, which the host both
+    registers under and looks up by. <code>getTooltipEntries()</code> returns a
+    single entry (Tier 1 summary + Tier 2 HTML detail) with a button that opens
+    the Tier 3 page, and <code>getTier3DocsAssetPath()</code> returns
+    <code>"docs"</code> so the host indexes and serves everything under
+    <code>src/main/assets/docs/</code>.
+  </p>
+
+  <h3>4.5 Plugin-scoped LayoutInflater</h3>
+  <p>
+    <code>ProjectToTemplateFragment.onGetLayoutInflater</code> wraps the inflater
+    with <code>PluginFragmentHelper.getPluginInflater(PLUGIN_ID, parent)</code>,
+    so <code>R.layout.*</code> resolves against the plugin's own APK rather than
+    the host's resources.
+  </p>
+
+  <h3>4.6 Permissions</h3>
+  <pre><code>&lt;meta-data android:name="plugin.permissions"
+           android:value="filesystem.read,filesystem.write,project.structure" /&gt;</code></pre>
+  <p>
+    The plugin reads the open project, walks its module structure, and writes the
+    template bundle next to it. It performs no network access.
+  </p>
+</section>
+
+<!-- ================================================================ -->
+<section id="deployment">
+  <h2>5. Deployment &amp; Usage</h2>
+
+  <h3>Building</h3>
+  <pre><code>cd project-to-template
+../gradlew assemblePlugin</code></pre>
+  <p>
+    Produces <code>project-to-template/build/plugin/project-to-template.cgp</code>.
+    The plugin uses the shared repo-root Gradle wrapper and
+    <code>../libs/*.jar</code> &mdash; it does not bundle its own copies. A
+    <code>local.properties</code> with <code>sdk.dir=&lt;Android SDK path&gt;</code>
+    is required.
+  </p>
+
+  <h3>Installation</h3>
+  <ol>
+    <li>Open <em>Preferences &rarr; Plugin Manager &rarr; +</em>.</li>
+    <li>Select the <code>project-to-template.cgp</code> file.</li>
+    <li>The IDE discovers <code>ProjectToTemplatePlugin</code> via the manifest
+        metadata and activates it.</li>
+    <li>A <strong>Project to Template</strong> item appears in the sidebar under
+        <em>tools</em>.</li>
+  </ol>
+
+  <h3>Using it</h3>
+  <ol>
+    <li>Open the project you want to templatize.</li>
+    <li>Tap <strong>Project to Template</strong> in the sidebar.</li>
+    <li>Enter a template name; optionally check <em>Dry run</em> first.</li>
+    <li>Tap <strong>Convert to Template</strong> and read the log.</li>
+    <li>Tap <strong>Install Template</strong> to register it with the IDE.</li>
+    <li>Long-press the sidebar item or tab for the three-tier help.</li>
+  </ol>
+
+  <h3>Runtime requirements</h3>
+  <table>
+    <tr><th>Requirement</th><th>Value</th></tr>
+    <tr><td>Min Android version</td><td>API 26 (Android 8)</td></tr>
+    <tr><td>Min IDE version</td><td>1.0.0</td></tr>
+    <tr><td>Permissions</td><td><code>filesystem.read</code>, <code>filesystem.write</code>, <code>project.structure</code></td></tr>
+    <tr><td>Network access</td><td>None</td></tr>
+  </table>
+</section>
+
+<!-- ================================================================ -->
+<section id="benefits">
+  <h2>6. Key Benefits</h2>
+  <ul>
+    <li><strong>No hand-editing.</strong> Turns a working project into a
+        parameterized template automatically, including the fiddly
+        package-directory flattening and Pebble whitespace handling.</li>
+    <li><strong>Non-destructive.</strong> Works on a copy; the original project
+        is never touched. A dry run previews everything with zero writes.</li>
+    <li><strong>End-to-end inside the IDE.</strong> Convert and install without
+        leaving Code On The Go &mdash; the result lands directly in the New
+        Project picker.</li>
+    <li><strong>Safety-aware cleanup.</strong> Removes build output and
+        keystores, and flags secret-bearing files (<code>local.properties</code>,
+        <code>google-services.json</code>, &hellip;) for manual review before
+        the template is shared.</li>
+    <li><strong>Testable core.</strong> The substitution engine is pure file
+        I/O with no plugin-API coupling.</li>
+  </ul>
+</section>
+
+<!-- ================================================================ -->
+<section id="license">
+  <h2>7. License</h2>
+  <p>
+    The plugin's source code is licensed per the surrounding
+    <code>plugin-examples</code> repository (see <code>LICENSE</code> at the repo
+    root).
+  </p>
+</section>
+
+<footer>
+  Project to Template Plugin Documentation &middot; Version 1.0.0 &middot; org.appdevforall.projecttotemplate
+</footer>
+
+</body>
+</html>

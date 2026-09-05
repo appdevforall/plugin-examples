@@ -2,6 +2,7 @@ import re
 from pathlib import Path
 
 DEFAULT_VERSION = "1.0.0"
+RELEASE_VERSION = re.compile(r"^[0-9]{2}\.[0-9]{2}$")
 
 SMALL_WORDS = {"a", "an", "and", "as", "at", "but", "by", "for",
                "in", "of", "on", "or", "the", "to", "up"}
@@ -54,3 +55,14 @@ def version(addon: Path) -> str:
     if declared and not declared.startswith("${"):
         return declared
     return DEFAULT_VERSION
+
+
+def min_app_version(addon: Path) -> str:
+    """The lowest Code On The Go release this addon declares.
+
+    The app's release version is YY.ww. Thirteen addons still carry the
+    legacy "1.0.0" placeholder, which states no real minimum, so it is
+    reported as no minimum rather than invented.
+    """
+    declared = manifest_value(addon, "plugin.min_ide_version")
+    return declared if RELEASE_VERSION.match(declared) else ""

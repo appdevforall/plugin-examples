@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository purpose
 
-Reference plugins for [CodeOnTheGo](https://github.com/appdevforall/CodeOnTheGo) (CoGo / CotG). Each top-level folder (`Beepy/`, `apk-viewer/`, `markdown-preview/`, `keystore-generator/`, `snippets/`, `random-xkcd/`, `icons-repository/`, `ndk-installer-plugin/`, `sketch-to-ui-plugin/`) is an independent Gradle project that builds a `.cgp` plugin installable via the CoGo Plugin Manager. They're held together only by the shared `libs/` jars at the repo root.
+Reference plugins for [CodeOnTheGo](https://github.com/appdevforall/CodeOnTheGo) (CoGo / CotG). Addons live under `plugins/`, with `templates/`, `snippets/`, and `code-actions/` reserved beside it. Each addon directory is an independent Gradle project that builds a `.cgp` installable via the Plugin Manager. They are held together only by the shared `libs/` jars at the repo root, which an addon references as `../../libs/`.
 
 ## Common commands
 
@@ -37,7 +37,7 @@ The script clones CoGo into `.cache/CodeOnTheGo/` on first run, rebuilds both ja
 
 ### `libs/` is the load-bearing piece
 
-Every plugin depends on two jars in the repo-root `libs/`:
+`libs/` holds **five** jars. Every plugin depends on at least these two:
 
 - **`plugin-api.jar`** — the IDE-side API surface (`IPlugin`, `PluginContext`, `BuildStatusListener`, `IdeBuildService`, etc.). Each plugin uses it as `compileOnly` (provided by the IDE at runtime) AND as `buildscript classpath` so the Gradle plugin can resolve symbols at configuration time.
 - **`gradle-plugin.jar`** — the Gradle plugin with id `com.itsaky.androidide.plugins.build`, applied by every plugin. It's the output of CoGo's `plugin-api/plugin-builder/` module (separate from CoGo's `gradle-plugin/` module, which is unrelated despite the name). It packages the compiled Android library into a `.cgp`.
@@ -51,7 +51,7 @@ Both jars are referenced via `../libs/*.jar`. **Always use the repo-root `libs/`
 A plugin is an Android *application* module (despite installing as a library) with:
 
 1. **`build.gradle.kts`** applies `com.android.application`, `org.jetbrains.kotlin.android`, and `com.itsaky.androidide.plugins.build`. Configures `pluginBuilder { pluginName = "..." }`. Uses `compileOnly(files("../libs/plugin-api.jar"))` — never `implementation`.
-2. **`settings.gradle.kts`** declares the two jars on the buildscript classpath plus AGP and Kotlin.
+2. **`settings.gradle.kts`** declares the jars it needs on the buildscript classpath plus AGP and Kotlin.
 3. **`src/main/AndroidManifest.xml`** declares plugin identity as `<meta-data>` entries on `<application>`: `plugin.id`, `plugin.name`, `plugin.version` (resolved from `${pluginVersion}`), `plugin.description`, `plugin.author`, `plugin.main_class`, `plugin.min_ide_version`, and optional `plugin.permissions`.
 4. **Main class** implements `com.itsaky.androidide.plugins.IPlugin`. Lifecycle: `initialize(PluginContext) → activate() → deactivate() → dispose()`. Services are obtained via `context.services.get(SomeService::class.java)` (e.g. `IdeBuildService` for build hooks). Android `Context` is `context.androidContext`.
 
@@ -114,7 +114,7 @@ If device verification isn't possible in-session, say so explicitly rather than 
 1. Copy `random-xkcd/` — it's the canonical starting template (small but complete, includes the in-IDE help HTML pattern that submissions are expected to follow).
 2. Update `settings.gradle.kts` `rootProject.name`, `build.gradle.kts` `pluginBuilder { pluginName }` + `android { namespace, applicationId }`, and `src/main/AndroidManifest.xml` (`plugin.id`, `plugin.name`, `plugin.main_class`).
 3. Add a row to the README's Examples table.
-4. If your plugin should ship via the website, add it to the `MAP` array in `.github/workflows/update-libs.yml` so the filename mapping picks it up. (`.github/workflows/build-plugins.yml` needs no change — it auto-discovers plugins by scanning `*/build.gradle.kts` for the plugin-builder Gradle plugin.)
+4. Nothing else. Publishing is automatic: `addons discover` finds any directory whose `build.gradle.kts` applies the plugin-builder, and the name, filenames, and URLs all derive from the directory name. The `MAP` array this file used to describe was deleted in #66 and no longer exists.
 
 ## Plugin review skill
 

@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Get AI Models</title>
+    <style>
+        body {
+            background: #ffffff;
+            color: #000000;
+            font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            font-size: 16px;
+            line-height: 1.6;
+            margin: 0 auto;
+            max-width: 900px;
+            padding: 28px 22px 64px;
+        }
+        h1 { font-size: 28px; margin: 0 0 6px; }
+        h2 { font-size: 21px; margin: 34px 0 10px; border-bottom: 2px solid #006c4c; padding-bottom: 5px; }
+        h3 { font-size: 17px; margin: 22px 0 6px; }
+        p, li, td, th { color: #000000; }
+        .subtitle { color: #33413a; font-size: 17px; margin: 0 0 20px; }
+        code { background: #eef2ef; border-radius: 3px; padding: 1px 5px; font-size: 14px; }
+        pre { background: #f4f6f4; border: 1px solid #d8ded9; border-radius: 5px; padding: 10px 12px; overflow-x: auto; font-size: 14px; }
+        table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 14px; display: block; overflow-x: auto; }
+        th, td { border: 1px solid #c9d2cb; padding: 7px 9px; text-align: left; vertical-align: top; }
+        th { background: #eef2ef; }
+        .note { background: #f4f8f5; border-left: 4px solid #006c4c; padding: 12px 14px; margin: 16px 0; }
+        ul.tight li, ol.tight li { margin-bottom: 5px; }
+        .scope-out { background: #fdf5f4; border-left: 4px solid #ba1a1a; padding: 12px 14px; margin: 16px 0; }
+    </style>
+</head>
+<body>
+
+<h1>Get AI Models</h1>
+<p class="subtitle">A Code On The Go plugin that adds a "Get AI Models" tab to the project editor's
+bottom drawer, listing a curated catalog of small GGUF language-model files and downloading them to
+the device with a SHA-256 gate.</p>
+
+<h2>Executive overview</h2>
+<p>Running a language model locally on an Android device starts with getting a model file onto the
+device. Doing that by hand means finding a trustworthy GGUF upload, judging whether its licence
+actually permits use, picking a quantization, downloading several gigabytes over a browser, and
+hoping the bytes arrived intact. That is a poor first experience, and it is the step where a user
+most easily ends up with an unusable file or a licence they are not allowed to rely on.</p>
+
+<p>This plugin removes that work. It ships a static, curated catalog of model files, each one
+screened against an explicit checklist - fully open licence, instruction-tuned, a real chat template,
+a single-file download from a reputable uploader with the checksum pinned to a specific upload
+revision, and at least a 16k-token context window - with any waiver recorded per entry. One tap
+downloads the file through
+Android's own download manager, and the plugin verifies its SHA-256 before letting the user keep
+it. A file that fails verification is deleted rather than left to fail mysteriously later.</p>
+
+<div class="note">
+    <b>Scope: download only.</b> Loading and running a model is the job of a separate AI plugin
+    built around llama.cpp. This plugin fetches and verifies files; it never loads one.
+</div>
+
+<h2>Core functionality</h2>
+
+<h3>The catalog</h3>
+<p>A static JSON asset bundled inside the plugin. There is no remote or updatable catalog - a
+revised model list ships as a new plugin version, which keeps the checksums, the URLs, and the
+descriptions versioned together as one reviewed artefact.</p>
+<p>Granularity is <b>one row per (model, quantization) file</b>, not per model, because the two
+choices cannot be judged separately: a 4-bit build of a larger model and an 8-bit build of a smaller
+one are genuinely different products. Each entry carries a name, quantization, parameter count,
+exact on-disk byte size, a strengths-and-weaknesses paragraph, the direct <code>.gguf</code> URL, a
+SHA-256, a minimum-RAM figure, and the publisher.</p>
+<p>What ships in version 1.0.0:</p>
+<table>
+    <tr>
+        <th>Model</th><th>Quant</th><th>Params</th><th>On disk</th><th>Context</th>
+        <th>Licence</th><th>Publisher</th>
+    </tr>
+    <tr>
+        <td>Qwen2.5 0.5B (base)</td>
+        <td><code>Q4_K_M</code></td>
+        <td>0.5B</td>
+        <td>0.37 GB</td>
+        <td>32k</td>
+        <td>apache-2.0</td>
+        <td>QuantFactory</td>
+    </tr>
+    <tr>
+        <td>Qwen3 0.6B</td>
+        <td><code>Q8_0</code></td>
+        <td>0.6B</td>
+        <td>0.60 GB</td>
+        <td>40k</td>
+        <td>apache-2.0</td>
+        <td>Qwen (Alibaba Cloud)</td>
+    </tr>
+    <tr>
+        <td>Qwen3.5 0.8B</td>
+        <td><code>Q4_K_M</code></td>
+        <td>0.8B</td>
+        <td>0.50 GB</td>
+        <td>256k</td>
+        <td>apache-2.0</td>
+        <td>unsloth</td>
+    </tr>
+    <tr>
+        <td>Llama 3.2 1B Instruct</td>
+        <td><code>Q4_K_M</code></td>
+        <td>1B</td>
+        <td>0.75 GB</td>
+        <td>128k</td>
+        <td>llama3.2</td>
+        <td>unsloth</td>
+    </tr>
+    <tr>
+        <td>SmolLM2 360M Instruct</td>
+        <td><code>Q8_0</code></td>
+        <td>360M</td>
+        <td>0.36 GB</td>
+        <td>8k</td>
+        <td>apache-2.0</td>
+        <td>Hugging Face TB</td>
+    </tr>
+    <tr>
+        <td>H2O Danube3 500M (base)</td>
+        <td><code>Q4_K_M</code></td>
+        <td>500M</td>
+        <td>0.30 GB</td>
+        <td>8k</td>
+        <td>apache-2.0</td>
+        <td>mradermacher</td>
+    </tr>
+</table>
+<p>Quantization is deliberately not restricted: <code>Q4_K_M</code> and <code>Q8_0</code> both appear
+because the gates are about behaviour, not about a preferred format.</p>
+<p><b>This list is a maintainer override, not a gate-derived set.</b> Five entries are Apache-2.0;
+Llama 3.2 1B is under the Llama 3.2 Community Licence, whose upstream repo is also access-gated. Two
+entries are pretrained <i>base</i> models with no chat template, and two have an 8k context window.
+The licence and context gates are consequently no longer enforced in code - see
+<code>docs/CURATION.md</code> for the per-entry waiver record.</p>
+
+<h3>Admission gates</h3>
+<p>Curation is acceptance-criteria-first. A candidate file earns a row only by passing all of:</p>
+<ol class="tight">
+    <li>Instruction-tuned, not a base model.</li>
+    <li>Fully open licence with no restrictions, verified on the base model <i>and</i> on the GGUF
+    re-uploader's repository.</li>
+    <li>The exact file loads and generates coherent output in our llama.cpp-wrapper build.</li>
+    <li>It passes a fixed tool-calling evaluation at 80% or better.</li>
+    <li>A valid chat template, embedded in or documented for the GGUF.</li>
+    <li>A single-file download from a reputable uploader, SHA-256 pinned to a specific revision.</li>
+    <li>A context window of at least 16k tokens.</li>
+</ol>
+<p>Gates 1, 2, 5, 6 and 7 are verifiable from published metadata and are recorded per entry in
+<code>docs/CURATION.md</code>; three of them (single-file, open licence, 16k context) are also
+asserted by a unit test that reads the shipped catalog. Gates 3 and 4 are behavioural and are
+proven by a repeatable admission test that runs the candidate through the AI plugin - that harness
+is downstream work, so the shipped catalog is the set of candidates that clear every statically
+checkable gate. A runtime budget (peak RAM, tokens per second) is deliberately not a gate yet.</p>
+
+<h3>Downloading and verification</h3>
+<ul class="tight">
+    <li><b>No connectivity</b> blocks the download with a message; nothing is queued.</li>
+    <li><b>A metered connection</b> warns first, showing the file size, with proceed and cancel.
+    A download that starts on an unmetered link is queued with
+    <code>setAllowedOverMetered(false)</code>, so dropping to cellular pauses the transfer rather
+    than silently spending the user's data allowance.</li>
+    <li><b>Transfer</b> is Android's <code>DownloadManager</code>, so progress is shown in the
+    system notification - and, because that notification is dismissible, on the row as well: the
+    Download button is replaced by a <b>Cancel</b> control whose background is the progress fill,
+    with byte counts in the status line. There is still no separate progress-bar widget, and
+    cancelling discards the partial file.</li>
+    <li><b>A stalled transfer is named, not hidden.</b> Pending, running and each paused reason
+    (waiting for Wi-Fi, no connection, retrying) render distinctly, so a download paused indefinitely
+    cannot masquerade as one making progress.</li>
+    <li><b>Destination</b> is always <code>/sdcard/Download</code>.</li>
+    <li><b>SHA-256 is a hard gate.</b> On completion the file is streamed and hashed. A match keeps
+    it; a mismatch deletes it and offers a re-download.</li>
+</ul>
+
+<h3>Reporting an in-flight transfer</h3>
+<p>The ticket specifies progress in the system notification and no in-app progress bar. That holds
+only while the notification exists - and the user can swipe it away, after which the row was the sole
+remaining signal and said nothing useful. Worse, <code>STATUS_PAUSED</code> originally shared a silent
+branch with <code>RUNNING</code>, so a download parked indefinitely waiting for Wi-Fi looked identical
+to one downloading normally.</p>
+<p>The chosen mitigation avoids adding a separate progress widget by making the Cancel control its
+own indicator: a <code>&lt;clip&gt;</code> drawable behind the label, driven by
+<code>setLevel(0..10000)</code>, so no measured width or layout pass is needed. The status line
+carries the numbers and the pause reason. When <code>DownloadManager</code> reports an unknown total
+size, the catalogued byte count is used as the denominator - it is the figure the file will be
+verified against anyway.</p>
+
+<h3>Deleting a downloaded file</h3>
+<p>An expanded row backed by a persisted record offers a destructive <b>Delete file</b> action behind
+a confirmation that names the file and its full path. The safety rule is narrow and load-bearing: it
+deletes <b>only the recorded absolute path</b> - a file this plugin wrote and hashed - and never a
+path composed from the catalogued file name, so a same-named file the user placed in Downloads is
+never a candidate. That is also what keeps the feature clear of the ticket's "handling pre-existing
+files" exclusion.</p>
+<p>The record is dropped only once the file is actually gone, so a failed delete leaves the row
+asserting what is still true. A delete is refused while a verification is hashing, since removing the
+file mid-stream would surface as a confusing read error. Two limits are documented rather than worked
+around: space is not reclaimed while another plugin holds the file mapped, and the system Downloads
+listing can lag until Android rescans.</p>
+
+<h3>The tab UI</h3>
+<p>A compact row per file - name plus a <code>parameters &middot; quantization &middot; size</code>
+spec line - with tap-to-expand detail showing the strengths-and-weaknesses paragraph, the publisher,
+the minimum RAM, and the licence and context window. Minimum RAM is display-only; the device's
+memory is never read, so the user is informed rather than gated.</p>
+
+<div class="scope-out">
+    <b>Explicitly out of scope:</b> running or loading models; device-RAM gating; handling
+    user-supplied checksums; in-app progress UI; a remote catalog.
+    <br><br>
+    <b>Two approved deviations</b>, both requested by the ticket owner during review rather than
+    chosen by the author:
+    <br><br>
+    <b>1. A minimal model registry.</b> The ticket excludes any "installed" state or model registry.
+    One is present, because without it a verified <code>Downloaded</code> badge vanished on every IDE
+    restart while a 4 GB file sat on disk - and simply keeping the badge would have made it lie once
+    the user deleted that file. What is stored is only "this entry's checksum passed, for the file at
+    this path and length", revalidated on every activation. It never blocks a download, and the one
+    thing it manages is deleting a file it downloaded itself, on request. The neighbouring exclusion,
+    "handling pre-existing files", is still honoured: nothing without a record is read or deleted.
+    <br><br>
+    <b>2. Progress on the row.</b> The ticket says progress belongs in the system notification, with
+    no in-app per-row progress bar. The row shows a fill behind the Cancel control, so this is a
+    deviation and not a compliant reading: the notification is dismissible, and once dismissed the row
+    could not tell a slow download from one paused indefinitely. No separate progress widget was added,
+    but that is a mitigation, not compliance.
+    <br><br>
+    See <i>Remembering a verification, without letting it lie</i>, <i>Reporting an in-flight
+    transfer</i>, and <i>Deleting a downloaded file</i> below.
+</div>
+
+<h2>Technical architecture</h2>
+
+<h3>Shape</h3>
+<p>A standard Code On The Go plugin: an Android application module that installs as a library,
+applying <code>com.itsaky.androidide.plugins.build</code> and packaged by
+<code>assemblePlugin</code> into <code>build/plugin/get-ai-models.cgp</code>. The IDE API arrives as
+<code>compileOnly(files("../libs/plugin-api.jar"))</code> from the shared repo-root
+<code>libs/</code>, and the build uses the shared repo-root Gradle wrapper.</p>
+
+<h3>Extension points</h3>
+<p><code>GetAiModelsPlugin</code> implements three interfaces:</p>
+<ul class="tight">
+    <li><code>IPlugin</code> - the <code>initialize &rarr; activate &rarr; deactivate &rarr;
+    dispose</code> lifecycle. The downloader is created in <code>activate()</code> and torn down in
+    both <code>deactivate()</code> and <code>dispose()</code>.</li>
+    <li><code>UIExtension.getEditorTabs()</code> - contributes the single bottom-drawer
+    <code>TabItem</code>, whose factory produces a fresh <code>ModelCatalogFragment</code>.</li>
+    <li><code>DocumentationExtension</code> - registers three tooltip entries (tab, row, download
+    button) under the category <code>plugin_org.appdevforall.getaimodels</code>, each with a Tier 1
+    summary and Tier 2 detail, and points Tier 3 at <code>assets/docs/index.html</code>.</li>
+</ul>
+
+<h3>Components</h3>
+<table>
+    <tr><th>File</th><th>Responsibility</th></tr>
+    <tr>
+        <td><code>GetAiModelsPlugin.kt</code></td>
+        <td>Lifecycle, tab registration, tooltip and Tier 3 docs wiring.</td>
+    </tr>
+    <tr>
+        <td><code>GetAiModelsRuntime.kt</code></td>
+        <td>Hands the plugin-scoped downloader to fragments the IDE constructs itself. Cleared on
+        teardown, so an unloaded plugin leaves nothing behind.</td>
+    </tr>
+    <tr>
+        <td><code>catalog/CatalogLoader.kt</code></td>
+        <td>Reads and strictly validates the bundled JSON: 64-hex SHA-256, HTTPS-only URL, no path
+        separator in the file name, positive sizes, and the 16k context gate.</td>
+    </tr>
+    <tr>
+        <td><code>download/ModelDownloader.kt</code></td>
+        <td>Enqueues to <code>DownloadManager</code>, polls for completion, resolves where the file
+        actually landed, and enforces the checksum gate. Exposes a
+        <code>StateFlow</code> of per-row state and a <code>SharedFlow</code> of one-shot
+        outcomes.</td>
+    </tr>
+    <tr>
+        <td><code>download/VerifiedModelStore.kt</code></td>
+        <td>Persists which entries passed the checksum, and the stat-based revalidation
+        (<code>DiskCheck</code>) that decides whether a remembered verification still holds. Every
+        method suspends onto <code>Dispatchers.IO</code>.</td>
+    </tr>
+    <tr>
+        <td><code>download/Sha256.kt</code></td>
+        <td>Streams the file in 1 MiB chunks; cancellation-aware so teardown mid-verify stops
+        promptly.</td>
+    </tr>
+    <tr>
+        <td><code>net/NetworkStatus.kt</code></td>
+        <td>Classifies the active network as unavailable, metered, or unmetered.</td>
+    </tr>
+    <tr>
+        <td><code>ui/ModelCatalogFragment.kt</code></td>
+        <td>The tab: list, network gates, metered confirmation, and the re-download prompt.</td>
+    </tr>
+    <tr>
+        <td><code>ui/ModelRowAdapter.kt</code></td>
+        <td>Compact rows, tap-to-expand detail, and per-row button state.</td>
+    </tr>
+</table>
+
+<h3>Why download state is plugin-scoped, not fragment-scoped</h3>
+<p>A model file is gigabytes. Closing the bottom drawer must not abandon a transfer, and the
+checksum gate has to run even when nobody is watching the tab. So <code>ModelDownloader</code>
+lives for the plugin's lifetime and the fragment is a pure view over its
+<code>StateFlow</code>. Reopening the tab mid-download shows the correct state.</p>
+
+<h3>Remembering a verification, without letting it lie</h3>
+<p>Two distinct problems hide in "keep the Downloaded badge across restarts". <b>Forgetting</b>:
+hashing costs seconds to minutes, and the result is not cheaply re-derivable, so it has to be stored.
+<b>Lying</b>: anything stored is a claim about the past, and the file can be deleted or replaced
+behind the plugin's back. Solving only the first yields a badge that outlives the file it
+describes.</p>
+<p>So <code>VerifiedModelStore</code> persists <code>entryId &rarr; {absolutePath, sizeBytes,
+verifiedAt}</code> in the plugin's own SharedPreferences, and <code>ModelDownloader.restore()</code>
+revalidates every record with a single <code>stat</code> on activation:</p>
+<table>
+    <tr><th>Disk</th><th>Row state</th><th>Why</th></tr>
+    <tr>
+        <td>Path absent</td>
+        <td><code>Idle</code>, record deleted</td>
+        <td>The user removed the file outside the IDE.</td>
+    </tr>
+    <tr>
+        <td>Present, length == recorded size</td>
+        <td><code>Verified</code></td>
+        <td>Same path and same length as when the SHA-256 passed.</td>
+    </tr>
+    <tr>
+        <td>Present, length differs</td>
+        <td><code>Changed</code></td>
+        <td>The recorded checksum no longer holds, so it is not claimed; the row offers
+        re-verification instead.</td>
+    </tr>
+</table>
+<p>Storing the <b>absolute path</b> rather than the catalogued file name also closes the
+<code>-1.gguf</code> blind spot: a record points at the file DownloadManager really wrote. The size
+check is free and catches every truncated file; the case it cannot catch is a same-length
+substitution, which is why an expanded verified row keeps an explicit <b>Verify file again</b> action
+that re-hashes on demand. A failed re-verify never deletes - unlike a failed download, that file was
+not written by us.</p>
+<p>This is knowingly the "installed state / model registry" the ticket lists as out of scope: there
+is no way to survive a restart without crossing that line, and a status that lies after a restart was
+the worse trade. The registry stays bounded - one small JSON string per entry, at most one per catalog
+row, cleared on uninstall.</p>
+
+<h3>Threading: why none of this can ANR or race</h3>
+<ul class="tight">
+    <li><b>No disk on the main thread.</b> Every <code>VerifiedModelStore</code> method is
+    <code>suspend</code> and wraps its work in <code>withContext(Dispatchers.IO)</code>, so the API
+    shape makes a main-thread call impossible. That matters because the first read of a
+    SharedPreferences instance blocks until its backing file has loaded.</li>
+    <li><b>Lazy, single initialisation.</b> The plugin passes a <i>provider lambda</i> rather than an
+    open SharedPreferences, because <code>activate()</code> runs on the main thread. The provider is
+    invoked on IO behind a <code>Mutex</code>, so concurrent first callers cannot each build an
+    instance.</li>
+    <li><b>No fsync stalls.</b> Writes use <code>apply()</code>: the in-memory map updates
+    immediately and the disk write is asynchronous.</li>
+    <li><b>One source of truth, mutated atomically.</b> Row state lives only in
+    <code>MutableStateFlow</code> and is only ever changed through <code>update {}</code>, so
+    concurrent verifications cannot lose each other's writes.</li>
+    <li><b>Restore cannot clobber a live row.</b> The rebuilt map is merged in a single
+    <code>update {}</code> that keeps any entry already carrying state - so a Download tapped while
+    the disk was being read wins over the restored value.</li>
+    <li><b>No duplicate work per row.</b> Both <code>enqueue</code> and
+    <code>verifyExisting</code> return early when that entry is already downloading or verifying.</li>
+    <li><b>Hashing never blocks the poll loop</b> and is cancellation-aware, so plugin teardown stops
+    it between 1 MiB chunks rather than after gigabytes.</li>
+</ul>
+
+<h3>Completion detection</h3>
+<p>Completion is detected by polling <code>DownloadManager.query()</code> every 1.5 seconds rather
+than by registering a <code>BroadcastReceiver</code> for
+<code>ACTION_DOWNLOAD_COMPLETE</code>. Polling keeps the plugin off the host process's dynamic
+receiver surface (a plugin's package id is not a real installed UID, which makes host-process
+registration a sharp edge worth avoiding) and costs nothing while idle: the poll loop only exists
+while a download is tracked, and it exits as soon as the last one finishes. Hashing runs in its own
+coroutine so a second download's completion is still noticed promptly.</p>
+
+<h3>Resource discipline</h3>
+<p>One <code>CoroutineScope(SupervisorJob() + Dispatchers.IO)</code>, owned by
+<code>ModelDownloader</code> and cancelled in <code>dispose()</code>. Cursors and input streams are
+closed with <code>use {}</code>. The fragment collects flows inside
+<code>repeatOnLifecycle(STARTED)</code> and nulls its view references in
+<code>onDestroyView()</code>. The plugin's only long-lived mutable state is the single downloader
+reference in <code>GetAiModelsRuntime</code>, which holds the application context - never an
+Activity or a View - and is cleared on teardown.</p>
+
+<h3>Permissions</h3>
+<p>Three, all on live code paths: <code>network.access</code> (the HTTPS fetch),
+<code>filesystem.read</code> (re-read the download to hash it), and
+<code>filesystem.write</code> (delete a download that fails the checksum). No system commands, no
+IDE settings, no project structure access, no native code, and no bundled <code>.so</code>
+libraries.</p>
+
+<h3>Theming and accessibility</h3>
+<p>Layout inflation is routed through <code>PluginFragmentHelper.getPluginInflater</code>, and
+<code>PluginTheme</code> extends <code>Theme.Material3.DayNight.NoActionBar</code> with a
+<code>values-night/colors.xml</code> that mirrors <code>values/colors.xml</code> name for name, so
+the tab follows the IDE's light/dark setting. Messages use <code>Snackbar</code> rather than
+<code>Toast</code>: a Toast raised from a plugin context adds a window under a package id that is
+not a real installed UID and takes the IDE down with a <code>SecurityException</code>.</p>
+
+<h2>Usage</h2>
+
+<h3>Build</h3>
+<pre>cd get-ai-models
+../gradlew assemblePlugin        # release .cgp -> build/plugin/get-ai-models.cgp
+../gradlew assemblePluginDebug   # debug variant
+../gradlew test                  # validates the shipped catalog asset</pre>
+<p>The plugin uses the shared repo-root Gradle wrapper and the shared repo-root
+<code>libs/</code> jars; it carries no wrapper or jars of its own. A
+<code>local.properties</code> with <code>sdk.dir=</code> is required.</p>
+
+<h3>Install</h3>
+<p>Copy the <code>.cgp</code> to the device and install it through Code On The Go's Plugin Manager,
+then open a project.</p>
+
+<h3>Use</h3>
+<ol class="tight">
+    <li>Open the editor's bottom drawer and select <b>Get AI Models</b>.</li>
+    <li>Tap a row to read what that file is good and bad at.</li>
+    <li>Tap <b>Download</b>. On a metered connection, confirm the warning.</li>
+    <li>Watch progress in the system notification area.</li>
+    <li>The row reads <b>Verifying&hellip;</b> and then <b>Downloaded</b>. The file is in
+    <code>/sdcard/Download</code>.</li>
+</ol>
+<p>Long-press the tab, any row, or a Download button for in-IDE help; the tab's tooltip links to
+the full offline guide.</p>
+
+<h2>Key benefits</h2>
+<ul class="tight">
+    <li><b>Licence transparency.</b> Every entry's licence is verified on both the base model and the
+    re-upload before it ships, and shown on the row. The current catalog does include one
+    restricted-licence model at the maintainer's request, so the guarantee is disclosure rather than
+    exclusion.</li>
+    <li><b>Integrity is not optional.</b> A pinned SHA-256 verified on device turns "the download
+    probably worked" into a yes or no answer, and a corrupt multi-gigabyte file is deleted at the
+    point of failure instead of surfacing later as an inference crash.</li>
+    <li><b>Revision pinning.</b> URLs resolve a specific upload revision, not a branch, so the
+    checksum in the catalog cannot be invalidated by the uploader replacing a file.</li>
+    <li><b>Honest guidance.</b> Each row states what its file is bad at, not only what it is good
+    at, and the minimum-RAM figure informs the user rather than silently blocking a device the
+    plugin has not actually measured.</li>
+    <li><b>No surprise data charges.</b> Metered connections warn with the file size before
+    anything starts, and a Wi-Fi download does not roll over onto cellular by itself.</li>
+    <li><b>Cheap to update, easy to review.</b> The catalog is one JSON asset guarded by unit
+    tests; adding or removing a model is a reviewable diff with no server to operate.</li>
+    <li><b>Modest footprint.</b> No native binaries, no reflection into IDE internals, no
+    background work while idle, and three narrowly scoped permissions.</li>
+</ul>
+
+</body>
+</html>

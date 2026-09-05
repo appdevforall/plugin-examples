@@ -1,3 +1,9 @@
 # One directory name for each line. State the reason after the name.
 pebble-custom-function-template-installer  ships stale copies of the shared jars
 cotg-ndk  held until the contributor confirms the name and the credit
+ai-agent-gemini  other pull requests in flight; do not touch the ai addons yet
+ai-agent-local  other pull requests in flight; do not touch the ai addons yet
+ai-agent-mcp  other pull requests in flight; do not touch the ai addons yet
+ai-agent-openai  other pull requests in flight; do not touch the ai addons yet
+ai-core  other pull requests in flight; do not touch the ai addons yet
+ai-literacy-course  other pull requests in flight; do not touch the ai addons yet

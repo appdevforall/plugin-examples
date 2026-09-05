@@ -43,7 +43,7 @@ jobs:
             [ -d "$dir" ] || dir="plugins/$name"
             echo "==> $dir"
             ( cd "$dir"
-              gradlew=../gradlew
+              gradlew="$GITHUB_WORKSPACE/gradlew"
               if [ -x ./gradlew ]; then gradlew=./gradlew; fi
               if grep -q downloadAssets build.gradle.kts; then
                 "$gradlew" --console=plain downloadAssets

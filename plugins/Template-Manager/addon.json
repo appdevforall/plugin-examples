@@ -1,0 +1,14 @@
+{
+  "summary": "Installs, removes, and browses project templates.",
+  "description": "Manages the template files on the device. Install a new template, look at the ones you have, or delete the ones you no longer want.",
+  "tags": [
+    "templates",
+    "management"
+  ],
+  "origin": "appdevforall",
+  "license": "AGPL-3.0-or-later",
+  "author": {
+    "name": "App Dev For All",
+    "url": "https://www.appdevforall.org"
+  }
+}

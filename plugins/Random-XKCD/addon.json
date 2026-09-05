@@ -1,0 +1,14 @@
+{
+  "summary": "Shows xkcd comics in the editor's bottom sheet.",
+  "description": "Fetches a comic from xkcd and shows it in the bottom sheet. A small break without leaving the editor.",
+  "tags": [
+    "fun",
+    "comics"
+  ],
+  "origin": "appdevforall",
+  "license": "AGPL-3.0-or-later",
+  "author": {
+    "name": "App Dev For All",
+    "url": "https://www.appdevforall.org"
+  }
+}

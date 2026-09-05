@@ -1,0 +1,15 @@
+{
+  "summary": "Downloads small language models for on-device AI addons.",
+  "description": "Lists a curated set of small GGUF language models and downloads the one you choose. The AI addons then run that model on the device.",
+  "tags": [
+    "ai",
+    "models",
+    "download"
+  ],
+  "origin": "appdevforall",
+  "license": "AGPL-3.0-or-later",
+  "author": {
+    "name": "App Dev For All",
+    "url": "https://www.appdevforall.org"
+  }
+}
