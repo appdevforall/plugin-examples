@@ -40,7 +40,7 @@ See the official [plugin documentation](https://www.appdevforall.org/codeonthego
 Every plugin is a standalone Gradle project that shares two jars from this repo's root `libs/` folder.
 
 ```sh
-cd Beepy
+cd plugins/Voice-Alerts
 ./gradlew assemblePlugin
 ```
 
@@ -71,7 +71,7 @@ Every plugin depends on two jars produced by the CodeOnTheGo source tree:
 - **`plugin-api.jar`** — the interface surface a plugin implements (`IPlugin`, `BuildStatusListener`, etc.). Used as `compileOnly` at build time; provided by the IDE at runtime.
 - **`gradle-plugin.jar`** — the custom Gradle plugin (`com.itsaky.androidide.plugins.build`) that packages a compiled Android library into a `.cgp` file. Applied via `classpath` in each plugin's `settings.gradle.kts`.
 
-Both jars live in `libs/` at the repo root; each plugin references them via `../libs/*.jar`. This means a plugin folder is **not standalone in isolation** — copying just `Beepy/` elsewhere will break its build until you also bring `libs/` along. The expected workflow is: clone the whole repo, work inside one of the example folders.
+Both jars live in `libs/` at the repo root; each plugin references them via `../../libs/*.jar`. This means a plugin folder is **not standalone in isolation** — copying just `plugins/Voice-Alerts/` elsewhere will break its build until you also bring `libs/` along. The expected workflow is: clone the whole repo, work inside one of the example folders.
 
 ## Refreshing `libs/`
 
@@ -93,7 +93,7 @@ First local run clones CodeOnTheGo into `.cache/CodeOnTheGo/` (gitignored); subs
 
 ## Adding a new plugin example
 
-1. Copy `Beepy/` to a new folder (e.g. `MyPlugin/`).
+1. Copy `plugins/Random-XKCD/` to a new folder under `plugins/` (e.g. `MyPlugin/`).
 2. In `MyPlugin/settings.gradle.kts`, change `rootProject.name` to `MyPlugin`.
 3. In `MyPlugin/build.gradle.kts`, update `pluginBuilder { pluginName = ... }` and `android { namespace ... applicationId ... }`.
 4. In `MyPlugin/src/main/AndroidManifest.xml`, update the `plugin.id`, `plugin.name`, `plugin.main_class`, and any other metadata.

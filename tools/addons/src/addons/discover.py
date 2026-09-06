@@ -7,20 +7,34 @@ PREDICATE = "com.itsaky.androidide.plugins.build"
 AREAS = ("plugins", "templates", "snippets", "code-actions")
 
 
-def read_skip(root: Path) -> set[str]:
+def read_skip(root: Path, only_never_build: bool = False) -> set[str]:
+    """Names excluded from the gallery.
+
+    A leading "!" means the module does not build at all, so it is excluded
+    from compile coverage too. Everything else is merely held back from
+    publishing and must still compile.
+    """
     f = root / "tools" / "addons" / "skip.txt"
     if not f.exists():
         return set()
     names = set()
     for line in f.read_text().splitlines():
         line = line.strip()
-        if line and not line.startswith("#"):
-            names.add(line.split()[0])
+        if not line or line.startswith("#"):
+            continue
+        name = line.split()[0]
+        never_build = name.startswith("!")
+        # every entry is held out of the gallery; only "!" entries are also
+        # held out of compile coverage
+        if never_build or not only_never_build:
+            names.add(name.lstrip("!"))
     return names
 
 
-def find_addons(root: Path, only: list[str] | None = None) -> list[Path]:
-    skip = read_skip(root)
+def find_addons(root: Path, only: list[str] | None = None,
+                include_skipped: bool = False) -> list[Path]:
+    skip = (read_skip(root, only_never_build=True) if include_skipped
+            else read_skip(root))
     found = []
     patterns = ["*/build.gradle.kts"] + [f"{a}/*/build.gradle.kts" for a in AREAS]
     for pattern in patterns:

@@ -1,6 +1,0 @@
-- generic [active] [ref=f74e1]:
-  - heading "Keystore Generator" [level=1] [ref=f74e2]
-  - generic [ref=f74e3]: XSS-EXECUTED-onerror
-  - link "go" [ref=f74e5] [cursor=pointer]:
-    - /url: javascript:document.getElementById('out2').textContent='XSS-EXECUTED-jsurl'
-  - generic [ref=f74e6]: safe2

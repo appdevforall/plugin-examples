@@ -139,7 +139,11 @@ printf "  %-20s %s\n" "gradle-plugin.jar" "$(du -h "$LIBS_DIR/gradle-plugin.jar"
 PLUGINS=()
 while IFS= read -r line; do
     PLUGINS+=("$line")
-done < <(uv run --directory "$REPO_ROOT/tools/addons" addons --root "$REPO_ROOT" discover)
+# --include-skipped on purpose: a libs refresh must prove every module still
+# compiles, including ones held out of the gallery. main built these too, and
+# losing that check would let a jar change break them silently.
+done < <(uv run --directory "$REPO_ROOT/tools/addons" addons --root "$REPO_ROOT" \
+         discover --include-skipped)
 
 if [ "${#PLUGINS[@]}" -eq 0 ]; then
     echo "Error: no addons discovered. 'addons discover' returned nothing -- check that uv works and that tools/addons/skip.txt is not excluding everything." >&2

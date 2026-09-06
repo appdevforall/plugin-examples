@@ -10,7 +10,10 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="addons")
     parser.add_argument("--root", type=Path, default=Path.cwd())
     sub = parser.add_subparsers(dest="command", required=True)
-    sub.add_parser("discover")
+    discover_parser = sub.add_parser("discover")
+    discover_parser.add_argument(
+        "--include-skipped", action="store_true",
+        help="also list skipped addons; for compile coverage, not publishing")
     sub.add_parser("check")
 
     catalog_parser = sub.add_parser("catalog")
@@ -33,7 +36,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "discover":
         # repo-relative, not bare names: callers cd into these and match them
         # against changed-file lists, so the location has to survive
-        for path in discover.find_addons(args.root):
+        for path in discover.find_addons(args.root,
+                                         include_skipped=args.include_skipped):
             print(path.relative_to(args.root).as_posix())
         return 0
 

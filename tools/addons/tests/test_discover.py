@@ -64,3 +64,29 @@ def test_finds_every_addon_type(tmp_path):
         "snippets/Some-Addon-snippets",
         "templates/Some-Addon-templates",
     ]
+
+
+def test_skipped_addons_can_still_be_listed_for_compiling(tmp_path):
+    """Two different questions: what do we publish, and what must still
+    compile. A skipped addon is excluded from the gallery, not from the
+    build that proves a libs refresh did not break it."""
+    make_addon(tmp_path, "plugins/Shipping")
+    make_addon(tmp_path, "held-back")
+    (tmp_path / "tools" / "addons").mkdir(parents=True)
+    (tmp_path / "tools" / "addons" / "skip.txt").write_text("held-back  reason\n")
+    assert [p.name for p in discover.find_addons(tmp_path)] == ["Shipping"]
+    assert [p.name for p in discover.find_addons(tmp_path, include_skipped=True)] \
+        == ["Shipping", "held-back"]
+
+
+def test_a_bang_prefix_means_never_build(tmp_path):
+    make_addon(tmp_path, "plugins/Shipping")
+    make_addon(tmp_path, "held-back")
+    make_addon(tmp_path, "broken")
+    (tmp_path / "tools" / "addons").mkdir(parents=True)
+    (tmp_path / "tools" / "addons" / "skip.txt").write_text(
+        "held-back  held out of the gallery\n!broken  does not build at all\n")
+    assert [p.name for p in discover.find_addons(tmp_path)] == ["Shipping"]
+    # compile coverage picks up the held-back one but never the broken one
+    assert [p.name for p in discover.find_addons(tmp_path, include_skipped=True)] \
+        == ["Shipping", "held-back"]

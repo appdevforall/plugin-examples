@@ -15,3 +15,6 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+
+# Browser-automation scratch from review sessions
+.playwright-mcp/
