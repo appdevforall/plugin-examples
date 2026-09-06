@@ -27,7 +27,7 @@ def entry(root: Path, addon: Path, cgp: Path, archive: Path,
           base: str = BASE) -> dict:
     directory = addon.name
     slug = model.slug(directory)
-    meta = json.loads((addon / "addon.json").read_text())
+    meta = model.metadata(addon)
     version = model.version(addon)
     if not VERSION.match(version):
         raise RuntimeError(f"{directory}: the version '{version}' is not a number")

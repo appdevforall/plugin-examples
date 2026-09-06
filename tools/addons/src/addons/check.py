@@ -29,14 +29,34 @@ def check_names(root: Path) -> list[str]:
 
         build = (path / "build.gradle.kts").read_text()
         found = re.search(r'pluginName\s*=\s*"([^"]*)"', build)
-        if found and found.group(1) != addon_slug:
+        if found is None:
+            problems.append(f"{directory}: build.gradle.kts declares no pluginName")
+        elif found.group(1) != addon_slug:
             problems.append(
                 f"{directory}: pluginName is '{found.group(1)}', expected '{addon_slug}'")
 
         plugin_name = model.manifest_value(path, "plugin.name")
-        if plugin_name and plugin_name != name:
+        if not plugin_name:
+            problems.append(f"{directory}: the manifest declares no plugin.name")
+        elif plugin_name != name:
             problems.append(
                 f"{directory}: plugin.name is '{plugin_name}', expected '{name}'")
+
+        # the app keys every install on this; an empty one orphans them all
+        if not model.plugin_id(path):
+            problems.append(f"{directory}: the manifest declares no plugin.id")
+
+        declared = model.manifest_value(path, "plugin.min_ide_version")
+        if (declared and declared != model.LEGACY_MIN_VERSION
+                and not model.RELEASE_VERSION.match(declared)):
+            problems.append(
+                f"{directory}: plugin.min_ide_version is '{declared}', "
+                f"expected a YY.ww release like 26.29")
+
+        if not model.VERSION_SHAPE.match(model.version(path)):
+            problems.append(
+                f"{directory}: the version '{model.version(path)}' is not a "
+                f"dotted number")
 
         for icon in ("icon_day.png", "icon_night.png"):
             if not (path / "src" / "main" / "assets" / icon).exists():
@@ -51,6 +71,16 @@ def check_names(root: Path) -> list[str]:
                 problems.append(f"{directory}: the page title must be '{name}'")
             # the h1 is what a visitor actually reads, and a rename that only
             # touches <title> leaves the old product name on the page
+            if re.search(r"<script\b", html, re.I):
+                problems.append(
+                    f"{directory}: the page contains a <script>; these pages "
+                    f"are published to the site origin")
+            handler = re.search(r"\son[a-z]+\s*=", html, re.I)
+            if handler:
+                problems.append(
+                    f"{directory}: the page has an inline event handler "
+                    f"({handler.group(0).strip()}); not allowed on a published page")
+
             prose = NOT_PROSE.sub(" ", html)
             for bad in SHORTHAND:
                 if re.search(r"\b" + bad + r"\b", prose):

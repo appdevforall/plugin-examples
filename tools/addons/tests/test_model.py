@@ -117,3 +117,28 @@ def test_manifest_value_survives_attribute_order(tmp_path):
         '<meta-data android:value="com.example.foo" android:name="plugin.id" />'
         '</application></manifest>')
     assert model.plugin_id(addon) == "com.example.foo"
+
+
+def test_plugin_version_beats_version_name(tmp_path):
+    """The gradle plugin resolves ${pluginVersion} from the pluginBuilder
+    extension first, and only falls back to versionName."""
+    addon = make(tmp_path, "${pluginVersion}",
+                 build='pluginBuilder { pluginVersion = "2.3.0" }\n'
+                       'android { defaultConfig { versionName = "1.0.0" } }')
+    assert model.version(addon) == "2.3.0"
+
+
+def test_a_malformed_minimum_is_not_silently_dropped(tmp_path):
+    # "26.5" is one keystroke from the real 26.29/26.17 values
+    assert model.min_app_version(make_min(tmp_path, "26.5")) == "26.5"
+
+
+def test_a_commented_out_value_is_ignored(tmp_path):
+    addon = tmp_path / "Commented"
+    (addon / "src" / "main").mkdir(parents=True)
+    (addon / "src" / "main" / "AndroidManifest.xml").write_text(
+        '<manifest><application>'
+        '<!-- <meta-data android:name="plugin.id" android:value="com.old.id" /> -->'
+        '<meta-data android:name="plugin.id" android:value="com.new.id" />'
+        '</application></manifest>')
+    assert model.plugin_id(addon) == "com.new.id"

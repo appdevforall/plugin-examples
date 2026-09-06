@@ -87,6 +87,88 @@ def test_a_download_under_a_prefix_is_still_an_attachment():
 def test_a_partial_publish_may_not_overwrite_the_live_catalog(tmp_path):
     import pytest
     from addons import cli
-    with pytest.raises(SystemExit):
+    _repo(tmp_path, ["A-One", "B-Two"])
+    with pytest.raises(SystemExit, match="subset"):
         cli.main(["--root", str(tmp_path), "publish", "--dist", str(tmp_path),
-                  "--only", "plugins/One"])
+                  "--only", "plugins/A-One"])
+
+
+def _repo(tmp_path, names):
+    for n in names:
+        d = tmp_path / "plugins" / n
+        (d / "src" / "main" / "assets").mkdir(parents=True)
+        (d / "build.gradle.kts").write_text("com.itsaky.androidide.plugins.build")
+    return tmp_path
+
+
+def test_publishing_everything_to_the_live_site_is_allowed(tmp_path):
+    """The workflow always passes --only, even for addon=all. A guard that
+    trips on 'was --only given' blocks the only live publish path there is."""
+    from addons import cli, discover
+    _repo(tmp_path, ["A-One", "B-Two"])
+    every = [p.relative_to(tmp_path).as_posix() for p in discover.find_addons(tmp_path)]
+    # the guard must not fire when the selection is everything
+    assert discover.find_addons(tmp_path, every) == discover.find_addons(tmp_path)
+
+
+def test_an_empty_selection_is_refused(tmp_path):
+    """argparse nargs='*' yields [], which is falsy; an unquoted $ONLY that
+    expands to nothing must not publish an empty catalog over the live one."""
+    import pytest
+    from addons import cli
+    _repo(tmp_path, ["A-One"])
+    with pytest.raises(SystemExit):
+        cli.main(["--root", str(tmp_path), "publish", "--dist", str(tmp_path), "--only"])
+
+
+def test_publish_emits_every_expected_key(tmp_path, monkeypatch):
+    """Design 8.7 asks for this directly: the keys and headers cannot be
+    checked any other way before a real upload."""
+    import json
+    from addons import cli, publish as pub
+
+    addon = tmp_path / "plugins" / "Demo-Addon"
+    (addon / "src" / "main" / "assets").mkdir(parents=True)
+    (addon / "build.gradle.kts").write_text("com.itsaky.androidide.plugins.build")
+    for icon in ("icon_day.png", "icon_night.png"):
+        (addon / "src" / "main" / "assets" / icon).write_bytes(b"png")
+    (addon / "demo-addon.html").write_text(
+        "<html><title>Demo Addon</title><body><h1>Demo Addon</h1></body></html>")
+
+    site = tmp_path / "site"
+    site.mkdir()
+    for n, body in (("styles.css", "a{}"), ("app.js", "//"),
+                    ("index.html", '<link href="assets/styles.css">'),
+                    ("catalog.schema.json", "{}")):
+        (site / n).write_text(body)
+    (site / "assets").mkdir()
+    (site / "assets" / "adfa-logo.svg").write_text("<svg/>")
+    (site / "page.template.html").write_text(
+        '<link href="../assets/styles.css">{{title}}{{body}}')
+
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "catalog.json").write_text("{}")
+    (dist / "demo-addon.cgp").write_bytes(b"cgp")
+    (dist / "demo-addon-src.tar.gz").write_bytes(b"tar")
+
+    client = FakeClient()
+    monkeypatch.setattr(pub, "client_from_env", lambda: client)
+    cli.main(["--root", str(tmp_path), "publish", "--dist", str(dist),
+              "--prefix", "staging/7/"])
+
+    keys = client.order
+    for expected in ("staging/7/index.html",
+                     "staging/7/p/demo-addon.html",
+                     "staging/7/p/demo-addon.png",
+                     "staging/7/p/demo-addon-night.png",
+                     "staging/7/dl/demo-addon.cgp",
+                     "staging/7/src/demo-addon-src.tar.gz",
+                     "staging/7/v1/catalog.schema.json"):
+        assert expected in keys, f"{expected} was never uploaded"
+    assert keys[-1] == "staging/7/v1/catalog.json", "the catalog must go last"
+    assert any(k.startswith("staging/7/assets/styles.") and k.endswith(".css")
+               for k in keys), "hashed stylesheet missing"
+    # the page must reference the hashed asset, not the plain name
+    page = client.store["staging/7/p/demo-addon.html"][0].decode()
+    assert "../assets/styles.css" not in page

@@ -90,3 +90,33 @@ def test_a_missing_icon_fails_the_check(tmp_path):
     (d / "src" / "main" / "assets" / "icon_night.png").unlink()
     problems = check.check_names(tmp_path)
     assert any("icon_night.png" in p for p in problems)
+
+
+def test_a_missing_plugin_id_fails(tmp_path):
+    """pluginId is the app's identity key; an empty one orphans every install."""
+    d = make_addon(tmp_path, "Keystore-Generator", "Keystore Generator",
+                   "keystore-generator", "keystore-generator.html")
+    m = d / "src" / "main" / "AndroidManifest.xml"
+    m.write_text(m.read_text().replace('android:name="plugin.id"', 'android:name="plugin.other"'))
+    assert any("plugin.id" in p for p in check.check_names(tmp_path))
+
+
+def test_a_missing_plugin_name_is_not_treated_as_agreement(tmp_path):
+    d = make_addon(tmp_path, "Keystore-Generator", "Keystore Generator",
+                   "keystore-generator", "keystore-generator.html")
+    b = d / "build.gradle.kts"
+    b.write_text(b.read_text().replace('pluginName = "keystore-generator"', ""))
+    assert any("pluginName" in p for p in check.check_names(tmp_path))
+
+
+def test_active_content_in_a_published_page_fails(tmp_path):
+    """These bodies are published to the same origin as the catalog."""
+    d = make_addon(tmp_path, "Keystore-Generator", "Keystore Generator",
+                   "keystore-generator", "keystore-generator.html")
+    (d / "keystore-generator.html").write_text(
+        "<html><title>Keystore Generator</title><body><h1>Keystore Generator</h1>"
+        '<img src=x onerror="alert(1)"><script>fetch("https://evil")</script>'
+        "</body></html>")
+    problems = check.check_names(tmp_path)
+    assert any("script" in p.lower() for p in problems)
+    assert any("onerror" in p.lower() or "handler" in p.lower() for p in problems)

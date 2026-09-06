@@ -1,3 +1,4 @@
+import gzip
 import re
 import shutil
 import subprocess
@@ -143,7 +144,20 @@ def build(root: Path, addon: Path, out: Path,
     top = _stage(root, addon, out, meta or {})
     verify(top, addon.relative_to(root).as_posix(), jars)
     archive = out / f"{top.name}.tar.gz"
-    with tarfile.open(archive, "w:gz") as tar:
-        tar.add(top, arcname=top.name)
+    # Reproducible: same source, same bytes, so a republish does not churn
+    # every sourceTarball checksum in the catalog. mtime=0 in the gzip header,
+    # and no builder identity or timestamps in the members.
+    def normalise(info: tarfile.TarInfo) -> tarfile.TarInfo:
+        info.uid = info.gid = 0
+        info.uname = info.gname = ""
+        info.mtime = 0
+        return info
+
+    with open(archive, "wb") as raw:
+        with gzip.GzipFile(filename="", mode="wb", fileobj=raw, mtime=0) as gz:
+            with tarfile.open(fileobj=gz, mode="w") as tar:
+                for path in sorted(top.rglob("*")):
+                    tar.add(path, arcname=str(Path(top.name) / path.relative_to(top)),
+                            recursive=False, filter=normalise)
     shutil.rmtree(top)
     return archive

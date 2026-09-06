@@ -142,3 +142,23 @@ def test_readme_credits_the_author_and_names_the_source(tmp_path):
     assert "github.com/aman-khan-786" in readme
     assert "community" in readme.lower()
     assert "plugin-examples" in readme                 # where it came from
+
+
+def test_tarballs_are_reproducible(tmp_path):
+    """Otherwise every publish churns all 23 sourceTarball checksums."""
+    import hashlib
+    addon = make_repo(tmp_path)
+    out = tmp_path / "dist"
+    out.mkdir()
+    first = hashlib.sha256(tarball.build(tmp_path, addon, out, META).read_bytes()).hexdigest()
+    second = hashlib.sha256(tarball.build(tmp_path, addon, out, META).read_bytes()).hexdigest()
+    assert first == second
+
+
+def test_no_builder_identity_leaks_into_the_archive(tmp_path):
+    addon = make_repo(tmp_path)
+    out = tmp_path / "dist"
+    out.mkdir()
+    with tarfile.open(tarball.build(tmp_path, addon, out, META)) as tar:
+        for m in tar.getmembers():
+            assert m.uname == "" and m.gname == "" and m.uid == 0 and m.mtime == 0

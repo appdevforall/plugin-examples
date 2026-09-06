@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://addons.appdevforall.org/v1/catalog.schema.json",
   "type": "object",
-  "additionalProperties": false,
+  "additionalProperties": true,
   "required": [
     "schemaVersion",
     "generated",
@@ -25,7 +25,7 @@
   "$defs": {
     "addon": {
       "type": "object",
-      "additionalProperties": false,
+      "additionalProperties": true,
       "required": [
         "type",
         "slug",
@@ -154,5 +154,6 @@
         }
       }
     }
-  }
+  },
+  "$comment": "Additive by design: section 10.5 permits new fields within a major version and requires consumers to ignore unknown ones, so this schema must not reject them. Field removal or retyping needs a new major."
 }

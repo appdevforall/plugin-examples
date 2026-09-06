@@ -3,6 +3,8 @@ from pathlib import Path
 
 DEFAULT_VERSION = "1.0.0"
 RELEASE_VERSION = re.compile(r"^[0-9]{2}\.[0-9]{2}$")
+LEGACY_MIN_VERSION = "1.0.0"
+VERSION_SHAPE = re.compile(r"^[0-9]+(\.[0-9]+)*$")
 
 SMALL_WORDS = {"a", "an", "and", "as", "at", "but", "by", "for",
                "in", "of", "on", "or", "the", "to", "up"}
@@ -35,7 +37,8 @@ def manifest_value(addon: Path, key: str) -> str:
     f = addon / "src" / "main" / "AndroidManifest.xml"
     if not f.exists():
         return ""
-    text = " ".join(f.read_text().split())
+    text = re.sub(r"<!--.*?-->", " ", f.read_text(), flags=re.S)
+    text = " ".join(text.split())
     # match the whole element: attribute order is not guaranteed, and a
     # missed match surfaces much later as an opaque schema failure
     for element in re.findall(r"<meta-data\b[^>]*/?>", text):
@@ -62,9 +65,14 @@ def version(addon: Path) -> str:
         return declared
     build = addon / "build.gradle.kts"
     if build.exists():
-        found = re.search(r'versionName\s*=\s*"([^"]+)"', build.read_text())
-        if found:
-            return found.group(1)
+        text = build.read_text()
+        # the gradle plugin resolves the placeholder from the extension
+        # first, then versionName, then its own default
+        for pattern in (r'pluginVersion\s*=\s*"([^"]+)"',
+                        r'versionName\s*=\s*"([^"]+)"'):
+            found = re.search(pattern, text)
+            if found:
+                return found.group(1)
     return DEFAULT_VERSION
 
 
@@ -76,4 +84,18 @@ def min_app_version(addon: Path) -> str:
     reported as no minimum rather than invented.
     """
     declared = manifest_value(addon, "plugin.min_ide_version")
-    return declared if RELEASE_VERSION.match(declared) else ""
+    if not declared or declared == LEGACY_MIN_VERSION:
+        return ""          # the legacy placeholder states no real minimum
+    return declared
+
+
+def metadata(addon: Path) -> dict:
+    """addon.json, with a named error rather than a bare traceback (R16/R47)."""
+    import json
+    f = addon / "addon.json"
+    if not f.exists():
+        raise RuntimeError(f"{addon.name}: addon.json is missing")
+    try:
+        return json.loads(f.read_text())
+    except json.JSONDecodeError as error:
+        raise RuntimeError(f"{addon.name}: addon.json is not valid JSON: {error}")
