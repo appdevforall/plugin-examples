@@ -259,7 +259,7 @@
 
   <h3>File layout</h3>
   <ul class="file-tree">
-    <li>client-time-tracker/
+    <li>plugins/Client-Time-Tracker/
       <ul>
         <li>build.gradle.kts, settings.gradle.kts, proguard-rules.pro</li>
         <li>schemas/ (Room exported schema: <code>ContractorDatabase/1.json</code>)</li>
@@ -385,8 +385,8 @@ suspend fun insert(project: TrackedProjectEntity) = insertRow(project.id, projec
     <tr><td>Min SDK</td><td>26</td></tr>
     <tr><td>Java / Kotlin target</td><td>17</td></tr>
     <tr><td>ProGuard</td><td>Disabled (<code>isMinifyEnabled = false</code>)</td></tr>
-    <tr><td>Plugin API</td><td><code>compileOnly</code> via <code>../libs/plugin-api.jar</code></td></tr>
-    <tr><td>IDE event classes</td><td><code>compileOnly</code> via <code>../libs/eventbus-events.jar</code></td></tr>
+    <tr><td>Plugin API</td><td><code>compileOnly</code> via <code>../../libs/plugin-api.jar</code></td></tr>
+    <tr><td>IDE event classes</td><td><code>compileOnly</code> via <code>../../libs/eventbus-events.jar</code></td></tr>
     <tr><td>Persistence</td><td>Room 2.7.0 (+ KSP)</td></tr>
     <tr><td>Excel export</td><td><code>org.dhatim:fastexcel</code> 0.18.4</td></tr>
     <tr><td>Output format</td><td><code>.cgp</code> package</td></tr>
@@ -442,8 +442,8 @@ suspend fun insert(project: TrackedProjectEntity) = insertRow(project.id, projec
     part of <code>plugin-api.jar</code>, so this plugin needs a third compile-only
     jar:
   </p>
-  <pre><code>compileOnly(files("../libs/plugin-api.jar"))
-compileOnly(files("../libs/eventbus-events.jar"))
+  <pre><code>compileOnly(files("../../libs/plugin-api.jar"))
+compileOnly(files("../../libs/eventbus-events.jar"))
 compileOnly("org.greenrobot:eventbus:3.3.1")</code></pre>
   <div class="callout">
     <strong>Note:</strong> any plugin that subscribes to host events over
@@ -488,15 +488,15 @@ compileOnly("org.greenrobot:eventbus:3.3.1")</code></pre>
   <h2>5. Deployment &amp; Usage</h2>
 
   <h3>Building</h3>
-  <pre><code>cd client-time-tracker
+  <pre><code>cd plugins/Client-Time-Tracker
 ./gradlew assemblePlugin</code></pre>
   <p>
-    Produces <code>client-time-tracker/build/plugin/client-time-tracker.cgp</code>, the bundle you
+    Produces <code>plugins/Client-Time-Tracker/build/plugin/client-time-tracker.cgp</code>, the bundle you
     sideload into Code On The Go.
   </p>
   <div class="callout">
     <strong>Before building:</strong> this plugin needs
-    <code>../libs/eventbus-events.jar</code> in addition to the usual
+    <code>../../libs/eventbus-events.jar</code> in addition to the usual
     <code>plugin-api.jar</code> and <code>gradle-plugin.jar</code>. See
     &sect;4.4 and the repo-root <code>README</code>'s <em>libs/</em> notes.
   </div>

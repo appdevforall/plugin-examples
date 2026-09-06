@@ -191,7 +191,7 @@
 
   <h3>File layout</h3>
   <ul class="file-tree">
-    <li>pair/
+    <li>plugins/Code-Together/
       <ul>
         <li>build.gradle.kts, settings.gradle.kts, proguard-rules.pro</li>
         <li>src/main/
@@ -303,7 +303,7 @@
     <tr><td>Min SDK</td><td>26</td></tr>
     <tr><td>Java / Kotlin target</td><td>17</td></tr>
     <tr><td>Compose</td><td>Enabled; linked <code>compileOnly</code> (host-provided), not bundled</td></tr>
-    <tr><td>Plugin API</td><td><code>compileOnly</code> via <code>../libs/plugin-api.jar</code></td></tr>
+    <tr><td>Plugin API</td><td><code>compileOnly</code> via <code>../../libs/plugin-api.jar</code></td></tr>
     <tr><td>Output format</td><td><code>.cgp</code> package</td></tr>
   </table>
 </section>
@@ -366,15 +366,15 @@
     <code>assemblePlugin</code> fails with unresolved references to those symbols, the
     shared <code>libs/</code> jars are older than the API Pair needs &mdash; refresh
     them from a Code On The Go build that includes the extensions
-    (<code>../scripts/update-libs.sh --local &lt;path&gt; --ref feat/ADFA-4419-remote-peer-editor-decoration</code>).
+    (<code>../../scripts/update-libs.sh --local &lt;path&gt; --ref feat/ADFA-4419-remote-peer-editor-decoration</code>).
   </div>
 
   <h3>4.5 Permissions</h3>
   <pre><code>&lt;meta-data android:name="plugin.permissions"
-           android:value="filesystem.read,filesystem.write,network.access,native.code" /&gt;</code></pre>
+           android:value="filesystem.read,filesystem.write,network.access," /&gt;</code></pre>
   <p>
     Filesystem access backs project transfer and history; <code>network.access</code>
-    runs the WebSocket server and client; <code>native.code</code> covers the bundled
+    runs the WebSocket server and client; <code></code> covers the bundled
     camera / QR-decoding native libraries used by the scan screen.
   </p>
 </section>
@@ -384,10 +384,10 @@
   <h2>5. Deployment &amp; Usage</h2>
 
   <h3>Building</h3>
-  <pre><code>cd pair
+  <pre><code>cd plugins/Code-Together
 ./gradlew clean assemblePlugin      # or assemblePluginDebug for the debug variant</code></pre>
   <p>
-    Produces <code>pair/build/plugin/pair.cgp</code>, the bundle you sideload into
+    Produces <code>plugins/Code-Together/build/plugin/code-together.cgp</code>, the bundle you sideload into
     Code On The Go.
   </p>
   <div class="callout">
@@ -399,7 +399,7 @@
   <h3>Installation</h3>
   <ol>
     <li>Open <em>Preferences &rarr; Plugin Manager &rarr; +</em>.</li>
-    <li>Select the <code>pair.cgp</code> file.</li>
+    <li>Select the <code>code-together.cgp</code> file.</li>
     <li>The IDE discovers <code>PairPlugin</code> via manifest metadata and activates it.</li>
   </ol>
 
@@ -416,8 +416,8 @@
   <table>
     <tr><th>Requirement</th><th>Value</th></tr>
     <tr><td>Min Android version</td><td>API 26 (Android 8)</td></tr>
-    <tr><td>Min IDE version</td><td>1.0.0</td></tr>
-    <tr><td>Permissions</td><td><code>filesystem.read</code>, <code>filesystem.write</code>, <code>network.access</code>, <code>native.code</code></td></tr>
+    <tr><td>Min IDE version</td><td>26.32</td></tr>
+    <tr><td>Permissions</td><td><code>filesystem.read</code>, <code>filesystem.write</code>, <code>network.access</code>, <code></code></td></tr>
     <tr><td>Network</td><td>Both devices on the same LAN with device-to-device traffic allowed; no internet required.</td></tr>
   </table>
 </section>

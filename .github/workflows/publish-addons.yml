@@ -31,6 +31,23 @@ jobs:
 
       - uses: astral-sh/setup-uv@v5
 
+      - name: Verify the R2 configuration
+        # The build below takes a long time. Without this, a renamed variable
+        # is only discovered after all of it, inside boto3.
+        env:
+          R2_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ vars.CLOUDFLARE_R2_BUCKET_NAME }}
+        run: |
+          for v in R2_ACCOUNT_ID R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_BUCKET; do
+            if [ -z "${!v}" ]; then
+              echo "$v is empty. Check the repository secrets and variables." >&2
+              exit 1
+            fi
+          done
+          echo "Publishing to bucket '$R2_BUCKET'."
+
       - name: Check names and metadata
         run: uv run --directory tools/addons addons --root "$GITHUB_WORKSPACE" check
 
@@ -47,7 +64,11 @@ jobs:
           else
             # resolve through discover so an unknown or hostile value cannot
             # reach the shell as a path
-            names="$(printf '%s\n' "$all" | grep -Fx -e "$ADDON" -e "plugins/$ADDON" || true)"
+            # match the directory name or the lowercase slug the rest of the
+            # system uses (dl/<slug>.cgp, the catalog's slug field)
+            names="$(printf '%s\n' "$all" | awk -v want="$ADDON" '
+              { n = $0; sub(/.*\//, "", n); l = tolower(n)
+                if (n == want || $0 == want || l == tolower(want)) print }')"
             if [ -z "$names" ]; then
               echo "Unknown addon: $ADDON" >&2; exit 1
             fi
@@ -85,7 +106,8 @@ jobs:
             prefix="staging/${{ github.run_id }}/"
           fi
           echo "prefix=${prefix}" >> "$GITHUB_OUTPUT"
-          echo "base=https://addons.appdevforall.org/${prefix%/}" >> "$GITHUB_OUTPUT"
+          base="https://addons.appdevforall.org${prefix:+/${prefix%/}}"
+          echo "base=$base" >> "$GITHUB_OUTPUT"
 
       - name: Generate the catalog
         env:

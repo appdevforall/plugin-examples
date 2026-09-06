@@ -236,7 +236,7 @@ Java_${{ PACKAGE_NAME | replace({".": "_"}) }}_MainActivity_stringFromJNI(
 
   <h3>File layout</h3>
   <ul class="file-tree">
-    <li>ndk-installer-plugin/
+    <li>plugins/NDK-Installer/
       <ul>
         <li>build.gradle.kts</li>
         <li>proguard-rules.pro</li>
@@ -583,7 +583,7 @@ Java_${{ PACKAGE_NAME | replace({".": "_"}) }}_MainActivity_stringFromJNI(
   <p>
     Before building, fetch the bundled NDK/CMake archive:
   </p>
-  <pre><code>./gradlew :ndk-installer-plugin:downloadAssets</code></pre>
+  <pre><code>./gradlew :NDK-Installer:downloadAssets</code></pre>
   <p>
     This downloads <code>ndk-cmake.tar.xz</code> from the release server,
     verifies the MD5 checksum, and places it in
@@ -591,10 +591,10 @@ Java_${{ PACKAGE_NAME | replace({".": "_"}) }}_MainActivity_stringFromJNI(
   </p>
 
   <h3>Building</h3>
-  <pre><code>./gradlew :ndk-installer-plugin:assemblePluginDebug</code></pre>
+  <pre><code>./gradlew :NDK-Installer:assemblePluginDebug</code></pre>
   <p>
     This produces a <code>.cgp</code> plugin package under
-    <code>ndk-installer-plugin/build/outputs/</code>. The build configuration
+    <code>plugins/NDK-Installer/build/outputs/</code>. The build configuration
     sets <code>noCompress += listOf("xz")</code> to prevent the Android asset
     system from re-compressing the archive.
   </p>

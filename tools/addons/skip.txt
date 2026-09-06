@@ -1,16 +1,14 @@
 # One directory name for each line. State the reason after the name.
 #
 # NOTE: skipping an addon stops it building, being packaged, and reaching the
-# catalog. PRD acceptance criterion 13 says the six AI addons "still build and
-# publish unchanged", which this list does NOT satisfy. They are here because
-# the owner asked that they not be touched while other pull requests are in
-# flight, and publishing them needs an addon.json and a rename. That is a
-# deliberate, recorded gap, not an oversight -- see O10 in the design.
+# catalog. The six AI addons are here by decision: other pull requests are in
+# flight against them, so they are not touched in any way and will be migrated
+# into the gallery later. Do not "fix" this by adding them back.
 pebble-custom-function-template-installer  ships stale copies of the shared jars
 cotg-ndk  held until the contributor confirms the name and the credit
-ai-agent-gemini  other pull requests in flight; do not touch the ai addons yet
-ai-agent-local  other pull requests in flight; do not touch the ai addons yet
-ai-agent-mcp  other pull requests in flight; do not touch the ai addons yet
-ai-agent-openai  other pull requests in flight; do not touch the ai addons yet
-ai-core  other pull requests in flight; do not touch the ai addons yet
-ai-literacy-course  other pull requests in flight; do not touch the ai addons yet
+ai-agent-gemini  other pull requests in flight; migrate later, do not touch
+ai-agent-local  other pull requests in flight; migrate later, do not touch
+ai-agent-mcp  other pull requests in flight; migrate later, do not touch
+ai-agent-openai  other pull requests in flight; migrate later, do not touch
+ai-core  other pull requests in flight; migrate later, do not touch
+ai-literacy-course  other pull requests in flight; migrate later, do not touch

@@ -220,10 +220,10 @@
 
   <h3>File layout</h3>
   <ul class="file-tree">
-    <li>project-to-template/
+    <li>plugins/Project-to-Template/
       <ul>
-        <li>build.gradle.kts &mdash; applies the plugin-builder; <code>compileOnly ../libs/plugin-api.jar</code></li>
-        <li>settings.gradle.kts &mdash; buildscript classpath on <code>../libs/*.jar</code></li>
+        <li>build.gradle.kts &mdash; applies the plugin-builder; <code>compileOnly ../../libs/plugin-api.jar</code></li>
+        <li>settings.gradle.kts &mdash; buildscript classpath on <code>../../libs/*.jar</code></li>
         <li>src/main/
           <ul>
             <li>AndroidManifest.xml &mdash; plugin identity metadata</li>
@@ -300,7 +300,7 @@
     <tr><td>Min SDK</td><td>26</td></tr>
     <tr><td>Java / Kotlin target</td><td>17</td></tr>
     <tr><td>ProGuard</td><td>Disabled (<code>isMinifyEnabled = false</code>)</td></tr>
-    <tr><td>Plugin API</td><td><code>compileOnly</code> via <code>../libs/plugin-api.jar</code> (shared repo-root jar)</td></tr>
+    <tr><td>Plugin API</td><td><code>compileOnly</code> via <code>../../libs/plugin-api.jar</code> (shared repo-root jar)</td></tr>
     <tr><td>Output format</td><td><code>.cgp</code> package</td></tr>
   </table>
 </section>
@@ -380,12 +380,12 @@
   <h2>5. Deployment &amp; Usage</h2>
 
   <h3>Building</h3>
-  <pre><code>cd project-to-template
-../gradlew assemblePlugin</code></pre>
+  <pre><code>cd plugins/Project-to-Template
+../../gradlew assemblePlugin</code></pre>
   <p>
-    Produces <code>project-to-template/build/plugin/project-to-template.cgp</code>.
+    Produces <code>plugins/Project-to-Template/build/plugin/project-to-template.cgp</code>.
     The plugin uses the shared repo-root Gradle wrapper and
-    <code>../libs/*.jar</code> &mdash; it does not bundle its own copies. A
+    <code>../../libs/*.jar</code> &mdash; it does not bundle its own copies. A
     <code>local.properties</code> with <code>sdk.dir=&lt;Android SDK path&gt;</code>
     is required.
   </p>

@@ -212,7 +212,7 @@ fun GreetingDarkPreview() {
 
   <h3>File layout</h3>
   <ul class="file-tree">
-    <li>compose-preview/
+    <li>plugins/Jetpack-Compose-Preview/
       <ul>
         <li>build.gradle.kts, settings.gradle.kts, proguard-rules.pro</li>
         <li>src/main/
@@ -284,7 +284,7 @@ fun GreetingDarkPreview() {
     <tr><td>Min SDK</td><td>26</td></tr>
     <tr><td>Java / Kotlin target</td><td>17</td></tr>
     <tr><td>Compose</td><td>Enabled; bundled (compose-bom) so the host need not ship it</td></tr>
-    <tr><td>Plugin API</td><td><code>compileOnly</code> via <code>../libs/plugin-api.jar</code></td></tr>
+    <tr><td>Plugin API</td><td><code>compileOnly</code> via <code>../../libs/plugin-api.jar</code></td></tr>
     <tr><td>Output format</td><td><code>.cgp</code> package</td></tr>
   </table>
 </section>
@@ -359,10 +359,10 @@ fun GreetingDarkPreview() {
   <h2>5. Deployment &amp; Usage</h2>
 
   <h3>Building</h3>
-  <pre><code>cd compose-preview
+  <pre><code>cd plugins/Jetpack-Compose-Preview
 ./gradlew clean assemblePluginDebug   # or assemblePlugin for release</code></pre>
   <p>
-    Produces <code>compose-preview/build/plugin/compose-preview-debug.cgp</code>,
+    Produces <code>plugins/Jetpack-Compose-Preview/build/plugin/jetpack-compose-preview-debug.cgp</code>,
     the bundle you sideload into Code On The Go.
   </p>
   <div class="callout">
@@ -375,7 +375,7 @@ fun GreetingDarkPreview() {
   <h3>Installation</h3>
   <ol>
     <li>Open <em>Preferences &rarr; Plugin Manager &rarr; +</em>.</li>
-    <li>Select the <code>compose-preview-debug.cgp</code> file.</li>
+    <li>Select the <code>jetpack-compose-preview-debug.cgp</code> file.</li>
     <li>The IDE discovers <code>ComposePreviewPlugin</code> via manifest metadata and activates it.</li>
   </ol>
 

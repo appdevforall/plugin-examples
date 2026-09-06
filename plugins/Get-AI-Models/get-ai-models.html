@@ -239,7 +239,7 @@ memory is never read, so the user is informed rather than gated.</p>
 <p>A standard Code On The Go plugin: an Android application module that installs as a library,
 applying <code>com.itsaky.androidide.plugins.build</code> and packaged by
 <code>assemblePlugin</code> into <code>build/plugin/get-ai-models.cgp</code>. The IDE API arrives as
-<code>compileOnly(files("../libs/plugin-api.jar"))</code> from the shared repo-root
+<code>compileOnly(files("../../libs/plugin-api.jar"))</code> from the shared repo-root
 <code>libs/</code>, and the build uses the shared repo-root Gradle wrapper.</p>
 
 <h3>Extension points</h3>
@@ -409,10 +409,10 @@ not a real installed UID and takes the IDE down with a <code>SecurityException</
 <h2>Usage</h2>
 
 <h3>Build</h3>
-<pre>cd get-ai-models
-../gradlew assemblePlugin        # release .cgp -> build/plugin/get-ai-models.cgp
-../gradlew assemblePluginDebug   # debug variant
-../gradlew test                  # validates the shipped catalog asset</pre>
+<pre>cd plugins/Get-AI-Models
+../../gradlew assemblePlugin        # release .cgp -> build/plugin/get-ai-models.cgp
+../../gradlew assemblePluginDebug   # debug variant
+../../gradlew test                  # validates the shipped catalog asset</pre>
 <p>The plugin uses the shared repo-root Gradle wrapper and the shared repo-root
 <code>libs/</code> jars; it carries no wrapper or jars of its own. A
 <code>local.properties</code> with <code>sdk.dir=</code> is required.</p>

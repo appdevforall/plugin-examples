@@ -186,7 +186,7 @@
 
   <h3>File layout</h3>
   <ul class="file-tree">
-    <li>layout-editor/
+    <li>plugins/Layout-Editor/
       <ul>
         <li>build.gradle.kts, settings.gradle.kts, proguard-rules.pro</li>
         <li>layout-editor-documentation.html (this page)</li>
@@ -266,7 +266,7 @@
     <tr><td>Min SDK</td><td>26</td></tr>
     <tr><td>Java / Kotlin target</td><td>17</td></tr>
     <tr><td>View binding</td><td>Enabled</td></tr>
-    <tr><td>Plugin API</td><td><code>compileOnly</code> via <code>../libs/plugin-api.jar</code></td></tr>
+    <tr><td>Plugin API</td><td><code>compileOnly</code> via <code>../../libs/plugin-api.jar</code></td></tr>
     <tr><td>Output format</td><td><code>.cgp</code> package</td></tr>
   </table>
 </section>
@@ -345,10 +345,10 @@
   <h2>5. Deployment &amp; Usage</h2>
 
   <h3>Building</h3>
-  <pre><code>cd layout-editor
+  <pre><code>cd plugins/Layout-Editor
 ./gradlew clean assemblePluginDebug   # or assemblePlugin for release</code></pre>
   <p>
-    Produces <code>layout-editor/build/plugin/layout-editor-debug.cgp</code>, the
+    Produces <code>plugins/Layout-Editor/build/plugin/layout-editor-debug.cgp</code>, the
     bundle you sideload into Code On The Go.
   </p>
   <div class="callout">

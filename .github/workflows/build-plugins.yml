@@ -1,10 +1,8 @@
 name: Build plugin artifacts
 
-# Builds every addon (or one) to prove the tree compiles. It publishes
-# nothing: use the "Publish addons" workflow to get a downloadable URL.
-# commits refreshed libs, never publishes a GitHub release, and never
-# deploys to the website — it only produces artifacts you can download
-# from the run summary.
+# Builds every addon (or one) to prove the tree compiles.
+# It publishes nothing and uploads no artifacts: to get a downloadable URL,
+# run "Publish addons" with staging: true.
 
 on:
   workflow_dispatch:

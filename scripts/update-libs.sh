@@ -142,7 +142,7 @@ while IFS= read -r line; do
 done < <(uv run --directory "$REPO_ROOT/tools/addons" addons --root "$REPO_ROOT" discover)
 
 if [ "${#PLUGINS[@]}" -eq 0 ]; then
-    echo "Error: no example plugins discovered (looked for sibling dirs whose build.gradle.kts applies $PLUGIN_BUILDER_ID)." >&2
+    echo "Error: no addons discovered. 'addons discover' returned nothing -- check that uv works and that tools/addons/skip.txt is not excluding everything." >&2
     exit 1
 fi
 

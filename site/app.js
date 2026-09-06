@@ -32,25 +32,33 @@ function matches(addon) {
   return state.q.toLowerCase().split(/\s+/).every((word) => text.includes(word));
 }
 
-function toggleTag(tag) {
+function toggleTag(tag, where) {
   const i = state.tags.indexOf(tag);
   if (i === -1) state.tags.push(tag);
   else state.tags.splice(i, 1);
   render();
+  // render() replaced the button that was clicked, so focus would fall to
+  // <body> and a keyboard user would restart from the top of the page
+  const again = document.querySelector(
+    `${where === "bar" ? "#active" : "#cards"} .tag[data-tag="${CSS.escape(tag)}"]`
+  ) || document.querySelector(`.tag[data-tag="${CSS.escape(tag)}"]`);
+  if (again) again.focus();
 }
 
-function tagButton(tag) {
+function tagButton(tag, where) {
   const b = document.createElement("button");
   b.type = "button";
   b.className = "tag";
   b.textContent = "#" + tag;
+  b.dataset.tag = tag;
+  if (where) b.dataset.where = where;
   if (state.tags.includes(tag)) {
     b.classList.add("on");
     b.setAttribute("aria-pressed", "true");
   } else {
     b.setAttribute("aria-pressed", "false");
   }
-  b.addEventListener("click", () => toggleTag(tag));
+  b.addEventListener("click", () => toggleTag(tag, b.dataset.where));
   return b;
 }
 
@@ -60,7 +68,7 @@ function renderActive() {
   bar.hidden = state.tags.length === 0;
   if (bar.hidden) return;
   bar.append("Filtering by ");
-  for (const tag of state.tags) bar.append(tagButton(tag));
+  for (const tag of state.tags) bar.append(tagButton(tag, "bar"));
   const clear = document.createElement("button");
   clear.type = "button";
   clear.className = "clear";
@@ -104,7 +112,7 @@ function render() {
     set("origin", addon.origin === "community" ? "Community" : "App Dev For All");
     set("size", size(addon.download.size));
     const tags = node.querySelector('[data-slot="tags"]');
-    for (const tag of addon.tags) tags.append(tagButton(tag));
+    for (const tag of addon.tags) tags.append(tagButton(tag, "card"));
     node.querySelector(".icon").src = safeUrl(addon.iconUrl);
     node.querySelector(".icon-dark").srcset = safeUrl(addon.iconDarkUrl);
     node.querySelector('[data-slot="download"]').href = safeUrl(addon.download.url);
@@ -117,7 +125,8 @@ function render() {
     cards.append(node);
   }
   renderActive();
-  status.textContent = shown.length ? "" : "No addon matches these filters.";
+  status.textContent = shown.length ? ""
+    : state.addons.length ? "No addon matches these filters." : "Loading\u2026";
   syncUrl();
 }
 
@@ -132,7 +141,9 @@ document.getElementById("type").addEventListener("change", (event) => {
 
 const params = new URLSearchParams(location.search);
 state.q = params.get("q") || "";
-state.type = params.get("type") || "";
+const wantedType = params.get("type") || "";
+const knownTypes = [...document.getElementById("type").options].map((o) => o.value);
+state.type = knownTypes.includes(wantedType) ? wantedType : "";
 state.tags = (params.get("tags") || "").split(",").filter(Boolean);
 document.getElementById("q").value = state.q;
 document.getElementById("type").value = state.type;

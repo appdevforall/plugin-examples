@@ -331,7 +331,7 @@
 
   <h3>Source layout</h3>
   <ul class="file-tree">
-    <li>sketch-to-ui-plugin/
+    <li>plugins/Sketch-to-UI/
       <ul>
         <li>build.gradle.kts &mdash; AGP application module, applies the Code On The Go plugin-builder</li>
         <li>src/main/
@@ -449,7 +449,7 @@
     <tr><td>Compile / Target SDK</td><td>35</td></tr>
     <tr><td>Min SDK</td><td>28</td></tr>
     <tr><td>Java / Kotlin target</td><td>17</td></tr>
-    <tr><td>Plugin API</td><td><code>compileOnly</code> via <code>../libs/plugin-api.jar</code></td></tr>
+    <tr><td>Plugin API</td><td><code>compileOnly</code> via <code>../../libs/plugin-api.jar</code></td></tr>
     <tr><td>ML runtime</td><td>LiteRT 1.0.1 (CPU + GPU delegate)</td></tr>
     <tr><td>OCR</td><td>ML Kit text-recognition 16.0.1</td></tr>
     <tr><td>DI</td><td>Koin 4.0.0</td></tr>
@@ -594,12 +594,12 @@
   <h2>6. Deployment &amp; Usage</h2>
 
   <h3>Building</h3>
-  <pre><code>cd sketch-to-ui-plugin
+  <pre><code>cd plugins/Sketch-to-UI
 ./gradlew assemblePlugin</code></pre>
   <p>
     Produces <code>build/plugin/sketch-to-ui.cgp</code>. The
     <code>libs/plugin-api.jar</code> at the repo root must exist; refresh it
-    with <code>../scripts/update-libs.sh</code> if you have just synced the
+    with <code>../../scripts/update-libs.sh</code> if you have just synced the
     upstream Code On The Go source.
   </p>
 

@@ -47,7 +47,7 @@ done
 
 # No stdin (e.g. manual invocation) or nothing to compare: fall back to the
 # diff against origin/main so the hook is still useful when run by hand.
-if [ -z "${changed_files//[$'\n\t ']/}" ]; then
+if [ -z "$(printf '%s' "$changed_files" | tr -d '[:space:]')" ]; then
   base="$(git rev-parse --verify --quiet origin/main || true)"
   [ -n "$base" ] && changed_files="$(git diff --name-only "$base...HEAD" 2>/dev/null || true)"
 fi
@@ -61,7 +61,7 @@ while IFS= read -r line; do
 done < <(plugin_dirs 2>/dev/null || true)
 touched=()
 for p in ${all_plugins[@]+"${all_plugins[@]}"}; do
-  if printf '%s\n' "$changed_files" | grep -q "^$p/"; then
+  if grep -q "^$p/" <<< "$changed_files"; then
     touched+=("$p")
   fi
 done
