@@ -19,7 +19,7 @@
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     color: var(--fg);
     background: var(--bg);
-    line-hseven: 1.6;
+    line-height: 1.6;
     max-width: 52rem;
     margin: 0 auto;
     padding: 2rem 1.5rem 4rem;
@@ -48,7 +48,7 @@
   }
   table { width: 100%; border-collapse: collapse; margin: 0.8rem 0 1rem; font-size: 0.95rem; }
   th, td { text-align: left; padding: 0.55rem 0.8rem; border: 1px solid var(--border); }
-  th { background: var(--accent-light); font-wseven: 600; }
+  th { background: var(--accent-light); font-weight: 600; }
   tr:nth-child(even) td { background: var(--table-stripe); }
   footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: 0.85rem; color: #777; }
 </style>
@@ -93,7 +93,7 @@
 <section id="functionality">
   <h2>2. Core Functionality</h2>
   <p>
-    On install, Bookshelf swaps seven placeholder PDF rows in Code On The Go's
+    On install, Bookshelf swaps eight placeholder PDF rows in Code On The Go's
     documentation database for the corresponding compressed textbook. On
     uninstall, the rows revert to the placeholder. The books shipped today
     are:
@@ -172,7 +172,7 @@
     <li>Install the <code>bookshelf.cgp</code> artifact (either from a local
         file or from the plugin catalog if it has been published there).</li>
     <li>Open <strong>Help &rarr; Bookshelf</strong> in the IDE.</li>
-    <li>Select any of the seven titles &mdash; each opens the real PDF
+    <li>Select any of the eight titles &mdash; each opens the real PDF
         directly inside the help viewer.</li>
   </ol>
   <p>
@@ -187,12 +187,12 @@
     <li><strong>Offline-first.</strong> No network access is required at
         install or read time &mdash; everything ships inside the
         <code>.cgp</code>.</li>
-    <li><strong>Curated.</strong> Seven widely-cited free programming
+    <li><strong>Curated.</strong> Eight widely-cited free programming
         textbooks, hand-picked for relevance to the languages most Code On The Go
         users write.</li>
     <li><strong>Non-destructive.</strong> Uninstall restores the host's
         placeholder PDFs, leaving no orphan database state behind.</li>
-    <li><strong>Compact.</strong> All seven books fit into roughly
+    <li><strong>Compact.</strong> All eight books fit into roughly
         24&nbsp;MiB of brotli-compressed payload, decompressed on demand by
         the host viewer.</li>
     <li><strong>Permissioned narrowly.</strong> Requests only

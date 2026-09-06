@@ -371,10 +371,10 @@
 
   <h3>4.5 Permissions</h3>
   <pre><code>&lt;meta-data android:name="plugin.permissions"
-           android:value="filesystem.read,filesystem.write,network.access," /&gt;</code></pre>
+           android:value="filesystem.read,filesystem.write,network.access,native.code" /&gt;</code></pre>
   <p>
     Filesystem access backs project transfer and history; <code>network.access</code>
-    runs the WebSocket server and client; <code></code> covers the bundled
+    runs the WebSocket server and client; <code>native.code</code> covers the bundled
     camera / QR-decoding native libraries used by the scan screen.
   </p>
 </section>
@@ -387,7 +387,7 @@
   <pre><code>cd plugins/Code-Together
 ./gradlew clean assemblePlugin      # or assemblePluginDebug for the debug variant</code></pre>
   <p>
-    Produces <code>plugins/Code-Together/build/plugin/code-together.cgp</code>, the bundle you sideload into
+    Produces <code>plugins/Code-Together/build/plugin/pair.cgp</code>, the bundle you sideload into
     Code On The Go.
   </p>
   <div class="callout">
@@ -399,7 +399,7 @@
   <h3>Installation</h3>
   <ol>
     <li>Open <em>Preferences &rarr; Plugin Manager &rarr; +</em>.</li>
-    <li>Select the <code>code-together.cgp</code> file.</li>
+    <li>Select the <code>pair.cgp</code> file.</li>
     <li>The IDE discovers <code>PairPlugin</code> via manifest metadata and activates it.</li>
   </ol>
 
@@ -416,8 +416,8 @@
   <table>
     <tr><th>Requirement</th><th>Value</th></tr>
     <tr><td>Min Android version</td><td>API 26 (Android 8)</td></tr>
-    <tr><td>Min IDE version</td><td>26.32</td></tr>
-    <tr><td>Permissions</td><td><code>filesystem.read</code>, <code>filesystem.write</code>, <code>network.access</code>, <code></code></td></tr>
+    <tr><td>Min IDE version</td><td>1.0.0</td></tr>
+    <tr><td>Permissions</td><td><code>filesystem.read</code>, <code>filesystem.write</code>, <code>network.access</code>, <code>native.code</code></td></tr>
     <tr><td>Network</td><td>Both devices on the same LAN with device-to-device traffic allowed; no internet required.</td></tr>
   </table>
 </section>

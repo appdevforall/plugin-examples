@@ -1,0 +1,2 @@
+[     228ms] [ERROR] Failed to load resource: the server responded with a status of 404 (File not found) @ http://127.0.0.1:8791/x:0
+[     289ms] [ERROR] Failed to load resource: the server responded with a status of 404 (File not found) @ http://127.0.0.1:8791/favicon.ico:0
