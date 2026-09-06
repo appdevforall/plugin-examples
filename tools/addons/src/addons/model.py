@@ -36,9 +36,13 @@ def manifest_value(addon: Path, key: str) -> str:
     if not f.exists():
         return ""
     text = " ".join(f.read_text().split())
-    found = re.search(
-        r'android:name="%s" android:value="([^"]*)"' % re.escape(key), text)
-    return found.group(1) if found else ""
+    # match the whole element: attribute order is not guaranteed, and a
+    # missed match surfaces much later as an opaque schema failure
+    for element in re.findall(r"<meta-data\b[^>]*/?>", text):
+        if re.search(r'android:name="%s"' % re.escape(key), element):
+            value = re.search(r'android:value="([^"]*)"', element)
+            return value.group(1) if value else ""
+    return ""
 
 
 def plugin_id(addon: Path) -> str:
@@ -46,14 +50,21 @@ def plugin_id(addon: Path) -> str:
 
 
 def version(addon: Path) -> str:
-    build = addon / "build.gradle.kts"
-    if build.exists():
-        found = re.search(r'pluginVersion\s*=\s*"([^"]+)"', build.read_text())
-        if found:
-            return found.group(1)
+    """The version a user sees for this addon.
+
+    A literal in the manifest is not substituted, so it ships verbatim and
+    wins. Otherwise the builder replaces ${pluginVersion} with versionName
+    plus a build-timestamp suffix; the catalog reports the semantic part,
+    since the suffix changes on every build and carries no meaning.
+    """
     declared = manifest_value(addon, "plugin.version")
     if declared and not declared.startswith("${"):
         return declared
+    build = addon / "build.gradle.kts"
+    if build.exists():
+        found = re.search(r'versionName\s*=\s*"([^"]+)"', build.read_text())
+        if found:
+            return found.group(1)
     return DEFAULT_VERSION
 
 

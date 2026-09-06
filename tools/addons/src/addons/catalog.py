@@ -1,5 +1,6 @@
 import hashlib
 import json
+import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -9,7 +10,9 @@ import jsonschema
 from addons import discover, model
 
 BASE = "https://addons.appdevforall.org"
-SOURCE = "https://github.com/appdevforall/plugin-examples/tree/main"
+REPO = "https://github.com/appdevforall/plugin-examples"
+# overridden per run so a staging publish links the ref it was cut from
+REF = os.environ.get("ADDONS_SOURCE_REF", "main")
 TYPES = {"plugins": "plugin", "templates": "template",
          "snippets": "snippet", "code-actions": "code-action"}
 VERSION = re.compile(r"^[0-9]+(\.[0-9]+)*$")
@@ -45,7 +48,7 @@ def entry(root: Path, addon: Path, cgp: Path, archive: Path,
         "iconUrl": f"{base}/p/{slug}.png",
         "iconDarkUrl": f"{base}/p/{slug}-night.png",
         "pageUrl": f"{base}/p/{slug}.html",
-        "sourceUrl": f"{SOURCE}/{relative}",
+        "sourceUrl": f"{REPO}/tree/{REF}/{relative}",
         "download": _file(cgp, f"{base}/dl/{slug}.cgp"),
         "sourceTarball": _file(archive, f"{base}/src/{slug}-src.tar.gz"),
     }

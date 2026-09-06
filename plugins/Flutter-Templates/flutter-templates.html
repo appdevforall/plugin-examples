@@ -85,8 +85,8 @@
 <body>
 
 <header>
-  <h1>Flutter Template</h1>
-  <p class="subtitle">Adds Flutter starter project templates to Code on the Go's New Project screen</p>
+  <h1>Flutter Templates</h1>
+  <p class="subtitle">Adds Flutter starter project templates to Code On The Go's New Project screen</p>
   <div class="meta">Version 2.0.0 &middot; Author: RJ Ali &middot; Package: <code>com.ali.fluttertemplate</code></div>
 </header>
 
@@ -106,7 +106,7 @@
 <section id="overview">
   <h2>1. Executive Overview</h2>
   <p>
-    Flutter Template is a Code on the Go plugin that adds ready-to-use <strong>Flutter starter
+    Flutter Template is a Code On The Go plugin that adds ready-to-use <strong>Flutter starter
     project templates</strong> to the IDE's New Project screen, sitting alongside the built-in
     core (Android) templates. Instead of starting from an empty folder, a developer picks a
     Flutter template, enters an app name and package name, and the IDE generates a complete,
@@ -169,7 +169,7 @@
 
   <h3>Template system integration</h3>
   <p>
-    Code on the Go discovers project templates by scanning a templates directory for <code>.cgt</code>
+    Code On The Go discovers project templates by scanning a templates directory for <code>.cgt</code>
     archives. A plugin adds its own by calling <code>IdeTemplateService.registerTemplate()</code>,
     which places the archive where the IDE will find it and reloads the template list &mdash; so the
     plugin's templates appear next to the core ones with no host changes.
@@ -233,7 +233,7 @@
   <ol>
     <li>Build the plugin: <code>cd flutter-template &amp;&amp; ./gradlew clean assemblePlugin</code>
       (produces <code>build/plugin/fluttertemplate.cgp</code>).</li>
-    <li>In Code on the Go, open <em>Preferences &rarr; Plugin Manager &rarr; +</em> and select the
+    <li>In Code On The Go, open <em>Preferences &rarr; Plugin Manager &rarr; +</em> and select the
       <code>fluttertemplate.cgp</code> file.</li>
     <li>Enable the plugin. Its templates register automatically.</li>
   </ol>
@@ -248,7 +248,7 @@
   </ol>
 
   <div class="callout">
-    <strong>Building the generated project</strong> requires the Flutter SDK, which Code on the Go
+    <strong>Building the generated project</strong> requires the Flutter SDK, which Code On The Go
     does not yet provide on-device. Run <code>flutter pub get</code> / <code>flutter run</code> on a
     machine with Flutter installed, or once an on-device Flutter SDK becomes available.
   </div>
@@ -275,7 +275,7 @@
   <ul>
     <li>The plugin <strong>scaffolds project files only</strong>; it does not install the
       Flutter/Dart SDK or build/run Flutter projects on-device.</li>
-    <li>Code on the Go's editor does not currently provide Dart syntax highlighting, completion, or
+    <li>Code On The Go's editor does not currently provide Dart syntax highlighting, completion, or
       analysis &mdash; these templates create the files, but rich Dart editing is outside the IDE's
       current language support.</li>
     <li>On-device Flutter toolchain support is a separate, larger effort tracked independently.</li>
@@ -288,7 +288,7 @@
     <li><strong>Original idea:</strong> Raju Kumar
       (<a href="https://appdevforall.atlassian.net/browse/ADFA-2599">ADFA-2599</a>).</li>
     <li><strong>Author / implementation:</strong> RJ Ali &lt;rjali3232@gmail.com&gt;, contributed via
-      the Code on the Go community submission process and rebuilt on the IDE's template system
+      the Code On The Go community submission process and rebuilt on the IDE's template system
       (<a href="https://appdevforall.atlassian.net/browse/ADFA-3857">ADFA-3857</a>).</li>
   </ul>
 </section>

@@ -59,10 +59,19 @@ def test_a_literal_in_the_manifest_wins_over_the_default(tmp_path):
     assert model.version(addon) == "1.0.1"
 
 
-def test_the_build_file_wins_over_everything(tmp_path):
-    addon = make(tmp_path, "1.0.1",
-                 build='pluginBuilder {\n  pluginVersion = "2.4.0"\n}\n')
-    assert model.version(addon) == "2.4.0"
+def test_a_manifest_literal_wins_because_it_is_not_substituted(tmp_path):
+    # Icons-Repository hardcodes 1.0.1 and its .cgp ships exactly that
+    addon = make(tmp_path, "1.0.1", build='android { defaultConfig { versionName = "1.0.0" } }')
+    assert model.version(addon) == "1.0.1"
+
+
+def test_the_placeholder_resolves_to_version_name(tmp_path):
+    # The builder substitutes versionName for ${pluginVersion}. Flutter-Templates
+    # declares 2.0.0 and its .cgp ships 2.0.0-release.<timestamp>; the catalog
+    # reports the semantic part.
+    addon = make(tmp_path, "${pluginVersion}",
+                 build='android {\n  defaultConfig {\n    versionName = "2.0.0"\n  }\n}\n')
+    assert model.version(addon) == "2.0.0"
 
 
 def test_a_missing_manifest_gives_an_empty_id(tmp_path):
@@ -98,3 +107,13 @@ def test_a_missing_minimum_is_empty(tmp_path):
     addon = tmp_path / "Bare"
     addon.mkdir()
     assert model.min_app_version(addon) == ""
+
+
+def test_manifest_value_survives_attribute_order(tmp_path):
+    addon = tmp_path / "Reordered"
+    (addon / "src" / "main").mkdir(parents=True)
+    (addon / "src" / "main" / "AndroidManifest.xml").write_text(
+        '<manifest><application>'
+        '<meta-data android:value="com.example.foo" android:name="plugin.id" />'
+        '</application></manifest>')
+    assert model.plugin_id(addon) == "com.example.foo"

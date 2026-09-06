@@ -1,7 +1,7 @@
 name: Build plugin artifacts
 
-# Builds every example plugin's .cgp and exposes them as downloadable
-# workflow artifacts. Unlike "Update libs from CodeOnTheGo", this never
+# Builds every addon (or one) to prove the tree compiles. It publishes
+# nothing: use the "Publish addons" workflow to get a downloadable URL.
 # commits refreshed libs, never publishes a GitHub release, and never
 # deploys to the website — it only produces artifacts you can download
 # from the run summary.
@@ -25,8 +25,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    outputs:
-      plugins: ${{ steps.stage.outputs.plugins }}
     steps:
       - name: Checkout plugin-examples
         uses: actions/checkout@v4
@@ -58,12 +56,19 @@ jobs:
           fi
 
       - name: Check every addon produced a release .cgp
+        env:
+          ONLY_PLUGIN: ${{ inputs.plugin }}
         run: |
           set -euo pipefail
+          all="$(uv run --directory tools/addons addons --root "$GITHUB_WORKSPACE" discover)"
+          # A single-plugin run only builds that module, so the others have no
+          # .cgp by design and must not be reported as missing.
+          if [ -n "$ONLY_PLUGIN" ]; then
+            all="$(printf '%s\n' "$all" | grep -Fx -e "$ONLY_PLUGIN" -e "plugins/$ONLY_PLUGIN")"
+          fi
           missing=0
-          for name in $(uv run --directory tools/addons addons --root "$GITHUB_WORKSPACE" discover); do
-            dir="$name"
-            if ! ls "$dir"/build/plugin/*.cgp 2>/dev/null | grep -qv -- '-debug\.cgp$'; then
+          for dir in $all; do
+            if ! find "$dir/build/plugin" -name '*.cgp' ! -name '*-debug.cgp' 2>/dev/null | grep -q .; then
               echo "ERROR: no release .cgp under ${dir}/build/plugin/"
               missing=$((missing + 1))
             fi

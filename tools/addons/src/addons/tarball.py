@@ -129,8 +129,6 @@ def verify(top: Path, inside: str, jars: list[str]) -> None:
             problems.append(f"{rel} could carry a secret")
         if path.is_dir() and path.name in (".gradle", "build"):
             problems.append(f"{rel}/ is build output")
-        if path.is_absolute() and not is_inside(path, top):
-            problems.append(f"{rel} is outside the archive root")
         if not is_inside(path, top):
             problems.append(f"{rel} escapes the archive root")
     if problems:

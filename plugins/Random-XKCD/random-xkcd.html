@@ -90,7 +90,7 @@
 
 <header>
   <h1>Random XKCD Plugin</h1>
-  <p class="subtitle">Browse xkcd comics from the Code on the Go editor bottom sheet</p>
+  <p class="subtitle">Browse xkcd comics from the Code On The Go editor bottom sheet</p>
   <div class="meta">Version 1.0.0 &middot; Author: App Dev For All &middot; Package: <code>org.appdevforall.randomxkcd</code></div>
 </header>
 
@@ -111,7 +111,7 @@
 <section id="overview">
   <h2>1. Executive Overview</h2>
   <p>
-    Random XKCD is a Code on the Go plugin that puts an xkcd-comic browser into
+    Random XKCD is a Code On The Go plugin that puts an xkcd-comic browser into
     the editor's bottom sheet. A new <strong>XKCD</strong> tab joins the
     built-in bottom-sheet tabs (Build Output, App Logs, &hellip;); inside it,
     a five-button navigation row mirrors the xkcd.com control bar &mdash;
@@ -132,7 +132,7 @@
     The plugin spans three Kotlin source files and one XML layout (~600 lines
     of code total), declares only the <code>network.access</code> permission,
     and is deliberately written as a canonical &ldquo;this is what a small
-    CoGo plugin looks like&rdquo; example. Every extension point it touches
+    Code On The Go plugin looks like&rdquo; example. Every extension point it touches
     &mdash; <code>IPlugin</code>, <code>UIExtension</code>,
     <code>DocumentationExtension</code> &mdash; is exercised once, in the
     simplest way that still tells the truth.
@@ -502,13 +502,13 @@
   <p>
     Writes to the plugin's own <code>filesDir</code> (the FileProvider hop)
     and access to the system clipboard are sandbox-allowed and need no
-    declaration. CoGo's <code>filesystem.*</code> permissions only gate the
+    declaration. Code On The Go's <code>filesystem.*</code> permissions only gate the
     host IDE's project-file services &mdash; not used here.
   </p>
 
   <h3>Integration summary</h3>
   <div class="diagram">
-                    Code on the Go IDE Host
+                    Code On The Go IDE Host
   +----------------------------------------------------+
   |                                                    |
   |   bottom-sheet tab system                          |
@@ -546,7 +546,7 @@
 ./gradlew assemblePlugin</code></pre>
   <p>
     Produces <code>random-xkcd/build/plugin/random-xkcd.cgp</code> &mdash; the
-    bundle you sideload into Code on the Go.
+    bundle you sideload into Code On The Go.
   </p>
 
   <h3>Installation</h3>
@@ -572,11 +572,11 @@
 
   <h3>Reading the code walkthrough</h3>
   <ul>
-    <li><strong>Inside CoGo</strong> (the canonical path) &mdash; long-press
+    <li><strong>Inside Code On The Go</strong> (the canonical path) &mdash; long-press
         the <strong>XKCD</strong> tab &rarr; tap <strong>See More</strong>
         &rarr; tap <strong>Code walkthrough</strong>. The IDE opens the page
         in an in-IDE WebView.</li>
-    <li><strong>Outside CoGo</strong> &mdash; open
+    <li><strong>Outside Code On The Go</strong> &mdash; open
         <code>src/main/assets/docs/index.html</code> directly in any
         browser. Renders identically.</li>
   </ul>
@@ -619,7 +619,7 @@
     <li><strong>Sandbox-honest permissions.</strong> Declares only
         <code>network.access</code> and documents why the clipboard and
         plugin-private filesystem writes do not need declarations &mdash;
-        useful reference for understanding CoGo's permission surface.</li>
+        useful reference for understanding Code On The Go's permission surface.</li>
   </ul>
 </section>
 

@@ -60,6 +60,15 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "publish":
         dist, prefix = args.dist, args.prefix
+        # The catalog describes the whole site. Publishing a subset writes a
+        # partial catalog over the live one and erases every other addon, so
+        # a scoped publish is only allowed under a prefix (R09: staging).
+        if args.only and not prefix:
+            raise SystemExit(
+                "refusing to publish a subset to the live site: the catalog "
+                "would replace all addons with just "
+                f"{', '.join(args.only)}. Use --prefix for a staging run, "
+                "or publish every addon.")
         site = args.root / "site"
         template = (site / "page.template.html").read_text()
         # content-hashed asset names, so a changed asset always gets a new URL

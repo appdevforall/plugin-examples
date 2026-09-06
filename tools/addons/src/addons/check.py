@@ -9,6 +9,14 @@ from addons import discover, model
 SCHEMA = json.loads((Path(__file__).parent / "addon.schema.json").read_text())
 
 
+# Global Constraint 6: the product name is written in full in anything a user
+# reads. These pages are published, so the rule reaches them.
+SHORTHAND = ("CodeOnTheGo", "CoGo", "CotG")
+NOT_PROSE = re.compile(
+    r"<code[^>]*>.*?</code>|<pre[^>]*>.*?</pre>|href=\"[^\"]*\"|src=\"[^\"]*\"",
+    re.S | re.I)
+
+
 def check_names(root: Path) -> list[str]:
     problems = []
     for path in discover.find_addons(root):
@@ -30,11 +38,31 @@ def check_names(root: Path) -> list[str]:
             problems.append(
                 f"{directory}: plugin.name is '{plugin_name}', expected '{name}'")
 
+        for icon in ("icon_day.png", "icon_night.png"):
+            if not (path / "src" / "main" / "assets" / icon).exists():
+                problems.append(f"{directory}: src/main/assets/{icon} is missing")
+
         page = path / f"{addon_slug}.html"
         if not page.exists():
             problems.append(f"{directory}: the page must be named {addon_slug}.html")
-        elif f"<title>{name}</title>" not in page.read_text():
-            problems.append(f"{directory}: the page title must be '{name}'")
+        else:
+            html = page.read_text()
+            if f"<title>{name}</title>" not in html:
+                problems.append(f"{directory}: the page title must be '{name}'")
+            # the h1 is what a visitor actually reads, and a rename that only
+            # touches <title> leaves the old product name on the page
+            prose = NOT_PROSE.sub(" ", html)
+            for bad in SHORTHAND:
+                if re.search(r"\b" + bad + r"\b", prose):
+                    problems.append(
+                        f"{directory}: the page says '{bad}'; write "
+                        f"'Code On The Go' in full")
+            heading = re.search(r"<h1[^>]*>(.*?)</h1>", html, re.S | re.I)
+            if heading:
+                text = " ".join(re.sub(r"<[^>]+>", "", heading.group(1)).split())
+                if name.lower() not in text.lower():
+                    problems.append(
+                        f"{directory}: the page h1 reads '{text}', expected '{name}'")
     return problems
 
 

@@ -45,8 +45,9 @@ def headers_for(key: str) -> dict:
 
 
 def put(client, bucket: str, key: str, path: Path) -> None:
-    client.put_object(Bucket=bucket, Key=key, Body=path.read_bytes(),
-                      **headers_for(key))
+    # upload_file streams from disk and retries; put_object would read a
+    # 200 MB addon entirely into memory
+    client.upload_file(str(path), bucket, key, ExtraArgs=headers_for(key))
 
 
 def publish(client, bucket: str, objects: list[tuple[str, Path]],

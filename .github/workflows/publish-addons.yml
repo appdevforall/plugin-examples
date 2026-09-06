@@ -11,6 +11,11 @@ on:
         type: boolean
         default: true
 
+# This job holds the R2 write credentials and runs Gradle builds for every
+# addon directory, so its token gets the least it can do its work with.
+permissions:
+  contents: read
+
 jobs:
   publish:
     runs-on: ubuntu-latest
@@ -86,6 +91,7 @@ jobs:
         env:
           BASE: ${{ steps.dest.outputs.base }}
           ONLY: ${{ steps.stage.outputs.only }}
+          ADDONS_SOURCE_REF: ${{ github.ref_name }}
         run: |
           # shellcheck disable=SC2086
           uv run --directory tools/addons addons --root "$GITHUB_WORKSPACE" catalog \

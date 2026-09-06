@@ -6,8 +6,8 @@ class FakeClient:
         self.store = {}
         self.order = []
 
-    def put_object(self, Bucket, Key, Body, **headers):
-        self.store[Key] = (Body, headers)
+    def upload_file(self, Filename, Bucket, Key, ExtraArgs=None):
+        self.store[Key] = (open(Filename, "rb").read(), ExtraArgs or {})
         self.order.append(Key)
 
 
@@ -82,3 +82,11 @@ def test_a_download_under_a_prefix_is_still_an_attachment():
     head = publish.headers_for("staging/1234/dl/voice-alerts.cgp")
     assert head["CacheControl"] == "public, max-age=60"
     assert head["ContentDisposition"].startswith("attachment")
+
+
+def test_a_partial_publish_may_not_overwrite_the_live_catalog(tmp_path):
+    import pytest
+    from addons import cli
+    with pytest.raises(SystemExit):
+        cli.main(["--root", str(tmp_path), "publish", "--dist", str(tmp_path),
+                  "--only", "plugins/One"])

@@ -64,7 +64,7 @@ def test_no_field_is_null(tmp_path):
 
 
 def test_a_bad_version_stops_the_build(tmp_path):
-    dist = make(tmp_path, build_extra='pluginBuilder { pluginVersion = "draft" }')
+    dist = make(tmp_path, build_extra='android { defaultConfig { versionName = "draft" } }')
     with pytest.raises(RuntimeError, match="version"):
         catalog.build(tmp_path, dist)
 

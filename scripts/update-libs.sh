@@ -147,19 +147,21 @@ if [ "${#PLUGINS[@]}" -eq 0 ]; then
 fi
 
 if [ -n "$ONLY_PLUGIN" ]; then
-    found=0
+    # keep the resolved repo-relative path: the build loop cds into it, and
+    # the bare name the caller gave us is no longer a directory
+    match=""
     for p in "${PLUGINS[@]}"; do
         if [ "$p" = "$ONLY_PLUGIN" ] || [ "${p##*/}" = "$ONLY_PLUGIN" ]; then
-            found=1
+            match="$p"
             break
         fi
     done
-    if [ "$found" -eq 0 ]; then
+    if [ -z "$match" ]; then
         echo "Error: requested plugin '$ONLY_PLUGIN' is not a buildable example plugin." >&2
         echo "Available plugins: ${PLUGINS[*]}" >&2
         exit 1
     fi
-    PLUGINS=("$ONLY_PLUGIN")
+    PLUGINS=("$match")
 fi
 
 echo ""
