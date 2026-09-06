@@ -149,7 +149,7 @@ fi
 if [ -n "$ONLY_PLUGIN" ]; then
     found=0
     for p in "${PLUGINS[@]}"; do
-        if [ "$p" = "$ONLY_PLUGIN" ]; then
+        if [ "$p" = "$ONLY_PLUGIN" ] || [ "${p##*/}" = "$ONLY_PLUGIN" ]; then
             found=1
             break
         fi

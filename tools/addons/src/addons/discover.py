@@ -2,6 +2,10 @@ from pathlib import Path
 
 PREDICATE = "com.itsaky.androidide.plugins.build"
 
+# The four addon areas, plus the repository root for addons not yet migrated.
+# catalog.TYPES maps the same four; keep them in step.
+AREAS = ("plugins", "templates", "snippets", "code-actions")
+
 
 def read_skip(root: Path) -> set[str]:
     f = root / "tools" / "addons" / "skip.txt"
@@ -15,11 +19,25 @@ def read_skip(root: Path) -> set[str]:
     return names
 
 
-def find_addons(root: Path) -> list[Path]:
+def find_addons(root: Path, only: list[str] | None = None) -> list[Path]:
     skip = read_skip(root)
     found = []
-    for pattern in ("*/build.gradle.kts", "plugins/*/build.gradle.kts"):
+    patterns = ["*/build.gradle.kts"] + [f"{a}/*/build.gradle.kts" for a in AREAS]
+    for pattern in patterns:
         for f in root.glob(pattern):
             if PREDICATE in f.read_text(errors="ignore") and f.parent.name not in skip:
                 found.append(f.parent)
-    return sorted(found, key=lambda p: p.name)
+    found = sorted(found, key=lambda p: p.name)
+    if only is None:
+        return found
+
+    # accept either the repo-relative path or the bare directory name
+    wanted, chosen = list(only), []
+    for name in only:
+        match = next((p for p in found
+                      if p.name == name
+                      or p.relative_to(root).as_posix() == name), None)
+        if match is None:
+            raise RuntimeError(f"{name}: not a known addon")
+        chosen.append(match)
+    return sorted(set(chosen), key=lambda p: p.name)

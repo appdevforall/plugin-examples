@@ -30,17 +30,25 @@ jobs:
         run: uv run --directory tools/addons addons --root "$GITHUB_WORKSPACE" check
 
       - name: Build, package, and stage
+        id: stage
+        env:
+          ADDON: ${{ inputs.addon }}
         run: |
           set -euo pipefail
           mkdir -p dist
-          if [ "${{ inputs.addon }}" = "all" ]; then
-            names="$(uv run --directory tools/addons addons --root "$GITHUB_WORKSPACE" discover)"
+          all="$(uv run --directory tools/addons addons --root "$GITHUB_WORKSPACE" discover)"
+          if [ "$ADDON" = "all" ]; then
+            names="$all"
           else
-            names="${{ inputs.addon }}"
+            # resolve through discover so an unknown or hostile value cannot
+            # reach the shell as a path
+            names="$(printf '%s\n' "$all" | grep -Fx -e "$ADDON" -e "plugins/$ADDON" || true)"
+            if [ -z "$names" ]; then
+              echo "Unknown addon: $ADDON" >&2; exit 1
+            fi
           fi
-          for name in $names; do
-            dir="$name"
-            [ -d "$dir" ] || dir="plugins/$name"
+          printf 'only<<EOF\n%s\nEOF\n' "$names" >> "$GITHUB_OUTPUT"
+          for dir in $names; do
             echo "==> $dir"
             ( cd "$dir"
               gradlew="$GITHUB_WORKSPACE/gradlew"
@@ -49,30 +57,41 @@ jobs:
                 "$gradlew" --console=plain downloadAssets
               fi
               "$gradlew" --console=plain assemblePlugin )
-            slug="$(echo "$name" | tr '[:upper:]' '[:lower:]')"
+            slug="$(basename "$dir" | tr '[:upper:]' '[:lower:]')"
             src="$(ls "$dir"/build/plugin/*.cgp | grep -v -- '-debug\.cgp$' | head -n1)"
             cp "$src" "dist/${slug}.cgp"
           done
 
       - name: Build the source tarballs
-        run: uv run --directory tools/addons addons --root "$GITHUB_WORKSPACE" tarball --out "$GITHUB_WORKSPACE/dist"
+        env:
+          ONLY: ${{ steps.stage.outputs.only }}
+        run: |
+          # shellcheck disable=SC2086
+          uv run --directory tools/addons addons --root "$GITHUB_WORKSPACE" \
+            tarball --out "$GITHUB_WORKSPACE/dist" --only $ONLY
 
       - name: Work out where this is being published
         id: dest
+        env:
+          STAGING: ${{ inputs.staging }}
         run: |
           prefix=""
-          if [ "${{ inputs.staging }}" = "true" ]; then
+          if [ "$STAGING" = "true" ]; then
             prefix="staging/${{ github.run_id }}/"
           fi
           echo "prefix=${prefix}" >> "$GITHUB_OUTPUT"
           echo "base=https://addons.appdevforall.org/${prefix%/}" >> "$GITHUB_OUTPUT"
 
       - name: Generate the catalog
+        env:
+          BASE: ${{ steps.dest.outputs.base }}
+          ONLY: ${{ steps.stage.outputs.only }}
         run: |
+          # shellcheck disable=SC2086
           uv run --directory tools/addons addons --root "$GITHUB_WORKSPACE" catalog \
             --dist "$GITHUB_WORKSPACE/dist" \
             --out "$GITHUB_WORKSPACE/dist/catalog.json" \
-            --base "${{ steps.dest.outputs.base }}"
+            --base "$BASE" --only $ONLY
 
       - name: Publish to Cloudflare R2
         env:
@@ -80,10 +99,14 @@ jobs:
           R2_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_SECRET_ACCESS_KEY }}
           R2_BUCKET: ${{ vars.CLOUDFLARE_R2_BUCKET_NAME }}
+          PREFIX: ${{ steps.dest.outputs.prefix }}
+          BASE: ${{ steps.dest.outputs.base }}
+          ONLY: ${{ steps.stage.outputs.only }}
         run: |
+          # shellcheck disable=SC2086
           uv run --directory tools/addons addons --root "$GITHUB_WORKSPACE" publish \
-            --dist "$GITHUB_WORKSPACE/dist" --prefix "${{ steps.dest.outputs.prefix }}"
+            --dist "$GITHUB_WORKSPACE/dist" --prefix "$PREFIX" --only $ONLY
           {
             echo "### Published"
-            echo "${{ steps.dest.outputs.base }}/index.html"
+            echo "$BASE/index.html"
           } >> "$GITHUB_STEP_SUMMARY"

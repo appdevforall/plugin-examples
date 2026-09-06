@@ -69,6 +69,26 @@ function renderActive() {
   bar.append(clear);
 }
 
+// Safari throws SecurityError after ~100 replaceState calls in 30 seconds and
+// render() runs on every keystroke, so coalesce the writes. A failure here
+// must never stop the list from rendering.
+let urlTimer = null;
+function syncUrl() {
+  clearTimeout(urlTimer);
+  urlTimer = setTimeout(() => {
+    try {
+      const url = new URL(location.href);
+      url.search = new URLSearchParams(
+        Object.entries({ q: state.q, type: state.type, tags: state.tags.join(",") })
+          .filter(([, v]) => v)
+      ).toString();
+      history.replaceState(null, "", url);
+    } catch (e) {
+      /* the list is rendered; a stale address bar is not worth breaking it */
+    }
+  }, 250);
+}
+
 function render() {
   const shown = state.addons.filter(matches);
   cards.replaceChildren();
@@ -98,12 +118,7 @@ function render() {
   }
   renderActive();
   status.textContent = shown.length ? "" : "No addon matches these filters.";
-  const url = new URL(location.href);
-  url.search = new URLSearchParams(
-    Object.entries({ q: state.q, type: state.type, tags: state.tags.join(",") })
-      .filter(([, v]) => v)
-  ).toString();
-  history.replaceState(null, "", url);
+  syncUrl();
 }
 
 document.getElementById("q").addEventListener("input", (event) => {

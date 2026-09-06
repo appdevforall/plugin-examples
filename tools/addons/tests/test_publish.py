@@ -70,3 +70,15 @@ def test_hashed_assets_are_immutable():
 def test_svg_is_served_as_an_image():
     assert publish.headers_for("assets/adfa-logo.svg")["ContentType"] == "image/svg+xml"
     assert "ContentDisposition" not in publish.headers_for("assets/adfa-logo.svg")
+
+
+def test_assets_stay_immutable_under_a_staging_prefix():
+    # publish keys carry the prefix, so a startswith("assets/") test misses them
+    head = publish.headers_for("staging/1234/assets/app.abc12345.js")
+    assert head["CacheControl"] == "public, max-age=31536000, immutable"
+
+
+def test_a_download_under_a_prefix_is_still_an_attachment():
+    head = publish.headers_for("staging/1234/dl/voice-alerts.cgp")
+    assert head["CacheControl"] == "public, max-age=60"
+    assert head["ContentDisposition"].startswith("attachment")

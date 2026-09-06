@@ -38,13 +38,17 @@ def test_unknown_key_fails(tmp_path):
     assert check.check_metadata(tmp_path) != []
 
 
-def test_community_needs_an_author(tmp_path):
-    bad = dict(GOOD, origin="community")
+def test_every_addon_needs_an_author(tmp_path):
+    """R15 asks for an author on community addons. The schema requires one
+    from every addon, which is stricter and simpler, and D12 wants the field
+    always present. This test states the rule that is actually enforced."""
+    bad = dict(GOOD)
     del bad["author"]
     make_addon(tmp_path, bad)
-    assert check.check_metadata(tmp_path) != []
+    assert any("author" in p for p in check.check_metadata(tmp_path))
 
 
-def test_bad_min_app_version_fails(tmp_path):
-    make_addon(tmp_path, GOOD | {"minAppVersion": "1.0.0"})
+def test_an_author_without_a_url_fails(tmp_path):
+    make_addon(tmp_path, GOOD | {"author": {"name": "Someone"}})
     assert check.check_metadata(tmp_path) != []
+

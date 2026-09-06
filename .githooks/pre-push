@@ -53,9 +53,14 @@ if [ -z "${changed_files//[$'\n\t ']/}" ]; then
 fi
 
 # Which plugin folders were touched?
-mapfile -t all_plugins < <(plugin_dirs)
+# No mapfile: macOS ships bash 3.2. No failure either -- this hook is a
+# nudge, so a missing uv must not stop a push.
+all_plugins=()
+while IFS= read -r line; do
+  [ -n "$line" ] && all_plugins+=("$line")
+done < <(plugin_dirs 2>/dev/null || true)
 touched=()
-for p in "${all_plugins[@]}"; do
+for p in ${all_plugins[@]+"${all_plugins[@]}"}; do
   if printf '%s\n' "$changed_files" | grep -q "^$p/"; then
     touched+=("$p")
   fi

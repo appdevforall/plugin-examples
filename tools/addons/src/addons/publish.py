@@ -37,7 +37,7 @@ def headers_for(key: str) -> dict:
     suffix = Path(key).suffix
     headers = {
         "ContentType": CONTENT_TYPES.get(suffix, "application/octet-stream"),
-        "CacheControl": IMMUTABLE if key.startswith("assets/") else SHORT,
+        "CacheControl": IMMUTABLE if Path(key).parent.name == "assets" else SHORT,
     }
     if suffix in ATTACHMENTS:
         headers["ContentDisposition"] = f'attachment; filename="{Path(key).name}"'

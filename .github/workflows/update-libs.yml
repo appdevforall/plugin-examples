@@ -97,4 +97,4 @@ jobs:
           target_commitish: ${{ steps.commit.outputs.head_sha }}
           body: Built against CodeOnTheGo@${{ steps.commit.outputs.codeonthego_sha }}.
           fail_on_unmatched_files: true
-          files: '*/build/plugin/*.cgp'
+          files: 'plugins/*/build/plugin/*.cgp'

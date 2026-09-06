@@ -6,7 +6,7 @@ from pathlib import Path
 from addons import catalog, check, discover, model, page, publish, tarball
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="addons")
     parser.add_argument("--root", type=Path, default=Path.cwd())
     sub = parser.add_subparsers(dest="command", required=True)
@@ -16,20 +16,25 @@ def main() -> int:
     catalog_parser = sub.add_parser("catalog")
     catalog_parser.add_argument("--dist", type=Path, required=True)
     catalog_parser.add_argument("--out", type=Path, required=True)
+    catalog_parser.add_argument("--only", nargs="*", default=None)
     catalog_parser.add_argument("--base", default=catalog.BASE,
                                 help="site base the catalog is published under")
 
     publish_parser = sub.add_parser("publish")
     publish_parser.add_argument("--dist", type=Path, required=True)
     publish_parser.add_argument("--prefix", default="")
+    publish_parser.add_argument("--only", nargs="*", default=None)
 
     tarball_parser = sub.add_parser("tarball")
     tarball_parser.add_argument("--out", type=Path, required=True)
-    args = parser.parse_args()
+    tarball_parser.add_argument("--only", nargs="*", default=None)
+    args = parser.parse_args(argv)
 
     if args.command == "discover":
+        # repo-relative, not bare names: callers cd into these and match them
+        # against changed-file lists, so the location has to survive
         for path in discover.find_addons(args.root):
-            print(path.name)
+            print(path.relative_to(args.root).as_posix())
         return 0
 
     if args.command == "check":
@@ -39,7 +44,7 @@ def main() -> int:
         return 1 if problems else 0
 
     if args.command == "catalog":
-        document = catalog.build(args.root, args.dist, args.base)
+        document = catalog.build(args.root, args.dist, args.base, args.only)
         args.out.parent.mkdir(parents=True, exist_ok=True)
         args.out.write_text(json.dumps(document, indent=2) + "\n")
         print(f"wrote {args.out} with {len(document['addons'])} addons")
@@ -47,9 +52,9 @@ def main() -> int:
 
     if args.command == "tarball":
         args.out.mkdir(parents=True, exist_ok=True)
-        for addon in discover.find_addons(args.root):
+        for addon in discover.find_addons(args.root, args.only):
             meta = json.loads((addon / "addon.json").read_text())
-            archive = tarball.build(args.root, addon, args.out, meta["license"])
+            archive = tarball.build(args.root, addon, args.out, meta)
             print(f"built {archive.name}")
         return 0
 
@@ -72,7 +77,7 @@ def main() -> int:
         index_file = dist / "index.html"
         index_file.write_text(with_hashed_assets((site / "index.html").read_text()))
         objects.append((f"{prefix}index.html", index_file))
-        for addon in discover.find_addons(args.root):
+        for addon in discover.find_addons(args.root, args.only):
             slug = model.slug(addon.name)
             wrapped = page.wrap((addon / f"{slug}.html").read_text(),
                                 model.display_name(addon.name), template)

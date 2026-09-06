@@ -11,7 +11,7 @@ Reference plugins for [CodeOnTheGo](https://github.com/appdevforall/CodeOnTheGo)
 Build one plugin:
 
 ```sh
-cd Beepy   # or any plugin folder
+cd plugins/Voice-Alerts   # or any addon folder
 ./gradlew assemblePlugin           # release .cgp -> build/plugin/<pluginName>.cgp
 ./gradlew assemblePluginDebug      # debug variant
 ```
@@ -42,15 +42,15 @@ The script clones CoGo into `.cache/CodeOnTheGo/` on first run, rebuilds both ja
 - **`plugin-api.jar`** — the IDE-side API surface (`IPlugin`, `PluginContext`, `BuildStatusListener`, `IdeBuildService`, etc.). Each plugin uses it as `compileOnly` (provided by the IDE at runtime) AND as `buildscript classpath` so the Gradle plugin can resolve symbols at configuration time.
 - **`gradle-plugin.jar`** — the Gradle plugin with id `com.itsaky.androidide.plugins.build`, applied by every plugin. It's the output of CoGo's `plugin-api/plugin-builder/` module (separate from CoGo's `gradle-plugin/` module, which is unrelated despite the name). It packages the compiled Android library into a `.cgp`.
 
-There is also **one shared Gradle wrapper at the repo root** (`gradlew` + `gradle/wrapper/`). New plugins should use it — build them with `cd <plugin> && ../gradlew assemblePlugin` rather than bundling a per-plugin `gradlew`/`gradle/wrapper/` copy. (`flutter-template` follows this; most older plugins still carry their own local wrapper and can be migrated opportunistically.)
+There is also **one shared Gradle wrapper at the repo root** (`gradlew` + `gradle/wrapper/`). New plugins should use it — build them with `cd plugins/<Addon> && ../../gradlew assemblePlugin` rather than bundling a per-plugin `gradlew`/`gradle/wrapper/` copy. (`flutter-template` follows this; most older plugins still carry their own local wrapper and can be migrated opportunistically.)
 
-Both jars are referenced via `../libs/*.jar`. **Always use the repo-root `libs/` jars and the repo-root Gradle wrapper — never bundle per-plugin copies.** A plugin that ships its own `libs/plugin-api.jar` / `libs/gradle-plugin.jar` (e.g. copied from another plugin) can drift out of sync with the rest of the repo; point `build.gradle.kts` (`compileOnly`) and `settings.gradle.kts` (buildscript `classpath`) at `../libs/*.jar` and delete any local `libs/`. The root `plugin-api.jar` already carries the full API surface (including `IdeTemplateService`/`CgtTemplateBuilder`), so newer sub-APIs do not justify a local copy. **A plugin folder is not standalone in isolation** — copy the root `libs/` along if you move one elsewhere. When CoGo's API changes, refresh via the script above or the **Update libs from CodeOnTheGo** GitHub Action (which also commits the refreshed jars, cuts a release, and deploys `.cgp` files to the website).
+An addon under `plugins/` references the shared jars as `../../libs/*.jar`. **Always use the repo-root `libs/` jars and the repo-root Gradle wrapper — never bundle per-plugin copies.** A plugin that ships its own `libs/plugin-api.jar` / `libs/gradle-plugin.jar` (e.g. copied from another plugin) can drift out of sync with the rest of the repo; point `build.gradle.kts` (`compileOnly`) and `settings.gradle.kts` (buildscript `classpath`) at `../../libs/*.jar` and delete any local `libs/`. The root `plugin-api.jar` already carries the full API surface (including `IdeTemplateService`/`CgtTemplateBuilder`), so newer sub-APIs do not justify a local copy. **A plugin folder is not standalone in isolation** — copy the root `libs/` along if you move one elsewhere. When CoGo's API changes, refresh via the script above or the **Update libs from CodeOnTheGo** GitHub Action (which also commits the refreshed jars, cuts a release, and deploys `.cgp` files to the website).
 
 ### Plugin shape
 
 A plugin is an Android *application* module (despite installing as a library) with:
 
-1. **`build.gradle.kts`** applies `com.android.application`, `org.jetbrains.kotlin.android`, and `com.itsaky.androidide.plugins.build`. Configures `pluginBuilder { pluginName = "..." }`. Uses `compileOnly(files("../libs/plugin-api.jar"))` — never `implementation`.
+1. **`build.gradle.kts`** applies `com.android.application`, `org.jetbrains.kotlin.android`, and `com.itsaky.androidide.plugins.build`. Configures `pluginBuilder { pluginName = "..." }`. Uses `compileOnly(files("../../libs/plugin-api.jar"))` — never `implementation`.
 2. **`settings.gradle.kts`** declares the jars it needs on the buildscript classpath plus AGP and Kotlin.
 3. **`src/main/AndroidManifest.xml`** declares plugin identity as `<meta-data>` entries on `<application>`: `plugin.id`, `plugin.name`, `plugin.version` (resolved from `${pluginVersion}`), `plugin.description`, `plugin.author`, `plugin.main_class`, `plugin.min_ide_version`, and optional `plugin.permissions`.
 4. **Main class** implements `com.itsaky.androidide.plugins.IPlugin`. Lifecycle: `initialize(PluginContext) → activate() → deactivate() → dispose()`. Services are obtained via `context.services.get(SomeService::class.java)` (e.g. `IdeBuildService` for build hooks). Android `Context` is `context.androidContext`.
@@ -111,7 +111,7 @@ If device verification isn't possible in-session, say so explicitly rather than 
 
 ## Adding a new plugin
 
-1. Copy `random-xkcd/` — it's the canonical starting template (small but complete, includes the in-IDE help HTML pattern that submissions are expected to follow).
+1. Copy `plugins/Random-XKCD/` — it's the canonical starting template (small but complete, includes the in-IDE help HTML pattern that submissions are expected to follow).
 2. Update `settings.gradle.kts` `rootProject.name`, `build.gradle.kts` `pluginBuilder { pluginName }` + `android { namespace, applicationId }`, and `src/main/AndroidManifest.xml` (`plugin.id`, `plugin.name`, `plugin.main_class`).
 3. Add a row to the README's Examples table.
 4. Nothing else. Publishing is automatic: `addons discover` finds any directory whose `build.gradle.kts` applies the plugin-builder, and the name, filenames, and URLs all derive from the directory name. The `MAP` array this file used to describe was deleted in #66 and no longer exists.

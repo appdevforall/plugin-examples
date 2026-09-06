@@ -14,7 +14,7 @@ on:
         required: false
         default: stage
       plugin:
-        description: Build only this plugin (folder name, e.g. random-xkcd). Leave empty to build all.
+        description: One addon directory name, e.g. Random-XKCD (blank builds all)
         required: false
         default: ''
 
@@ -63,7 +63,6 @@ jobs:
           missing=0
           for name in $(uv run --directory tools/addons addons --root "$GITHUB_WORKSPACE" discover); do
             dir="$name"
-            [ -d "$dir" ] || dir="plugins/$name"
             if ! ls "$dir"/build/plugin/*.cgp 2>/dev/null | grep -qv -- '-debug\.cgp$'; then
               echo "ERROR: no release .cgp under ${dir}/build/plugin/"
               missing=$((missing + 1))

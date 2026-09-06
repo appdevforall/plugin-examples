@@ -51,9 +51,10 @@ def entry(root: Path, addon: Path, cgp: Path, archive: Path,
     }
 
 
-def build(root: Path, dist: Path, base: str = BASE) -> dict:
+def build(root: Path, dist: Path, base: str = BASE,
+          only: list[str] | None = None) -> dict:
     entries = []
-    for addon in discover.find_addons(root):
+    for addon in discover.find_addons(root, only):
         slug = model.slug(addon.name)
         cgp = dist / f"{slug}.cgp"
         archive = dist / f"{slug}-src.tar.gz"

@@ -6,9 +6,16 @@ from pathlib import Path
 
 from addons import model
 
+SOURCE = "https://github.com/appdevforall/plugin-examples"
+
 README = """# {name}
 
 Source for the {name} addon for Code On The Go.
+
+- Origin: {origin}
+- Author: {author}
+- Comes from: {source}/tree/main/{directory}
+- License: {license}. The full text is in LICENSE beside this file.
 
 ## Build
 
@@ -20,8 +27,6 @@ The plugin file appears in `{directory}/build/plugin/`.
 You must create `{directory}/local.properties` with one line:
 
     sdk.dir=/path/to/your/Android/sdk
-
-License: {license}
 """
 
 
@@ -42,7 +47,7 @@ def tracked_files(root: Path, addon: Path) -> list[str]:
     return [line for line in result.stdout.splitlines() if line]
 
 
-def _stage(root: Path, addon: Path, out: Path, licence: str) -> Path:
+def _stage(root: Path, addon: Path, out: Path, meta: dict) -> Path:
     top = out / f"{model.slug(addon.name)}-src"
     if top.exists():
         shutil.rmtree(top)
@@ -70,11 +75,40 @@ def _stage(root: Path, addon: Path, out: Path, licence: str) -> Path:
             shutil.copy2(root / name, top / name)
     shutil.copytree(root / "gradle" / "wrapper", top / "gradle" / "wrapper")
 
+    # AGPL source distribution: ship the licence text the notice refers to
+    licence_file = root / "LICENSE"
+    if licence_file.exists():
+        shutil.copy2(licence_file, top / "LICENSE")
+
+    author = meta.get("author") or {}
     inside = addon.relative_to(root).as_posix()
     (top / "README.md").write_text(README.format(
         name=model.display_name(addon.name), directory=inside,
-        up="../" * len(Path(inside).parts), license=licence))
+        up="../" * len(Path(inside).parts),
+        origin="Community contribution" if meta.get("origin") == "community"
+               else "App Dev for All",
+        author=f"{author.get('name', 'App Dev for All')}"
+               + (f" ({author['url']})" if author.get("url") else ""),
+        source=SOURCE,
+        license=meta.get("license", "AGPL-3.0-or-later")))
     return top
+
+
+# Anything matching these must never reach a published tarball. Section 9.3
+# names Sentry DSNs as the material at risk, and they do not live only in
+# local.properties.
+SECRET_NAMES = ("local.properties", ".env", "keystore.properties",
+                "sentry.properties", "secrets.properties", "google-services.json")
+SECRET_SUFFIXES = (".jks", ".keystore", ".p12", ".pem", ".key")
+
+
+def is_inside(path: Path, root: Path) -> bool:
+    """A string prefix test accepts /out/foo-src-evil for root /out/foo-src."""
+    try:
+        path.resolve().relative_to(root.resolve())
+        return True
+    except ValueError:
+        return False
 
 
 def verify(top: Path, inside: str, jars: list[str]) -> None:
@@ -89,22 +123,26 @@ def verify(top: Path, inside: str, jars: list[str]) -> None:
     for name in ("build.gradle.kts", "settings.gradle.kts"):
         if not (top / inside / name).exists():
             problems.append(f"{inside}/{name} is missing")
-    root = top.resolve()
     for path in top.rglob("*"):
-        if path.name == "local.properties":
-            problems.append("local.properties is present")
-        if not str(path.resolve()).startswith(str(root)):
-            problems.append(f"{path} is outside the archive root")
+        rel = path.relative_to(top).as_posix()
+        if path.name in SECRET_NAMES or path.suffix in SECRET_SUFFIXES:
+            problems.append(f"{rel} could carry a secret")
+        if path.is_dir() and path.name in (".gradle", "build"):
+            problems.append(f"{rel}/ is build output")
+        if path.is_absolute() and not is_inside(path, top):
+            problems.append(f"{rel} is outside the archive root")
+        if not is_inside(path, top):
+            problems.append(f"{rel} escapes the archive root")
     if problems:
         raise RuntimeError(f"{inside}: " + "; ".join(problems))
 
 
 def build(root: Path, addon: Path, out: Path,
-          licence: str = "AGPL-3.0-or-later") -> Path:
+          meta: dict | None = None) -> Path:
     jars = jars_for(addon)
     if not jars:
         raise RuntimeError(f"{addon.name}: it references no shared jar")
-    top = _stage(root, addon, out, licence)
+    top = _stage(root, addon, out, meta or {})
     verify(top, addon.relative_to(root).as_posix(), jars)
     archive = out / f"{top.name}.tar.gz"
     with tarfile.open(archive, "w:gz") as tar:
