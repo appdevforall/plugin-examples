@@ -1,0 +1,15 @@
+{
+  "summary": "Adds Python and Flask project templates, and runs them.",
+  "description": "Installs Python and Flask starter projects and gives them a run experience inside the editor.",
+  "tags": [
+    "python",
+    "flask",
+    "templates"
+  ],
+  "origin": "appdevforall",
+  "license": "AGPL-3.0-or-later",
+  "author": {
+    "name": "App Dev For All",
+    "url": "https://www.appdevforall.org"
+  }
+}
