@@ -13,9 +13,9 @@ import org.json.JSONObject
  * `okhttp3` resolves to the host's older OkHttp and an SDK bundling its own copy crashes with a
  * NoSuchMethodError. Kept apart from the backend so the backend is about generating, not sockets.
  *
- * Both entry points tag their sockets ([NetworkTags]): the host installs
- * `StrictMode.VmPolicy.detectAll()` process-wide, and an untagged socket trips
- * `detectUntaggedSockets()` from inside plugin code.
+ * Both entry points tag their sockets ([NetworkTags]): the host's debug builds install
+ * `StrictMode.VmPolicy.detectAll()`, and an untagged socket trips `detectUntaggedSockets()` from
+ * inside plugin code.
  *
  * @param connectTimeoutMs how long to wait for the connection itself
  * @param readTimeoutMs how long a generation may take to answer

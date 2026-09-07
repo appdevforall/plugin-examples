@@ -22,7 +22,6 @@ class NetworkTagsTest {
         mockkStatic(TrafficStats::class)
         every { TrafficStats.getThreadStatsTag() } answers { currentTag }
         every { TrafficStats.setThreadStatsTag(any()) } answers { currentTag = firstArg() }
-        every { TrafficStats.clearThreadStatsTag() } answers { currentTag = UNTAGGED }
     }
 
     @After
@@ -44,7 +43,7 @@ class NetworkTagsTest {
     }
 
     @Test
-    fun givenABlockThatCompletes_whenItReturns_thenTheThreadStatsTagIsCleared() {
+    fun givenABlockThatCompletes_whenItReturns_thenThePreviousThreadStatsTagIsRestored() {
         // A tag left behind would be charged to whatever this shared Dispatchers.IO thread
         // does next, which is the very defect this helper exists to fix.
         withTrafficTag(NetworkTags.CATALOG) {}
@@ -53,7 +52,7 @@ class NetworkTagsTest {
     }
 
     @Test
-    fun givenABlockThatThrows_whenRunningIt_thenTheThreadStatsTagIsStillCleared() {
+    fun givenABlockThatThrows_whenRunningIt_thenThePreviousThreadStatsTagIsStillRestored() {
         assertThrows(IllegalStateException::class.java) {
             withTrafficTag(NetworkTags.INFERENCE) { throw IllegalStateException("boom") }
         }
@@ -62,15 +61,18 @@ class NetworkTagsTest {
     }
 
     @Test
-    fun givenTheDeclaredTags_whenInspected_thenTheyAreDistinctAndNonZero() {
-        // A zero tag means "untagged" to the kernel, so it would defeat the whole point.
-        assertNotEquals(0, NetworkTags.INFERENCE)
-        assertNotEquals(0, NetworkTags.CATALOG)
-        assertNotEquals(NetworkTags.INFERENCE, NetworkTags.CATALOG)
+    fun givenAnEnclosingTag_whenANestedBlockReturns_thenTheEnclosingTagIsRestored() {
+        withTrafficTag(NetworkTags.INFERENCE) {
+            withTrafficTag(NetworkTags.CATALOG) {}
+
+            assertEquals(NetworkTags.INFERENCE, currentTag)
+        }
+
+        assertEquals(UNTAGGED, currentTag)
     }
 
     private companion object {
-        /** What `clearThreadStatsTag()` leaves behind — the platform's "no tag" value. */
+        /** The platform's "no tag" value, which an untouched thread reports. */
         const val UNTAGGED = -1
     }
 }
