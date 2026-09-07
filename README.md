@@ -28,7 +28,6 @@ See the official [plugin documentation](https://www.appdevforall.org/codeonthego
 | [`plugins/Random-XKCD/`](plugins/Random-XKCD/) | Shows xkcd comics in the editor's bottom sheet. |
 | [`plugins/Sketch-to-UI/`](plugins/Sketch-to-UI/) | Turns a drawing or screenshot into an Android layout. |
 | [`plugins/Speech-to-Text/`](plugins/Speech-to-Text/) | Dictates code and text into the editor with your voice. |
-| [`plugins/Template-Manager/`](plugins/Template-Manager/) | Installs, removes, and browses project templates. |
 | [`plugins/Vector-Search/`](plugins/Vector-Search/) | Searches the project by meaning, not only by exact text. |
 | [`plugins/Voice-Alerts/`](plugins/Voice-Alerts/) | Plays a sound when a build finishes or fails. |
 
