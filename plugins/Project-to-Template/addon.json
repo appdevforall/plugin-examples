@@ -1,0 +1,15 @@
+{
+  "summary": "Turns the open project into a reusable template.",
+  "description": "Takes the project you have open and writes it out as a Code On The Go template, so you can start new projects from it.",
+  "tags": [
+    "templates",
+    "project",
+    "reuse"
+  ],
+  "origin": "appdevforall",
+  "license": "AGPL-3.0-or-later",
+  "author": {
+    "name": "App Dev For All",
+    "url": "https://www.appdevforall.org"
+  }
+}

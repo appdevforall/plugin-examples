@@ -1,0 +1,15 @@
+{
+  "summary": "Renders Compose preview functions on the device.",
+  "description": "Draws a Jetpack Compose @Preview function without building and running the whole app, so you see a layout change quickly.",
+  "tags": [
+    "compose",
+    "preview",
+    "ui"
+  ],
+  "origin": "appdevforall",
+  "license": "AGPL-3.0-or-later",
+  "author": {
+    "name": "App Dev For All",
+    "url": "https://www.appdevforall.org"
+  }
+}

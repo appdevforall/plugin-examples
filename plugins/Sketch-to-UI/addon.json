@@ -1,0 +1,15 @@
+{
+  "summary": "Turns a drawing or screenshot into an Android layout.",
+  "description": "Takes a photograph of a hand-drawn sketch, or a screenshot of an interface, and produces Android XML layout code from it.",
+  "tags": [
+    "ai",
+    "layout",
+    "ui"
+  ],
+  "origin": "appdevforall",
+  "license": "AGPL-3.0-or-later",
+  "author": {
+    "name": "App Dev For All",
+    "url": "https://www.appdevforall.org"
+  }
+}

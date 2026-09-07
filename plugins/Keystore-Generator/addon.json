@@ -1,0 +1,15 @@
+{
+  "summary": "Creates and manages app signing keystores on the device.",
+  "description": "Generates an Android release keystore and stores it safely, so you can sign a release build without a desktop machine.",
+  "tags": [
+    "signing",
+    "release",
+    "security"
+  ],
+  "origin": "appdevforall",
+  "license": "AGPL-3.0-or-later",
+  "author": {
+    "name": "App Dev For All",
+    "url": "https://www.appdevforall.org"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "summary": "Searches the project by meaning, not only by exact text.",
+  "description": "Ranks search results by how close their meaning is to the words you typed, so you find related code that a plain text search would miss.",
+  "tags": [
+    "search",
+    "ai",
+    "navigation"
+  ],
+  "origin": "appdevforall",
+  "license": "AGPL-3.0-or-later",
+  "author": {
+    "name": "App Dev For All",
+    "url": "https://www.appdevforall.org"
+  }
+}

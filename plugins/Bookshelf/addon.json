@@ -1,0 +1,15 @@
+{
+  "summary": "Offline reference textbooks inside the in-app help.",
+  "description": "Adds a shelf of reference books to the Code On The Go help system. The books are stored on the device, so they work with no network.",
+  "tags": [
+    "docs",
+    "reference",
+    "offline"
+  ],
+  "origin": "appdevforall",
+  "license": "AGPL-3.0-or-later",
+  "author": {
+    "name": "App Dev For All",
+    "url": "https://www.appdevforall.org"
+  }
+}

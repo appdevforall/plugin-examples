@@ -1,10 +1,8 @@
 name: Build plugin artifacts
 
-# Builds every example plugin's .cgp and exposes them as downloadable
-# workflow artifacts. Unlike "Update libs from CodeOnTheGo", this never
-# commits refreshed libs, never publishes a GitHub release, and never
-# deploys to the website — it only produces artifacts you can download
-# from the run summary.
+# Builds every addon (or one) to prove the tree compiles.
+# It publishes nothing and uploads no artifacts: to get a downloadable URL,
+# run "Publish addons" with staging: true.
 
 on:
   workflow_dispatch:
@@ -14,7 +12,7 @@ on:
         required: false
         default: stage
       plugin:
-        description: Build only this plugin (folder name, e.g. random-xkcd). Leave empty to build all.
+        description: One addon directory name, e.g. Random-XKCD (blank builds all)
         required: false
         default: ''
 
@@ -25,8 +23,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    outputs:
-      plugins: ${{ steps.stage.outputs.plugins }}
     steps:
       - name: Checkout plugin-examples
         uses: actions/checkout@v4
@@ -36,6 +32,9 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v3
@@ -54,94 +53,35 @@ jobs:
             ./scripts/update-libs.sh --ref "$CODEONTHEGO_REF"
           fi
 
-      - name: Stage built .cgp artifacts
-        id: stage
+      - name: Check every addon produced a release .cgp
         env:
-          ONLY_PLUGIN: ${{ github.event.inputs.plugin }}
+          ONLY_PLUGIN: ${{ inputs.plugin }}
         run: |
-          mkdir -p deploy-staging
-
-          # Discover every plugin module the same way scripts/update-libs.sh does
-          # (a sibling dir whose build.gradle.kts applies the plugin-builder Gradle
-          # plugin), then stage each plugin's built .cgp under its own name. The
-          # plugin-builder already names the artifact, so there is no rename map —
-          # new plugins are picked up automatically.
-          # Keep in sync with SKIP_PLUGINS in scripts/update-libs.sh.
-          SKIP_PLUGINS=(pebble-custom-function-template-installer)
-
-          staged=0
-          names=()
-          for build_file in */build.gradle.kts; do
-            [ -f "$build_file" ] || continue
-            grep -qF "com.itsaky.androidide.plugins.build" "$build_file" || continue
-            module="$(dirname "$build_file")"
-            # When a single plugin was requested, only that module was built —
-            # skip every other module so its absent .cgp is not treated as an error.
-            if [ -n "$ONLY_PLUGIN" ] && [ "$module" != "$ONLY_PLUGIN" ]; then
-              continue
-            fi
-            skip=0
-            for s in "${SKIP_PLUGINS[@]}"; do
-              [ "$s" = "$module" ] && skip=1 && break
-            done
-            if [ "$skip" -eq 1 ]; then
-              echo "Skipping $module (in SKIP_PLUGINS)"
-              continue
-            fi
-            src="$(ls "${module}/build/plugin/"*.cgp 2>/dev/null | grep -v -- '-debug\.cgp$' | head -n1)"
-            if [ -z "$src" ]; then
-              echo "ERROR: no release .cgp found under ${module}/build/plugin/ (did assemblePlugin run?)"
+          set -euo pipefail
+          # --include-skipped, the same list scripts/update-libs.sh builds and
+          # resolves --plugin against. An addon merely held out of the gallery
+          # is still built here and must still package, and a single-addon run
+          # naming one has to find it in this list. Only "!" entries in
+          # skip.txt are absent from both.
+          all="$(uv run --directory tools/addons addons --root "$GITHUB_WORKSPACE" discover --include-skipped)"
+          # A single-plugin run only builds that module, so the others have no
+          # .cgp by design and must not be reported as missing.
+          if [ -n "$ONLY_PLUGIN" ]; then
+            all="$(printf '%s\n' "$all" | grep -Fx -e "$ONLY_PLUGIN" -e "plugins/$ONLY_PLUGIN" || true)"
+            # Never let a no-match end the step on grep's bare exit 1: that
+            # reports a build that in fact succeeded as a red run, with no
+            # line saying why.
+            if [ -z "$all" ]; then
+              echo "ERROR: '${ONLY_PLUGIN}' is not a known addon, so nothing was checked." >&2
               exit 1
             fi
-            cp "$src" "deploy-staging/$(basename "$src")"
-            echo "Staged $src -> deploy-staging/$(basename "$src")"
-            names+=("$(basename "$src" .cgp)")
-            staged=$((staged + 1))
-          done
-
-          if [ "$staged" -eq 0 ]; then
-            echo "ERROR: no plugin modules discovered under */build.gradle.kts"
-            exit 1
           fi
-
-          # Emit the staged artifact names as a JSON array so the publish job can
-          # fan out one downloadable artifact per plugin via a matrix.
-          plugins="$(printf '%s\n' "${names[@]}" | jq -R . | jq -cs .)"
-          echo "plugins=${plugins}" >> "$GITHUB_OUTPUT"
-
-          echo ""
-          echo "Staged ${staged} plugin artifact(s): ${names[*]}"
-          ls -la deploy-staging/
-
-      - name: Upload all .cgp as one bundle
-        uses: actions/upload-artifact@v4
-        with:
-          name: all-plugins-cgp
-          path: deploy-staging/*.cgp
-          retention-days: 7
-          if-no-files-found: error
-
-  # publish one downloadable artifact per plugin so each .cgp can be
-  # grabbed directly from the run summary, not only as part of the bundle.
-  publish:
-    needs: build
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    strategy:
-      fail-fast: false
-      matrix:
-        plugin: ${{ fromJson(needs.build.outputs.plugins) }}
-    steps:
-      - name: Download bundle
-        uses: actions/download-artifact@v4
-        with:
-          name: all-plugins-cgp
-          path: deploy-staging
-
-      - name: Upload ${{ matrix.plugin }} as its own artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.plugin }}
-          path: deploy-staging/${{ matrix.plugin }}.cgp
-          retention-days: 7
-          if-no-files-found: error
+          missing=0
+          for dir in $all; do
+            if ! find "$dir/build/plugin" -name '*.cgp' ! -name '*-debug.cgp' 2>/dev/null | grep -q .; then
+              echo "ERROR: no release .cgp under ${dir}/build/plugin/"
+              missing=$((missing + 1))
+            fi
+          done
+          [ "$missing" -eq 0 ] || exit 1
+          echo "Every discovered addon produced a release .cgp."
