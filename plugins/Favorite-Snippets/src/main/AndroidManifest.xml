@@ -2,12 +2,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <application
-        android:label="Custom Snippets"
+        android:label="Favorite Snippets"
         android:theme="@style/PluginTheme">
 
         <meta-data
             android:name="plugin.id"
-            android:value="com.codeonthego.snippets" />
+            android:value="org.appdevforall.favoritesnippets" />
 
         <meta-data
             android:name="plugin.name"
@@ -35,7 +35,7 @@
 
         <meta-data
             android:name="plugin.main_class"
-            android:value="com.codeonthego.snippets.SnippetsPlugin" />
+            android:value="org.appdevforall.favoritesnippets.SnippetsPlugin" />
 
         <meta-data
             android:name="plugin.sidebar_items"

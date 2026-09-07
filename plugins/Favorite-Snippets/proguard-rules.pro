@@ -1,1 +1,1 @@
--keep class com.codeonthego.snippets.** { *; }
+-keep class org.appdevforall.favoritesnippets.** { *; }

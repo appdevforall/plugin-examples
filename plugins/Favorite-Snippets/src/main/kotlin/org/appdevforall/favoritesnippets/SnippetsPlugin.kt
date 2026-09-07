@@ -1,7 +1,7 @@
-package com.codeonthego.snippets
+package org.appdevforall.favoritesnippets
 
 import android.util.Log
-import com.codeonthego.snippets.ui.SnippetManagerFragment
+import org.appdevforall.favoritesnippets.ui.SnippetManagerFragment
 import com.itsaky.androidide.plugins.IPlugin
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.extensions.EditorTabExtension
@@ -24,19 +24,19 @@ class SnippetsPlugin : IPlugin, SnippetExtension, EditorTabExtension, UIExtensio
     override fun initialize(context: PluginContext): Boolean {
         pluginContext = context
         instance = this
-        Log.i(TAG, "Custom Snippets plugin initialized")
+        Log.i(TAG, "Favorite Snippets plugin initialized")
         return true
     }
 
     override fun activate(): Boolean {
-        Log.i(TAG, "Custom Snippets plugin activated")
+        Log.i(TAG, "Favorite Snippets plugin activated")
         return true
     }
 
     override fun deactivate(): Boolean {
         cachedContributions = null
         snippetsLastModified = 0
-        Log.i(TAG, "Custom Snippets plugin deactivated")
+        Log.i(TAG, "Favorite Snippets plugin deactivated")
         return true
     }
 
@@ -44,7 +44,7 @@ class SnippetsPlugin : IPlugin, SnippetExtension, EditorTabExtension, UIExtensio
         pluginContext = null
         cachedContributions = null
         instance = null
-        Log.i(TAG, "Custom Snippets plugin disposed")
+        Log.i(TAG, "Favorite Snippets plugin disposed")
     }
 
     override fun getMainEditorTabs(): List<EditorTabItem> = listOf(
@@ -210,8 +210,8 @@ class SnippetsPlugin : IPlugin, SnippetExtension, EditorTabExtension, UIExtensio
 
     companion object {
         private const val TAG = "CustomSnippets"
-        const val PLUGIN_ID = "com.codeonthego.snippets"
-        const val TAB_ID = "com.codeonthego.snippets.manager"
+        const val PLUGIN_ID = "org.appdevforall.favoritesnippets"
+        const val TAB_ID = "org.appdevforall.favoritesnippets.manager"
         const val SNIPPETS_PATH = ".cg/snippets.json"
 
         var instance: SnippetsPlugin? = null

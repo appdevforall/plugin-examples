@@ -11,11 +11,11 @@ pluginBuilder {
 }
 
 android {
-    namespace = "com.codeonthego.snippets"
+    namespace = "org.appdevforall.favoritesnippets"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.codeonthego.snippets"
+        applicationId = "org.appdevforall.favoritesnippets"
         minSdk = 26
         targetSdk = 36
         versionCode = 1

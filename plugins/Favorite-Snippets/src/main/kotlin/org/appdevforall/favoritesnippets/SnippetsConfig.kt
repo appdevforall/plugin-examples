@@ -1,4 +1,4 @@
-package com.codeonthego.snippets
+package org.appdevforall.favoritesnippets
 
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder

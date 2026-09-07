@@ -1,4 +1,4 @@
-package com.codeonthego.snippets.ui
+package org.appdevforall.favoritesnippets.ui
 
 import android.os.Bundle
 import android.util.Log
@@ -15,11 +15,11 @@ import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
 import androidx.fragment.app.Fragment
-import com.codeonthego.snippets.R
-import com.codeonthego.snippets.SnippetEntry
-import com.codeonthego.snippets.SnippetsConfig
-import com.codeonthego.snippets.SnippetsConfigParser
-import com.codeonthego.snippets.SnippetsPlugin
+import org.appdevforall.favoritesnippets.R
+import org.appdevforall.favoritesnippets.SnippetEntry
+import org.appdevforall.favoritesnippets.SnippetsConfig
+import org.appdevforall.favoritesnippets.SnippetsConfigParser
+import org.appdevforall.favoritesnippets.SnippetsPlugin
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.textfield.TextInputEditText
@@ -219,6 +219,6 @@ class SnippetManagerFragment : Fragment() {
     }
 
     companion object {
-        private const val PLUGIN_ID = "com.codeonthego.snippets"
+        private const val PLUGIN_ID = "org.appdevforall.favoritesnippets"
     }
 }

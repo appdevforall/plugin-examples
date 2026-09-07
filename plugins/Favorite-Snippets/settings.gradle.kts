@@ -28,4 +28,4 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "snippets"
+rootProject.name = "favorite-snippets"
