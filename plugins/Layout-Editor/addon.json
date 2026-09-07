@@ -1,0 +1,15 @@
+{
+  "summary": "Edits Android XML layouts by dragging views.",
+  "description": "A visual editor for Android XML layouts. Drag a view onto the canvas and the editor writes the XML for you.",
+  "tags": [
+    "layout",
+    "ui",
+    "xml"
+  ],
+  "origin": "appdevforall",
+  "license": "AGPL-3.0-or-later",
+  "author": {
+    "name": "App Dev For All",
+    "url": "https://www.appdevforall.org"
+  }
+}

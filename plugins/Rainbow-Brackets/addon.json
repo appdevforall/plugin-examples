@@ -1,0 +1,15 @@
+{
+  "summary": "Colours brackets by depth so pairs are easy to see.",
+  "description": "Gives each level of parentheses, brackets, and braces its own colour, so you can see which opening bracket matches which closing one.",
+  "tags": [
+    "editor",
+    "readability",
+    "brackets"
+  ],
+  "origin": "appdevforall",
+  "license": "AGPL-3.0-or-later",
+  "author": {
+    "name": "App Dev For All",
+    "url": "https://www.appdevforall.org"
+  }
+}

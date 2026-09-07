@@ -1,0 +1,15 @@
+{
+  "summary": "Plays a sound when a build finishes or fails.",
+  "description": "Plays a short sound for each build result, so you know whether the build passed without watching the screen.",
+  "tags": [
+    "build",
+    "audio",
+    "notification"
+  ],
+  "origin": "appdevforall",
+  "license": "AGPL-3.0-or-later",
+  "author": {
+    "name": "App Dev For All",
+    "url": "https://www.appdevforall.org"
+  }
+}

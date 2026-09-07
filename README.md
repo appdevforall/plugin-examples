@@ -8,39 +8,38 @@ See the official [plugin documentation](https://www.appdevforall.org/codeonthego
 
 | Plugin                                             | Purpose                                                           |
 | -------------------------------------------------- | ----------------------------------------------------------------- |
-| [`Beepy/`](Beepy/)                                 | Plays a sound when a build starts, succeeds, or fails.            |
-| [`apk-viewer/`](apk-viewer/)                       | Inspects an APK's contents and surfaces a structural breakdown.   |
-| [`bookshelf/`](bookshelf/)                         | Adds reference textbooks (C, C++, Java, Kotlin, Android) accessible from CoGo's in-IDE Bookshelf help page. |
-| [`markdown-preview/`](markdown-preview/)           | Renders Markdown files with a live preview pane in the editor.    |
-| [`keystore-generator/`](keystore-generator/)       | Generates signing keystores from inside the IDE.                  |
-| [`snippets/`](snippets/)                           | Adds user-managed code snippets with prefix-triggered expansions. |
-| [`random-xkcd/`](random-xkcd/)                     | Random xkcd comic in the editor bottom sheet; canonical small-plugin walkthrough with in-IDE help. |
-| [`icons-repository/`](icons-repository/)           | Browse a bundled Material icon catalog and import any icon as a Vector Drawable into the active project. |
-| [`client-time-tracker/`](client-time-tracker/)                       | Tracks billable coding sessions per project and generates PDF/Excel/CSV invoices. |
-| [`python-tools/`](python-tools/)                   | Adds Python + Flask project templates, with on-device Python install and run/install/test actions. |
-| [`rainbow-on-the-go/`](rainbow-on-the-go/)         | Colors matching parentheses, brackets, and braces by nesting depth, with light/dark palettes. |
-| [`compose-preview/`](compose-preview/)             | Renders Jetpack Compose `@Preview` functions on-device — no full app build or run. |
-| [`ai-literacy-course/`](ai-literacy-course/)       | Bundles Learn AI Anywhere's offline "Introduction to AI" course (26 videos + interactive activities) and plays it full-screen, fully offline. |
-| [`layout-editor/`](layout-editor/)                 | Visual drag-and-drop editor for Android XML layouts. |
-| [`ai-core/`](ai-core/)                             | The **Agent** chat (tool-calling assistant) plus the shared LLM inference **router** other plugins consume. Ships no model — install at least one backend plugin below. Mandatory for every AI feature. |
-| [`ai-agent-local/`](ai-agent-local/)               | On-device `.gguf` inference backend for `ai-core` (bundled llama.cpp AAR). Registers as `local`; needs no network. |
-| [`ai-agent-gemini/`](ai-agent-gemini/)             | Google Gemini API inference backend for `ai-core`. Registers as `gemini`; needs an API key and network access. |
-| [`ai-agent-openai/`](ai-agent-openai/)             | OpenAI-compatible inference backend for `ai-core`. Registers as `openai`; talks to OpenAI by default, or to Ollama / LM Studio / OpenRouter / `llama-server` by changing one URL. |
-| [`ai-agent-mcp/`](ai-agent-mcp/)                   | Connects the Agent to Model Context Protocol servers, contributing their tools through `ai-core`. Needs network access; tools are off until enabled. |
-| [`flutter-template/`](flutter-template/)           | Adds Flutter starter project templates (Basic, BLoC, Provider, GetX, Riverpod) to the New Project screen. |
-| [`code-suggestions-plugin/`](code-suggestions-plugin/) | Inline ghost-text code completions powered by AI. |
-| [`speech-to-text-plugin/`](speech-to-text-plugin/) | Voice-to-code: converts speech to code with AI generation. |
-| [`vector-search-plugin/`](vector-search-plugin/) | Semantic code search using embeddings and vector similarity. |
-| [`get-ai-models/`](get-ai-models/)                 | Bottom-drawer catalog of curated, fully-open GGUF model files; downloads one to `/sdcard/Download` and verifies its SHA-256. |
-| [`project-to-template/`](project-to-template/)     | Converts the open Android project into a Code On The Go (.cgt) template and installs it into the IDE's New Project picker. |
-| [`code-together/`](code-together/) | Real-time pair programming across two devices on the same WiFi — host or join a session and sync edits and cursor presence live over the local network. |
+| [`plugins/APK-Analyzer/`](plugins/APK-Analyzer/) | Inspects the structure of an APK file inside the editor. |
+| [`plugins/Bookshelf/`](plugins/Bookshelf/) | Offline reference textbooks inside the in-app help. |
+| [`plugins/Client-Time-Tracker/`](plugins/Client-Time-Tracker/) | Tracks billable time for each project and creates invoices. |
+| [`plugins/Code-Suggestions/`](plugins/Code-Suggestions/) | Shows inline code completions as you type. |
+| [`plugins/Code-Together/`](plugins/Code-Together/) | Pair programming between two devices on the same network. |
+| [`plugins/Favorite-Snippets/`](plugins/Favorite-Snippets/) | Saves your own code snippets and inserts them in the editor. |
+| [`plugins/Flutter-Templates/`](plugins/Flutter-Templates/) | Adds five Flutter starter projects to the New Project screen. |
+| [`plugins/Get-AI-Models/`](plugins/Get-AI-Models/) | Downloads small language models for on-device AI addons. |
+| [`plugins/Icons-Repository/`](plugins/Icons-Repository/) | Adds vector icons to a project from inside the editor. |
+| [`plugins/Jetpack-Compose-Preview/`](plugins/Jetpack-Compose-Preview/) | Renders Compose preview functions on the device. |
+| [`plugins/Keystore-Generator/`](plugins/Keystore-Generator/) | Creates and manages app signing keystores on the device. |
+| [`plugins/Layout-Editor/`](plugins/Layout-Editor/) | Edits Android XML layouts by dragging views. |
+| [`plugins/Markdown-Previewer/`](plugins/Markdown-Previewer/) | Shows a live preview of Markdown and HTML files. |
+| [`plugins/NDK-Installer/`](plugins/NDK-Installer/) | Installs the NDK and CMake, and adds a native project template. |
+| [`plugins/Project-to-Template/`](plugins/Project-to-Template/) | Turns the open project into a reusable template. |
+| [`plugins/Python-Tools/`](plugins/Python-Tools/) | Adds Python and Flask project templates, and runs them. |
+| [`plugins/Rainbow-Brackets/`](plugins/Rainbow-Brackets/) | Colours brackets by depth so pairs are easy to see. |
+| [`plugins/Random-XKCD/`](plugins/Random-XKCD/) | Shows xkcd comics in the editor's bottom sheet. |
+| [`plugins/Sketch-to-UI/`](plugins/Sketch-to-UI/) | Turns a drawing or screenshot into an Android layout. |
+| [`plugins/Speech-to-Text/`](plugins/Speech-to-Text/) | Dictates code and text into the editor with your voice. |
+| [`plugins/Vector-Search/`](plugins/Vector-Search/) | Searches the project by meaning, not only by exact text. |
+| [`plugins/Voice-Alerts/`](plugins/Voice-Alerts/) | Plays a sound when a build finishes or fails. |
+
+> The `ai-*` addons and `cotg-ndk` are not listed yet. They stay at the repository root until their own work lands; see `tools/addons/skip.txt`.
+
 
 ## Building a plugin
 
 Every plugin is a standalone Gradle project that shares two jars from this repo's root `libs/` folder.
 
 ```sh
-cd Beepy
+cd plugins/Voice-Alerts
 ./gradlew assemblePlugin
 ```
 
@@ -71,7 +70,7 @@ Every plugin depends on two jars produced by the CodeOnTheGo source tree:
 - **`plugin-api.jar`** — the interface surface a plugin implements (`IPlugin`, `BuildStatusListener`, etc.). Used as `compileOnly` at build time; provided by the IDE at runtime.
 - **`gradle-plugin.jar`** — the custom Gradle plugin (`com.itsaky.androidide.plugins.build`) that packages a compiled Android library into a `.cgp` file. Applied via `classpath` in each plugin's `settings.gradle.kts`.
 
-Both jars live in `libs/` at the repo root; each plugin references them via `../libs/*.jar`. This means a plugin folder is **not standalone in isolation** — copying just `Beepy/` elsewhere will break its build until you also bring `libs/` along. The expected workflow is: clone the whole repo, work inside one of the example folders.
+Both jars live in `libs/` at the repo root; each plugin references them via `../../libs/*.jar`. This means a plugin folder is **not standalone in isolation** — copying just `plugins/Voice-Alerts/` elsewhere will break its build until you also bring `libs/` along. The expected workflow is: clone the whole repo, work inside one of the example folders.
 
 ## Refreshing `libs/`
 
@@ -93,9 +92,26 @@ First local run clones CodeOnTheGo into `.cache/CodeOnTheGo/` (gitignored); subs
 
 ## Adding a new plugin example
 
-1. Copy `Beepy/` to a new folder (e.g. `MyPlugin/`).
-2. In `MyPlugin/settings.gradle.kts`, change `rootProject.name` to `MyPlugin`.
-3. In `MyPlugin/build.gradle.kts`, update `pluginBuilder { pluginName = ... }` and `android { namespace ... applicationId ... }`.
-4. In `MyPlugin/src/main/AndroidManifest.xml`, update the `plugin.id`, `plugin.name`, `plugin.main_class`, and any other metadata.
-5. Replace the source under `MyPlugin/src/main/kotlin/...` with your implementation.
-6. Add a row to the **Examples** table above.
+1. Copy `plugins/Random-XKCD/` to a new folder under `plugins/`. Name it in MixedCase with single hyphens between words (`My-Plugin`), ASCII letters and digits only. Every other name, filename, and URL is derived from this one — see [`docs/plugin-naming-standards.md`](docs/plugin-naming-standards.md).
+
+2. Update **every** copied file that still names the template. Two values come from the folder name: the **slug** is it lowercased (`my-plugin`), and the **display name** is it with hyphens replaced by spaces (`My Plugin`).
+
+   | File | Change |
+   |---|---|
+   | `settings.gradle.kts` | `rootProject.name` — Gradle's own name for the build. Nothing is derived from it; keep it in step with the slug anyway. |
+   | `build.gradle.kts` | `pluginBuilder { pluginName }` → the slug; `android { namespace, applicationId }` |
+   | `src/main/AndroidManifest.xml` | `plugin.id`, `plugin.name` → the display name, `plugin.main_class` |
+   | `random-xkcd.html` | rename to `<slug>.html`; set `<title>` to the display name exactly, and make the `<h1>` contain it |
+   | `addon.json` | `summary`, `description`, `tags`, `origin`, `license`, `author`. This text goes on the gallery card. A copied file passes every check while describing the wrong plugin, so rewrite it. |
+   | `src/main/assets/icon_day.png`, `icon_night.png` | replace both; both must be present |
+   | `src/main/kotlin/...` | your implementation |
+
+3. Run the checks from the repository root before you push:
+
+   ```sh
+   uv run --directory tools/addons addons --root "$PWD" check
+   ```
+
+   `--root` must be an absolute path: `--directory` moves uv into `tools/addons`, so `--root .` would resolve there and find no plugins. This is the same check that runs on every pull request. It names the exact file and value it expects, so it is faster to run it here than to read it from a failed run.
+
+4. Add a row to the **Examples** table above.

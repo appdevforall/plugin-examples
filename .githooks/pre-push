@@ -18,13 +18,11 @@ set -euo pipefail
 # plugin-builder Gradle plugin. Discover them dynamically so new plugins are
 # picked up automatically.
 plugin_dirs() {
-  local f
-  for f in */build.gradle.kts; do
-    [ -e "$f" ] || continue
-    if grep -q 'com.itsaky.androidide.plugins.build' "$f"; then
-      printf '%s\n' "${f%/build.gradle.kts}"
-    fi
-  done
+  # < /dev/null is load bearing. git feeds the ref list to this hook on
+  # stdin and the caller reads it in a while loop; without the redirect
+  # uv inherits that stdin, blocks on it, and the push hangs forever.
+  root="$(git rev-parse --show-toplevel)"
+  uv run --directory "$root/tools/addons" addons --root "$root" discover < /dev/null
 }
 
 # Determine the set of commits being pushed. git feeds pre-push one line per
@@ -49,16 +47,21 @@ done
 
 # No stdin (e.g. manual invocation) or nothing to compare: fall back to the
 # diff against origin/main so the hook is still useful when run by hand.
-if [ -z "${changed_files//[$'\n\t ']/}" ]; then
+if [ -z "$(printf '%s' "$changed_files" | tr -d '[:space:]')" ]; then
   base="$(git rev-parse --verify --quiet origin/main || true)"
   [ -n "$base" ] && changed_files="$(git diff --name-only "$base...HEAD" 2>/dev/null || true)"
 fi
 
 # Which plugin folders were touched?
-mapfile -t all_plugins < <(plugin_dirs)
+# No mapfile: macOS ships bash 3.2. No failure either -- this hook is a
+# nudge, so a missing uv must not stop a push.
+all_plugins=()
+while IFS= read -r line; do
+  [ -n "$line" ] && all_plugins+=("$line")
+done < <(plugin_dirs 2>/dev/null || true)
 touched=()
-for p in "${all_plugins[@]}"; do
-  if printf '%s\n' "$changed_files" | grep -q "^$p/"; then
+for p in ${all_plugins[@]+"${all_plugins[@]}"}; do
+  if grep -q "^$p/" <<< "$changed_files"; then
     touched+=("$p")
   fi
 done
