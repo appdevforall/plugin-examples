@@ -466,10 +466,11 @@ Changes:
 
 | Change | Requirement |
 |---|---|
-| Type and origin indicated by a glyph or shape, not colour alone. Today they are colour-only pills. | R20 |
+| Type and origin each carry a glyph beside their word: `◆ ▲ ● ■` for the four types, `★` for App Dev For All and `☆` for a community addon. Filled geometric shapes are types, stars are origins, and a filled star is first-party. The glyph is `aria-hidden` — the word beside it is what a screen reader announces, so the glyph is a second cue rather than a replacement. | R20 |
+| Tags, type, **and origin** filter the list, and combine. Origin is a second `<select>` beside the type one, with the same known-values guard, so an unknown `?origin=` falls back to no filter instead of hiding every card. | R18 |
 | Addon icons on cards, in both light and dark form. Every addon already ships `icon_day.png` and `icon_night.png`; the catalog carries both and a `<picture>` lets the browser choose. | R17 |
 | Links take an explicit colour token. The browser default `#0000EE` sits at roughly 1.4:1 against the dark card, well under the 4.5:1 minimum. | R19 |
-| Tags render on each card as buttons that filter, and combine with type and free text. | R18 |
+| Tags render on each card as buttons that filter, and combine with type, origin, and free text. | R18 |
 | Sort by name. There is no sort at all today; cards render in file order. | — |
 | `plugins.json` and `templates.json` dropped. Generated, committed, and served today, but consumed by nothing. | — |
 | Unused `icon` field dropped from the schema in favour of the derived `iconUrl`. | — |
@@ -671,9 +672,9 @@ Carried from the PRD where still live, plus what the design introduces.
 | R15 | §7, §8.2 — `author` required for community origin, enforced by `check` |
 | R16 | §8.2, §10 — schema-validated, fails loudly, `additionalProperties: false` |
 | R17 | §11.1 — card fields |
-| R18 | §11.1 — combining type, tag, and free-text filters |
+| R18 | §11.1 — combining type, origin, tag, and free-text filters |
 | R19 | §11.1 — mobile-first layout retained |
-| R20 | §11.1 — glyph or shape, not colour alone |
+| R20 | §11.1 — a glyph beside the word on both the type and the origin |
 | R21 | §11.1 — filter state synchronised to the URL |
 | R22 | §11.1 — explicit error state |
 | R23 | §6 — directory is the sole source of identity |

@@ -150,9 +150,9 @@ The quota problem blocks releases outright, and the naming drift compounds with 
 | ID | Requirement |
 |---|---|
 | **R17** | The gallery must present every published addon with its name, description, type, origin, source link, description-page link, and download link. |
-| **R18** | Users must be able to filter by addon type, filter by tag, and search free text; filters must combine. |
+| **R18** | Users must be able to filter by addon type, filter by **origin** — App Dev For All or community — filter by tag, and search free text; filters must combine. |
 | **R19** | The gallery must be **mobile-first** — designed for a phone viewport, usable in Android browsers and in-app WebViews. |
-| **R20** | Type and origin must be distinguishable **without relying on color alone**. |
+| **R20** | Type and origin must be distinguishable **without relying on color alone** — each carries a shape or glyph beside its word. |
 | **R21** | A filtered view must be shareable as a URL that reproduces it. |
 | **R22** | A failed catalog load must show an error state, not a blank page. |
 
@@ -326,7 +326,7 @@ Both this addon and `pebble-custom-function-template-installer` are excluded fro
 7. An addon with missing or invalid metadata fails the build rather than being silently omitted.
 8. The gallery loads on a phone viewport, lists every published addon, and its links resolve.
 9. The catalog is reachable at the site root.
-10. Type, tag, and text filters each work and combine; a filtered view is reproducible from its URL.
+10. Type, origin, tag, and text filters each work and combine; a filtered view is reproducible from its URL.
 11. For every in-scope addon, directory, display name, artifact filename, and documentation filename agree, and a check fails on drift.
 12. No addon's plugin id, namespace, or application id has changed.
 13. All six frozen AI addons still build and publish unchanged.

@@ -41,6 +41,11 @@
       <option value="snippet">Snippets</option>
       <option value="code-action">Code actions</option>
     </select>
+    <select id="origin" aria-label="Filter by who made it">
+      <option value="">Anyone</option>
+      <option value="appdevforall">App Dev For All</option>
+      <option value="community">Community</option>
+    </select>
   </div>
   <p id="active" hidden></p>
   <p id="status" role="status">Loading&hellip;</p>
@@ -54,11 +59,14 @@
       <img class="icon" alt="" width="56" height="56">
     </picture>
     <div class="body">
-      <h2><span data-slot="name"></span> <span class="badge" data-slot="type"></span></h2>
+      <h2><span data-slot="name"></span> <span class="badge"><span
+        class="glyph" data-slot="type-glyph" aria-hidden="true"></span><span
+        data-slot="type"></span></span></h2>
       <p class="summary" data-slot="summary"></p>
       <p class="meta">
         <span data-slot="version"></span> &middot;
-        <span data-slot="origin"></span> &middot;
+        <span><span class="glyph" data-slot="origin-glyph"
+          aria-hidden="true"></span><span data-slot="origin"></span></span> &middot;
         <span data-slot="size"></span>
       </p>
       <p class="tags" data-slot="tags"></p>

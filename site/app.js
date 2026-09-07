@@ -1,4 +1,14 @@
-const state = { addons: [], q: "", type: "", tags: [] };
+const state = { addons: [], q: "", type: "", origin: "", tags: [] };
+
+// R20: type and origin must be distinguishable without relying on colour.
+// Each badge already carries its word, so these are a second, non-colour cue
+// rather than the only one, and they are aria-hidden because a screen reader
+// reads that word already. Filled shapes are types, stars are origins, and a
+// filled star is first-party.
+const TYPE_GLYPH = {
+  plugin: "◆", template: "▲", snippet: "●", "code-action": "■",
+};
+const ORIGIN_GLYPH = { appdevforall: "★", community: "☆" };
 
 const cards = document.getElementById("cards");
 const status = document.getElementById("status");
@@ -24,6 +34,7 @@ function safeUrl(value) {
 
 function matches(addon) {
   if (state.type && addon.type !== state.type) return false;
+  if (state.origin && addon.origin !== state.origin) return false;
   // every selected tag must be present, so tags narrow rather than widen
   if (!state.tags.every((t) => addon.tags.includes(t))) return false;
   if (!state.q) return true;
@@ -87,7 +98,8 @@ function syncUrl() {
     try {
       const url = new URL(location.href);
       url.search = new URLSearchParams(
-        Object.entries({ q: state.q, type: state.type, tags: state.tags.join(",") })
+        Object.entries({ q: state.q, type: state.type, origin: state.origin,
+                         tags: state.tags.join(",") })
           .filter(([, v]) => v)
       ).toString();
       history.replaceState(null, "", url);
@@ -107,9 +119,11 @@ function render() {
     };
     set("name", addon.name);
     set("type", addon.type);
+    set("type-glyph", TYPE_GLYPH[addon.type] || "◆");
     set("summary", addon.summary);
     set("version", "v" + addon.version);
     set("origin", addon.origin === "community" ? "Community" : "App Dev For All");
+    set("origin-glyph", ORIGIN_GLYPH[addon.origin] || ORIGIN_GLYPH.appdevforall);
     set("size", size(addon.download.size));
     const tags = node.querySelector('[data-slot="tags"]');
     for (const tag of addon.tags) tags.append(tagButton(tag, "card"));
@@ -138,15 +152,28 @@ document.getElementById("type").addEventListener("change", (event) => {
   state.type = event.target.value;
   render();
 });
+document.getElementById("origin").addEventListener("change", (event) => {
+  state.origin = event.target.value;
+  render();
+});
+
+// A select's own options are the allowed values, so an unknown or hostile
+// query parameter falls back to "no filter" rather than reaching the
+// comparison and silently hiding every card.
+function fromParams(params, id) {
+  const wanted = params.get(id) || "";
+  const known = [...document.getElementById(id).options].map((o) => o.value);
+  return known.includes(wanted) ? wanted : "";
+}
 
 const params = new URLSearchParams(location.search);
 state.q = params.get("q") || "";
-const wantedType = params.get("type") || "";
-const knownTypes = [...document.getElementById("type").options].map((o) => o.value);
-state.type = knownTypes.includes(wantedType) ? wantedType : "";
+state.type = fromParams(params, "type");
+state.origin = fromParams(params, "origin");
 state.tags = (params.get("tags") || "").split(",").filter(Boolean);
 document.getElementById("q").value = state.q;
 document.getElementById("type").value = state.type;
+document.getElementById("origin").value = state.origin;
 
 fetch("v1/catalog.json")
   .then((response) => {

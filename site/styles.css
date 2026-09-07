@@ -100,6 +100,8 @@ main { max-width:74rem; margin:0 auto; padding:26px 20px 56px; }
          color:var(--brand); background:var(--mint); border-radius:4px; padding:2px 7px; }
 @media (prefers-color-scheme: dark) { .badge { background:#22305e; color:#cfe0ff; } }
 .meta { color:var(--dim); font-size:.8rem; }
+/* R20: the shape cue beside the word, so neither badge relies on colour */
+.glyph { margin-right:.35em; }
 .tags { display:flex; flex-wrap:wrap; gap:6px; }
 .tag { font:inherit; font-size:.72rem; cursor:pointer; padding:3px 9px; border-radius:999px;
        border:1px solid var(--rule); background:transparent; color:var(--dim); }
