@@ -19,11 +19,11 @@ class AgentLoopTest {
     private class ScriptedModel(private val responses: List<String>) {
         val turns = mutableListOf<List<ChatMessage>>()
         var calls = 0
-        suspend fun generate(history: List<ChatMessage>): String {
+        suspend fun generate(history: List<ChatMessage>): AgentLoop.ModelReply {
             turns += history
             val r = responses.getOrElse(calls) { responses.last() }
             calls++
-            return r
+            return AgentLoop.ModelReply(r)
         }
     }
 
@@ -127,6 +127,60 @@ class AgentLoopTest {
         assertTrue(result.completed)
         assertEquals(0, toolsInvoked)
         assertEquals("All set!", finalMessage)
+    }
+
+    @Test
+    fun givenAReplyWhoseHistoryTextDiffers_whenTheLoopRuns_thenTheTranscriptKeepsTheHistoryText() = runTest {
+        // A natively-calling backend hands over the envelopes for extraction only: shown its own
+        // calls as text, the model starts writing the next one in a format that does not run.
+        val call = toolCall("read_file")
+        val replies = listOf(
+            AgentLoop.ModelReply(text = "Reading it. $call", historyText = "Reading it."),
+            AgentLoop.ModelReply(text = "All done."),
+        )
+        var turn = 0
+        val history = mutableListOf(ChatMessage(Role.USER, "read MainActivity.kt"))
+        val executed = mutableListOf<List<ToolCall>>()
+
+        val result = AgentLoop().run(
+            history = history,
+            generate = { replies[turn++] },
+            executeTools = { calls ->
+                executed += calls
+                listOf(ToolResult.success("contents", "MainActivity.kt"))
+            }
+        )
+
+        assertTrue(result.completed)
+        // The call still ran, so extraction read the envelope...
+        assertEquals(1, executed.size)
+        assertEquals("read_file", executed[0][0].name)
+        // ...but the stored turn carries neither it nor its envelope.
+        assertEquals("Reading it.", history[1].content)
+        assertFalse(history[1].content.contains("<tool_call>"))
+    }
+
+    @Test
+    fun givenACallWithNoProseBesideIt_whenTheLoopRuns_thenNoEmptyTurnIsStored() = runTest {
+        // Gemini rejects a content part with empty text, so the turn is left out rather than
+        // stored blank; the tool results that follow name the call.
+        val replies = listOf(
+            AgentLoop.ModelReply(text = toolCall("read_file"), historyText = ""),
+            AgentLoop.ModelReply(text = "All done."),
+        )
+        var turn = 0
+        val history = mutableListOf(ChatMessage(Role.USER, "read MainActivity.kt"))
+
+        AgentLoop().run(
+            history = history,
+            generate = { replies[turn++] },
+            executeTools = { listOf(ToolResult.success("contents", "MainActivity.kt")) }
+        )
+
+        // user, user(tool results), assistant("All done.") — no blank turn between the first two.
+        assertEquals(3, history.size)
+        assertEquals(Role.USER, history[1].role)
+        assertTrue(history[1].content.startsWith("<tool_response>"))
     }
 
     @Test

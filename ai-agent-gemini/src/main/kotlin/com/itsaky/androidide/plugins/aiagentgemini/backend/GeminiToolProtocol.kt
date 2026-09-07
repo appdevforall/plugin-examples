@@ -146,7 +146,9 @@ internal object GeminiToolProtocol {
         (schema["enum"] as? Collection<*>)?.let { values ->
             json.put("enum", JSONArray().apply { values.forEach { put(it.toString()) } })
         }
-        (schema["items"] as? Map<*, *>)?.let { json.put("items", schemaJson(it)) }
+        // Through declarable() like a property: an array of free-form objects is as propertyless
+        // as a free-form property, and Gemini answers the same 400.
+        (schema["items"] as? Map<*, *>)?.let { json.put("items", declarable(schemaJson(it))) }
         (schema["properties"] as? Map<*, *>)?.let { properties ->
             val rendered = JSONObject()
             for ((name, value) in properties) {

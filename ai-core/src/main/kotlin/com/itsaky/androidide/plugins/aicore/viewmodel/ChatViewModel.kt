@@ -1000,14 +1000,12 @@ class ChatViewModel(
                                 turn: Int,
                                 reason: ToolCallExtractor.UnparsedReply,
                             ) {
+                                // No system message: AgentReplyRenderer already puts this same
+                                // advice in the turn's own bubble, in place of the raw envelope.
                                 AgentTrace.refusal(
                                     "PARSE",
                                     "turn=$turn reason=$reason",
                                     "reply carried no readable tool call",
-                                )
-                                addSystemMessage(
-                                    str(unparsedReplyMessage(reason)),
-                                    MessageStatus.ERROR
                                 )
                             }
 
@@ -1096,7 +1094,8 @@ class ChatViewModel(
      * @param config the generation config.
      * @param toolDefinitions the tools to offer a natively-calling backend; see [callsToolsNatively].
      * @param epoch this run's epoch, for staleness checks against Stop/newer sends.
-     * @return the final response text (raw, for tool-call extraction).
+     * @return the turn: the reply with any native calls rendered into it for extraction, beside the
+     *   text the model itself wrote, which is what the transcript keeps.
      */
     private suspend fun runModelTurn(
         llmService: LlmInferenceService,
@@ -1104,8 +1103,8 @@ class ChatViewModel(
         config: LlmInferenceService.LlmConfig,
         toolDefinitions: List<LlmInferenceService.ToolDefinition>,
         epoch: Int
-    ): String {
-        val deferred = CompletableDeferred<String>()
+    ): AgentLoop.ModelReply {
+        val deferred = CompletableDeferred<AgentLoop.ModelReply>()
         val agentMessageId = UUID.randomUUID().toString()
         val startTime = System.currentTimeMillis()
         val responseBuilder = StringBuilder()
@@ -1123,6 +1122,10 @@ class ChatViewModel(
             _messages.value = _messages.value + agentMessage
             syncMessageToSession(agentMessage)
         }
+
+        // Rendered into the reply on completion, so a natively-called tool reaches extraction,
+        // the transcript badge and the loop's repeat guard by the one path text calls use.
+        val nativeCalls = mutableListOf<LlmInferenceService.ToolCallRequest>()
 
         val streamCallback = object : LlmInferenceService.StreamCallback {
                 override fun onToken(token: String) {
@@ -1145,10 +1148,14 @@ class ChatViewModel(
 
                 override fun onComplete(response: LlmInferenceService.LlmResponse) {
                     // Null text means a failed response, which arrives through onError instead.
-                    val text = response.text.orEmpty()
+                    val written = response.text.orEmpty()
+                    val calls = synchronized(nativeCalls) { nativeCalls.toList() }
+                    val text = withNativeCalls(written, calls)
+                    // The transcript keeps what the model wrote, never the envelopes below.
+                    val reply = AgentLoop.ModelReply(text = text, historyText = written)
                     if (isStale()) {
                         // Already cancelled; the awaiting loop was unblocked by job cancel.
-                        deferred.complete(text)
+                        deferred.complete(reply)
                         return
                     }
                     val durationMs = System.currentTimeMillis() - startTime
@@ -1176,7 +1183,7 @@ class ChatViewModel(
                         viewModelScope.launch(Dispatchers.Main) {
                             _messages.value = _messages.value.filter { it.id != agentMessageId }
                         }
-                        deferred.complete(text)
+                        deferred.complete(reply)
                         return
                     }
 
@@ -1204,8 +1211,9 @@ class ChatViewModel(
                         _messages.value = _messages.value.map { if (it.id == agentMessageId) finalMsg else it }
                         syncMessageToSession(finalMsg)
                     }
-                    // Return the RAW text to the loop so extraction/stop logic is unaffected.
-                    deferred.complete(text)
+                    // Hand the loop the reply with the envelopes, so extraction/stop logic sees
+                    // a native call, and the model's own text for the transcript.
+                    deferred.complete(reply)
                 }
 
                 override fun onError(error: String) {
@@ -1220,10 +1228,6 @@ class ChatViewModel(
                     deferred.completeExceptionally(RuntimeException(error))
                 }
             }
-
-        // Appended to the reply on completion, so a natively-called tool reaches extraction,
-        // the transcript badge and the loop's repeat guard by the one path text calls use.
-        val nativeCalls = mutableListOf<LlmInferenceService.ToolCallRequest>()
 
         try {
             // Every backend takes the structured form: the last turn as the prompt, the rest as
@@ -1249,12 +1253,10 @@ class ChatViewModel(
                         synchronized(nativeCalls) { nativeCalls.add(request) }
                     }
 
-                    override fun onComplete(response: LlmInferenceService.LlmResponse) {
-                        val calls = synchronized(nativeCalls) { nativeCalls.toList() }
-                        streamCallback.onComplete(
-                            if (calls.isEmpty()) response else response.withNativeCalls(calls)
-                        )
-                    }
+                    // The reported calls are read back in streamCallback.onComplete, which
+                    // renders them into the reply it hands the loop.
+                    override fun onComplete(response: LlmInferenceService.LlmResponse) =
+                        streamCallback.onComplete(response)
 
                     override fun onError(error: String) = streamCallback.onError(error)
                 }
@@ -1272,23 +1274,26 @@ class ChatViewModel(
     }
 
     /**
-     * This response with [calls] appended as canonical `<tool_call>` envelopes.
+     * [written] with [calls] appended as canonical `<tool_call>` envelopes.
      *
      * The model never writes these: [ToolCallExtractor.renderEnvelope] encodes them from arguments
      * the provider already parsed, so the mis-escaping that loses a text-mode call cannot lose one.
+     * For this turn only — see [AgentLoop.ModelReply] for why the transcript keeps [written].
      *
-     * @param calls the native calls reported during this turn.
-     * @return a response whose text carries the calls in the form extraction reads back.
+     * @param written the reply text as the model produced it.
+     * @param calls the native calls reported during this turn; none leaves [written] unchanged.
+     * @return the text carrying the calls in the form extraction reads back.
      */
-    private fun LlmInferenceService.LlmResponse.withNativeCalls(
+    private fun withNativeCalls(
+        written: String,
         calls: List<LlmInferenceService.ToolCallRequest>,
-    ): LlmInferenceService.LlmResponse {
+    ): String {
+        if (calls.isEmpty()) return written
         val envelopes = calls.joinToString("\n") {
             ToolCallExtractor.renderEnvelope(it.name, it.args.orEmpty())
         }
-        val prose = text?.trim().orEmpty()
-        val merged = if (prose.isEmpty()) envelopes else prose + "\n" + envelopes
-        return LlmInferenceService.LlmResponse(success, merged, error, tokensGenerated, timeMs)
+        val prose = written.trim()
+        return if (prose.isEmpty()) envelopes else prose + "\n" + envelopes
     }
 
     /**

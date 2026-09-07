@@ -375,8 +375,11 @@ class GeminiBackend(
                 )
                 when {
                     // Truncation is why a request to write a whole file came back unusable, and it
-                    // reads as an empty or half-finished reply unless the reason is reported.
-                    toolCallCount == 0 && finishReason == FINISH_REASON_MAX_TOKENS ->
+                    // reads as an empty reply unless the reason is reported. Only when the cap left
+                    // nothing behind: onError deletes the bubble, so reporting it for a long answer
+                    // that ran out of room would throw away the prose it did produce.
+                    toolCallCount == 0 && finalText.isBlank() &&
+                        finishReason == FINISH_REASON_MAX_TOKENS ->
                         callback.onError(userMessage(GeminiFailure.ReplyTruncated))
 
                     toolCallCount == 0 && finalText.isBlank() ->

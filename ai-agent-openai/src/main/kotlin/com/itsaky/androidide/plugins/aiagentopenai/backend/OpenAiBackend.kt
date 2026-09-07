@@ -1,7 +1,10 @@
 package com.itsaky.androidide.plugins.aiagentopenai.backend
 
 import android.content.SharedPreferences
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
+import android.widget.Toast
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aiagentopenai.R
 import com.itsaky.androidide.plugins.aiagentopenai.errors.OpenAiErrorFormatter
@@ -555,7 +558,25 @@ class OpenAiBackend(
                 "OpenAiBackend: $baseUrl does not accept tool declarations; " +
                     "the agent cannot call tools on this server"
             )
+            // Said out loud, not only logged: from here the agent answers but never touches the
+            // project, which reads as the tools being broken. Once per server, since the flag
+            // above short-circuits every later turn.
+            notifyToolsUnsupported(baseUrl)
             attempt(emptyList())
+        }
+    }
+
+    /**
+     * Tells the user this server cannot call tools, as a Toast: the run continues, so there is no
+     * error message to carry it, and the chat's own turn is an ordinary prose answer.
+     *
+     * @param baseUrl the server that refused, named in the message.
+     */
+    private fun notifyToolsUnsupported(baseUrl: String) {
+        val appContext = context.androidContext.applicationContext
+        val message = appContext.getString(R.string.openai_error_tools_unsupported, baseUrl)
+        Handler(Looper.getMainLooper()).post {
+            Toast.makeText(appContext, message, Toast.LENGTH_LONG).show()
         }
     }
 

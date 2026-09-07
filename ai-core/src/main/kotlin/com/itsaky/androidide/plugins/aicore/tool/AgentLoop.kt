@@ -38,6 +38,21 @@ class AgentLoop(
         const val DEFAULT_MAX_CONSECUTIVE_REPEATS = 2
     }
 
+    /**
+     * One model turn, as the loop reads it and as the transcript keeps it.
+     *
+     * The two differ for a natively-calling backend: [text] carries the provider's calls rendered
+     * as `<tool_call>` envelopes so extraction reads them by the one path a text-mode call takes,
+     * while [historyText] is what the model actually wrote. Storing the envelopes would show the
+     * model its own calls in a format the system prompt says is not read, which invites it to write
+     * the next one as text.
+     *
+     * @property text the reply tool extraction reads.
+     * @property historyText the ASSISTANT turn to store; the same text unless the caller says
+     *   otherwise.
+     */
+    data class ModelReply(val text: String, val historyText: String = text)
+
     /** Callbacks so the caller can drive UI/state; all no-ops by default. */
     interface Events {
         /**
@@ -136,14 +151,15 @@ class AgentLoop(
      * @param history transcript, mutated in place; seed it with the user message.
      * @param generate renders one model turn from the transcript so far. Receives the turns
      *   structurally rather than pre-flattened, so a backend that speaks a real chat format can
-     *   emit one turn per message; flattening callers can use [renderTranscript].
+     *   emit one turn per message; flattening callers can use [renderTranscript]. Returns a
+     *   [ModelReply], whose two texts a natively-calling caller sets apart.
      * @param executeTools runs a batch of tool calls.
      * @param events UI/state callbacks.
      * @return the run [Result].
      */
     suspend fun run(
         history: MutableList<ChatMessage>,
-        generate: suspend (turns: List<ChatMessage>) -> String,
+        generate: suspend (turns: List<ChatMessage>) -> ModelReply,
         executeTools: suspend (List<ToolCall>) -> List<ToolResult>,
         events: Events = object : Events {},
     ): Result {
@@ -155,8 +171,14 @@ class AgentLoop(
         while (turn < maxIterations) {
             turn++
 
-            val text = generate(history.toList())
-            history.add(ChatMessage(Role.ASSISTANT, text))
+            val reply = generate(history.toList())
+            val text = reply.text
+            // A native call with no prose beside it leaves nothing to record, and an empty turn is
+            // not harmless: Gemini rejects a content part whose text is empty. The tool results
+            // that follow name the call anyway.
+            if (reply.historyText.isNotBlank()) {
+                history.add(ChatMessage(Role.ASSISTANT, reply.historyText))
+            }
             events.onModelTurn(turn, text)
 
             val calls = extractToolCalls(text)

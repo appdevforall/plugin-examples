@@ -75,6 +75,35 @@ class GeminiToolProtocolTest {
     }
 
     @Test
+    fun givenAnArrayOfFreeFormObjects_whenDeclared_thenItsItemsAreDeclaredAsJsonText() {
+        // The same propertyless OBJECT, one level down: an items schema left as-is 400s the
+        // request just as a property would, and the streaming path does not catch it.
+        val declarations = GeminiToolProtocol.functionDeclarations(
+            listOf(
+                ToolDefinition(
+                    "add_dependency",
+                    "Add dependencies",
+                    schema(
+                        "entries" to mapOf(
+                            "type" to "array",
+                            "items" to mapOf("type" to "object", "description" to "One entry."),
+                        ),
+                        required = listOf("entries"),
+                    ),
+                )
+            )
+        )
+
+        val items = declarations.getJSONObject(0)
+            .getJSONObject("parameters")
+            .getJSONObject("properties")
+            .getJSONObject("entries")
+            .getJSONObject("items")
+        assertEquals("STRING", items.getString("type"))
+        assertTrue(items.getString("description").contains("JSON object"))
+    }
+
+    @Test
     fun givenASchemaThatNamesNoProperties_whenDeclared_thenNoParametersAreSent() {
         // Same rejection at the top level, where there is nothing to degrade it to.
         val declarations = GeminiToolProtocol.functionDeclarations(
