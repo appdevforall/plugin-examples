@@ -9,7 +9,9 @@ from addons import model
 
 SOURCE = "https://github.com/appdevforall/plugin-examples"
 
-README = """# {name}
+# Named BUILDING.md, not README.md: 18 of the 23 addons ship their own README,
+# and the one a reader wants first is the addon's, not this notice.
+NOTES = """# Building {name}
 
 Source for the {name} addon for Code On The Go.
 
@@ -18,22 +20,35 @@ Source for the {name} addon for Code On The Go.
 - Comes from: {source}/tree/main/{directory}
 - License: {license}. The full text is in LICENSE beside this file.
 
-## Build
+This folder is the project root. Open it in Code On The Go, or build it from a
+desktop:
 
-    cd {directory}
-    {up}gradlew assemblePlugin
+    ./gradlew assemblePlugin
 
-The plugin file appears in `{directory}/build/plugin/`.
+The plugin file appears in `build/plugin/`.
 
-You must create `{directory}/local.properties` with one line:
+A desktop build needs `local.properties` beside this file, with one line:
 
     sdk.dir=/path/to/your/Android/sdk
+
+On a phone you do not need that file: Code On The Go puts `ANDROID_HOME` and
+`ANDROID_SDK_ROOT` in the build environment.
 """
+
+# Every shared jar is referenced as "../libs/x.jar" (or "../../libs/x.jar")
+# from the addon's place in the repository. Flattening moves the addon to the
+# archive root, so those references have to lose their parent hops.
+PARENT_LIBS = re.compile(r"(?:\.\./)+libs/")
+
+# Only these are rewritten. They are the only tracked files that reference the
+# shared jars by path; READMEs and HTML documentation describe the repository
+# and stay as they are.
+REWRITTEN = ("build.gradle.kts", "settings.gradle.kts")
 
 
 def jars_for(addon: Path) -> list[str]:
     text = ""
-    for name in ("build.gradle.kts", "settings.gradle.kts"):
+    for name in REWRITTEN:
         f = addon / name
         if f.exists():
             text += f.read_text()
@@ -48,44 +63,69 @@ def tracked_files(root: Path, addon: Path) -> list[str]:
     return [line for line in result.stdout.splitlines() if line]
 
 
+def flatten(text: str) -> str:
+    return PARENT_LIBS.sub("libs/", text)
+
+
+def _claim(top: Path, relative: str, label: str) -> Path:
+    """Reserve one path in the staging tree, or say who else wanted it.
+
+    Flattening merges three sources into one directory -- the addon's own
+    tracked files, the shared jars, and the repository's Gradle wrapper -- so a
+    silent overwrite is possible in a way the two-level shape made impossible.
+    """
+    target = top / relative
+    if target.exists():
+        raise RuntimeError(f"{label}: {relative} is claimed twice")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    return target
+
+
 def _stage(root: Path, addon: Path, out: Path, meta: dict) -> Path:
     top = out / f"{model.slug(addon.name)}-src"
     if top.exists():
         shutil.rmtree(top)
     top.mkdir(parents=True)
 
+    inside = addon.relative_to(root).as_posix()
     files = tracked_files(root, addon)
     if not files:
         raise RuntimeError(f"{addon.name}: git tracks no file in this directory")
-    # Mirror the repository path exactly, so every "../" in a build file
-    # resolves inside the archive without any rewriting.
-    for relative in files:
-        target = top / relative
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(root / relative, target)
+    # The archive root IS the project root: Code On The Go reads a folder as a
+    # plugin project only when build.gradle.kts and libs/plugin-api.jar sit in
+    # the folder it was given (isPluginProject in ProjectValidations.kt).
+    for repo_path in files:
+        relative = repo_path[len(inside) + 1:]
+        target = _claim(top, relative, addon.name)
+        if relative in REWRITTEN:
+            target.write_text(flatten((root / repo_path).read_text()))
+        else:
+            shutil.copy2(root / repo_path, target)
 
-    (top / "libs").mkdir()
     for jar in jars_for(addon):
         source = root / "libs" / jar
         if not source.exists():
             raise RuntimeError(f"{addon.name}: libs/{jar} is missing")
-        shutil.copy2(source, top / "libs" / jar)
+        shutil.copy2(source, _claim(top, f"libs/{jar}", addon.name))
 
-    for name in ("gradlew", "gradlew.bat"):
-        if (root / name).exists():
-            shutil.copy2(root / name, top / name)
-    shutil.copytree(root / "gradle" / "wrapper", top / "gradle" / "wrapper")
+    # Most addons track a wrapper of their own, which is already correct for a
+    # root-level build. Only fall back to the repository's for the few that
+    # rely on it.
+    if not (top / "gradlew").exists():
+        for name in ("gradlew", "gradlew.bat"):
+            if (root / name).exists():
+                shutil.copy2(root / name, _claim(top, name, addon.name))
+    if not (top / "gradle" / "wrapper").exists():
+        shutil.copytree(root / "gradle" / "wrapper", top / "gradle" / "wrapper")
 
     # AGPL source distribution: ship the licence text the notice refers to
     licence_file = root / "LICENSE"
     if licence_file.exists():
-        shutil.copy2(licence_file, top / "LICENSE")
+        shutil.copy2(licence_file, _claim(top, "LICENSE", addon.name))
 
     author = meta.get("author") or {}
-    inside = addon.relative_to(root).as_posix()
-    (top / "README.md").write_text(README.format(
+    _claim(top, "BUILDING.md", addon.name).write_text(NOTES.format(
         name=model.display_name(addon.name), directory=inside,
-        up="../" * len(Path(inside).parts),
         origin="Community contribution" if meta.get("origin") == "community"
                else "App Dev for All",
         author=f"{author.get('name', 'App Dev for All')}"
@@ -121,9 +161,15 @@ def verify(top: Path, inside: str, jars: list[str]) -> None:
         problems.append("gradlew is missing")
     if not (top / "gradle" / "wrapper" / "gradle-wrapper.properties").exists():
         problems.append("the wrapper properties file is missing")
-    for name in ("build.gradle.kts", "settings.gradle.kts"):
-        if not (top / inside / name).exists():
-            problems.append(f"{inside}/{name} is missing")
+    for name in REWRITTEN:
+        gradle_file = top / name
+        if not gradle_file.exists():
+            problems.append(f"{name} is missing from the archive root")
+        # A reference that still climbs out of the archive root would only fail
+        # once someone unpacked it and ran a build, which is exactly the
+        # failure this shape exists to remove.
+        elif "../" in gradle_file.read_text():
+            problems.append(f"{name} still references a parent directory")
     for path in top.rglob("*"):
         rel = path.relative_to(top).as_posix()
         if path.name in SECRET_NAMES or path.suffix in SECRET_SUFFIXES:

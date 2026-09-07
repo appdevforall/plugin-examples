@@ -25,26 +25,110 @@ def make_repo(tmp_path: Path) -> Path:
     (addon / "settings.gradle.kts").write_text(
         'classpath(files("../../libs/gradle-plugin.jar"))\n')
     (addon / "src" / "Main.kt").write_text("fun main() {}")
+    (addon / "README.md").write_text("# Keystore Generator\n\nWhat it does.\n")
     (addon / "local.properties").write_text("sdk.dir=/Users/someone/Android")
     (tmp_path / ".gitignore").write_text("local.properties\n")
-    subprocess.run(["git", "-C", str(tmp_path), "add", "-A"], check=True)
-    subprocess.run(["git", "-C", str(tmp_path), "-c", "user.email=t@t",
-                    "-c", "user.name=t", "commit", "-qm", "x"], check=True)
+    commit(tmp_path)
     return addon
 
 
-def test_the_archive_mirrors_the_repository_path(tmp_path):
-    addon = make_repo(tmp_path)
-    out = tmp_path / "dist"
-    out.mkdir()
-    archive = tarball.build(tmp_path, addon, out)
+def commit(root: Path) -> None:
+    subprocess.run(["git", "-C", str(root), "add", "-A"], check=True)
+    subprocess.run(["git", "-C", str(root), "-c", "user.email=t@t",
+                    "-c", "user.name=t", "commit", "-qm", "x"], check=True)
+
+
+def names_in(archive: Path) -> set[str]:
     with tarfile.open(archive) as tar:
-        names = set(tar.getnames())
+        return set(tar.getnames())
+
+
+def text_in(archive: Path, name: str) -> str:
+    with tarfile.open(archive) as tar:
+        return tar.extractfile(name).read().decode()
+
+
+def build(tmp_path: Path, addon: Path, meta: dict | None = None) -> Path:
+    out = tmp_path / "dist"
+    out.mkdir(exist_ok=True)
+    return tarball.build(tmp_path, addon, out, meta)
+
+
+def test_the_archive_root_is_the_project_root(tmp_path):
+    """Code On The Go accepts a folder only when build.gradle.kts and
+    libs/plugin-api.jar sit in that same folder (isPluginProject)."""
+    names = names_in(build(tmp_path, make_repo(tmp_path)))
     top = "keystore-generator-src"
-    # ../../libs from plugins/<Addon> must land on the archive's own libs/
-    assert f"{top}/plugins/Keystore-Generator/settings.gradle.kts" in names
+    assert f"{top}/build.gradle.kts" in names
+    assert f"{top}/settings.gradle.kts" in names
     assert f"{top}/libs/plugin-api.jar" in names
-    assert f"{top}/Keystore-Generator" not in names
+    assert f"{top}/src/Main.kt" in names
+    # no trace of the repository path remains
+    assert not any(n.startswith(f"{top}/plugins/") for n in names)
+
+
+def test_archive_has_a_flat_self_contained_shape(tmp_path):
+    archive = build(tmp_path, make_repo(tmp_path))
+    assert archive.name == "keystore-generator-src.tar.gz"
+    names = names_in(archive)
+    top = "keystore-generator-src"
+    assert f"{top}/libs/plugin-api.jar" in names
+    assert f"{top}/libs/gradle-plugin.jar" in names
+    assert f"{top}/libs/common.jar" not in names
+    assert f"{top}/gradlew" in names
+    assert f"{top}/gradle/wrapper/gradle-wrapper.properties" in names
+    assert f"{top}/BUILDING.md" in names
+
+
+def test_build_files_lose_their_parent_paths(tmp_path):
+    """A ../../libs reference points outside a flattened archive."""
+    archive = build(tmp_path, make_repo(tmp_path))
+    top = "keystore-generator-src"
+    build_file = text_in(archive, f"{top}/build.gradle.kts")
+    settings = text_in(archive, f"{top}/settings.gradle.kts")
+    assert 'files("libs/plugin-api.jar")' in build_file
+    assert 'files("libs/gradle-plugin.jar")' in settings
+    assert "../" not in build_file and "../" not in settings
+
+
+def test_the_addons_own_readme_survives(tmp_path):
+    """18 of 23 addons ship a README.md; the generated notes must not eat it."""
+    archive = build(tmp_path, make_repo(tmp_path))
+    top = "keystore-generator-src"
+    assert "What it does." in text_in(archive, f"{top}/README.md")
+
+
+def test_the_addons_own_wrapper_wins_over_the_root_one(tmp_path):
+    addon = make_repo(tmp_path)
+    (addon / "gradlew").write_text("#!/bin/sh\n# the addon's own\n")
+    (addon / "gradle" / "wrapper").mkdir(parents=True)
+    (addon / "gradle" / "wrapper" / "gradle-wrapper.properties").write_text("own")
+    commit(tmp_path)
+    archive = build(tmp_path, addon)
+    top = "keystore-generator-src"
+    assert "the addon's own" in text_in(archive, f"{top}/gradlew")
+    assert text_in(archive, f"{top}/gradle/wrapper/gradle-wrapper.properties") == "own"
+
+
+def test_the_addons_own_jar_sits_beside_the_shared_ones(tmp_path):
+    addon = make_repo(tmp_path)
+    (addon / "libs").mkdir()
+    (addon / "libs" / "shared.jar").write_bytes(b"own")
+    commit(tmp_path)
+    names = names_in(build(tmp_path, addon))
+    top = "keystore-generator-src"
+    assert f"{top}/libs/shared.jar" in names
+    assert f"{top}/libs/plugin-api.jar" in names
+
+
+def test_a_jar_name_collision_stops_the_build(tmp_path):
+    """Flattening merges the addon's libs/ with the shared one."""
+    addon = make_repo(tmp_path)
+    (addon / "libs").mkdir()
+    (addon / "libs" / "plugin-api.jar").write_bytes(b"a different jar")
+    commit(tmp_path)
+    with pytest.raises(RuntimeError, match="libs/plugin-api.jar"):
+        build(tmp_path, addon)
 
 
 def test_finds_only_the_jars_the_addon_uses(tmp_path):
@@ -52,66 +136,51 @@ def test_finds_only_the_jars_the_addon_uses(tmp_path):
     assert tarball.jars_for(addon) == ["gradle-plugin.jar", "plugin-api.jar"]
 
 
-def test_archive_has_the_two_level_shape(tmp_path):
-    addon = make_repo(tmp_path)
-    out = tmp_path / "dist"
-    out.mkdir()
-    archive = tarball.build(tmp_path, addon, out)
-    assert archive.name == "keystore-generator-src.tar.gz"
-    with tarfile.open(archive) as tar:
-        names = set(tar.getnames())
-    top = "keystore-generator-src"
-    assert f"{top}/libs/plugin-api.jar" in names
-    assert f"{top}/libs/gradle-plugin.jar" in names
-    assert f"{top}/libs/common.jar" not in names
-    assert f"{top}/gradlew" in names
-    assert f"{top}/gradle/wrapper/gradle-wrapper.properties" in names
-    assert f"{top}/plugins/Keystore-Generator/build.gradle.kts" in names
-    assert f"{top}/README.md" in names
-
-
 def test_local_properties_never_reaches_the_archive(tmp_path):
-    addon = make_repo(tmp_path)
-    out = tmp_path / "dist"
-    out.mkdir()
-    archive = tarball.build(tmp_path, addon, out)
-    with tarfile.open(archive) as tar:
-        assert not any("local.properties" in n for n in tar.getnames())
+    archive = build(tmp_path, make_repo(tmp_path))
+    assert not any("local.properties" in n for n in names_in(archive))
 
 
 def test_a_missing_jar_stops_the_build(tmp_path):
     addon = make_repo(tmp_path)
     (tmp_path / "libs" / "plugin-api.jar").unlink()
-    out = tmp_path / "dist"
-    out.mkdir()
     with pytest.raises(RuntimeError, match="plugin-api.jar"):
-        tarball.build(tmp_path, addon, out)
+        build(tmp_path, addon)
 
 
 def test_verify_rejects_other_credential_files(tmp_path):
     addon = make_repo(tmp_path)
     (addon / "sentry.properties").write_text("dsn=https://secret@sentry.io/1")
-    subprocess.run(["git", "-C", str(tmp_path), "add", "-A"], check=True)
-    subprocess.run(["git", "-C", str(tmp_path), "-c", "user.email=t@t",
-                    "-c", "user.name=t", "commit", "-qm", "creds"], check=True)
-    out = tmp_path / "dist"
-    out.mkdir()
+    commit(tmp_path)
     with pytest.raises(RuntimeError, match="sentry.properties"):
-        tarball.build(tmp_path, addon, out)
+        build(tmp_path, addon)
 
 
-def test_verify_rejects_build_output(tmp_path):
-    addon = make_repo(tmp_path)
-    top = tmp_path / "staged"
-    (top / "plugins" / "Keystore-Generator" / "build").mkdir(parents=True)
-    (top / "plugins" / "Keystore-Generator" / "build" / "out.jar").write_bytes(b"x")
-    (top / "libs").mkdir(); (top / "libs" / "plugin-api.jar").write_bytes(b"j")
+def staged_project(top: Path) -> None:
+    (top / "libs").mkdir(parents=True)
+    (top / "libs" / "plugin-api.jar").write_bytes(b"j")
     (top / "gradlew").write_text("x")
     (top / "gradle" / "wrapper").mkdir(parents=True)
     (top / "gradle" / "wrapper" / "gradle-wrapper.properties").write_text("x")
     for n in ("build.gradle.kts", "settings.gradle.kts"):
-        (top / "plugins" / "Keystore-Generator" / n).write_text("x")
+        (top / n).write_text('files("libs/plugin-api.jar")\n')
+
+
+def test_verify_rejects_build_output(tmp_path):
+    top = tmp_path / "staged"
+    staged_project(top)
+    (top / "build").mkdir()
+    (top / "build" / "out.jar").write_bytes(b"x")
     with pytest.raises(RuntimeError, match="build/"):
+        tarball.verify(top, "plugins/Keystore-Generator", ["plugin-api.jar"])
+
+
+def test_verify_rejects_a_surviving_parent_path(tmp_path):
+    """The last line of defence: a rewrite that missed a reference."""
+    top = tmp_path / "staged"
+    staged_project(top)
+    (top / "build.gradle.kts").write_text('files("../../libs/plugin-api.jar")\n')
+    with pytest.raises(RuntimeError, match="build.gradle.kts"):
         tarball.verify(top, "plugins/Keystore-Generator", ["plugin-api.jar"])
 
 
@@ -128,37 +197,32 @@ META = {"summary": "s", "description": "d", "tags": ["t"],
         "author": {"name": "Aman Khan", "url": "https://github.com/aman-khan-786"}}
 
 
-def test_readme_credits_the_author_and_names_the_source(tmp_path):
+def test_build_notes_credit_the_author_and_name_the_source(tmp_path):
     addon = make_repo(tmp_path)
     (tmp_path / "LICENSE").write_text("GNU AFFERO GENERAL PUBLIC LICENSE\n")
-    out = tmp_path / "dist"
-    out.mkdir()
-    archive = tarball.build(tmp_path, addon, out, META)
-    with tarfile.open(archive) as tar:
-        names = set(tar.getnames())
-        readme = tar.extractfile("keystore-generator-src/README.md").read().decode()
-    assert "keystore-generator-src/LICENSE" in names   # AGPL text must ship
-    assert "Aman Khan" in readme
-    assert "github.com/aman-khan-786" in readme
-    assert "community" in readme.lower()
-    assert "plugin-examples" in readme                 # where it came from
+    archive = build(tmp_path, addon, META)
+    top = "keystore-generator-src"
+    notes = text_in(archive, f"{top}/BUILDING.md")
+    assert f"{top}/LICENSE" in names_in(archive)   # AGPL text must ship
+    assert "Aman Khan" in notes
+    assert "github.com/aman-khan-786" in notes
+    assert "community" in notes.lower()
+    assert "plugin-examples" in notes              # where it came from
+    assert "plugins/Keystore-Generator" in notes   # which directory it was
+    assert "./gradlew assemblePlugin" in notes     # buildable as unpacked
 
 
 def test_tarballs_are_reproducible(tmp_path):
     """Otherwise every publish churns all 23 sourceTarball checksums."""
     import hashlib
     addon = make_repo(tmp_path)
-    out = tmp_path / "dist"
-    out.mkdir()
-    first = hashlib.sha256(tarball.build(tmp_path, addon, out, META).read_bytes()).hexdigest()
-    second = hashlib.sha256(tarball.build(tmp_path, addon, out, META).read_bytes()).hexdigest()
+    first = hashlib.sha256(build(tmp_path, addon, META).read_bytes()).hexdigest()
+    second = hashlib.sha256(build(tmp_path, addon, META).read_bytes()).hexdigest()
     assert first == second
 
 
 def test_no_builder_identity_leaks_into_the_archive(tmp_path):
     addon = make_repo(tmp_path)
-    out = tmp_path / "dist"
-    out.mkdir()
-    with tarfile.open(tarball.build(tmp_path, addon, out, META)) as tar:
+    with tarfile.open(build(tmp_path, addon, META)) as tar:
         for m in tar.getmembers():
             assert m.uname == "" and m.gname == "" and m.uid == 0 and m.mtime == 0

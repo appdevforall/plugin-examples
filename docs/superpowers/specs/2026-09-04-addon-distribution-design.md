@@ -34,7 +34,7 @@ Each was taken during design and is recorded with its rationale so a later reade
 | **D02** | Root routing by Cloudflare **Transform Rule**, not a Worker, not a redirect. | Configuration only — no deployable code, nothing to version. **Verified live** (§4, V01). A redirect would work but changes the visible URL to `/index.html`. |
 | **D03** | No cache purge. Bounded staleness via `Cache-Control` at upload. | Cloudflare does not edge-cache HTML or JSON by default, so the catalog, the pages, and the downloads are already current the instant a publish completes. Only icons and tarballs need bounding. This removes the second credential that C04 anticipated: the design needs exactly **one** bucket-scoped token. |
 | **D04** | Publishing is decoupled from the `libs/` rebuild. | Today shipping one fixed addon means a ~30-minute rebuild of everything. A separate publish workflow makes a one-addon hotfix a short job and gives R09 a natural home. |
-| **D05** | A source tarball is a **two-level mini-repo**, mirroring this repository's own shape. | Every existing `../libs/plugin-api.jar` reference then resolves unchanged, so there is **zero path rewriting** — the largest source of silent breakage in X2/R43 simply does not arise. It also stops `ai-agent-local`'s own `libs/` from colliding with the shared one. |
+| **D05** | A source tarball is **flat**: the archive root is the addon's project root, with the shared jars in its own `libs/`. | Code On The Go reads a folder as a plugin project only when `build.gradle.kts` and `libs/plugin-api.jar` sit in that same folder (`isPluginProject`, `ProjectValidations.kt`), and it picks `assemblePlugin` over `assembleDebug` by the same test (`ProjectManagerImpl.setup`). A two-level mini-repo mirroring this repository needs no path rewriting, but no level of it can be opened on a phone — so the addon that ships the source cannot build it. Rewriting is confined to `(../)+libs/` → `libs/` in the two Gradle files, and §9.6 refuses any archive where a parent reference survives. |
 | **D06** | Gallery chrome is injected at publish time, not committed. | The 31 existing pages stay plain HTML that anyone can edit. The published site is still coherent, with no duplicated chrome in git and no manual cache-bust chore. |
 | **D07** | Icons publish as-is; CSS sizes the tile. | Ships icons now at no cost. The one 24×24 icon will look soft and gets a follow-up issue rather than blocking this work. |
 | **D08** | R04 is amended to bounded staleness. | Follows from D03. New text in §12.4. |
@@ -243,26 +243,28 @@ The test suite runs in `check-toolchain.yml` alongside `addons check`.
 
 ### 9.1 Shape
 
-A tarball is a **two-level mini-repo**: the same shape as this repository, reduced to one addon.
+A tarball is **flat**: the archive root is the addon's project root.
 
 ```
 keystore-generator-src/
-  README.md                    generated (§9.4)
-  gradlew                      copied from the repo root
+  BUILDING.md                  generated (§9.4)
+  README.md                    the addon's own, untouched
+  build.gradle.kts             ../../libs/ rewritten to libs/
+  settings.gradle.kts          ../../libs/ rewritten to libs/
+  src/...
+  gradlew                      the addon's own, or the repo root's
   gradlew.bat
-  gradle/wrapper/              copied from the repo root
+  gradle/wrapper/
   libs/
     plugin-api.jar             only the jars this addon references
     gradle-plugin.jar
-  Keystore-Generator/
-    build.gradle.kts           unmodified
-    settings.gradle.kts        unmodified
-    src/...
 ```
 
-Build instructions are then literally the repository's own: `cd Keystore-Generator && ../gradlew assemblePlugin`.
+Build instructions are then `./gradlew assemblePlugin` in the folder as unpacked.
 
-This is the point of D05. Every `../libs/plugin-api.jar` reference already resolves, so **no file is rewritten** (R43 is met by construction, not by editing). `ai-agent-local/libs/llama-api.jar` and `pair-programming-plugin/libs/shared.jar` stay where they are inside the addon directory and never collide with the shared `libs/` one level up (X2).
+This is the point of D05. Code On The Go tests for `build.gradle.kts` **and** `libs/plugin-api.jar` in the folder it is given, so only a flat archive can be opened on a phone at all. The cost is the one thing X2/R43 warns about — a rewrite — held to `(../)+libs/` → `libs/` in the two Gradle files, which are the only tracked files that reference the shared jars by path. §9.6 fails the run if any parent reference survives, so a missed rewrite cannot be published.
+
+Flattening merges three sources into one directory: the addon's tracked files, the shared jars, and the Gradle wrapper. Every write claims its path first and a second claim is a hard error, so an addon's own `libs/` jar (`Code-Together/libs/shared.jar`) sits beside the shared ones, while a name clash with them stops the run instead of silently overwriting (X2). An addon that tracks its own wrapper keeps it; only the few without one get the repository's.
 
 ### 9.2 Deriving the jar set (R41)
 
@@ -276,11 +278,13 @@ The addon's file list comes from `git ls-files` for that directory, **not** from
 
 This is deliberate and load-bearing. `local.properties` is gitignored but present on disk in 27 addon directories, and contains a developer's SDK path **and Sentry DSNs**. Sourcing from the index makes that leak structurally impossible rather than filtered — there is no exclusion list to forget to update. `build/`, `.gradle/`, and every other ignored path are excluded by the same mechanism.
 
-### 9.4 Generated `README.md`
+### 9.4 Generated `BUILDING.md`
 
 States the build command, the addon's license, its origin and author where applicable, and the URL it came from. For any addon that cannot be made self-contained, it states the prerequisite **at the top**, before the build instructions (R46).
 
-Exactly one addon is in that category today: `ai-agent-local` depends on the `subprojects/llama.cpp` git submodule, which `git ls-files` does not descend into. Its README leads with the clone command for that submodule. This is the single deliberate exception to R40.
+It is not called `README.md`: 18 of the 23 addons ship a README of their own, which now lands at the archive root and is the file a reader wants first. The generated notes sit beside it rather than over it.
+
+Exactly one addon is in that category today: `ai-agent-local` depends on the `subprojects/llama.cpp` git submodule, which `git ls-files` does not descend into. Its `BUILDING.md` leads with the clone command for that submodule. This is the single deliberate exception to R40.
 
 ### 9.5 Fetched assets (R45)
 
@@ -294,7 +298,8 @@ After assembly and before upload, every tarball is checked:
 2. no member path escapes the tarball root, and no path is absolute;
 3. `gradlew` and `gradle/wrapper/gradle-wrapper.properties` are present;
 4. no `local.properties`, no `.gradle/`, no `build/`, no file matching a credential pattern;
-5. `build.gradle.kts` and `settings.gradle.kts` are present in the addon directory.
+5. `build.gradle.kts` and `settings.gradle.kts` are present **at the archive root**, which is what makes the folder openable in Code On The Go;
+6. neither of those two files still references a parent directory — a `../` that survived the rewrite would resolve outside the archive and fail only once someone unpacked it and ran a build.
 
 Any failure aborts the run (R47). Nothing partial is uploaded.
 
@@ -688,13 +693,13 @@ Carried from the PRD where still live, plus what the design introduces.
 | R37 | §7 — name and URL required, email only by consent |
 | R38 | §6 — a community addon's original naming is preserved |
 | R39 | §9 — a tarball per published addon |
-| R40 | §9.1 — two-level mini-repo builds standalone |
+| R40 | §9.1 — the flat archive root builds standalone, and opens in Code On The Go |
 | R41 | §9.2 — jar set derived per addon by parsing build files |
 | R42 | §9.1 — root wrapper copied in |
-| R43 | §9.1 — met by construction; no path is rewritten |
+| R43 | §9.1 — one bounded rewrite, `(../)+libs/` → `libs/`, enforced by check 6 in §9.6 |
 | R44 | §9.3 — file list from `git ls-files` |
 | R45 | §9.5 — fetch step retained, assets move to our host |
-| R46 | §9.4 — prerequisite stated at the top of the README |
+| R46 | §9.4 — prerequisite stated at the top of `BUILDING.md` |
 | R47 | §9.2, §9.6, §10 — every failure aborts the run |
 | R48 | §9.6 — five structural checks on every tarball |
 | R49 | §10 — tarball checksum and size in the catalog |
