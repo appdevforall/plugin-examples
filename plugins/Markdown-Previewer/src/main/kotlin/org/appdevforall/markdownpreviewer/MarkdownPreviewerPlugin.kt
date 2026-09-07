@@ -1,4 +1,4 @@
-package com.codeonthego.markdownpreviewer
+package org.appdevforall.markdownpreviewer
 
 import androidx.fragment.app.Fragment
 import com.itsaky.androidide.plugins.IPlugin
@@ -10,8 +10,8 @@ import com.itsaky.androidide.plugins.extensions.EditorTabItem
 import com.itsaky.androidide.plugins.extensions.NavigationItem
 import com.itsaky.androidide.plugins.extensions.ContextMenuContext
 import com.itsaky.androidide.plugins.services.IdeEditorTabService
-import com.codeonthego.markdownpreviewer.fragments.MarkdownPreviewFragment
-import com.codeonthego.markdownpreviewer.viewmodel.MarkdownPreviewViewModel
+import org.appdevforall.markdownpreviewer.fragments.MarkdownPreviewFragment
+import org.appdevforall.markdownpreviewer.viewmodel.MarkdownPreviewViewModel
 import java.io.File
 
 class MarkdownPreviewerPlugin : IPlugin, UIExtension, EditorTabExtension {
@@ -19,7 +19,7 @@ class MarkdownPreviewerPlugin : IPlugin, UIExtension, EditorTabExtension {
     private lateinit var context: PluginContext
     
     companion object {
-        const val PLUGIN_ID = "com.codeonthego.markdownpreviewer"
+        const val PLUGIN_ID = "org.appdevforall.markdownpreviewer"
         private val MARKDOWN_EXTENSIONS = setOf("md", "markdown", "mdown", "mkd", "mkdn")
         private val HTML_EXTENSIONS = setOf("html", "htm", "xhtml")
         val SUPPORTED_EXTENSIONS = MARKDOWN_EXTENSIONS + HTML_EXTENSIONS

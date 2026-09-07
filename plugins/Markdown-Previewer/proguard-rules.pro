@@ -7,4 +7,4 @@
 -keep class org.commonmark.** { *; }
 
 # Keep plugin classes
--keep class com.codeonthego.markdownpreviewer.** { *; }
+-keep class org.appdevforall.markdownpreviewer.** { *; }

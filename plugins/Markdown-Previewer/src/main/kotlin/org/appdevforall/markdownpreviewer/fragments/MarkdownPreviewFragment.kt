@@ -1,4 +1,4 @@
-package com.codeonthego.markdownpreviewer.fragments
+package org.appdevforall.markdownpreviewer.fragments
 
 import android.app.Activity
 import android.content.Intent
@@ -23,10 +23,10 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
-import com.codeonthego.markdownpreviewer.MarkdownPreviewerPlugin
-import com.codeonthego.markdownpreviewer.PreviewState
-import com.codeonthego.markdownpreviewer.R
-import com.codeonthego.markdownpreviewer.viewmodel.MarkdownPreviewViewModel
+import org.appdevforall.markdownpreviewer.MarkdownPreviewerPlugin
+import org.appdevforall.markdownpreviewer.PreviewState
+import org.appdevforall.markdownpreviewer.R
+import org.appdevforall.markdownpreviewer.viewmodel.MarkdownPreviewViewModel
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.itsaky.androidide.plugins.base.PluginFragmentHelper
 import com.itsaky.androidide.plugins.services.IdeFileService

@@ -1,4 +1,4 @@
-package com.codeonthego.markdownpreviewer.viewmodel
+package org.appdevforall.markdownpreviewer.viewmodel
 
 import android.content.Context
 import android.net.Uri

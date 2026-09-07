@@ -8,7 +8,7 @@
         <!-- Plugin metadata -->
         <meta-data
             android:name="plugin.id"
-            android:value="com.codeonthego.markdownpreviewer" />
+            android:value="org.appdevforall.markdownpreviewer" />
 
         <meta-data
             android:name="plugin.name"
@@ -36,7 +36,7 @@
 
         <meta-data
             android:name="plugin.main_class"
-            android:value="com.codeonthego.markdownpreviewer.MarkdownPreviewerPlugin" />
+            android:value="org.appdevforall.markdownpreviewer.MarkdownPreviewerPlugin" />
 
         <meta-data
             android:name="plugin.sidebar_items"

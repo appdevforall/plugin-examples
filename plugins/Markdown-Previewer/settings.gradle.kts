@@ -27,4 +27,4 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "markdown-preview"
+rootProject.name = "markdown-previewer"
