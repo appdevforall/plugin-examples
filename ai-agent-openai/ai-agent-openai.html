@@ -118,8 +118,9 @@
     <tr><td><code>OpenAiErrorFormatter</code></td><td>Classifies a failure
       (unknown model, rate limit, spent balance, refused key, outage, server not
       running) so it can be reported as one translated sentence.</td></tr>
-    <tr><td><code>SecureApiKeyStore</code></td><td>AES/GCM encryption of the API
-      key, under this plugin's own Keystore alias.</td></tr>
+    <tr><td><code>SecureApiKeyStore</code></td><td>Binds this plugin's own
+      Keystore alias to the IDE's <code>KeystoreSecretStore</code>, which
+      AES/GCM-encrypts the API key.</td></tr>
   </table>
   <p><b>No third-party HTTP SDK.</b> Plugins run in the host IDE's classloader
   where <code>okhttp3</code> resolves to the host's older OkHttp — a mismatch that

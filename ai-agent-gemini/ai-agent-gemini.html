@@ -82,9 +82,9 @@
     <tr><td><code>GeminiErrorFormatter</code></td><td>Classifies a failure
       (retired model, quota, refused key, outage, unreachable) so it can be
       reported as one translated sentence.</td></tr>
-    <tr><td><code>SecureApiKeyStore</code></td><td>AES/GCM encryption of the API
-      key under a hardware-backed Android Keystore secret owned by this
-      plugin.</td></tr>
+    <tr><td><code>SecureApiKeyStore</code></td><td>Binds this plugin's Keystore
+      alias to the IDE's <code>KeystoreSecretStore</code>, which AES/GCM-encrypts
+      the API key under a hardware-backed Android Keystore secret.</td></tr>
     <tr><td><code>GeminiSettingsFragment</code></td><td>The settings pane AI Core
       mounts: key entry and verification, visibility toggle, and the model picker
       driven by the live catalog.</td></tr>

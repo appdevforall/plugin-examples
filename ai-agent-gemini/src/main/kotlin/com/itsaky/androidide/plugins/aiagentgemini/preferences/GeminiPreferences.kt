@@ -2,6 +2,8 @@ package com.itsaky.androidide.plugins.aiagentgemini.preferences
 
 import android.content.SharedPreferences
 import com.itsaky.androidide.plugins.PluginContext
+// Imported for the KDoc link below: the alias the API key is encrypted under lives there.
+import com.itsaky.androidide.plugins.aiagentgemini.security.secureApiKeyStore
 
 /**
  * This plugin's own settings store, and the one-time move of its settings out of AI Core's.
@@ -59,7 +61,7 @@ internal object GeminiPreferences {
      * Copies this backend's settings out of every store in [LEGACY_FILES], once.
      *
      * The API key moves as ciphertext and stays readable: it is encrypted under a Keystore alias
-     * (see [SecureApiKeyStore]) rather than under anything plugin-specific, and every plugin runs
+     * (see [secureApiKeyStore]) rather than under anything plugin-specific, and every plugin runs
      * in the host's process and UID. Copies rather than moves, so downgrading still finds the old
      * values. Call before anything reads a setting.
      *

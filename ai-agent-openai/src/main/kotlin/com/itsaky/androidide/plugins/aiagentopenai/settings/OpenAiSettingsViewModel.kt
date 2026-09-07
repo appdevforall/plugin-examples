@@ -10,7 +10,8 @@ import com.itsaky.androidide.plugins.PluginLogger
 import com.itsaky.androidide.plugins.aiagentopenai.backend.OpenAiBackend
 import com.itsaky.androidide.plugins.aiagentopenai.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aiagentopenai.preferences.OpenAiPreferences
-import com.itsaky.androidide.plugins.aiagentopenai.security.SecureApiKeyStore
+import com.itsaky.androidide.plugins.aiagentopenai.security.secureApiKeyStore
+import com.itsaky.androidide.plugins.security.KeystoreSecretStore
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -244,7 +245,7 @@ class OpenAiSettingsViewModel(
     }
 
     /**
-     * Encrypts [apiKey] via [SecureApiKeyStore] and persists only the ciphertext, off the main
+     * Encrypts [apiKey] via [secureApiKeyStore] and persists only the ciphertext, off the main
      * thread. Nothing is written on failure.
      *
      * @param apiKey the plaintext key to store (trimmed before encryption)
@@ -261,7 +262,7 @@ class OpenAiSettingsViewModel(
                 return@withContext false
             }
             val encrypted = try {
-                SecureApiKeyStore.encrypt(apiKey.trim())
+                secureApiKeyStore.encrypt(apiKey.trim())
             } catch (e: Exception) {
                 logger?.error("$TAG: failed to encrypt API key", e)
                 return@withContext false
@@ -288,30 +289,39 @@ class OpenAiSettingsViewModel(
     /**
      * Decrypt the stored key off the main thread (Keystore IPC + AES/GCM), upgrading a plaintext
      * value to ciphertext in passing.
+     *
+     * @return what is on disk: nothing, the key, a key this device's Keystore can no longer open,
+     *   or one it would not open just now. Those are not the same — a lost Keystore entry has to be
+     *   entered again, a keystore that did not answer only retried — so the caller says which.
      */
-    suspend fun getApiKey(): String? = withContext(ioDispatcher) {
-        SecureApiKeyStore.readAndMigrate(prefs(), OpenAiPreferences.KEY_API_KEY)
+    suspend fun getApiKey(): KeystoreSecretStore.Stored = withContext(ioDispatcher) {
+        secureApiKeyStore.readAndMigrate(prefs(), OpenAiPreferences.KEY_API_KEY)
     }
 
     /**
-     * The stored key, but only when it was saved for [baseUrl].
+     * What is stored for [baseUrl] — the whole four-way read, not a key-or-null.
      *
      * What the connection test sends: testing a LAN server must not hand it the key the user
-     * entered for OpenAI. A key stored before the origin was recorded is returned, matching the
-     * backend's own rule.
+     * entered for OpenAI, so a key saved for another origin reads as absent. A key stored before
+     * the origin was recorded is returned, matching the backend's own rule.
      *
-     * @return the plaintext key, or null when none is stored or it belongs to another server
+     * @return the read, with a key belonging to another server reported as
+     *   [KeystoreSecretStore.Stored.Absent] — the test's answer for it is the same as for nothing
+     *   stored. [KeystoreSecretStore.Stored.Unavailable] is *not* that answer: the key is intact,
+     *   so the caller retries instead of testing without one.
      */
-    suspend fun getApiKeyFor(baseUrl: String): String? {
+    suspend fun getApiKeyFor(baseUrl: String): KeystoreSecretStore.Stored {
         val savedFor = prefs()?.getString(OpenAiPreferences.KEY_API_KEY_URL, null)
-        if (savedFor != null && !BaseUrlPolicy.sameOrigin(savedFor, baseUrl)) return null
+        if (savedFor != null && !BaseUrlPolicy.sameOrigin(savedFor, baseUrl)) {
+            return KeystoreSecretStore.Stored.Absent
+        }
         return getApiKey()
     }
 
     /**
-     * True when a key is present on disk, whether or not it can still be decrypted. Lets the UI
-     * tell "nothing was saved" from "the Keystore entry is gone" — [getApiKey] is null for both.
-     * Raw pref only, so no Keystore IPC and safe on the main thread.
+     * True when a key is present on disk, whether or not it can still be decrypted: what the key
+     * block is dressed from, which must not collapse the moment a Keystore entry is lost. Raw pref
+     * only, so no Keystore IPC and safe on the main thread — which [getApiKey] is not.
      */
     fun hasStoredApiKey(): Boolean =
         !prefs()?.getString(OpenAiPreferences.KEY_API_KEY, null).isNullOrBlank()

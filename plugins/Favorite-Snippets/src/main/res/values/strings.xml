@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<string name="snippet_editor_title_new">New Snippet</string>
+	<string name="snippet_editor_title_edit">Edit Snippet</string>
+	<string name="snippet_action_save">Save</string>
+	<string name="snippet_action_cancel">Cancel</string>
+	<string name="snippet_action_delete">Delete</string>
+	<string name="snippet_delete_title">Delete Snippet</string>
+	<string name="snippet_delete_confirm">Delete \"%1$s\"?</string>
+	<string name="snippet_msg_all_fields_required">All fields are required</string>
+	<string name="snippet_msg_saved">Snippets saved</string>
+	<string name="snippet_msg_save_failed">Failed to save</string>
+</resources>

@@ -2,10 +2,11 @@ package com.itsaky.androidide.plugins.aiagentmcp.client
 
 import android.util.Log
 import com.itsaky.androidide.plugins.aiagentmcp.logging.LOG_PREFIX
-import com.itsaky.androidide.plugins.aiagentmcp.security.SecureTokenStore
+import com.itsaky.androidide.plugins.aiagentmcp.security.UnavailableSecretException
 import com.itsaky.androidide.plugins.aiagentmcp.security.UnreadableSecretException
 import com.itsaky.androidide.plugins.aiagentmcp.settings.McpServer
 import com.itsaky.androidide.plugins.aiagentmcp.settings.McpServerStore
+import com.itsaky.androidide.plugins.security.KeystoreSecretStore
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 
@@ -89,13 +90,23 @@ object McpConnections {
      * @return its token and headers; either may be empty.
      * @throws UnreadableSecretException when a stored credential cannot be decrypted here. Sending
      *   the request without it would earn a 401 and tell the user their token was refused.
+     * @throws UnavailableSecretException when the keystore could not be reached to decrypt one, a
+     *   failure to retry rather than to report as a lost credential.
      */
     private fun credentialsFor(serverId: String): McpCredentials {
         val token = when (val stored = McpServerStore.token(serverId)) {
-            is SecureTokenStore.Stored.Value -> stored.plain
-            SecureTokenStore.Stored.Absent -> ""
-            SecureTokenStore.Stored.Unreadable ->
+            // Trimmed here, not by the store: the host's readAndMigrate migrates verbatim, and a
+            // legacy token saved with a stray newline is one `setRequestProperty` refuses to send.
+            is KeystoreSecretStore.Stored.Value -> stored.plain.trim()
+            KeystoreSecretStore.Stored.Absent -> ""
+            KeystoreSecretStore.Stored.Unreadable ->
                 throw UnreadableSecretException("The stored token for '$serverId' cannot be decrypted.")
+            // Not Unreadable: the token is very likely intact and the call is worth repeating, so
+            // the user is told to retry rather than to enter the token again.
+            KeystoreSecretStore.Stored.Unavailable ->
+                throw UnavailableSecretException(
+                    "The stored token for '$serverId' could not be read just now."
+                )
         }
         return McpCredentials(token, McpServerStore.headers(serverId))
     }

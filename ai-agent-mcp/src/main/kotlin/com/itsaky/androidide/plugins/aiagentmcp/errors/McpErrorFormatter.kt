@@ -3,6 +3,7 @@ package com.itsaky.androidide.plugins.aiagentmcp.errors
 import android.content.Context
 import com.itsaky.androidide.plugins.aiagentmcp.R
 import com.itsaky.androidide.plugins.aiagentmcp.client.McpProtocolException
+import com.itsaky.androidide.plugins.aiagentmcp.security.UnavailableSecretException
 import com.itsaky.androidide.plugins.aiagentmcp.security.UnreadableSecretException
 import com.itsaky.androidide.plugins.aiagentmcp.transport.McpHttpException
 import com.itsaky.androidide.plugins.aiagentmcp.transport.McpRedirectException
@@ -64,6 +65,9 @@ sealed interface McpFailure {
     /** A stored credential cannot be decrypted on this device, so nothing was sent. */
     data object SecretUnreadable : McpFailure
 
+    /** The keystore would not open a stored credential just now, so nothing was sent — retry. */
+    data object SecretUnavailable : McpFailure
+
     /** The server redirected somewhere the request cannot be repeated with its credentials. */
     data object RedirectRefused : McpFailure
 
@@ -88,6 +92,7 @@ object McpErrorFormatter {
     fun classify(error: Throwable): McpFailure = when (error) {
         // Before the IOException branches below, which it is one of.
         is UnreadableSecretException -> McpFailure.SecretUnreadable
+        is UnavailableSecretException -> McpFailure.SecretUnavailable
         is McpRedirectException -> McpFailure.RedirectRefused
         is McpHttpException -> forStatus(error.statusCode)
         is McpProtocolException -> McpFailure.Rejected(error.message.orEmpty())
@@ -125,6 +130,8 @@ object McpErrorFormatter {
             McpFailure.Cancelled -> context.getString(R.string.mcp_error_cancelled, serverName)
             McpFailure.SecretUnreadable ->
                 context.getString(R.string.mcp_error_secret_unreadable, serverName)
+            McpFailure.SecretUnavailable ->
+                context.getString(R.string.mcp_error_secret_unavailable, serverName)
             McpFailure.RedirectRefused ->
                 context.getString(R.string.mcp_error_redirect_refused, serverName)
             is McpFailure.ServerError ->

@@ -107,8 +107,9 @@
     <tr><td><code>McpToolText</code></td><td>Sanitises server-supplied names and
       descriptions — untrusted remote text that would otherwise land verbatim in a
       prompt assembled inside a third-party backend plugin.</td></tr>
-    <tr><td><code>SecureTokenStore</code></td><td>AES/GCM encryption under a
-      Keystore alias owned by this plugin, so only ciphertext reaches disk.</td></tr>
+    <tr><td><code>SecureTokenStore</code></td><td>Binds this plugin's own Keystore
+      alias to the IDE's <code>KeystoreSecretStore</code>, whose AES/GCM keeps
+      only ciphertext on disk.</td></tr>
   </table>
   <p>The transport is MCP's <b>Streamable HTTP</b> revision over
   <code>HttpURLConnection</code>. Two dependencies were deliberately not taken:

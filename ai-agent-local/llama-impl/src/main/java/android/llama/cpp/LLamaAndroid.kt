@@ -13,11 +13,18 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 
 /**
+ * Prefix on every logger name this module creates. Duplicated from LOG_PREFIX in the plugin's
+ * logging/LogTags.kt, which this module cannot import, and kept in step with it by hand: llama-impl
+ * only ever ships inside ai-agent-local's AAR, so a name without it points at no plugin.
+ */
+private const val LOG_PREFIX = "AiAgentLocal"
+
+/**
  * Static library loader - ensures native library is loaded before any static methods are called.
  * This object's init block runs when the object is first accessed.
  */
 private object NativeLibraryLoader {
-    private val log = LoggerFactory.getLogger("llama.cpp.loader")
+    private val log = LoggerFactory.getLogger("$LOG_PREFIX.NativeLibraryLoader")
 
     @Volatile
     private var loaded = false
@@ -49,7 +56,7 @@ private object NativeLibraryLoader {
 
 class LLamaAndroid : ILlamaController {
 
-    private val log = LoggerFactory.getLogger(LLamaAndroid::class.java)
+    private val log = LoggerFactory.getLogger("$LOG_PREFIX.LLamaAndroid")
 
     init {
         // Ensure native library is loaded when any instance is created
@@ -158,7 +165,12 @@ class LLamaAndroid : ILlamaController {
     private external fun log_to_android()
     private external fun load_model(filename: String): Long
     private external fun free_model(model: Long)
-    private external fun new_context(model: Long): Long
+    private external fun new_context(
+        model: Long,
+        nCtx: Int,
+        quantizeKv: Boolean,
+        fallbackNCtx: Int,
+    ): Long
     private external fun free_context(context: Long)
     private external fun backend_init(numa: Boolean)
     private external fun backend_free()
@@ -231,21 +243,59 @@ class LLamaAndroid : ILlamaController {
         }
     }
 
-    override suspend fun load(pathToModel: String) {
+    override suspend fun load(pathToModel: String) = load(pathToModel, DEFAULT_N_CTX)
+
+    /**
+     * Loads a model and gives its context [nCtx] tokens, stored as q8_0 when [quantizeKv] asks for
+     * it. Every part of the shape is an argument rather than process-global state so that none of it
+     * can be overwritten between being chosen and being used: the context is created on the run
+     * loop, well after the caller picked them.
+     *
+     * A partial load frees what it allocated before rethrowing: [threadLocalState] stays `Idle`, so
+     * nothing else can reach those handles, and a retry would otherwise mmap another model on top
+     * of the leaked one for the process lifetime.
+     *
+     * @param pathToModel filesystem path to the `.gguf` model
+     * @param nCtx context size in tokens, sized for [quantizeKv]; non-positive means [DEFAULT_N_CTX]
+     * @param quantizeKv true to store the KV cache as q8_0, roughly half the bytes of f16; the
+     *   native side may still refuse it, in which case the load falls back to f16 at [fallbackNCtx]
+     * @param fallbackNCtx context size for that f16 fallback, which the caller sizes against f16's
+     *   own per-token cost; non-positive means [DEFAULT_N_CTX], since [nCtx] would be the wrong
+     *   default under [quantizeKv] — an f16 cache at a size q8_0 paid for asks for nearly twice the
+     *   bytes the attempt that just failed did
+     */
+    suspend fun load(
+        pathToModel: String,
+        nCtx: Int,
+        quantizeKv: Boolean = false,
+        fallbackNCtx: Int = 0,
+    ) {
         withContext(runLoop()) {
             when (threadLocalState.get()) {
                 is State.Idle -> {
                     val model = load_model(pathToModel)
                     if (model == 0L) throw IllegalStateException("load_model() failed")
 
-                    val context = new_context(model)
-                    if (context == 0L) throw IllegalStateException("new_context() failed")
+                    var context = 0L
+                    var batch = 0L
+                    var sampler = 0L
+                    try {
+                        context = new_context(model, nCtx, quantizeKv, fallbackNCtx)
+                        if (context == 0L) throw IllegalStateException("new_context() failed")
 
-                    val batch = new_batch(2048, 0, 1)
-                    if (batch == 0L) throw IllegalStateException("new_batch() failed")
+                        batch = new_batch(2048, 0, 1)
+                        if (batch == 0L) throw IllegalStateException("new_batch() failed")
 
-                    val sampler = new_sampler()
-                    if (sampler == 0L) throw IllegalStateException("new_sampler() failed")
+                        sampler = new_sampler()
+                        if (sampler == 0L) throw IllegalStateException("new_sampler() failed")
+                    } catch (failure: Throwable) {
+                        // Reverse of the allocation order, and the model last: it owns the rest.
+                        if (sampler != 0L) free_sampler(sampler)
+                        if (batch != 0L) free_batch(batch)
+                        if (context != 0L) free_context(context)
+                        free_model(model)
+                        throw failure
+                    }
 
                     log.info("Loaded model {}", pathToModel)
                     threadLocalState.set(State.Loaded(model, context, batch, sampler))
@@ -339,7 +389,10 @@ class LLamaAndroid : ILlamaController {
     }
 
     companion object {
-        private val nativeLog = LoggerFactory.getLogger("llama.cpp")
+        private val nativeLog = LoggerFactory.getLogger("$LOG_PREFIX.llama.cpp")
+
+        /** Context a [load] gets when the caller does not pick one; matches DEFAULT_N_CTX natively. */
+        const val DEFAULT_N_CTX = 4096
 
         // External native methods
         @JvmStatic
@@ -347,9 +400,6 @@ class LLamaAndroid : ILlamaController {
 
         @JvmStatic
         private external fun native_configureSampling(temperature: Float, topP: Float, topK: Int)
-
-        @JvmStatic
-        private external fun native_configureContext(nCtx: Int)
 
         @JvmStatic
         private external fun native_configureKvCacheReuse(enabled: Boolean)
@@ -365,12 +415,6 @@ class LLamaAndroid : ILlamaController {
         fun configureSampling(temperature: Float, topP: Float, topK: Int) {
             NativeLibraryLoader.ensureLoaded()
             native_configureSampling(temperature, topP, topK)
-        }
-
-        @JvmStatic
-        fun configureContext(nCtx: Int) {
-            NativeLibraryLoader.ensureLoaded()
-            native_configureContext(nCtx)
         }
 
         @JvmStatic

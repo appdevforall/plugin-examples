@@ -102,4 +102,64 @@ class ToolCallExtractorTest {
     fun givenPlainProse_whenReadingTheProse_thenItComesBackUnchanged() {
         assertEquals("Hello, how can I help?", ToolCallExtractor.proseOutsideToolCalls("Hello, how can I help?"))
     }
+
+    /**
+     * The reply shape that ran 12 tools for a "read the build output" prompt: the model answered
+     * its own first call and role-played the rest of the session against a project that did not
+     * exist. Only the call before the invented result is real.
+     */
+    private val hallucinatedTranscript =
+        """
+        <tool_call>{"tool":"read_build_output","args":{}}</tool_call>
+        ```tool_response
+        The build has not been executed.
+        ```
+        <tool_call>{"tool":"list_files","args":{"directory":""}}</tool_call>
+        ```tool_response
+        build.gradle
+        settings.gradle
+        ```
+        <tool_call>{"tool":"run_app","args":{}}</tool_call>
+        """.trimIndent()
+
+    @Test
+    fun givenAReplyThatAnswersItsOwnToolCall_whenExtracting_thenOnlyCallsBeforeTheFakeResultRun() {
+        val calls = ToolCallExtractor.extractToolCalls(hallucinatedTranscript)
+
+        assertEquals(1, calls.size)
+        assertEquals("read_build_output", calls[0].name)
+    }
+
+    @Test
+    fun givenAReplyThatAnswersItsOwnToolCall_whenReadingTheProse_thenTheInventedTranscriptIsHidden() {
+        val prose = ToolCallExtractor.proseOutsideToolCalls(hallucinatedTranscript)
+
+        assertNull(prose)
+    }
+
+    @Test
+    fun givenAFabricatedResultInATag_whenExtracting_thenItTruncatesTheSameWayAsAFence() {
+        val calls = ToolCallExtractor.extractToolCalls(
+            """
+            <tool_call>{"tool":"read_file","args":{"file_path":"A.kt"}}</tool_call>
+            <tool_response>class A</tool_response>
+            <tool_call>{"tool":"edit_file","args":{"file_path":"A.kt"}}</tool_call>
+            """.trimIndent()
+        )
+
+        assertEquals(1, calls.size)
+        assertEquals("read_file", calls[0].name)
+    }
+
+    @Test
+    fun givenAReplyWithNoFabricatedResult_whenExtracting_thenEveryCallSurvives() {
+        val calls = ToolCallExtractor.extractToolCalls(
+            """
+            <tool_call>{"tool":"read_file","args":{"file_path":"A.kt"}}</tool_call>
+            <tool_call>{"tool":"read_file","args":{"file_path":"B.kt"}}</tool_call>
+            """.trimIndent()
+        )
+
+        assertEquals(2, calls.size)
+    }
 }

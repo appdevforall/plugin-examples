@@ -38,9 +38,9 @@ object ModelLoadDiagnostics {
     }
 
     /**
-     * Weights are mmap'd, so the file need not fit in free RAM — only the KV cache and compute
-     * buffers must be resident. The memory check therefore tests a conservative headroom, because
-     * overestimating it would blame a corrupt model on memory and send users chasing smaller files.
+     * Diagnoses a load that already failed, so it tests a conservative headroom rather than the
+     * file size: overestimating would blame a corrupt model on memory. [ContextSizePolicy] charges
+     * the mmap'd weights instead, because it sizes the cache before the load pages them in.
      *
      * @param modelPath resolved filesystem path the native loader was handed
      * @param availableMemoryBytes free RAM reported by the OS, or negative if unknown

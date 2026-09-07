@@ -13,6 +13,29 @@ import com.itsaky.androidide.plugins.aicore.tool.respondMessageOf
 object AgentReplyRenderer {
 
     /**
+     * Whether this turn only repeats the calls that already succeeded, so its bubble is dropped.
+     *
+     * A turn carrying the terminal call is never a duplicate, whatever else it repeats: that bubble
+     * is the only place the answer is rendered. `AgentLoop` runs the real calls first and so never
+     * reaches `onFinalAnswer`, and dropping the turn here would end the run "completed" with
+     * nothing on screen. The match is the loose one a handler is routed by, so a backend answering
+     * `Respond` is recognised as terminal too.
+     *
+     * @param toolCalls the calls parsed out of this turn.
+     * @param lastSucceededCalls the calls this run last executed successfully, null when none did.
+     * @param terminalTool the name of the answer-carrying pseudo-tool (`respond`).
+     * @return true when the turn adds nothing and should not reach the transcript.
+     */
+    fun isDuplicateTurn(
+        toolCalls: List<ToolCall>,
+        lastSucceededCalls: List<ToolCall>?,
+        terminalTool: String,
+    ): Boolean {
+        if (toolCalls.any { isTerminalToolName(it.name, terminalTool) }) return false
+        return toolCalls.isNotEmpty() && toolCalls == lastSucceededCalls
+    }
+
+    /**
      * Renders one model turn.
      * @param rawText the model's raw reply.
      * @param toolCalls the calls parsed out of it.

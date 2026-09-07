@@ -71,8 +71,8 @@ dependencies {
     testImplementation("org.json:json:20231013")
 }
 
-// SecureApiKeyStore is no longer duplicated: this plugin holds the only copy, so there is nothing
-// left to drift against. The parity check that guarded the ai-assistant copy went with that plugin.
+// No SecureApiKeyStore parity check any more: the AES/GCM core is the host's KeystoreSecretStore
+// (plugin-api), so there is one implementation in the process rather than copies to keep in step.
 
 // AAR metadata checks are disabled by convention for these application-as-library plugins.
 tasks.matching {

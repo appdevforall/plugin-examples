@@ -25,6 +25,9 @@ android {
 				arguments += "-DLLAMA_BUILD_COMMON=ON"
 				arguments += "-DGGML_LLAMAFILE=OFF"
 				arguments += "-DCMAKE_BUILD_TYPE=Release"
+				// 16 KB page alignment, required on newer arm64 devices; PrebuiltAarAbiTest asserts it
+				// on the committed AAR, since dropping this still builds and still loads on 4 KB.
+				arguments += "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON"
 				cppFlags += listOf()
 				arguments += listOf()
 

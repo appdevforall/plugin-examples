@@ -12,7 +12,6 @@ import androidx.core.view.doOnAttach
 import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -24,17 +23,21 @@ import com.itsaky.androidide.plugins.aicore.BuildConfig
 import com.itsaky.androidide.plugins.aicore.R
 import com.itsaky.androidide.plugins.aicore.adapters.ChatAdapter
 import com.itsaky.androidide.plugins.aicore.databinding.FragmentChatBinding
+import com.itsaky.androidide.plugins.aicore.logging.AgentTrace
 import com.itsaky.androidide.plugins.aicore.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aicore.models.AgentState
 import com.itsaky.androidide.plugins.aicore.models.isRunning
+import com.itsaky.androidide.plugins.aicore.models.traceLabel
 import com.itsaky.androidide.plugins.aicore.plugin.AiCorePlugin
 import com.itsaky.androidide.plugins.aicore.viewmodel.ChatViewModel
+import com.itsaky.androidide.plugins.aicore.viewmodel.ChatViewModelStore
 import com.itsaky.androidide.plugins.base.PluginFragmentHelper
 import com.itsaky.androidide.plugins.services.IdeProjectService
 import com.itsaky.androidide.plugins.services.IdeTooltipService
 import com.itsaky.androidide.plugins.services.IdeUIService
 import io.noties.markwon.Markwon
 import java.io.File
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.launch
 
 private const val TAG = "$LOG_PREFIX.ChatFragment"
@@ -62,6 +65,9 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
 
     /** The message list's layout-declared padding, before any cutout inset is added. */
     private val basePadding = Rect()
+
+    /** Message count last logged, so streaming re-emissions do not each get a line. */
+    private var renderedMessageCount = -1
 
     private val tooltipService: IdeTooltipService? by lazy {
         try {
@@ -106,15 +112,41 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
         return binding.root
     }
 
+    /**
+     * Tears down the view only. It deliberately does **not** stop the agent: the host removes this
+     * fragment whenever the user switches bottom-sheet tabs, and cancelling here killed the run in
+     * flight — a `run_app` wait can be ten minutes long — so the build finished with nobody left to
+     * report it. Only Stop, Clear Chat and plugin dispose cancel a run.
+     */
     override fun onDestroyView() {
         if (::chatAdapter.isInitialized) {
             chatAdapter.stopAllAnimations()
         }
         super.onDestroyView()
-        viewModel.stopProcessing()
+        // runInFlight=true here, followed by that run still reporting, is the tab-switch fix
+        // working; the run being gone from the trace after it is the bug coming back. Guarded
+        // because a log line must never be the thing that takes the IDE down.
+        if (::viewModel.isInitialized) {
+            val state = viewModel.agentState.value
+            AgentTrace.stage(
+                "UI",
+                "chat view destroyed runInFlight=${state.isRunning} state=${state.traceLabel}"
+            )
+        }
         composer?.detach()
         composer = null
         _binding = null
+    }
+
+    /**
+     * Writes the transcript out on the way off screen. The ViewModel now outlives this fragment, so
+     * its onCleared() no longer fires on a tab switch and is no longer the only writer.
+     */
+    override fun onStop() {
+        super.onStop()
+        if (::viewModel.isInitialized) {
+            viewModel.persistState()
+        }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -129,16 +161,27 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
         initializeMarkwon()
         initializeViewModel()
         if (!viewModel.isStorageInitialized()) {
-            viewModel.initializeStorage(requireContext())
+            // Application context: the ViewModel outlives this fragment, and the activity.
+            viewModel.initializeStorage(requireContext().applicationContext)
         }
         setupToolbar()
         setupRecyclerView()
         setupInputArea()
+        restoreContextChips()
         setupCutoutPadding()
         setupComposer(savedInstanceState)
         setupStatusBar()
         setupBackendIndicator()
         observeViewModel()
+
+        AgentTrace.stage(
+            "UI",
+            "chat view created runInFlight=${viewModel.agentState.value.isRunning} " +
+                "state=${viewModel.agentState.value.traceLabel} " +
+                "messages=${viewModel.messages.value.size} " +
+                "contextFiles=${contextFiles.size} " +
+                "pendingApproval=${viewModel.pendingApprovalRequest.value?.toolName}"
+        )
 
         // Check for test prompt from broadcast receiver (E2E testing)
         injectPendingTestPrompt()
@@ -199,12 +242,13 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
         viewModel.refreshBackendLabel()
     }
 
+    /**
+     * Resolves the plugin-scoped ViewModel rather than a fragment-scoped one, so an agent run
+     * survives this fragment being removed and re-attaches to the tab that comes back. See
+     * [ChatViewModelStore].
+     */
     private fun initializeViewModel() {
-        // A context getter, not the service, so the ViewModel resolves it lazily.
-        viewModel = ViewModelProvider(
-            this,
-            ChatViewModelFactory { getPluginContext() }
-        )[ChatViewModel::class.java]
+        viewModel = ChatViewModelStore.get()
     }
 
     private fun getPluginContext(): PluginContext? {
@@ -252,7 +296,7 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
     private fun setupInputArea() {
         binding.sendButton.setOnClickListener {
             if (viewModel.agentState.value.isRunning) {
-                viewModel.stopProcessing()
+                viewModel.stopProcessing(reason = "stop button")
             } else {
                 val message = binding.promptInputEdittext.text?.toString() ?: return@setOnClickListener
                 if (message.isNotBlank()) {
@@ -363,20 +407,23 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
     }
 
     private suspend fun observeMessages() {
-        android.util.Log.d(TAG, "observeMessages: Starting to collect messages")
         viewModel.messages.collect { messages ->
             val binding = _binding ?: return@collect
-            android.util.Log.d(TAG, "observeMessages: Received ${messages.size} messages")
-            messages.forEachIndexed { index, msg ->
-                android.util.Log.d(TAG, "  Message $index: sender=${msg.sender}, text=${msg.text.take(50)}")
+            // One line, and only when the count moves: this collector re-emits on every streamed
+            // token, and a per-message dump here made the log unreadable during a run.
+            if (messages.size != renderedMessageCount) {
+                renderedMessageCount = messages.size
+                AgentTrace.detail(
+                    "UI",
+                    "rendering messages=$renderedMessageCount " +
+                        "last=${messages.lastOrNull()?.sender}"
+                )
             }
             binding.emptyChatView.isVisible = messages.isEmpty()
-            android.util.Log.d(TAG, "observeMessages: Calling submitList with ${messages.size} messages")
             // Sampled before the list changes: streaming re-emits on every token, so scrolling
             // unconditionally would drag the user back down whenever they scrolled up to read.
             val stickToBottom = binding.chatRecyclerView.isAtBottom()
             chatAdapter.submitList(messages) {
-                android.util.Log.d(TAG, "observeMessages: submitList callback - scrolling to ${messages.size - 1}")
                 if (stickToBottom && messages.isNotEmpty()) {
                     // Null after onDestroyView: submitList posts this callback.
                     _binding?.chatRecyclerView?.scrollToPosition(messages.lastIndex)
@@ -395,8 +442,17 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
                 is AgentState.Idle -> binding.agentStatusContainer.isVisible = false
                 is AgentState.Executing -> {
                     binding.agentStatusContainer.isVisible = true
-                    binding.agentStatusMessage.text = state.formattedProgress
-                    binding.agentStatusTimer.text = state.formattedTiming
+                    binding.agentStatusMessage.text = getString(
+                        R.string.state_executing,
+                        state.stepNumber,
+                        state.totalSteps,
+                        state.description,
+                    )
+                    binding.agentStatusTimer.text = getString(
+                        R.string.state_executing_timing,
+                        formatDuration(state.elapsedMillis),
+                        formatDuration(state.estimatedTotalMillis),
+                    )
                     viewModel.startStateTimer(state)
                 }
                 is AgentState.Processing -> {
@@ -408,11 +464,31 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
                     binding.agentStatusContainer.isVisible = false
                     viewModel.stopStateTimer()
                     showErrorSnackbar(state.message)
+                    // One-shot: an error raised while this tab was gone must not re-raise on every
+                    // later re-attach, now that the state outlives the fragment.
+                    viewModel.clearErrorState()
                 }
                 else -> Unit
             }
             // The composer owns the send/stop button, since Stop is what pins it open.
             composer?.onAgentRunningChanged(state.isRunning)
+        }
+    }
+
+    /**
+     * Renders a duration the way the status timer reads it: `4.5s`, or `1m 4.5s` past the minute.
+     *
+     * @param millis the duration; a clock that ran backwards reads as zero.
+     * @return the localised figure, with no surrounding words.
+     */
+    private fun formatDuration(millis: Long): String {
+        val total = millis.coerceAtLeast(0)
+        val minutes = TimeUnit.MILLISECONDS.toMinutes(total)
+        val seconds = (total - TimeUnit.MINUTES.toMillis(minutes)) / 1000.0
+        return if (minutes > 0) {
+            getString(R.string.time_format_minutes, minutes, seconds)
+        } else {
+            getString(R.string.time_format_seconds, seconds)
         }
     }
 
@@ -438,6 +514,7 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
     private fun showApprovalDialog(request: com.itsaky.androidide.plugins.aicore.tool.ApprovalRequest) {
         // childFragmentManager makes this fragment the parent, which is how Host is resolved.
         if (currentApprovalDialog() != null) return
+        AgentTrace.detail("UI", "approval dialog shown tool=${request.toolName}")
         ApprovalDialogFragment.newInstance(request).show(childFragmentManager, APPROVAL_DIALOG_TAG)
     }
 
@@ -445,6 +522,7 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
         result: com.itsaky.androidide.plugins.aicore.tool.ApprovalResult,
         correction: String?,
     ) {
+        AgentTrace.detail("UI", "approval decided choice=$result corrected=${correction != null}")
         viewModel.submitApproval(result, correction)
     }
 
@@ -466,6 +544,17 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
         }
         composer?.pauseUntilClosed(dialog.lifecycle)
         dialog.show(parentFragmentManager, "file_picker")
+    }
+
+    /**
+     * Rebuilds the attached-file chips from the ViewModel. It keeps the attachments across a tab
+     * switch, so without this they would still go into the next prompt with nothing on screen
+     * naming them.
+     */
+    private fun restoreContextChips() {
+        contextFiles.clear()
+        contextFiles.addAll(viewModel.contextFiles)
+        contextFiles.forEach(::addChipForFile)
     }
 
     private fun addContextFiles(files: List<File>) {
@@ -558,19 +647,4 @@ class ChatFragment : Fragment(), ApprovalDialogFragment.Host {
         Snackbar.make(binding.root, message, Snackbar.LENGTH_LONG).show()
     }
 
-}
-
-/**
- * Factory for creating ChatViewModel with PluginContext dependency.
- */
-class ChatViewModelFactory(
-    private val getContext: () -> PluginContext?
-) : ViewModelProvider.Factory {
-    @Suppress("UNCHECKED_CAST")
-    override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-        if (modelClass.isAssignableFrom(ChatViewModel::class.java)) {
-            return ChatViewModel(getContext) as T
-        }
-        throw IllegalArgumentException("Unknown ViewModel class")
-    }
 }

@@ -59,11 +59,15 @@ object AgentTrace {
     fun endRun(outcome: String, turns: Int? = null) {
         stage("DONE", "outcome=$outcome" + (turns?.let { " turns=$it" } ?: ""))
         runId = "-"
+        // Reset too, or the UI lines that follow a run report an elapsed time measured from a run
+        // that is already over.
+        runStartMs = 0L
     }
 
     /**
      * Logs a milestone in the run at INFO — the lines you want when following the flow.
-     * @param stage short uppercase phase name (PROMPT, LLM, TOOL, APPROVAL, EXEC, …).
+     * @param stage short uppercase phase name (PROMPT, LLM, PARSE, APPROVAL, EXEC, RESULT, BUILD,
+     *   STATE, UI, CANCEL, DONE).
      * @param detail structured `key=value` facts.
      * @param preview optional free text, already previewed by the caller.
      */
