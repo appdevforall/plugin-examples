@@ -58,11 +58,23 @@ jobs:
           ONLY_PLUGIN: ${{ inputs.plugin }}
         run: |
           set -euo pipefail
-          all="$(uv run --directory tools/addons addons --root "$GITHUB_WORKSPACE" discover)"
+          # --include-skipped, the same list scripts/update-libs.sh builds and
+          # resolves --plugin against. An addon merely held out of the gallery
+          # is still built here and must still package, and a single-addon run
+          # naming one has to find it in this list. Only "!" entries in
+          # skip.txt are absent from both.
+          all="$(uv run --directory tools/addons addons --root "$GITHUB_WORKSPACE" discover --include-skipped)"
           # A single-plugin run only builds that module, so the others have no
           # .cgp by design and must not be reported as missing.
           if [ -n "$ONLY_PLUGIN" ]; then
-            all="$(printf '%s\n' "$all" | grep -Fx -e "$ONLY_PLUGIN" -e "plugins/$ONLY_PLUGIN")"
+            all="$(printf '%s\n' "$all" | grep -Fx -e "$ONLY_PLUGIN" -e "plugins/$ONLY_PLUGIN" || true)"
+            # Never let a no-match end the step on grep's bare exit 1: that
+            # reports a build that in fact succeeded as a red run, with no
+            # line saying why.
+            if [ -z "$all" ]; then
+              echo "ERROR: '${ONLY_PLUGIN}' is not a known addon, so nothing was checked." >&2
+              exit 1
+            fi
           fi
           missing=0
           for dir in $all; do
