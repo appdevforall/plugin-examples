@@ -18,6 +18,17 @@ TYPES = {"plugins": "plugin", "templates": "template",
 VERSION = re.compile(r"^[0-9]+(\.[0-9]+)*$")
 
 
+def slug_pattern(root: Path) -> re.Pattern:
+    """The slug rule the published catalog enforces.
+
+    Read rather than restated so a pull request check and the publish cannot
+    disagree: a name the check accepts and the schema refuses fails inside
+    jsonschema at the end of a publish, after every Gradle build has run.
+    """
+    schema = json.loads((root / "site" / "catalog.schema.json").read_text())
+    return re.compile(schema["$defs"]["addon"]["properties"]["slug"]["pattern"])
+
+
 def _file(path: Path, url: str) -> dict:
     data = path.read_bytes()
     return {"url": url, "sha256": hashlib.sha256(data).hexdigest(), "size": len(data)}

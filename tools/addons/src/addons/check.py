@@ -4,7 +4,7 @@ from pathlib import Path
 
 import jsonschema
 
-from addons import discover, model
+from addons import catalog, discover, model
 
 SCHEMA = json.loads((Path(__file__).parent / "addon.schema.json").read_text())
 
@@ -19,6 +19,8 @@ NOT_PROSE = re.compile(
 
 def check_names(root: Path) -> list[str]:
     problems = []
+    # read once: the same contract governs every addon in the run
+    slug_shape = catalog.slug_pattern(root)
     for path in discover.find_addons(root):
         directory = path.name
         name = model.display_name(directory)
@@ -26,6 +28,15 @@ def check_names(root: Path) -> list[str]:
 
         if not model.directory_is_valid(directory):
             problems.append(f"{directory}: the directory name breaks the naming rule")
+
+        # directory_is_valid only rules on separators and capitals, so a name
+        # like Code.Together passes it and then makes a slug the catalog
+        # refuses. Fail here, not at the end of a publish.
+        if not slug_shape.match(addon_slug):
+            problems.append(
+                f"{directory}: it makes the slug '{addon_slug}', which the "
+                f"catalog schema refuses ({slug_shape.pattern}). Use ASCII "
+                f"letters and digits, separated by single hyphens")
 
         build = (path / "build.gradle.kts").read_text()
         found = re.search(r'pluginName\s*=\s*"([^"]*)"', build)

@@ -1,8 +1,12 @@
+import json
 from pathlib import Path
 
 from addons import check
 
 PREDICATE = "com.itsaky.androidide.plugins.build"
+# check_names reads the slug rule from the published catalog contract, so a
+# fixture root needs the real one. Same approach as test_catalog.
+CATALOG_SCHEMA = Path(__file__).parents[3] / "site" / "catalog.schema.json"
 
 MANIFEST = """<manifest><application>
 <meta-data android:name="plugin.id" android:value="com.appdevforall.keygen.plugin" />
@@ -12,6 +16,9 @@ MANIFEST = """<manifest><application>
 
 def make_addon(root: Path, directory: str, plugin_name: str,
                gradle_name: str, page: str) -> Path:
+    site = root / "site"
+    site.mkdir(exist_ok=True)
+    (site / "catalog.schema.json").write_text(CATALOG_SCHEMA.read_text())
     d = root / directory
     (d / "src" / "main" / "assets").mkdir(parents=True)
     for icon in ("icon_day.png", "icon_night.png"):
@@ -50,6 +57,35 @@ def test_a_bad_directory_name_fails(tmp_path):
                "keystore-generator", "keystore-generator.html")
     problems = check.check_names(tmp_path)
     assert any("directory" in p for p in problems)
+
+
+def test_a_slug_the_catalog_would_reject_fails(tmp_path):
+    """A dot passes every naming rule here and yields slug "code.together",
+    which the catalog schema refuses. Caught on the pull request, or else at
+    publish time after all 23 Gradle builds have run."""
+    make_addon(tmp_path, "Code.Together", "Code.Together",
+               "code.together", "code.together.html")
+    problems = check.check_names(tmp_path)
+    assert len(problems) == 1
+    assert "code.together" in problems[0]
+
+
+def test_a_slug_with_a_punctuation_tail_fails(tmp_path):
+    make_addon(tmp_path, "Layout-Editor+", "Layout Editor+",
+               "layout-editor+", "layout-editor+.html")
+    assert any("layout-editor+" in p for p in check.check_names(tmp_path))
+
+
+def test_the_slug_rule_is_read_from_the_catalog_schema(tmp_path):
+    """Not a second copy of the pattern: the catalog is the public contract,
+    and two copies drift."""
+    make_addon(tmp_path, "Code.Together", "Code.Together",
+               "code.together", "code.together.html")
+    f = tmp_path / "site" / "catalog.schema.json"
+    schema = json.loads(f.read_text())
+    schema["$defs"]["addon"]["properties"]["slug"]["pattern"] = "^[a-z0-9.]+$"
+    f.write_text(json.dumps(schema))
+    assert check.check_names(tmp_path) == []
 
 
 def test_a_stale_h1_fails(tmp_path):
