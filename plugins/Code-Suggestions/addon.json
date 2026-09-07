@@ -1,0 +1,15 @@
+{
+  "summary": "Shows inline code completions as you type.",
+  "description": "Adds grey ghost text to the editor that completes the line you are writing. The suggestions come from the on-device model that the AI Core addon provides.",
+  "tags": [
+    "ai",
+    "completion",
+    "editor"
+  ],
+  "origin": "appdevforall",
+  "license": "AGPL-3.0-or-later",
+  "author": {
+    "name": "App Dev For All",
+    "url": "https://www.appdevforall.org"
+  }
+}

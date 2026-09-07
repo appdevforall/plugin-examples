@@ -4,14 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository purpose
 
-Reference plugins for [CodeOnTheGo](https://github.com/appdevforall/CodeOnTheGo) (CoGo / CotG). Each top-level folder (`Beepy/`, `apk-viewer/`, `markdown-preview/`, `keystore-generator/`, `snippets/`, `random-xkcd/`, `icons-repository/`, `ndk-installer-plugin/`, `sketch-to-ui-plugin/`) is an independent Gradle project that builds a `.cgp` plugin installable via the CoGo Plugin Manager. They're held together only by the shared `libs/` jars at the repo root.
+Reference plugins for [CodeOnTheGo](https://github.com/appdevforall/CodeOnTheGo) (CoGo / CotG). Addons live under `plugins/`, with `templates/`, `snippets/`, and `code-actions/` reserved beside it. Each addon directory is an independent Gradle project that builds a `.cgp` installable via the Plugin Manager. They are held together only by the shared `libs/` jars at the repo root, which an addon references as `../../libs/`.
 
 ## Common commands
 
 Build one plugin:
 
 ```sh
-cd Beepy   # or any plugin folder
+cd plugins/Voice-Alerts   # or any addon folder
 ./gradlew assemblePlugin           # release .cgp -> build/plugin/<pluginName>.cgp
 ./gradlew assemblePluginDebug      # debug variant
 ```
@@ -37,14 +37,14 @@ The script clones CoGo into `.cache/CodeOnTheGo/` on first run, rebuilds both ja
 
 ### `libs/` is the load-bearing piece
 
-Every plugin depends on two jars in the repo-root `libs/`:
+`libs/` holds **five** jars. Every plugin depends on at least these two:
 
 - **`plugin-api.jar`** — the IDE-side API surface (`IPlugin`, `PluginContext`, `BuildStatusListener`, `IdeBuildService`, etc.). Each plugin uses it as `compileOnly` (provided by the IDE at runtime) AND as `buildscript classpath` so the Gradle plugin can resolve symbols at configuration time.
 - **`gradle-plugin.jar`** — the Gradle plugin with id `com.itsaky.androidide.plugins.build`, applied by every plugin. It's the output of CoGo's `plugin-api/plugin-builder/` module (separate from CoGo's `gradle-plugin/` module, which is unrelated despite the name). It packages the compiled Android library into a `.cgp`.
 
-There is also **one shared Gradle wrapper at the repo root** (`gradlew` + `gradle/wrapper/`). New plugins should use it — build them with `cd <plugin> && ../gradlew assemblePlugin` rather than bundling a per-plugin `gradlew`/`gradle/wrapper/` copy. (`flutter-template` follows this; most older plugins still carry their own local wrapper and can be migrated opportunistically.)
+There is also **one shared Gradle wrapper at the repo root** (`gradlew` + `gradle/wrapper/`). New plugins should use it — build them with `cd plugins/<Addon> && ../../gradlew assemblePlugin` rather than bundling a per-plugin `gradlew`/`gradle/wrapper/` copy. (`flutter-template` follows this; most older plugins still carry their own local wrapper and can be migrated opportunistically.)
 
-Both jars are referenced via `../libs/*.jar`. **Always use the repo-root `libs/` jars and the repo-root Gradle wrapper — never bundle per-plugin copies.** A plugin that ships its own `libs/plugin-api.jar` / `libs/gradle-plugin.jar` (e.g. copied from another plugin) can drift out of sync with the rest of the repo; point `build.gradle.kts` (`compileOnly`) and `settings.gradle.kts` (buildscript `classpath`) at `../libs/*.jar` and delete any local `libs/`. The root `plugin-api.jar` already carries the full API surface (including `IdeTemplateService`/`CgtTemplateBuilder`), so newer sub-APIs do not justify a local copy. **A plugin folder is not standalone in isolation** — copy the root `libs/` along if you move one elsewhere. When CoGo's API changes, refresh via the script above or the **Update libs from CodeOnTheGo** GitHub Action (which also commits the refreshed jars, cuts a release, and deploys `.cgp` files to the website).
+An addon under `plugins/` references the shared jars as `../../libs/*.jar`. **Always use the repo-root `libs/` jars and the repo-root Gradle wrapper — never bundle per-plugin copies.** A plugin that ships its own `libs/plugin-api.jar` / `libs/gradle-plugin.jar` (e.g. copied from another plugin) can drift out of sync with the rest of the repo; point `build.gradle.kts` (`compileOnly`) and `settings.gradle.kts` (buildscript `classpath`) at `../../libs/*.jar` and delete any local `libs/`. The root `plugin-api.jar` already carries the full API surface (including `IdeTemplateService`/`CgtTemplateBuilder`), so newer sub-APIs do not justify a local copy. **A plugin folder is not standalone in isolation** — copy the root `libs/` along if you move one elsewhere. When CoGo's API changes, refresh via the script above or the **Update libs from CodeOnTheGo** GitHub Action (which commits the refreshed jars and cuts a release). Publishing addons is a separate workflow, **Publish addons**, which uploads to Cloudflare R2.
 
 ### Credentials: use the host's `KeystoreSecretStore`, never your own crypto
 
@@ -86,8 +86,8 @@ say so in a comment.
 
 A plugin is an Android *application* module (despite installing as a library) with:
 
-1. **`build.gradle.kts`** applies `com.android.application`, `org.jetbrains.kotlin.android`, and `com.itsaky.androidide.plugins.build`. Configures `pluginBuilder { pluginName = "..." }`. Uses `compileOnly(files("../libs/plugin-api.jar"))` — never `implementation`.
-2. **`settings.gradle.kts`** declares the two jars on the buildscript classpath plus AGP and Kotlin.
+1. **`build.gradle.kts`** applies `com.android.application`, `org.jetbrains.kotlin.android`, and `com.itsaky.androidide.plugins.build`. Configures `pluginBuilder { pluginName = "..." }`. Uses `compileOnly(files("../../libs/plugin-api.jar"))` — never `implementation`.
+2. **`settings.gradle.kts`** declares the jars it needs on the buildscript classpath plus AGP and Kotlin.
 3. **`src/main/AndroidManifest.xml`** declares plugin identity as `<meta-data>` entries on `<application>`: `plugin.id`, `plugin.name`, `plugin.version` (resolved from `${pluginVersion}`), `plugin.description`, `plugin.author`, `plugin.main_class`, `plugin.min_ide_version`, and optional `plugin.permissions`.
 4. **Main class** implements `com.itsaky.androidide.plugins.IPlugin`. Lifecycle: `initialize(PluginContext) → activate() → deactivate() → dispose()`. Services are obtained via `context.services.get(SomeService::class.java)` (e.g. `IdeBuildService` for build hooks). Android `Context` is `context.androidContext`.
 
@@ -97,7 +97,7 @@ Available permission strings (declared comma-separated in `plugin.permissions`):
 
 Every plugin with UI implements `com.itsaky.androidide.plugins.extensions.DocumentationExtension`. This wiring is fixed and foundational — get **all** of it right or the tooltip renders the literal string **`n/a`** at runtime. The build stays green and the manifest looks fine, so **only device long-press testing catches a mistake** (this bit us once). All symbols are in `plugin-api.jar`.
 
-1. **Category is `"plugin_<pluginId>"` — exactly.** `getTooltipCategory()` MUST return `"plugin_"` + the full `plugin.id` (e.g. `"plugin_org.appdevforall.templatemanagerplugin"`). The host registers your entries under this string **and** derives the same string when resolving a lookup. Any other value — a short slug, a dotless/underscore form — silently mismatches → `n/a`.
+1. **Category is `"plugin_<pluginId>"` — exactly.** `getTooltipCategory()` MUST return `"plugin_"` + the full `plugin.id` (e.g. `"plugin_org.appdevforall.projecttotemplate"`). The host registers your entries under this string **and** derives the same string when resolving a lookup. Any other value — a short slug, a dotless/underscore form — silently mismatches → `n/a`.
 2. **Entries.** `getTooltipEntries()` returns `PluginTooltipEntry(tag, summary, detail, buttons)`: `summary` = Tier 1 (one line shown on long-press), `detail` = Tier 2 (HTML behind "See more"). Keep the `tag` in one shared `const val` used by steps 3–4.
 3. **Look tooltips up with the 3-arg overload.** Call `IdeTooltipService.showTooltip(anchorView, category, tag)` and pass `category = "plugin_<pluginId>"` explicitly. **Never use the 2-arg `showTooltip(view, tag)`** — it resolves under a different default category and renders `n/a` even when the entry is registered correctly. Param order is `(anchorView, category, tag)`.
 4. **Attach tags to UI.** Set `tooltipTag = <that same tag>` on every contributed `NavigationItem` / `TabItem` / menu item / FAB; `EditorTabItem` instead takes a literal `tooltip = "..."` string. A contributed element with no tooltip fails review clause 6.7.
@@ -147,10 +147,22 @@ If device verification isn't possible in-session, say so explicitly rather than 
 
 ## Adding a new plugin
 
-1. Copy `random-xkcd/` — it's the canonical starting template (small but complete, includes the in-IDE help HTML pattern that submissions are expected to follow).
-2. Update `settings.gradle.kts` `rootProject.name`, `build.gradle.kts` `pluginBuilder { pluginName }` + `android { namespace, applicationId }`, and `src/main/AndroidManifest.xml` (`plugin.id`, `plugin.name`, `plugin.main_class`).
-3. Add a row to the README's Examples table.
-4. If your plugin should ship via the website, add it to the `MAP` array in `.github/workflows/update-libs.yml` so the filename mapping picks it up. (`.github/workflows/build-plugins.yml` needs no change — it auto-discovers plugins by scanning `*/build.gradle.kts` for the plugin-builder Gradle plugin.)
+1. Copy `plugins/Random-XKCD/` — it's the canonical starting template (small but complete, includes the in-IDE help HTML pattern that submissions are expected to follow). Name the new directory in MixedCase with single hyphens between words (`APK-Analyzer`), ASCII letters and digits only. Every other name, filename, and URL derives from it — see `docs/plugin-naming-standards.md`.
+2. Update **every** copied file that still names the template. Two values come from the directory name: the **slug** is it lowercased (`apk-analyzer`), the **display name** is it with hyphens replaced by spaces (`APK Analyzer`).
+
+   | File | Change |
+   |---|---|
+   | `settings.gradle.kts` | `rootProject.name` — Gradle's own name for the build. Nothing derives from it; keep it in step with the slug anyway. |
+   | `build.gradle.kts` | `pluginBuilder { pluginName }` → the slug; `android { namespace, applicationId }` |
+   | `src/main/AndroidManifest.xml` | `plugin.id`, `plugin.name` → the display name, `plugin.main_class` |
+   | `random-xkcd.html` | rename to `<slug>.html`; set `<title>` to the display name exactly, and make the `<h1>` contain it |
+   | `addon.json` | `summary`, `description`, `tags`, `origin`, `license`, `author`. The schema checks the shape, not the words, so a copied one passes every check and puts xkcd's description on your gallery card. |
+   | `src/main/assets/icon_day.png`, `icon_night.png` | replace both; both must be present |
+   | `src/main/kotlin/...` | your implementation |
+
+3. Run `uv run --directory tools/addons addons --root "$PWD" check` from the repository root before pushing. `--root` must be absolute: `--directory` moves uv into `tools/addons`, so `--root .` resolves there and finds no addons. It is the same gate `check-toolchain.yml` runs on every pull request, it costs a second, and it names the exact file and value it wants. Treat it as the authority — do not restate its rules here, or the two copies drift.
+4. Add a row to the README's Examples table.
+5. Nothing else to wire up. Publishing is automatic: `addons discover` finds any directory whose `build.gradle.kts` applies the plugin-builder, and the name, filenames, and URLs all derive from the directory name. The `MAP` array this file used to describe was deleted in #66 and no longer exists.
 
 ## Plugin review skill
 

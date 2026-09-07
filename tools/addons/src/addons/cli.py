@@ -1,0 +1,123 @@
+import argparse
+import json
+import sys
+from pathlib import Path
+
+from addons import catalog, check, discover, model, page, publish, tarball
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(prog="addons")
+    parser.add_argument("--root", type=Path, default=Path.cwd())
+    sub = parser.add_subparsers(dest="command", required=True)
+    discover_parser = sub.add_parser("discover")
+    discover_parser.add_argument(
+        "--include-skipped", action="store_true",
+        help="also list skipped addons; for compile coverage, not publishing")
+    sub.add_parser("check")
+
+    catalog_parser = sub.add_parser("catalog")
+    catalog_parser.add_argument("--dist", type=Path, required=True)
+    catalog_parser.add_argument("--out", type=Path, required=True)
+    catalog_parser.add_argument("--only", nargs="*", default=None)
+    catalog_parser.add_argument("--base", default=catalog.BASE,
+                                help="site base the catalog is published under")
+
+    publish_parser = sub.add_parser("publish")
+    publish_parser.add_argument("--dist", type=Path, required=True)
+    publish_parser.add_argument("--prefix", default="")
+    publish_parser.add_argument("--only", nargs="*", default=None)
+
+    tarball_parser = sub.add_parser("tarball")
+    tarball_parser.add_argument("--out", type=Path, required=True)
+    tarball_parser.add_argument("--only", nargs="*", default=None)
+    args = parser.parse_args(argv)
+
+    if args.command == "discover":
+        # repo-relative, not bare names: callers cd into these and match them
+        # against changed-file lists, so the location has to survive
+        for path in discover.find_addons(args.root,
+                                         include_skipped=args.include_skipped):
+            print(path.relative_to(args.root).as_posix())
+        return 0
+
+    if args.command == "check":
+        problems = check.run(args.root)
+        for problem in problems:
+            print(problem, file=sys.stderr)
+        return 1 if problems else 0
+
+    if args.command == "catalog":
+        document = catalog.build(args.root, args.dist, args.base, args.only)
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        args.out.write_text(json.dumps(document, indent=2) + "\n")
+        print(f"wrote {args.out} with {len(document['addons'])} addons")
+        return 0
+
+    if args.command == "tarball":
+        args.out.mkdir(parents=True, exist_ok=True)
+        for addon in discover.find_addons(args.root, args.only):
+            meta = model.metadata(addon)
+            archive = tarball.build(args.root, addon, args.out, meta)
+            print(f"built {archive.name}")
+        return 0
+
+    if args.command == "publish":
+        dist, prefix = args.dist, args.prefix
+        # The catalog describes the whole site, so a *subset* published to the
+        # live keys would erase every other addon. Selecting everything is
+        # fine, and the workflow always passes --only even for "all".
+        if args.only is not None:
+            if not args.only:
+                raise SystemExit("--only needs at least one addon")
+            selected = discover.find_addons(args.root, args.only)
+            if not prefix and len(selected) < len(discover.find_addons(args.root)):
+                raise SystemExit(
+                    "refusing to publish a subset to the live site: the "
+                    "catalog would replace all addons with just "
+                    f"{', '.join(args.only)}. Use --prefix for a staging run, "
+                    "or publish every addon.")
+        site = args.root / "site"
+        template = (site / "page.template.html").read_text()
+        # content-hashed asset names, so a changed asset always gets a new URL
+        sources = {"styles.css": site / "styles.css",
+                   "app.js": site / "app.js",
+                   "adfa-logo.svg": site / "assets" / "adfa-logo.svg"}
+        assets = {n: publish.hashed_name(p) for n, p in sources.items()}
+        objects = [(f"{prefix}assets/{h}", sources[n]) for n, h in assets.items()]
+
+        def with_hashed_assets(text: str) -> str:
+            for name, hashed in assets.items():
+                text = text.replace(f"assets/{name}", f"assets/{hashed}")
+            return text
+
+        index_file = dist / "index.html"
+        index_file.write_text(with_hashed_assets((site / "index.html").read_text()))
+        objects.append((f"{prefix}index.html", index_file))
+        for addon in discover.find_addons(args.root, args.only):
+            slug = model.slug(addon.name)
+            wrapped = page.wrap((addon / f"{slug}.html").read_text(),
+                                model.display_name(addon.name), template)
+            page_file = dist / f"{slug}.page.html"
+            page_file.write_text(with_hashed_assets(wrapped))
+            objects += [
+                (f"{prefix}p/{slug}.html", page_file),
+                (f"{prefix}p/{slug}.png",
+                 addon / "src" / "main" / "assets" / "icon_day.png"),
+                (f"{prefix}p/{slug}-night.png",
+                 addon / "src" / "main" / "assets" / "icon_night.png"),
+                (f"{prefix}dl/{slug}.cgp", dist / f"{slug}.cgp"),
+                (f"{prefix}src/{slug}-src.tar.gz", dist / f"{slug}-src.tar.gz"),
+            ]
+        objects.append((f"{prefix}v1/catalog.schema.json",
+                        site / "catalog.schema.json"))
+        publish.publish(publish.client_from_env(), publish.bucket_from_env(),
+                        objects,
+                        (f"{prefix}v1/catalog.json", dist / "catalog.json"))
+        print(f"published {len(objects) + 1} objects")
+        return 0
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

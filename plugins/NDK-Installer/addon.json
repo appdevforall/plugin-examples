@@ -1,0 +1,15 @@
+{
+  "summary": "Installs the NDK and CMake, and adds a native project template.",
+  "description": "Downloads and installs the Android NDK and CMake on the device, then adds a native activity template so you can start a C++ project.",
+  "tags": [
+    "ndk",
+    "cpp",
+    "native"
+  ],
+  "origin": "appdevforall",
+  "license": "AGPL-3.0-or-later",
+  "author": {
+    "name": "App Dev For All",
+    "url": "https://www.appdevforall.org"
+  }
+}
