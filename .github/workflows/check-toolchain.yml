@@ -20,6 +20,8 @@ on:
 
 permissions:
   contents: read
+  # the libs/ guard below reads the pull request's changed file list
+  pull-requests: read
 
 jobs:
   check-toolchain:
@@ -28,6 +30,30 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # libs/ holds build outputs, not source. Only the "Update libs from
+      # CodeOnTheGo" workflow may change them. It builds the jars on JDK 17,
+      # which is the JDK every runner here uses, so what it commits always
+      # loads. A laptop on JDK 21 emits class file version 65 instead, and a
+      # JDK 17 runner reads only up to 61 -- that is what broke "Publish
+      # addons" after #87 shipped hand-built jars. That workflow pushes
+      # straight to main with an admin PAT and bypasses the main ruleset, so
+      # this check never sees it.
+      - name: Refuse hand-built libs/ jars
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          changed="$(gh api --paginate \
+                       "repos/${GITHUB_REPOSITORY}/pulls/${PR}/files" \
+                       -q '.[].filename' | grep '^libs/' || true)"
+          if [ -n "$changed" ]; then
+            printf '%s\n' "$changed"
+            echo "::error::A pull request must not change libs/. Run the 'Update libs from CodeOnTheGo' workflow instead -- it builds the jars on the JDK the runners use."
+            exit 1
+          fi
 
       - name: Check toolchain versions
         run: ./scripts/check-toolchain.sh
