@@ -26,3 +26,18 @@ def test_the_title_is_escaped():
 def test_the_title_cannot_inject_the_body_placeholder():
     result = page.wrap("<p>real body</p>", "{{body}}", TEMPLATE)
     assert "real body" in result
+
+
+def test_the_shipped_template_offers_a_way_back_at_both_ends():
+    """These pages run long, so the header scrolls away; the bottom link is
+    the one a reader actually reaches."""
+    from pathlib import Path
+    template = (Path(__file__).parents[3] / "site" / "page.template.html").read_text()
+    body = template.split("{{body}}")
+    assert len(body) == 2, "the template must place the body exactly once"
+    before, after = body
+    assert 'class="back"' in before
+    assert 'class="back back-end"' in after
+    # "../" alone 404s under a staging prefix: only the site root is routed
+    # to index.html, so every link back has to name the file.
+    assert 'href="../"' not in template

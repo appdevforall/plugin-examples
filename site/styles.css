@@ -117,6 +117,11 @@ main { max-width:74rem; margin:0 auto; padding:26px 20px 56px; }
 
 /* ---------- description pages ---------- */
 .page { max-width:52rem; margin:0 auto; padding:30px 20px 56px; }
+/* The way back to the gallery, above and below the addon's own content. The
+   second one matters most: these pages run long, and the header scrolls away. */
+.back { display:inline-block; font-size:.9rem; font-weight:500; margin:0 0 18px; }
+.back-end { margin:34px 0 0; padding-top:18px; border-top:1px solid var(--rule);
+            width:100%; }
 .page h1 { font-size:clamp(1.6rem,4vw,2.1rem); margin:0 0 14px; }
 .page h2 { font-size:1.25rem; margin:32px 0 10px; padding-bottom:6px;
            border-bottom:1px solid var(--rule); }
