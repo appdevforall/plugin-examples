@@ -111,10 +111,22 @@ If device verification isn't possible in-session, say so explicitly rather than 
 
 ## Adding a new plugin
 
-1. Copy `plugins/Random-XKCD/` — it's the canonical starting template (small but complete, includes the in-IDE help HTML pattern that submissions are expected to follow).
-2. Update `settings.gradle.kts` `rootProject.name`, `build.gradle.kts` `pluginBuilder { pluginName }` + `android { namespace, applicationId }`, and `src/main/AndroidManifest.xml` (`plugin.id`, `plugin.name`, `plugin.main_class`).
-3. Add a row to the README's Examples table.
-4. Nothing else. Publishing is automatic: `addons discover` finds any directory whose `build.gradle.kts` applies the plugin-builder, and the name, filenames, and URLs all derive from the directory name. The `MAP` array this file used to describe was deleted in #66 and no longer exists.
+1. Copy `plugins/Random-XKCD/` — it's the canonical starting template (small but complete, includes the in-IDE help HTML pattern that submissions are expected to follow). Name the new directory in MixedCase with single hyphens between words (`APK-Analyzer`), ASCII letters and digits only. Every other name, filename, and URL derives from it — see `docs/plugin-naming-standards.md`.
+2. Update **every** copied file that still names the template. Two values come from the directory name: the **slug** is it lowercased (`apk-analyzer`), the **display name** is it with hyphens replaced by spaces (`APK Analyzer`).
+
+   | File | Change |
+   |---|---|
+   | `settings.gradle.kts` | `rootProject.name` — Gradle's own name for the build. Nothing derives from it; keep it in step with the slug anyway. |
+   | `build.gradle.kts` | `pluginBuilder { pluginName }` → the slug; `android { namespace, applicationId }` |
+   | `src/main/AndroidManifest.xml` | `plugin.id`, `plugin.name` → the display name, `plugin.main_class` |
+   | `random-xkcd.html` | rename to `<slug>.html`; set `<title>` to the display name exactly, and make the `<h1>` contain it |
+   | `addon.json` | `summary`, `description`, `tags`, `origin`, `license`, `author`. The schema checks the shape, not the words, so a copied one passes every check and puts xkcd's description on your gallery card. |
+   | `src/main/assets/icon_day.png`, `icon_night.png` | replace both; both must be present |
+   | `src/main/kotlin/...` | your implementation |
+
+3. Run `uv run --directory tools/addons addons --root "$PWD" check` from the repository root before pushing. `--root` must be absolute: `--directory` moves uv into `tools/addons`, so `--root .` resolves there and finds no addons. It is the same gate `check-toolchain.yml` runs on every pull request, it costs a second, and it names the exact file and value it wants. Treat it as the authority — do not restate its rules here, or the two copies drift.
+4. Add a row to the README's Examples table.
+5. Nothing else to wire up. Publishing is automatic: `addons discover` finds any directory whose `build.gradle.kts` applies the plugin-builder, and the name, filenames, and URLs all derive from the directory name. The `MAP` array this file used to describe was deleted in #66 and no longer exists.
 
 ## Plugin review skill
 

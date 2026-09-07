@@ -93,9 +93,26 @@ First local run clones CodeOnTheGo into `.cache/CodeOnTheGo/` (gitignored); subs
 
 ## Adding a new plugin example
 
-1. Copy `plugins/Random-XKCD/` to a new folder under `plugins/` (e.g. `MyPlugin/`).
-2. In `MyPlugin/settings.gradle.kts`, change `rootProject.name` to `MyPlugin`.
-3. In `MyPlugin/build.gradle.kts`, update `pluginBuilder { pluginName = ... }` and `android { namespace ... applicationId ... }`.
-4. In `MyPlugin/src/main/AndroidManifest.xml`, update the `plugin.id`, `plugin.name`, `plugin.main_class`, and any other metadata.
-5. Replace the source under `MyPlugin/src/main/kotlin/...` with your implementation.
-6. Add a row to the **Examples** table above.
+1. Copy `plugins/Random-XKCD/` to a new folder under `plugins/`. Name it in MixedCase with single hyphens between words (`My-Plugin`), ASCII letters and digits only. Every other name, filename, and URL is derived from this one — see [`docs/plugin-naming-standards.md`](docs/plugin-naming-standards.md).
+
+2. Update **every** copied file that still names the template. Two values come from the folder name: the **slug** is it lowercased (`my-plugin`), and the **display name** is it with hyphens replaced by spaces (`My Plugin`).
+
+   | File | Change |
+   |---|---|
+   | `settings.gradle.kts` | `rootProject.name` — Gradle's own name for the build. Nothing is derived from it; keep it in step with the slug anyway. |
+   | `build.gradle.kts` | `pluginBuilder { pluginName }` → the slug; `android { namespace, applicationId }` |
+   | `src/main/AndroidManifest.xml` | `plugin.id`, `plugin.name` → the display name, `plugin.main_class` |
+   | `random-xkcd.html` | rename to `<slug>.html`; set `<title>` to the display name exactly, and make the `<h1>` contain it |
+   | `addon.json` | `summary`, `description`, `tags`, `origin`, `license`, `author`. This text goes on the gallery card. A copied file passes every check while describing the wrong plugin, so rewrite it. |
+   | `src/main/assets/icon_day.png`, `icon_night.png` | replace both; both must be present |
+   | `src/main/kotlin/...` | your implementation |
+
+3. Run the checks from the repository root before you push:
+
+   ```sh
+   uv run --directory tools/addons addons --root "$PWD" check
+   ```
+
+   `--root` must be an absolute path: `--directory` moves uv into `tools/addons`, so `--root .` would resolve there and find no plugins. This is the same check that runs on every pull request. It names the exact file and value it expects, so it is faster to run it here than to read it from a failed run.
+
+4. Add a row to the **Examples** table above.
