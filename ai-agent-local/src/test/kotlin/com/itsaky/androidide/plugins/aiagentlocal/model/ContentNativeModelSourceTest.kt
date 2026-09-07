@@ -84,6 +84,25 @@ class ContentNativeModelSourceTest {
     }
 
     @Test
+    fun givenAProviderThatServesOnTheSecondAsk_whenProbed_thenItIsReachableRatherThanGone() {
+        // ContentResolver converts every provider-death path into FileNotFoundException before it
+        // returns, so the re-ask — which restarts the provider — is what separates it from a delete.
+        every { resolver.openFileDescriptor(any(), "r") } throws java.io.FileNotFoundException() andThen
+            mockk<ParcelFileDescriptor>(relaxed = true)
+
+        assertEquals(SourceReachability.REACHABLE, source.reachabilityOf(CONTENT_URI))
+    }
+
+    @Test
+    fun givenAProviderThatStaysSilentOnTheSecondAsk_whenProbed_thenTheAnswerIsUnknown() {
+        // Neither ask established anything, and only GONE may cost a resident model its pages.
+        every { resolver.openFileDescriptor(any(), "r") } throws java.io.FileNotFoundException() andThen
+            null
+
+        assertEquals(SourceReachability.UNKNOWN, source.reachabilityOf(CONTENT_URI))
+    }
+
+    @Test
     fun givenARevokedGrant_whenProbed_thenItIsGone() {
         // As final as a deletion from here: only a fresh pick can bring the document back.
         every { resolver.openFileDescriptor(any(), "r") } throws SecurityException("no grant")

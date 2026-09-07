@@ -9,6 +9,7 @@ import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aiagentlocal.model.DeviceMemory
 import com.itsaky.androidide.plugins.aiagentlocal.model.ModelFileInfo
 import com.itsaky.androidide.plugins.aiagentlocal.model.ModelFileSource
+import com.itsaky.androidide.plugins.aiagentlocal.model.SourceReachability
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkStatic
@@ -41,6 +42,9 @@ class LocalLlmSettingsViewModelTest {
         /** References the provider will not serve, standing in for a deleted document. */
         val unreadable = mutableSetOf<String>()
 
+        /** References the provider does not answer for, standing in for one killed under pressure. */
+        val silent = mutableSetOf<String>()
+
         /** Makes the lookup blow up, standing in for a provider that fails mid-selection. */
         var failInfo = false
 
@@ -51,7 +55,11 @@ class LocalLlmSettingsViewModelTest {
 
         override fun openStream(context: Context, uriString: String): InputStream? = null
 
-        override fun isReadable(context: Context, uriString: String) = uriString !in unreadable
+        override fun readability(context: Context, uriString: String) = when (uriString) {
+            in silent -> SourceReachability.UNKNOWN
+            in unreadable -> SourceReachability.GONE
+            else -> SourceReachability.REACHABLE
+        }
 
         override fun fallbackDisplayName(uriOrPath: String) = uriOrPath.substringAfterLast('/')
 
@@ -252,6 +260,35 @@ class LocalLlmSettingsViewModelTest {
 
         assertEquals(ModelLoadingState.Loaded("a.gguf"), viewModel.state.value?.model)
         assertEquals(EngineState.Initialized, viewModel.state.value?.engine)
+    }
+
+    @Test
+    fun givenAConfiguredModelWhoseProviderIsSilent_whenTheScreenReturns_thenItsStatusIsLeftAlone() {
+        // A resident multi-GB model is the pressure that kills a DocumentsProvider; reading that
+        // silence as a deletion tells the user to re-pick a model that needs nothing.
+        val viewModel = viewModel()
+        viewModel.loadModelFromUri(MODEL_A)
+        modelFiles.silent += MODEL_A
+
+        viewModel.refreshSavedModelAvailability()
+
+        assertEquals(ModelLoadingState.Loaded("a.gguf"), viewModel.state.value?.model)
+        assertEquals(EngineState.Initialized, viewModel.state.value?.engine)
+    }
+
+    @Test
+    fun givenAnErrorAboutTheConfiguredModel_whenTheScreenReturns_thenItStandsInsteadOfReadingAsLoaded() {
+        // "Load from saved" refuses the configured model itself, and a readable stream is no answer
+        // to why: clearing on that probe would report a model loaded that just would not load.
+        val viewModel = viewModel()
+        viewModel.loadModelFromUri(MODEL_A)
+        every { resolver.openInputStream(any()) } answers { ByteArrayInputStream("NOPE".toByteArray()) }
+        viewModel.loadModelFromUri(MODEL_A)
+        val refusal = viewModel.state.value?.model as ModelLoadingState.Error
+
+        viewModel.refreshSavedModelAvailability()
+
+        assertEquals(refusal.message, (viewModel.state.value?.model as ModelLoadingState.Error).message)
     }
 
     @Test

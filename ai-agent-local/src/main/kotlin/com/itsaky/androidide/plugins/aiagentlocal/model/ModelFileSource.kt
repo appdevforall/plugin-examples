@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.OpenableColumns
 import java.io.File
+import java.io.FileNotFoundException
 import java.io.InputStream
 
 /**
@@ -36,12 +37,14 @@ interface ModelFileSource {
     fun openStream(context: Context, uriString: String): InputStream?
 
     /**
-     * Whether the model can still be opened right now. A configured model can go away underneath
-     * the settings screen — deleted, unmounted, or its read grant revoked — and the stored path
-     * says nothing about that, so the screen has to ask. Reports rather than logs: a model that is
-     * gone is an answer, not a lookup failure. Not for the main thread.
+     * Whether the model can still be opened right now: a configured model can be deleted or
+     * unmounted underneath the settings screen, and the stored path says nothing about that.
+     * Tri-state, because a provider that stayed silent is no reason to tell the user to re-pick a
+     * model that is intact. Reports rather than logs, and not for the main thread.
+     *
+     * @return what the probe found; [SourceReachability.UNKNOWN] leaves the screen's status alone
      */
-    fun isReadable(context: Context, uriString: String): Boolean
+    fun readability(context: Context, uriString: String): SourceReachability
 
     /** Decoded last path segment — a cheap name that at least avoids raw `%3A` escapes. */
     fun fallbackDisplayName(uriOrPath: String): String
@@ -93,15 +96,36 @@ class ContentModelFileSource(
         null
     }
 
-    override fun isReadable(context: Context, uriString: String): Boolean = try {
+    override fun readability(context: Context, uriString: String): SourceReachability =
         if (uriString.startsWith(CONTENT_SCHEME)) {
-            context.contentResolver.openInputStream(Uri.parse(uriString))?.use { true } ?: false
+            // Confirmed: one FileNotFoundException covers a deletion and a dead provider alike.
+            confirmedGone { probeDocument(context, uriString) }
         } else {
-            File(uriString).let { it.isFile && it.canRead() }
+            probeFile(uriString)
         }
+
+    private fun probeDocument(context: Context, uriString: String): SourceReachability = try {
+        context.contentResolver.openInputStream(Uri.parse(uriString))
+            ?.use { SourceReachability.REACHABLE }
+        // No stream and no failure is not the provider saying the document is gone.
+            ?: SourceReachability.UNKNOWN
+    } catch (_: FileNotFoundException) {
+        // A deleted document, but also every provider-death path: only the re-ask decides.
+        SourceReachability.GONE
+    } catch (_: SecurityException) {
+        // The persisted grant is gone, which is as final as a deletion from here.
+        SourceReachability.GONE
     } catch (e: Exception) {
-        // Deleted, unmounted, or the grant is gone — all of which mean the same thing here.
-        false
+        onError("could not reach $uriString", e)
+        SourceReachability.UNKNOWN
+    }
+
+    private fun probeFile(path: String): SourceReachability = try {
+        if (File(path).let { it.isFile && it.canRead() }) SourceReachability.REACHABLE
+        else SourceReachability.GONE
+    } catch (e: Exception) {
+        onError("could not stat $path", e)
+        SourceReachability.UNKNOWN
     }
 
     override fun fallbackDisplayName(uriOrPath: String): String =

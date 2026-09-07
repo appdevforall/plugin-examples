@@ -19,6 +19,7 @@ import com.itsaky.androidide.plugins.aiagentlocal.model.ModelFileInfo
 import com.itsaky.androidide.plugins.aiagentlocal.model.ModelFileSource
 import com.itsaky.androidide.plugins.aiagentlocal.model.ModelMemoryEstimator
 import com.itsaky.androidide.plugins.aiagentlocal.model.ModelMemoryGate
+import com.itsaky.androidide.plugins.aiagentlocal.model.SourceReachability
 import com.itsaky.androidide.plugins.aiagentlocal.model.SystemDeviceMemory
 import com.itsaky.androidide.plugins.aiagentlocal.preferences.LocalLlmPreferences
 import kotlinx.coroutines.CancellationException
@@ -42,7 +43,15 @@ sealed class ModelLoadingState {
      */
     data class Unavailable(val modelName: String) : ModelLoadingState()
 
-    data class Error(val message: String) : ModelLoadingState()
+    /**
+     * A selection was refused. [reference] is the model the message is about, so a re-check of the
+     * *configured* model cannot clear an error that describes it — "Load from saved" refuses the
+     * configured model, and readability alone is no answer to why (ADFA-5253).
+     *
+     * @param message what to show the user
+     * @param reference the model the message is about; null when it is about no particular one
+     */
+    data class Error(val message: String, val reference: String? = null) : ModelLoadingState()
 }
 
 /**
@@ -195,26 +204,39 @@ class LocalLlmSettingsViewModel(
         val context = getContext()?.androidContext ?: return
 
         viewModelScope.launch(ioDispatcher) {
-            val readable = modelFiles.isReadable(context, savedPath)
+            val reachability = modelFiles.readability(context, savedPath)
 
             // A selection made while the check ran owns the status now; leave it to that load.
             if (getLocalModelPath() != savedPath) return@launch
             if (current.model is ModelLoadingState.Loading) return@launch
 
-            if (readable) {
-                // An Error describes a refused *pick*, so a readable model clears that too.
-                if (current.model is ModelLoadingState.Unavailable ||
-                    current.model is ModelLoadingState.Error
-                ) {
-                    publishModelState(modelStateFor(savedPath))
+            when (reachability) {
+                SourceReachability.REACHABLE -> clearStatusMadeStaleBy(savedPath)
+                SourceReachability.GONE -> {
+                    logger?.warn("$TAG: the configured model can no longer be read: $savedPath")
+                    publishModelState(ModelLoadingState.Unavailable(displayNameFor(savedPath)))
                 }
-            } else {
-                logger?.warn("$TAG: the configured model can no longer be read: $savedPath")
-                publishModelState(
-                    ModelLoadingState.Unavailable(displayNameFor(savedPath))
-                )
+                // Silence says nothing about the model, so it may not restate its status either way.
+                SourceReachability.UNKNOWN ->
+                    logger?.warn("$TAG: could not tell whether $savedPath is still readable")
             }
         }
+    }
+
+    /**
+     * Replaces a status that a just-confirmed readability makes stale, and leaves every other one.
+     * An [ModelLoadingState.Error] about the configured model is not stale: this probe only proves
+     * that a stream opens, which is no answer to a model whose bytes stopped being a GGUF.
+     *
+     * @param savedPath the configured model, confirmed readable a moment ago
+     */
+    private fun clearStatusMadeStaleBy(savedPath: String) {
+        val stale = when (val model = current.model) {
+            is ModelLoadingState.Unavailable -> true
+            is ModelLoadingState.Error -> model.reference != savedPath
+            else -> false
+        }
+        if (stale) publishModelState(modelStateFor(savedPath))
     }
 
     /**
@@ -242,8 +264,11 @@ class LocalLlmSettingsViewModel(
         val engine =
             if (uriString == getLocalModelPath()) engineStateFor(model) ?: engineBefore
             else engineBefore
+        // Stamped here rather than at each call site, so no refusal can forget what it was about.
+        val stamped =
+            if (model is ModelLoadingState.Error) model.copy(reference = uriString) else model
 
-        update { it.copy(model = model, engine = engine) }
+        update { it.copy(model = stamped, engine = engine) }
     }
 
     /**
@@ -366,8 +391,10 @@ class LocalLlmSettingsViewModel(
                 val fileName = fileInfo.displayName
 
                 // Checked before the GGUF sniff so a model that is simply gone — the "Load from
-                // saved" case after the file was deleted — is not reported as a corrupt one.
-                if (!modelFiles.isReadable(context, uriString)) {
+                // saved" case after the file was deleted — is not reported as a corrupt one. Only a
+                // confirmed GONE refuses: a provider's silence is not a model that went away, and
+                // every step below fails open, so the backend's own load diagnoses that case.
+                if (modelFiles.readability(context, uriString) == SourceReachability.GONE) {
                     publishAbandonedSelection(
                         uriString,
                         ModelLoadingState.Unavailable(fileName),

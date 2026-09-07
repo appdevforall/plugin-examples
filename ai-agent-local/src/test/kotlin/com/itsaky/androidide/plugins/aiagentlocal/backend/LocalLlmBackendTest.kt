@@ -336,8 +336,10 @@ class LocalLlmBackendTest {
     @Test
     fun givenADocumentThatCannotBeReopenedByPath_whenLoading_thenRefusedWithItsOwnAdvice() {
         // Refused before native code, or it lands on "pick the model again" for a file that is there.
+        // Named, not an fd number: a test worker holds hundreds, so /proc/self/fd/N often opens.
         val descriptor = RecordingDescriptor()
-        val unreadable = OpenModelFile("/proc/self/fd/99", 4_096L, descriptor)
+        val missing = File(temporaryFolder.root, "never-created/model.gguf").absolutePath
+        val unreadable = OpenModelFile(missing, 4_096L, descriptor)
         val source = FakeModelSource(mapOf(CONTENT_URI to unreadable))
         val engine = FakeEngine()
 
@@ -428,6 +430,21 @@ class LocalLlmBackendTest {
 
         Thread.sleep(200)
         assertEquals("a spurious notification must not unload a reachable model", 0, engine.unloadCount)
+    }
+
+    @Test
+    fun givenAResidentModelJustProbed_whenGeneratingAgain_thenTheProviderIsNotAskedEveryTime() {
+        // The probe is a blocking binder call holding generationMutex, and a provider that hangs
+        // rather than dies cannot be cancelled out of: bound it to one message, not the session.
+        val source = FakeModelSource(mapOf(CONTENT_URI to handleFor(chatModel())))
+        val backend = backendWith(source, FakeEngine())
+
+        runBlocking {
+            backend.ensureModelLoaded(CONTENT_URI)
+            repeat(4) { backend.ensureModelLoaded(CONTENT_URI) }
+        }
+
+        assertEquals("a fresh REACHABLE answer must stand in for the next probe", 1, source.probeCount)
     }
 
     /** The eviction runs on the backend's own cleanup scope, so the test waits for it. */

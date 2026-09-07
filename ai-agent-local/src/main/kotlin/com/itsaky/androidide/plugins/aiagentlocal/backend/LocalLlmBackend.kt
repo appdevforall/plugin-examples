@@ -31,6 +31,7 @@ import com.itsaky.androidide.plugins.services.SharedServices
 import java.io.Closeable
 import java.io.File
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.CancellationException
@@ -77,6 +78,9 @@ class LocalLlmBackend(
          * [deleteLegacyModelCache], which gives the space back.
          */
         private const val LEGACY_MODEL_CACHE_DIR = "llm-models"
+
+        /** How long a REACHABLE answer stands in for the next one; see [reachabilityIsFresh]. */
+        private val REACHABILITY_TRUST_NANOS = TimeUnit.SECONDS.toNanos(5)
     }
 
     private val llamaLazy = lazy { LLamaAndroid.instance() }
@@ -125,6 +129,13 @@ class LocalLlmBackend(
 
     /** Whether a watch-triggered reachability check is already queued; see [onModelSourceGone]. */
     private val sourceCheckInFlight = AtomicBoolean(false)
+
+    /**
+     * When the resident model's source last answered REACHABLE, as a [System.nanoTime] reading.
+     * The probe is a synchronous binder call in front of every generation, holding
+     * [generationMutex] — and a provider that hangs rather than dies cannot be cancelled out of.
+     */
+    @Volatile private var lastReachableNanos = 0L
 
     /**
      * Opens the configured model for the native loader. Lazy so construction touches no Android
@@ -289,8 +300,11 @@ class LocalLlmBackend(
             // Residency is not evidence the file still exists. The descriptor this backend holds
             // keeps a deleted inode alive, so an unchecked early return keeps answering from a
             // model the user threw away — and keeps its gigabytes mapped. Confirm, then serve.
+            if (reachabilityIsFresh()) return
+            val reachability = modelSource.reachabilityOf(modelRef)
+            if (reachability == SourceReachability.REACHABLE) lastReachableNanos = System.nanoTime()
             // Anything but GONE is served: a silent provider is no reason to pay a GB reload.
-            if (modelSource.reachabilityOf(modelRef) != SourceReachability.GONE) return
+            if (reachability != SourceReachability.GONE) return
             context.logger.info("Resident model is no longer reachable; unloading: $modelRef")
             evictResidentModel()
             throw unopenable(modelRef)
@@ -452,6 +466,16 @@ class LocalLlmBackend(
     }
 
     /**
+     * Whether the source answered REACHABLE recently enough to be taken at its word again, which
+     * bounds a wedged provider to one blocked message instead of the session. Only a probe refreshes
+     * it, so a model deleted between its load and its first message is still caught.
+     */
+    private fun reachabilityIsFresh(): Boolean {
+        val since = System.nanoTime() - lastReachableNanos
+        return lastReachableNanos != 0L && since in 0..REACHABILITY_TRUST_NANOS
+    }
+
+    /**
      * Forgets the resident model and releases its descriptor. The native unload is the caller's to
      * do first — the mapped pages must be freed before the descriptor behind them goes.
      */
@@ -461,6 +485,7 @@ class LocalLlmBackend(
         currentModelRef = null
         openModel?.close()
         openModel = null
+        lastReachableNanos = 0L
     }
 
     /**
@@ -818,8 +843,12 @@ class LocalLlmBackend(
         return runGeneration(buildPrompt(config.systemPrompt, prompt, history), config)
     }
 
-    /** Suspending model unload — safe to call from any coroutine. */
-    private suspend fun unloadModelInternal() {
+    /**
+     * Suspending model unload — safe to call from any coroutine. Takes [generationMutex] because
+     * [evictResidentModel] requires it: a watch notification that arrives just before [close] runs
+     * its own eviction on [cleanupScope], and two of them would unload the native model twice.
+     */
+    private suspend fun unloadModelInternal() = generationMutex.withLock {
         if (modelLoaded) {
             evictResidentModel()
             context.logger.info("Model unloaded")

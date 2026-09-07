@@ -80,9 +80,33 @@ enum class SourceReachability {
     /** The source answered: the model is gone — deleted, unmounted, or the read grant was revoked. */
     GONE,
 
-    /** The source did not answer, which says nothing about the model. */
+    /** The source did not answer, or answered gone only once: no evidence about the model. */
     UNKNOWN,
 }
+
+/**
+ * Runs [probe] and reports a [SourceReachability.GONE] only when a second ask agrees: the resolver
+ * turns provider death into the same `FileNotFoundException` a deleted document gives, so only the
+ * re-ask — which restarts the provider — separates them. Sleeps, so never on the main thread.
+ *
+ * @param probe one reachability question, asked at most twice
+ * @return the probe's answer, an unconfirmed [SourceReachability.GONE] downgraded to UNKNOWN
+ */
+internal fun confirmedGone(probe: () -> SourceReachability): SourceReachability {
+    val first = probe()
+    if (first != SourceReachability.GONE) return first
+    try {
+        Thread.sleep(GONE_CONFIRM_DELAY_MS)
+    } catch (_: InterruptedException) {
+        // Interrupted mid-confirmation: nothing was established, and GONE evicts gigabytes.
+        Thread.currentThread().interrupt()
+        return SourceReachability.UNKNOWN
+    }
+    return probe()
+}
+
+/** Long enough for a provider killed under memory pressure to be restarted for the second ask. */
+private const val GONE_CONFIRM_DELAY_MS = 250L
 
 /**
  * Opens the user's selected model for the native loader, in place and without copying it.
@@ -139,27 +163,31 @@ class ContentNativeModelSource(
 
     /**
      * One binder round trip for a document, one stat for a path — nothing is read, so this is cheap
-     * enough to ask before every generation. [SourceReachability.GONE] is only ever what the source
-     * itself said; a call that failed is [SourceReachability.UNKNOWN], which is not evidence.
+     * enough to ask before every generation. [SourceReachability.GONE] is only ever an answer the
+     * source gave twice (see [confirmedGone]); anything less is [SourceReachability.UNKNOWN].
      */
     override fun reachabilityOf(modelReference: String): SourceReachability =
         if (modelReference.startsWith(CONTENT_SCHEME)) documentReachability(modelReference)
         else fileReachability(modelReference)
 
-    private fun documentReachability(uriString: String): SourceReachability = try {
+    /** Confirmed, because one `FileNotFoundException` cannot tell a deletion from a dead provider. */
+    private fun documentReachability(uriString: String): SourceReachability =
+        confirmedGone { probeDocument(uriString) }
+
+    private fun probeDocument(uriString: String): SourceReachability = try {
         context.contentResolver
             .openFileDescriptor(Uri.parse(uriString), "r")
             ?.use { SourceReachability.REACHABLE }
         // No descriptor and no failure is not the provider saying the document is gone.
             ?: SourceReachability.UNKNOWN
     } catch (_: FileNotFoundException) {
-        // The routine answer for a deleted or renamed document, and not worth reporting.
+        // A deleted document, but also every provider-death path: only the re-ask decides.
         SourceReachability.GONE
     } catch (_: SecurityException) {
         // The persisted grant is gone, which is as final as a deletion from here.
         SourceReachability.GONE
     } catch (e: Exception) {
-        // DeadObjectException and friends: the provider died, which is not the routine case.
+        // Anything the resolver did not convert on its way out; not evidence either way.
         onError("could not reach the selected model $uriString", e)
         SourceReachability.UNKNOWN
     }

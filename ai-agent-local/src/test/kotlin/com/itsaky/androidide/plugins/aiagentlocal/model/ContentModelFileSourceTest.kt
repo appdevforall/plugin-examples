@@ -79,34 +79,60 @@ class ContentModelFileSourceTest {
     }
 
     @Test
-    fun givenDeletedDocument_whenIsReadable_thenFalseWithoutReportingAnError() {
+    fun givenDeletedDocument_whenProbed_thenGoneWithoutReportingAnError() {
         every { resolver.openInputStream(uri) } throws
             FileNotFoundException("open failed: ENOENT (No such file or directory)")
 
-        assertFalse(source.isReadable(context, CONTENT_URI))
+        assertEquals(SourceReachability.GONE, source.readability(context, CONTENT_URI))
         // A model that is gone is an answer for the caller, not a lookup failure to log.
         assertTrue(errors.toString(), errors.isEmpty())
     }
 
     @Test
-    fun givenOpenableDocument_whenIsReadable_thenTrueAndTheStreamIsClosed() {
+    fun givenAProviderThatServesOnTheSecondAsk_whenProbed_thenItIsReachableRatherThanGone() {
+        // The resolver turns provider death into the FileNotFoundException a deletion gives, so
+        // only the re-ask keeps this from telling the user to re-pick a model that is intact.
+        every { resolver.openInputStream(uri) } throws FileNotFoundException() andThen
+            ByteArrayInputStream(ByteArray(4))
+
+        assertEquals(SourceReachability.REACHABLE, source.readability(context, CONTENT_URI))
+    }
+
+    @Test
+    fun givenAProviderThatStaysSilentOnTheSecondAsk_whenProbed_thenTheAnswerIsUnknown() {
+        // Neither ask established anything, and only GONE may say "select the model again".
+        every { resolver.openInputStream(uri) } throws FileNotFoundException() andThen null
+
+        assertEquals(SourceReachability.UNKNOWN, source.readability(context, CONTENT_URI))
+    }
+
+    @Test
+    fun givenOpenableDocument_whenProbed_thenReachableAndTheStreamIsClosed() {
         val stream = spyk(ByteArrayInputStream(ByteArray(4)))
         every { resolver.openInputStream(uri) } returns stream
 
-        assertTrue(source.isReadable(context, CONTENT_URI))
+        assertEquals(SourceReachability.REACHABLE, source.readability(context, CONTENT_URI))
         verify { stream.close() }
     }
 
     @Test
-    fun givenMissingFilesystemPath_whenIsReadable_thenFalse() {
-        assertFalse(source.isReadable(context, "/sdcard/Download/gone.gguf"))
+    fun givenAProviderThatAnswersWithNothing_whenProbed_thenTheAnswerIsUnknown() {
+        // No stream and no failure is not the provider saying the document is gone.
+        every { resolver.openInputStream(uri) } returns null
+
+        assertEquals(SourceReachability.UNKNOWN, source.readability(context, CONTENT_URI))
     }
 
     @Test
-    fun givenExistingFile_whenIsReadable_thenTrue() {
+    fun givenMissingFilesystemPath_whenProbed_thenGone() {
+        assertEquals(SourceReachability.GONE, source.readability(context, "/sdcard/Download/gone.gguf"))
+    }
+
+    @Test
+    fun givenExistingFile_whenProbed_thenReachable() {
         val file = File.createTempFile("model", ".gguf").apply { deleteOnExit() }
 
-        assertTrue(source.isReadable(context, file.absolutePath))
+        assertEquals(SourceReachability.REACHABLE, source.readability(context, file.absolutePath))
     }
 
     private companion object {

@@ -81,7 +81,10 @@ class PlatformModelSourceWatcher(
                 context.contentResolver.registerContentObserver(it, true, observer)
             }
         } catch (e: Exception) {
-            // The handler is already counted; give it back or the thread outlives every watch.
+            // Whichever registration landed goes back too: watch() is about to return nothing, and
+            // an observer left behind would hold onGone for the process's life — dispatching to a
+            // HandlerThread releaseHandler() has just quit.
+            unregisterQuietly(observer)
             releaseHandler()
             throw e
         }
@@ -92,6 +95,15 @@ class PlatformModelSourceWatcher(
             } finally {
                 releaseHandler()
             }
+        }
+    }
+
+    /** Unregisters on a path that is already failing, where the failure to report is the first. */
+    private fun unregisterQuietly(observer: ContentObserver) {
+        try {
+            context.contentResolver.unregisterContentObserver(observer)
+        } catch (e: Exception) {
+            onError("could not unregister a half-registered model observer", e)
         }
     }
 
