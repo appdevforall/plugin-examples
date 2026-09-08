@@ -11,11 +11,11 @@ pluginBuilder {
 }
 
 android {
-    namespace = "org.appdevforall.rainbowonthego"
+    namespace = "org.appdevforall.rainbowbrackets"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "org.appdevforall.rainbowonthego"
+        applicationId = "org.appdevforall.rainbowbrackets"
         minSdk = 26
         targetSdk = 36
         versionCode = 1
@@ -62,7 +62,7 @@ tasks.wrapper {
 }
 
 // Disable AAR metadata checks that fail under the plugin-builder
-// pipeline (Beepy + Forms use the same workaround).
+// pipeline (Voice Alerts + Forms use the same workaround).
 tasks.matching {
     it.name.contains("checkDebugAarMetadata") ||
     it.name.contains("checkReleaseAarMetadata")

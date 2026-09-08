@@ -27,4 +27,4 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Beepy"
+rootProject.name = "voice-alerts"

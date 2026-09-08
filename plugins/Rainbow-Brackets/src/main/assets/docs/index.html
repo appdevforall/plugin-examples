@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>RainbowOnTheGo — How it works</title>
+<title>Rainbow Brackets — How it works</title>
 <link rel="stylesheet" href="css/walkthrough.css">
 </head>
 <body>
 
-<h1>RainbowOnTheGo</h1>
-<p>RainbowOnTheGo colors matching parentheses, brackets, and braces by how deeply they
+<h1>Rainbow Brackets</h1>
+<p>Rainbow Brackets colors matching parentheses, brackets, and braces by how deeply they
 nest, so a delimiter and its match share a color. It colors <b>Java and Kotlin</b> files and adds
 color only — your normal syntax highlighting is untouched, and other languages are left alone.</p>
 
@@ -37,11 +37,11 @@ the palette that matches your current theme and repaints when you switch.</p>
 does not affect nesting depth.</p>
 
 <h2>Turning it off</h2>
-<p>Disable RainbowOnTheGo in the Plugin Manager to return all brackets to the editor's normal
+<p>Disable Rainbow Brackets in the Plugin Manager to return all brackets to the editor's normal
 color. The change applies immediately to open editors.</p>
 
 <h2>How it's built</h2>
-<p>RainbowOnTheGo implements <code>EditorDecorationProvider</code>, a generic Code On The Go
+<p>Rainbow Brackets implements <code>EditorDecorationProvider</code>, a generic Code On The Go
 plugin API. Its <code>decorate</code> method scans a region of text for bracket characters,
 tracks the running nesting depth, skips brackets inside strings and comments, and returns a
 foreground-color span per bracket. The editor merges those spans on top of the normal
