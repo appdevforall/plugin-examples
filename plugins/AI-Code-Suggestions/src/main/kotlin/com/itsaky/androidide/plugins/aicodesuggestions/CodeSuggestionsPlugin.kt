@@ -1,4 +1,4 @@
-package com.itsaky.androidide.plugins.codesuggestions
+package com.itsaky.androidide.plugins.aicodesuggestions
 
 import android.util.Log
 import com.itsaky.androidide.plugins.IPlugin
@@ -194,7 +194,7 @@ class CodeSuggestionsPlugin : IPlugin, DocumentationExtension {
     }
 
     // Strict convention: category is "plugin_<pluginId>" so host-derived tooltip lookups resolve.
-    override fun getTooltipCategory(): String = "plugin_com.itsaky.androidide.plugins.codesuggestions"
+    override fun getTooltipCategory(): String = "plugin_com.itsaky.androidide.plugins.aicodesuggestions"
 
     override fun getTooltipEntries(): List<PluginTooltipEntry> = listOf(
         PluginTooltipEntry(
