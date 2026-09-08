@@ -1,4 +1,4 @@
-package org.appdevforall.rainbowonthego
+package org.appdevforall.rainbowbrackets
 
 import com.itsaky.androidide.plugins.IPlugin
 import com.itsaky.androidide.plugins.PluginContext
@@ -13,7 +13,7 @@ import java.io.File
 import java.util.TreeMap
 
 /**
- * RainbowOnTheGo — tints matching parentheses, brackets, and braces by nesting depth.
+ * Rainbow Brackets — tints matching parentheses, brackets, and braces by nesting depth.
  *
  * Implemented as a generic [EditorDecorationProvider]: the Code On The Go editor calls [decorate]
  * for each analyzed region and merges the returned color spans on top of the normal syntax
@@ -21,7 +21,7 @@ import java.util.TreeMap
  * skipping brackets inside strings/comments — lives here in the plugin; the IDE is unaware that
  * this is about brackets at all.
  */
-class RainbowOnTheGoPlugin : IPlugin, EditorDecorationProvider, FileOpenExtension, DocumentationExtension {
+class RainbowBracketsPlugin : IPlugin, EditorDecorationProvider, FileOpenExtension, DocumentationExtension {
 
     private lateinit var context: PluginContext
 
@@ -50,7 +50,7 @@ class RainbowOnTheGoPlugin : IPlugin, EditorDecorationProvider, FileOpenExtensio
         }
 
     companion object {
-        const val PLUGIN_ID = "org.appdevforall.rainbowonthego"
+        const val PLUGIN_ID = "org.appdevforall.rainbowbrackets"
         const val TOOLTIP_TAG = "rainbow.info"
 
         // Upper bound on cached prefix checkpoints per document; clearing on overflow caps memory.
@@ -88,26 +88,26 @@ class RainbowOnTheGoPlugin : IPlugin, EditorDecorationProvider, FileOpenExtensio
         // Wrap in try/catch so a stray exception in our setup can't crash the host IDE.
         return try {
             this.context = context
-            context.logger.info("RainbowOnTheGoPlugin initialized")
+            context.logger.info("RainbowBracketsPlugin initialized")
             true
         } catch (t: Throwable) {
-            context.logger.error("RainbowOnTheGoPlugin initialization failed", t)
+            context.logger.error("RainbowBracketsPlugin initialization failed", t)
             false
         }
     }
 
     override fun activate(): Boolean {
-        context.logger.info("RainbowOnTheGoPlugin activated")
+        context.logger.info("RainbowBracketsPlugin activated")
         return true
     }
 
     override fun deactivate(): Boolean {
-        context.logger.info("RainbowOnTheGoPlugin deactivated")
+        context.logger.info("RainbowBracketsPlugin deactivated")
         return true
     }
 
     override fun dispose() {
-        context.logger.info("RainbowOnTheGoPlugin disposed")
+        context.logger.info("RainbowBracketsPlugin disposed")
     }
 
     // --- FileOpenExtension: observe-only, used purely to track the active file's language ---
@@ -275,14 +275,14 @@ class RainbowOnTheGoPlugin : IPlugin, EditorDecorationProvider, FileOpenExtensio
     //   Tier 3 = buttons[].uri  (HTML page served at
     //                            http://localhost:6174/plugin/<pluginId>/<uri>)
 
-    override fun getTooltipCategory(): String = "plugin_rainbow_on_the_go"
+    override fun getTooltipCategory(): String = "plugin_$PLUGIN_ID"
 
     override fun getTooltipEntries(): List<PluginTooltipEntry> = listOf(
         PluginTooltipEntry(
             tag = TOOLTIP_TAG,
             summary = "Colors brackets by nesting depth in Java/Kotlin — red, orange, yellow, green, blue, purple.",
             detail = """
-                <p><b>RainbowOnTheGo</b> tints <b>()</b>, <b>[]</b> and <b>{}</b> by how deeply
+                <p><b>Rainbow Brackets</b> tints <b>()</b>, <b>[]</b> and <b>{}</b> by how deeply
                 they nest in <b>Java and Kotlin</b> files, so a delimiter and its match share a color.</p>
                 <ul>
                   <li>Six colors cycle red → orange → yellow → green → blue → purple.</li>
@@ -305,7 +305,7 @@ class RainbowOnTheGoPlugin : IPlugin, EditorDecorationProvider, FileOpenExtensio
     /**
      * Subdirectory under src/main/assets/ that holds the Tier 3 help. Every file under
      * assets/docs/ is indexed at install time and served from
-     *   http://localhost:6174/plugin/org.appdevforall.rainbowonthego/<file>
+     *   http://localhost:6174/plugin/org.appdevforall.rainbowbrackets/<file>
      */
     override fun getTier3DocsAssetPath(): String? = "docs"
 }

@@ -29,4 +29,4 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "compose-preview"
+rootProject.name = "jetpack-compose-preview"

@@ -59,8 +59,8 @@ Prerequisites: Android SDK (API 33+), JDK 17. Create `local.properties` with
 `sdk.dir=...`.
 
 ```bash
-cd speech-to-text-plugin
-../gradlew assemblePlugin          # release  -> build/plugin/speech-to-text-plugin.cgp
+cd Speech-to-Text
+../gradlew assemblePlugin          # release  -> build/plugin/speech-to-text.cgp
 ../gradlew assemblePluginDebug     # debug variant
 ```
 
@@ -70,7 +70,7 @@ The build resolves `plugin-api.jar` from the repo-root `../libs/`.
 
 1. (Optional but recommended) Build and install **`ai-core` first** for
    voice→code (see [`../ai-core/README.md`](../ai-core/README.md)).
-2. Build this plugin, install `build/plugin/speech-to-text-plugin.cgp` via
+2. Build this plugin, install `build/plugin/speech-to-text.cgp` via
    CodeOnTheGo's Plugin Manager, and restart the IDE.
 3. Open a file, tap the microphone in the editor toolbar, grant the microphone
    permission on first use, and speak.

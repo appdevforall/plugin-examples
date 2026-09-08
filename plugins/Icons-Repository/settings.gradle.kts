@@ -28,4 +28,4 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "IconsRepository-Plugin"
+rootProject.name = "icons-repository"

@@ -27,4 +27,4 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "GetAiModelsPlugin"
+rootProject.name = "get-ai-models"

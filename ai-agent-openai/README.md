@@ -2,8 +2,8 @@
 
 OpenAI-compatible inference for CodeOnTheGo's AI plugins. Registers itself as the
 `openai` backend with [`ai-core`](../ai-core/)'s `LlmInferenceService`, which is
-what `ai-core`'s Agent chat, `code-suggestions-plugin`, `speech-to-text-plugin`
-and `vector-search-plugin` actually talk to.
+what `ai-core`'s Agent chat, `Code-Suggestions`, `Speech-to-Text`
+and `Vector-Search` actually talk to.
 
 **One backend, many servers.** It speaks `POST {baseUrl}/chat/completions`, and
 the base URL is a setting. Across OpenAI, Ollama, LM Studio, OpenRouter and

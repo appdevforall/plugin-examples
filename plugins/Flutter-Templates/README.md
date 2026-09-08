@@ -35,7 +35,7 @@ cd flutter-template
 ../gradlew clean assemblePlugin
 ```
 
-The `.cgp` lands in `build/plugin/fluttertemplate.cgp`. Install it from inside Code on the Go via
+The `.cgp` lands in `build/plugin/flutter-templates.cgp`. Install it from inside Code on the Go via
 the Plugin Manager, then open **New Project** to see the Flutter templates.
 
 ## Note on the Flutter SDK
