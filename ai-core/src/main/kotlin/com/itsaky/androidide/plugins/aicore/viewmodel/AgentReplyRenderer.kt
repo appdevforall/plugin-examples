@@ -13,30 +13,27 @@ import com.itsaky.androidide.plugins.aicore.tool.respondMessageOf
 object AgentReplyRenderer {
 
     /**
-     * Whether this turn only repeats the calls that already succeeded, so its bubble is dropped.
+     * Whether this turn leaves no bubble behind.
      *
-     * A turn carrying the terminal call is never a duplicate, whatever else it repeats: that bubble
-     * is the only place the answer is rendered. `AgentLoop` runs the real calls first and so never
-     * reaches `onFinalAnswer`, and dropping the turn here would end the run "completed" with
-     * nothing on screen. The match is the loose one a handler is routed by, so a backend answering
-     * `Respond` is recognised as terminal too.
+     * A turn that only asks for tools is work in progress, not something to read: the run reports
+     * it on the single activity line ([AgentActivity]), which is replaced as each call starts, and
+     * a failure still gets its own message. Before that line existed every such turn appended a
+     * badge bubble and every result another, which is what buried the answer.
+     *
+     * A turn carrying the terminal call always keeps its bubble: that is the only place the answer
+     * is rendered.
      *
      * @param toolCalls the calls parsed out of this turn.
-     * @param lastSucceededCalls the calls this run last executed successfully, null when none did.
      * @param terminalTool the name of the answer-carrying pseudo-tool (`respond`).
-     * @return true when the turn adds nothing and should not reach the transcript.
+     * @return true when the turn should not reach the transcript.
      */
-    fun isDuplicateTurn(
-        toolCalls: List<ToolCall>,
-        lastSucceededCalls: List<ToolCall>?,
-        terminalTool: String,
-    ): Boolean {
-        if (toolCalls.any { isTerminalToolName(it.name, terminalTool) }) return false
-        return toolCalls.isNotEmpty() && toolCalls == lastSucceededCalls
+    fun isSilentTurn(toolCalls: List<ToolCall>, terminalTool: String): Boolean {
+        if (toolCalls.isEmpty()) return false
+        return toolCalls.none { isTerminalToolName(it.name, terminalTool) }
     }
 
     /**
-     * Renders one model turn.
+     * Renders one model turn. Only reached for a turn [isSilentTurn] kept.
      * @param rawText the model's raw reply.
      * @param toolCalls the calls parsed out of it.
      * @param terminalTool the name of the answer-carrying pseudo-tool (`respond`).
@@ -44,7 +41,6 @@ object AgentReplyRenderer {
      * @param actionFailedText what to show when the model claims success after a failed tool.
      * @param noResponseText last-resort text when the turn carries nothing to show.
      * @param unparsedReplyText what to show for a reply that meant to call a tool and failed to.
-     * @param renderToolCall renders one tool call as a badge line.
      * @return the text to display for this turn.
      */
     fun render(
@@ -55,7 +51,6 @@ object AgentReplyRenderer {
         actionFailedText: String,
         noResponseText: String,
         unparsedReplyText: (ToolCallExtractor.UnparsedReply) -> String,
-        renderToolCall: (ToolCall) -> String,
     ): String {
         val respondCall = toolCalls.firstOrNull { isTerminalToolName(it.name, terminalTool) }
         return when {
@@ -65,7 +60,6 @@ object AgentReplyRenderer {
                 respondMessageOf(respondCall.args)
                     ?: ToolCallExtractor.proseOutsideToolCalls(rawText)
                     ?: noResponseText
-            toolCalls.isNotEmpty() -> toolCalls.joinToString("\n", transform = renderToolCall)
             // A call that failed to parse: say so, rather than pasting the raw envelope on screen.
             else -> ToolCallExtractor.diagnoseUnparsedReply(rawText)?.let(unparsedReplyText)
                 ?: rawText.ifBlank { noResponseText }

@@ -83,9 +83,6 @@ class ChatViewModel(
          */
         private const val EXTRA_PARAM_GRAMMAR = "grammar"
 
-        /** Per-argument cap in the tool badge shown in the transcript. */
-        private const val TOOL_BADGE_ARG_LIMIT = 80
-
         /**
          * The call envelope this side parses back (see [ToolCallExtractor]) and constrains local
          * sampling to (see [com.itsaky.androidide.plugins.aicore.tool.ToolCallGrammar]). Handed to
@@ -242,9 +239,14 @@ class ChatViewModel(
     @Volatile
     private var lastToolFailedThisRun = false
 
-    /** The current run's most recent fully-successful tool batch, or null; reset per run. */
-    @Volatile
-    private var lastSucceededCalls: List<ToolCall>? = null
+    /**
+     * The transcript row this run rewrites in place as each tool starts, closed as a one-line
+     * summary when the run ends; null before the run's first tool. Main thread only.
+     */
+    private var activityMessageId: String? = null
+
+    /** Every tool name this run executed, in order, for the activity line's closing summary. */
+    private val runToolNames = mutableListOf<String>()
 
     /** The prompt the last run was started with, for [retryLastRun]; null before the first send. */
     @Volatile
@@ -406,6 +408,23 @@ class ChatViewModel(
     fun setContextFiles(files: List<File>) {
         // Copied: the caller passes its own mutable list, which it keeps editing.
         _contextFiles = files.toList()
+    }
+
+    /**
+     * Drops a message from the transcript and from the session list behind it.
+     *
+     * Both, always: [syncMessageToSession] republishes the transcript from the session's own list,
+     * so a message removed from one and not the other comes back on the next sync. That is what
+     * left a silenced turn's empty agent bubble on screen, animating its dots for the rest of the
+     * conversation.
+     *
+     * @param messageId the message to remove; an unknown id is a no-op.
+     */
+    private fun removeMessageFromSession(messageId: String) {
+        _messages.value = _messages.value.filter { it.id != messageId }
+        _currentSessionId.value
+            ?.let { id -> _sessions.value.firstOrNull { it.id == id } }
+            ?.messages?.removeAll { it.id == messageId }
     }
 
     /**
@@ -722,9 +741,13 @@ class ChatViewModel(
     }
 
     /**
-     * Executes a batch of tool calls, renders each result as a TOOL message, and
-     * returns the results for the [agentLoop] to feed back; leaves [AgentState.Idle]
-     * to the loop.
+     * Executes a batch of tool calls and returns the results for the [agentLoop] to feed back;
+     * leaves [AgentState.Idle] to the loop.
+     *
+     * A successful call is reported only on the run's single activity line, which this rewrites as
+     * each call starts. A failure keeps its own message: it is the one thing here a user has to act
+     * on, and it carries the Retry button.
+     *
      * @param tools the snapshot this run started with; a source registered mid-run does not join it.
      * @param toolCalls the calls to execute.
      * @return the results, positionally aligned with [toolCalls].
@@ -743,27 +766,22 @@ class ChatViewModel(
         withContext(Dispatchers.Main) { setState(executingState) }
         startStateTimer(executingState)
 
-        val results = tools.executor.execute(toolCalls)
+        val results = tools.executor.execute(toolCalls) { call ->
+            withContext(Dispatchers.Main) { showActivity(call) }
+        }
 
         // Record whether this batch's last tool failed (read by runModelTurn).
         lastToolFailedThisRun = results.lastOrNull()?.success == false
 
-        lastSucceededCalls = toolCalls.takeIf { results.isNotEmpty() && results.all { r -> r.success } }
-
-        // Add tool results as messages
         withContext(Dispatchers.Main) {
             results.forEachIndexed { index, result ->
+                if (result.success) return@forEachIndexed
                 val toolCall = toolCalls[index]
-                val resultText = if (result.success) {
-                    "${toolCall.name}: ${result.message}\n${result.data ?: ""}"
-                } else {
-                    "${toolCall.name} failed: ${result.message}\n${result.error_details ?: ""}"
-                }
                 val resultMessage = ChatMessage(
                     id = UUID.randomUUID().toString(),
-                    text = resultText,
+                    text = "${toolCall.name} failed: ${result.message}\n${result.error_details ?: ""}",
                     sender = Sender.TOOL,
-                    status = if (result.success) MessageStatus.SENT else MessageStatus.ERROR
+                    status = MessageStatus.ERROR
                 )
                 _messages.value = _messages.value + resultMessage
                 syncMessageToSession(resultMessage)
@@ -894,7 +912,8 @@ class ChatViewModel(
         AgentTrace.beginRun(currentBackendId, userMessage, contextFiles.size)
         // Reset per-run tool tracking.
         lastToolFailedThisRun = false
-        lastSucceededCalls = null
+        activityMessageId = null
+        runToolNames.clear()
         // Where a Retry has to rewind to; read here, on Main, while no run can be appending.
         lastRunPrompt = userMessage
         historySizeBeforeLastRun = _history.value.size
@@ -1059,8 +1078,12 @@ class ChatViewModel(
                 // Allow re-entry once the coroutine unwinds.
                 isGenerating.set(false)
                 // The run can finish with the chat off screen, where nothing else writes.
-                // NonCancellable so a Stop still saves what the run produced before it.
-                withContext(NonCancellable + Dispatchers.Main) { persistState() }
+                // NonCancellable so a Stop still saves what the run produced before it, and so the
+                // activity line is closed rather than left reading as a tool still running.
+                withContext(NonCancellable + Dispatchers.Main) {
+                    finishActivity()
+                    persistState()
+                }
             }
         }
     }
@@ -1179,9 +1202,9 @@ class ChatViewModel(
                     // Per-run flag (set by executeToolCalls), not a session-wide scan.
                     val lastToolFailed = lastToolFailedThisRun
 
-                    if (AgentReplyRenderer.isDuplicateTurn(toolCalls, lastSucceededCalls, RESPOND_TOOL)) {
+                    if (AgentReplyRenderer.isSilentTurn(toolCalls, RESPOND_TOOL)) {
                         viewModelScope.launch(Dispatchers.Main) {
-                            _messages.value = _messages.value.filter { it.id != agentMessageId }
+                            removeMessageFromSession(agentMessageId)
                         }
                         deferred.complete(reply)
                         return
@@ -1195,10 +1218,7 @@ class ChatViewModel(
                         actionFailedText = str(R.string.agent_action_failed),
                         noResponseText = str(R.string.agent_no_response),
                         unparsedReplyText = { str(unparsedReplyMessage(it)) },
-                    ) { c ->
-                        // Capped: edit_file snippets would turn the badge into a wall of source.
-                        "🔧 ${c.name}(${c.args.entries.joinToString(", ") { "${it.key}=${abbreviate(it.value)}" }})"
-                    }
+                    )
                     viewModelScope.launch(Dispatchers.Main) {
                         if (isStale()) return@launch
                         val finalMsg = ChatMessage(
@@ -1223,7 +1243,7 @@ class ChatViewModel(
                     }
                     viewModelScope.launch(Dispatchers.Main) {
                         // Drop the empty/partial bubble; the error surfaces as a SYSTEM message.
-                        _messages.value = _messages.value.filter { it.id != agentMessageId }
+                        removeMessageFromSession(agentMessageId)
                     }
                     deferred.completeExceptionally(RuntimeException(error))
                 }
@@ -1265,7 +1285,7 @@ class ChatViewModel(
             // A synchronous throw fires no callback; complete deferred so await() doesn't hang.
             logError("generateStreaming threw synchronously", e)
             viewModelScope.launch(Dispatchers.Main) {
-                _messages.value = _messages.value.filter { it.id != agentMessageId }
+                removeMessageFromSession(agentMessageId)
             }
             if (!deferred.isCompleted) deferred.completeExceptionally(e)
         }
@@ -1295,6 +1315,92 @@ class ChatViewModel(
         val prose = written.trim()
         return if (prose.isEmpty()) envelopes else prose + "\n" + envelopes
     }
+
+    /**
+     * Puts [call] on the run's activity line, creating that row on the run's first tool and
+     * rewriting it in place from then on. One row per run is the whole point: the badge-per-call
+     * and result-per-call rows it replaces buried the answer under twenty messages.
+     *
+     * @param call the call that is starting.
+     */
+    private fun showActivity(call: ToolCall) {
+        runToolNames += call.name
+        val subject = AgentActivity.subjectOf(call)
+        putActivity(
+            text = if (subject == null) {
+                str(R.string.agent_activity_running_plain, call.name)
+            } else {
+                str(R.string.agent_activity_running, call.name, subject)
+            },
+            status = MessageStatus.SENT,
+        )
+    }
+
+    /**
+     * Closes the run's activity line: a run that used tools leaves a one-line summary of which
+     * ones, a run that used none leaves nothing at all. Idempotent, since every exit from a run —
+     * completion, Stop, error — passes through here.
+     */
+    private fun finishActivity() {
+        val id = activityMessageId ?: return
+        val names = AgentActivity.distinctNames(runToolNames)
+        // Gone already means the chat was cleared or the session switched under the run.
+        val stillShown = _messages.value.any { it.id == id }
+        if (stillShown && names.isNotEmpty()) {
+            putActivity(
+                text = plural(
+                    R.plurals.agent_activity_done,
+                    runToolNames.size,
+                    runToolNames.size,
+                    names.joinToString(str(R.string.agent_activity_separator)),
+                ),
+                status = MessageStatus.COMPLETED,
+            )
+        } else {
+            removeMessageFromSession(id)
+        }
+        activityMessageId = null
+        runToolNames.clear()
+    }
+
+    /**
+     * Writes [text] to the activity row, appending it if this run has not shown one yet. Also
+     * appends when the row it held has gone — clearing the chat mid-run drops it, and a silently
+     * discarded update would leave the rest of the run with no progress at all.
+     *
+     * @param text the line to show.
+     * @param status the row's status; [MessageStatus.COMPLETED] closes it.
+     */
+    private fun putActivity(text: String, status: MessageStatus) {
+        val id = activityMessageId
+        val existing = id != null && _messages.value.any { it.id == id }
+        val message = ChatMessage(
+            id = if (existing) id!! else UUID.randomUUID().toString(),
+            text = text,
+            sender = Sender.TOOL,
+            status = status,
+            // Any non-null value: a null one is what the adapter animates generating-dots on.
+            durationMs = 0L,
+        )
+        activityMessageId = message.id
+        _messages.value = if (existing) {
+            _messages.value.map { if (it.id == message.id) message else it }
+        } else {
+            _messages.value + message
+        }
+        // Rewrites the row in place by id, as it does for every other message.
+        syncMessageToSession(message)
+    }
+
+    /**
+     * Resolves a quantity string, empty when the plugin context has gone; see [str].
+     * @param resId the plurals resource.
+     * @param quantity the count the wording is chosen by.
+     * @param args the format arguments.
+     * @return the formatted line.
+     */
+    private fun plural(resId: Int, quantity: Int, vararg args: Any?): String =
+        getContext()?.androidContext?.resources?.getQuantityString(resId, quantity, *args).orEmpty()
 
     /**
      * Appends an AGENT message to the chat (terminal state, no streaming dots).
@@ -1349,18 +1455,6 @@ class ChatViewModel(
      */
     private fun str(resId: Int, vararg args: Any?): String =
         getContext()?.androidContext?.getString(resId, *args).orEmpty()
-
-    /**
-     * Renders a tool argument for the one-line tool badge: line breaks flattened and the
-     * value capped, so a code-carrying argument stays a badge instead of a source dump.
-     * @param value the raw argument value.
-     * @return a single-line, length-capped rendering.
-     */
-    private fun abbreviate(value: Any?): String {
-        val text = value?.toString().orEmpty().replace("\n", "⏎")
-        return if (text.length <= TOOL_BADGE_ARG_LIMIT) text
-        else text.take(TOOL_BADGE_ARG_LIMIT) + "…"
-    }
 
     /**
      * Appends a SYSTEM message to the chat (on the main thread).

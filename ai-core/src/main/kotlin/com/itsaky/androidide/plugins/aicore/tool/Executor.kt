@@ -77,9 +77,14 @@ class Executor(
      * read-only handler, and a batch of four reads must not go sequential over spelling.
      *
      * @param toolCalls the calls to run, in the order the model emitted them.
+     * @param onCallStarted invoked as each call begins, for the UI's activity line; a parallel run
+     *   invokes it once per call in that run, in no guaranteed order.
      * @return one result per call, positionally aligned with [toolCalls].
      */
-    suspend fun execute(toolCalls: List<ToolCall>): List<ToolResult> = coroutineScope {
+    suspend fun execute(
+        toolCalls: List<ToolCall>,
+        onCallStarted: suspend (ToolCall) -> Unit = {},
+    ): List<ToolResult> = coroutineScope {
         Log.i(TAG, "Executing ${toolCalls.size} tool call(s)...")
 
         val results = arrayOfNulls<ToolResult>(toolCalls.size)
@@ -91,6 +96,7 @@ class Executor(
         var index = 0
         while (index < toolCalls.size) {
             if (!parallelSafe[index]) {
+                onCallStarted(toolCalls[index])
                 results[index] = executeCall(toolCalls[index], handlers[index], "Sequential")
                 index++
                 continue
@@ -99,7 +105,10 @@ class Executor(
             var end = index
             while (end < toolCalls.size && parallelSafe[end]) end++
             (index until end).map { i ->
-                async { results[i] = executeCall(toolCalls[i], handlers[i], "Parallel") }
+                async {
+                    onCallStarted(toolCalls[i])
+                    results[i] = executeCall(toolCalls[i], handlers[i], "Parallel")
+                }
             }.awaitAll()
             index = end
         }
