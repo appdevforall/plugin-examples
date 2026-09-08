@@ -1,15 +1,15 @@
 {
   "summary": "Adds five Flutter starter projects to the New Project screen.",
-  "description": "Installs Flutter project templates so you can start a Flutter app from the New Project screen instead of building the structure by hand.",
+  "description": "Installs Flutter project templates so you can start a Flutter app from the New Project screen instead of building the structure by hand. Contributed to Code On The Go by RJ Ali, from an original idea by Raju Kumar.",
   "tags": [
     "flutter",
     "templates",
     "dart"
   ],
-  "origin": "appdevforall",
+  "origin": "community",
   "license": "AGPL-3.0-or-later",
   "author": {
-    "name": "App Dev For All",
-    "url": "https://www.appdevforall.org"
+    "name": "RJ Ali",
+    "url": ""
   }
 }
