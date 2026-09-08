@@ -298,35 +298,39 @@ class GeminiBackend(
 
                 val fullText = StringBuilder()
                 var chunkCount = 0
-                val conn = openConnection(getModelName(), METHOD_STREAM_GENERATE_CONTENT, sse = true, apiKey = apiKey)
-                val cancelHandle = coroutineContext[Job]?.invokeOnCompletion { cause ->
-                    if (cause != null) conn.disconnect()
-                }
-                try {
-                    writeBody(conn, body)
-                    checkResponse(conn)
-                    // SSE: each chunk arrives as a `data: {json}` line; parse text as it streams.
-                    conn.inputStream.bufferedReader().useLines { lines ->
-                        for (line in lines) {
-                            ensureActive()
-                            if (!line.startsWith("data:")) continue
-                            val payload = line.substringAfter("data:").trim()
-                            if (payload.isEmpty() || payload == "[DONE]") continue
-                            // A malformed/non-JSON chunk must not abort the whole stream; skip it.
-                            val chunk = runCatching { extractText(JSONObject(payload)) }.getOrElse {
-                                context.logger.warn("GeminiBackend: skipping malformed SSE chunk: ${it.message}")
-                                ""
-                            }
-                            if (chunk.isNotEmpty()) {
-                                chunkCount++
-                                fullText.append(chunk)
-                                callback.onToken(chunk)
+                // Read outside the tagged block: `coroutineContext` is only reachable from suspend code.
+                val requestJob = coroutineContext[Job]
+                withTrafficTag(NetworkTags.INFERENCE) {
+                    val conn = openConnection(getModelName(), METHOD_STREAM_GENERATE_CONTENT, sse = true, apiKey = apiKey)
+                    val cancelHandle = requestJob?.invokeOnCompletion { cause ->
+                        if (cause != null) conn.disconnect()
+                    }
+                    try {
+                        writeBody(conn, body)
+                        checkResponse(conn)
+                        // SSE: each chunk arrives as a `data: {json}` line; parse text as it streams.
+                        conn.inputStream.bufferedReader().useLines { lines ->
+                            for (line in lines) {
+                                ensureActive()
+                                if (!line.startsWith("data:")) continue
+                                val payload = line.substringAfter("data:").trim()
+                                if (payload.isEmpty() || payload == "[DONE]") continue
+                                // A malformed/non-JSON chunk must not abort the whole stream; skip it.
+                                val chunk = runCatching { extractText(JSONObject(payload)) }.getOrElse {
+                                    context.logger.warn("GeminiBackend: skipping malformed SSE chunk: ${it.message}")
+                                    ""
+                                }
+                                if (chunk.isNotEmpty()) {
+                                    chunkCount++
+                                    fullText.append(chunk)
+                                    callback.onToken(chunk)
+                                }
                             }
                         }
+                    } finally {
+                        cancelHandle?.dispose()
+                        conn.disconnect()
                     }
-                } finally {
-                    cancelHandle?.dispose()
-                    conn.disconnect()
                 }
 
                 val finalText = fullText.toString()
@@ -476,55 +480,58 @@ class GeminiBackend(
 
     /**
      * Fetch and parse the ListModels catalog, following pagination, keeping only models that
-     * support [METHOD_GENERATE_CONTENT]. Runs on the caller's (IO) coroutine. The
+     * support [METHOD_GENERATE_CONTENT]. Runs on the caller's (IO) coroutine, sockets tagged
+     * [NetworkTags.CATALOG] across every page. The
      * `ListModels HTTP <code>` message is a cross-plugin contract — keep that shape if you reword.
      */
     private fun fetchAvailableModels(apiKey: String): List<String> {
         val names = mutableListOf<String>()
-        var pageToken: String? = null
+        withTrafficTag(NetworkTags.CATALOG) {
+            var pageToken: String? = null
 
-        do {
-            val url = buildString {
-                append(MODELS_BASE_URL)
-                append("?pageSize=1000")
-                pageToken?.let { append("&pageToken=").append(java.net.URLEncoder.encode(it, "UTF-8")) }
-            }
-
-            val conn = (java.net.URL(url).openConnection() as java.net.HttpURLConnection).apply {
-                requestMethod = "GET"
-                connectTimeout = 15_000
-                readTimeout = 15_000
-                // Pass the API key as a header, never in the URL query string: query
-                // strings leak into logs, proxies, and crash reports.
-                setRequestProperty("x-goog-api-key", apiKey)
-            }
-
-            val body = try {
-                val code = conn.responseCode
-                if (code !in 200..299) {
-                    val err = conn.errorStream?.bufferedReader()?.use { it.readText() }.orEmpty()
-                    throw java.io.IOException("ListModels HTTP $code: $err")
+            do {
+                val url = buildString {
+                    append(MODELS_BASE_URL)
+                    append("?pageSize=1000")
+                    pageToken?.let { append("&pageToken=").append(java.net.URLEncoder.encode(it, "UTF-8")) }
                 }
-                conn.inputStream.bufferedReader().use { it.readText() }
-            } finally {
-                conn.disconnect()
-            }
 
-            val json = org.json.JSONObject(body)
-            val models = json.optJSONArray("models")
-            if (models != null) {
-                for (i in 0 until models.length()) {
-                    val model = models.getJSONObject(i)
-                    val methods = model.optJSONArray("supportedGenerationMethods") ?: continue
-                    val supportsChat = (0 until methods.length())
-                        .any { methods.optString(it) == METHOD_GENERATE_CONTENT }
-                    if (!supportsChat) continue
-                    val name = model.optString("name").removePrefix("models/")
-                    if (name.isNotBlank()) names.add(name)
+                val conn = (java.net.URL(url).openConnection() as java.net.HttpURLConnection).apply {
+                    requestMethod = "GET"
+                    connectTimeout = 15_000
+                    readTimeout = 15_000
+                    // Pass the API key as a header, never in the URL query string: query
+                    // strings leak into logs, proxies, and crash reports.
+                    setRequestProperty("x-goog-api-key", apiKey)
                 }
-            }
-            pageToken = json.optString("nextPageToken").takeIf { it.isNotBlank() }
-        } while (pageToken != null)
+
+                val body = try {
+                    val code = conn.responseCode
+                    if (code !in 200..299) {
+                        val err = conn.errorStream?.bufferedReader()?.use { it.readText() }.orEmpty()
+                        throw java.io.IOException("ListModels HTTP $code: $err")
+                    }
+                    conn.inputStream.bufferedReader().use { it.readText() }
+                } finally {
+                    conn.disconnect()
+                }
+
+                val json = org.json.JSONObject(body)
+                val models = json.optJSONArray("models")
+                if (models != null) {
+                    for (i in 0 until models.length()) {
+                        val model = models.getJSONObject(i)
+                        val methods = model.optJSONArray("supportedGenerationMethods") ?: continue
+                        val supportsChat = (0 until methods.length())
+                            .any { methods.optString(it) == METHOD_GENERATE_CONTENT }
+                        if (!supportsChat) continue
+                        val name = model.optString("name").removePrefix("models/")
+                        if (name.isNotBlank()) names.add(name)
+                    }
+                }
+                pageToken = json.optString("nextPageToken").takeIf { it.isNotBlank() }
+            } while (pageToken != null)
+        }
 
         return names.distinct()
     }
@@ -580,21 +587,24 @@ User: $userPrompt"""
     /**
      * POST [body] to a model method and return the concatenated response text.
      *
+     * The socket is tagged [NetworkTags.INFERENCE].
+     *
      * @param model model name (without the `models/` prefix)
      * @param apiKey Gemini API key
      * @param body request payload built by [buildRequestJson]
      * @return the response text, or "" when the API returned no candidates/parts
      */
-    private fun requestText(model: String, apiKey: String, body: JSONObject): String {
-        val conn = openConnection(model, METHOD_GENERATE_CONTENT, sse = false, apiKey = apiKey)
-        return try {
-            writeBody(conn, body)
-            checkResponse(conn)
-            extractText(JSONObject(conn.inputStream.bufferedReader().use { it.readText() }))
-        } finally {
-            conn.disconnect()
+    private fun requestText(model: String, apiKey: String, body: JSONObject): String =
+        withTrafficTag(NetworkTags.INFERENCE) {
+            val conn = openConnection(model, METHOD_GENERATE_CONTENT, sse = false, apiKey = apiKey)
+            try {
+                writeBody(conn, body)
+                checkResponse(conn)
+                extractText(JSONObject(conn.inputStream.bufferedReader().use { it.readText() }))
+            } finally {
+                conn.disconnect()
+            }
         }
-    }
 
     /**
      * Open a POST connection to `.../models/{model}:{method}`.
