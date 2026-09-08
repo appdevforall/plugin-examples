@@ -2,7 +2,7 @@ package org.appdevforall.codeonthego.layouteditor
 
 /**
  * Hands the current layout file from the toolbar action to [LayoutEditorFragment] across the
- * openPluginScreen boundary (which carries no Bundle). Mirrors compose-preview's
+ * openPluginScreen boundary (which carries no Bundle). Mirrors Jetpack-Compose-Preview's
  * ComposePreviewState / sketch-to-ui's SketchToUiState pattern.
  *
  * The two values mirror the Intent extras the in-app EditorActivity used to receive:

@@ -85,7 +85,7 @@ tasks.matching {
     enabled = false
 }
 
-// --- Build-time asset downloads (mirrors ndk-installer-plugin) ---------------
+// --- Build-time asset downloads (mirrors ndk-installer) ---------------
 //
 // Neither the 110 MB course ZIP nor the PDF.js viewer is committed to git. This
 // task pulls each from its source and verifies a pinned MD5. scripts/update-libs.sh

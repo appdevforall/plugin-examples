@@ -1,4 +1,4 @@
-# rainbow-on-the-go
+# Rainbow Brackets
 
 A Code On The Go plugin that colors matching parentheses, brackets, and braces by
 nesting depth — an opening delimiter and its match share a color, cycling through six
@@ -18,8 +18,8 @@ no permissions, makes no network calls, and reads no files.
 ## Build
 
 ```sh
-cd rainbow-on-the-go
-./gradlew assemblePlugin        # release .cgp -> build/plugin/rainbow-on-the-go.cgp
+cd Rainbow-Brackets
+./gradlew assemblePlugin        # release .cgp -> build/plugin/rainbow-brackets.cgp
 ```
 
 The plugin compiles against `../libs/plugin-api.jar`. If the `EditorDecorationProvider` API
@@ -33,6 +33,6 @@ cd ..
 ## In-IDE help
 
 A walkthrough is served by the host IDE at
-`http://localhost:6174/plugin/org.appdevforall.rainbowonthego/index.html` once installed
+`http://localhost:6174/plugin/org.appdevforall.rainbowbrackets/index.html` once installed
 (source: `src/main/assets/docs/index.html`). Long-press is wired through
 `DocumentationExtension` for the three-tier tooltip help.

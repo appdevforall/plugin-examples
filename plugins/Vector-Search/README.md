@@ -50,8 +50,8 @@ Prerequisites: Android SDK (API 33+), JDK 17. Create `local.properties` with
 `sdk.dir=...`. No NDK or native toolchain.
 
 ```bash
-cd vector-search-plugin
-../gradlew assemblePlugin          # release  -> build/plugin/vector-search-plugin.cgp
+cd Vector-Search
+../gradlew assemblePlugin          # release  -> build/plugin/vector-search.cgp
 ../gradlew assemblePluginDebug     # debug variant
 ```
 
@@ -61,7 +61,7 @@ The build resolves `plugin-api.jar` from the repo-root `../libs/`.
 
 1. Build and install **`ai-core` first** for quality embeddings (see
    [`../ai-core/README.md`](../ai-core/README.md)).
-2. Build this plugin, install `build/plugin/vector-search-plugin.cgp` via
+2. Build this plugin, install `build/plugin/vector-search.cgp` via
    CodeOnTheGo's Plugin Manager, and restart the IDE.
 3. Run a query from the project search screen; look for the **Semantic
    Results** section.

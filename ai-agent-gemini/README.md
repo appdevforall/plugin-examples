@@ -2,8 +2,8 @@
 
 Google Gemini API inference for CodeOnTheGo's AI plugins. Registers itself as the
 `gemini` backend with [`ai-core`](../ai-core/)'s `LlmInferenceService`, which is
-what `ai-core`'s Agent chat, `code-suggestions-plugin`, `speech-to-text-plugin` and
-`vector-search-plugin` actually talk to.
+what `ai-core`'s Agent chat, `Code-Suggestions`, `Speech-to-Text` and
+`Vector-Search` actually talk to.
 
 Calls the Generative Language REST API directly over `HttpURLConnection` rather
 than the google-genai SDK: the SDK bundles OkHttp 4.x, but plugins run in the

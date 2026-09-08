@@ -1,4 +1,4 @@
-package com.example.beepy
+package org.appdevforall.voicealerts
 
 import android.media.AudioAttributes
 import android.media.SoundPool
@@ -8,7 +8,7 @@ import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.services.BuildStatusListener
 import com.itsaky.androidide.plugins.services.IdeBuildService
 
-class Beepy : IPlugin, BuildStatusListener {
+class VoiceAlertsPlugin : IPlugin, BuildStatusListener {
 
     private lateinit var context: PluginContext
     private var soundPool: SoundPool? = null

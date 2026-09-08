@@ -11,7 +11,7 @@ cd client-time-tracker
 ./gradlew assemblePlugin
 ```
 
-The `.cgp` lands in `build/plugin/`. Install it from inside CodeOnTheGo via the Plugin Manager.
+The `.cgp` lands in `build/plugin/`. Install it from inside Code On The Go via the Plugin Manager.
 
 ## How it works
 

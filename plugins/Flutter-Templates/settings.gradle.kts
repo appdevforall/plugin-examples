@@ -27,4 +27,4 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "fluttertemplate"
+rootProject.name = "flutter-templates"

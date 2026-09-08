@@ -17,4 +17,4 @@ dependencyResolutionManagement {
     repositories { google(); mavenCentral() }
 }
 
-rootProject.name = "speech-to-text-plugin"
+rootProject.name = "speech-to-text"
