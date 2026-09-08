@@ -7,7 +7,7 @@ Surfaces as a preview action in the editor toolbar, shown only when a Kotlin fil
 ## Building
 
 ```sh
-cd compose-preview
+cd Jetpack-Compose-Preview
 ./gradlew assemblePlugin
 ```
 

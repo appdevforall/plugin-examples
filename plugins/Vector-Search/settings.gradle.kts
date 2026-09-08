@@ -17,4 +17,4 @@ dependencyResolutionManagement {
     repositories { google(); mavenCentral() }
 }
 
-rootProject.name = "vector-search-plugin"
+rootProject.name = "vector-search"

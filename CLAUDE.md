@@ -121,7 +121,7 @@ This is intentional — the `application`-as-library packaging trips those check
 
 ### Asset downloads (rare)
 
-Some plugins (`ndk-installer-plugin`, `ai-literacy-course`) register a `downloadAssets` task that fetches large files at build time with pinned-MD5 verification. These assets are **not committed to git** (e.g. `ai-literacy-course` pulls a ~110 MB course ZIP plus `pdfjs.zip`). `scripts/update-libs.sh` runs `downloadAssets` automatically before `assemblePlugin` when the build file references it.
+Some plugins (`ndk-installer`, `ai-literacy-course`) register a `downloadAssets` task that fetches large files at build time with pinned-MD5 verification. These assets are **not committed to git** (e.g. `ai-literacy-course` pulls a ~110 MB course ZIP plus `pdfjs.zip`). `scripts/update-libs.sh` runs `downloadAssets` automatically before `assemblePlugin` when the build file references it.
 
 **Gotcha: a bare `./gradlew assemblePlugin` does NOT run `downloadAssets` and does not warn when the assets are missing** — it silently packages a broken `.cgp` (e.g. a course with no PDF viewer). When building such a plugin by hand, run `./gradlew downloadAssets assemblePlugin` (or the script), and confirm the expected files exist under `src/main/assets/` (or `unzip -l` the `.cgp`) before trusting it.
 
