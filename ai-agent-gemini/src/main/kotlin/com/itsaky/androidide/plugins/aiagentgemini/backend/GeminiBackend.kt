@@ -258,19 +258,32 @@ class GeminiBackend(
      * acknowledges — the same shape [generateWithHistory] uses, kept in one place so the two
      * transports cannot drift apart.
      *
+     * Consecutive same-role turns are merged into one content, because the transcript no longer
+     * always alternates: the agent loop drops an ASSISTANT turn that carried only a native call
+     * and no prose, leaving the user message and the tool results it produced adjacent.
+     *
      * @param history the conversation so far, oldest first
      * @param prompt the current user turn, appended last
      * @param config supplies the optional system prompt
      */
-    private fun buildContents(
+    internal fun buildContents(
         history: List<ChatMessage>,
         prompt: String,
         config: LlmConfig
     ): JSONArray {
-        val contents = JSONArray()
+        val turns = mutableListOf<Pair<String, String>>()
+        // Folds a turn into the previous one when the role repeats, so the roles alternate.
+        fun add(role: String, text: String) {
+            val last = turns.lastOrNull()
+            if (last != null && last.first == role) {
+                turns[turns.lastIndex] = role to (last.second + "\n\n" + text)
+            } else {
+                turns.add(role to text)
+            }
+        }
         config.systemPrompt?.let { systemPrompt ->
-            contents.put(contentJson("user", systemPrompt))
-            contents.put(contentJson("model", "Understood."))
+            add("user", systemPrompt)
+            add("model", "Understood.")
         }
         for (msg in history) {
             val role = when (msg.role) {
@@ -282,9 +295,14 @@ class GeminiBackend(
                 // in history is text, so a tool result rides in as a user turn instead.
                 ChatMessage.Role.TOOL -> "user"
             }
-            contents.put(contentJson(role, msg.content))
+            add(role, msg.content)
         }
-        contents.put(contentJson("user", prompt))
+        add("user", prompt)
+
+        val contents = JSONArray()
+        for ((role, text) in turns) {
+            contents.put(contentJson(role, text))
+        }
         return contents
     }
 
