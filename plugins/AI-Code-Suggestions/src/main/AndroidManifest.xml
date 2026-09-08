@@ -3,7 +3,7 @@
     package="com.itsaky.androidide.plugins.codesuggestions">
 
     <application
-        android:label="Code Suggestions Plugin"
+        android:label="AI Code Suggestions Plugin"
         android:theme="@style/PluginTheme">
 
         <!-- Plugin metadata -->
@@ -13,7 +13,7 @@
 
         <meta-data
             android:name="plugin.name"
-            android:value="Code Suggestions" />
+            android:value="AI Code Suggestions" />
 
         <meta-data
             android:name="plugin.version"

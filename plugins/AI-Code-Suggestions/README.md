@@ -1,4 +1,4 @@
-# Code Suggestions plugin for Code On The Go
+# AI Code Suggestions plugin for Code On The Go
 
 Inline **ghost-text** code completions. As you type, the plugin debounces, asks
 an LLM for a completion at the cursor, and shows it as dimmed inline text via
@@ -12,14 +12,14 @@ an LLM for a completion at the cursor, and shows it as dimmed inline text via
 ## Architecture
 
 ```
-┌──────────────────────────┐
-│  code-suggestions (this) │  ← content-change listener, debounce, ghost text
-└────────────┬─────────────┘
-             │ SharedServices (runtime) → LlmInferenceService
-             ▼
-┌──────────────────────────┐
-│  ai-core                 │  ← LLM inference (local llama.cpp / Gemini)
-└──────────────────────────┘
+┌─────────────────────────────┐
+│  ai-code-suggestions (this) │  ← content-change listener, debounce, ghost text
+└──────────────┬──────────────┘
+               │ SharedServices (runtime) → LlmInferenceService
+               ▼
+┌─────────────────────────────┐
+│  ai-core                    │  ← LLM inference (local llama.cpp / Gemini)
+└─────────────────────────────┘
 ```
 
 ## Features
@@ -47,8 +47,8 @@ Prerequisites: Android SDK (API 33+), JDK 17. Create `local.properties` with
 `sdk.dir=...`. No NDK or native toolchain.
 
 ```bash
-cd Code-Suggestions
-../gradlew assemblePlugin          # release  -> build/plugin/code-suggestions.cgp
+cd AI-Code-Suggestions
+../gradlew assemblePlugin          # release  -> build/plugin/ai-code-suggestions.cgp
 ../gradlew assemblePluginDebug     # debug variant
 ```
 
@@ -57,7 +57,7 @@ The build resolves `plugin-api.jar` from the repo-root `../libs/`.
 ## Installation
 
 1. Build and install **`ai-core` first** (see [`../ai-core/README.md`](../ai-core/README.md)).
-2. Build this plugin, install `build/plugin/code-suggestions.cgp` via
+2. Build this plugin, install `build/plugin/ai-code-suggestions.cgp` via
    Code On The Go's Plugin Manager, and restart the IDE.
 3. Configure a model in **AI Assistant → AI Settings**.
 

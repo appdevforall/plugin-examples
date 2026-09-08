@@ -5,7 +5,7 @@ plugins {
 }
 
 pluginBuilder {
-    pluginName = "code-suggestions"
+    pluginName = "ai-code-suggestions"
 }
 
 android {

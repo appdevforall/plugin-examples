@@ -11,7 +11,7 @@ See the official [plugin documentation](https://www.appdevforall.org/codeonthego
 | [`plugins/APK-Analyzer/`](plugins/APK-Analyzer/) | Inspects the structure of an APK file inside the editor. |
 | [`plugins/Bookshelf/`](plugins/Bookshelf/) | Offline reference textbooks inside the in-app help. |
 | [`plugins/Client-Time-Tracker/`](plugins/Client-Time-Tracker/) | Tracks billable time for each project and creates invoices. |
-| [`plugins/Code-Suggestions/`](plugins/Code-Suggestions/) | Shows inline code completions as you type. |
+| [`plugins/AI-Code-Suggestions/`](plugins/AI-Code-Suggestions/) | Shows inline code completions as you type. |
 | [`plugins/Code-Together/`](plugins/Code-Together/) | Pair programming between two devices on the same network. |
 | [`plugins/Favorite-Snippets/`](plugins/Favorite-Snippets/) | Saves your own code snippets and inserts them in the editor. |
 | [`plugins/Flutter-Templates/`](plugins/Flutter-Templates/) | Adds five Flutter starter projects to the New Project screen. |
