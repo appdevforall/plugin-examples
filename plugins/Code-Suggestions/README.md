@@ -1,11 +1,11 @@
-# Code Suggestions plugin for CodeOnTheGo
+# Code Suggestions plugin for Code On The Go
 
 Inline **ghost-text** code completions. As you type, the plugin debounces, asks
 an LLM for a completion at the cursor, and shows it as dimmed inline text via
 `IdeEditorService.showInlineSuggestion()`.
 
 > This plugin has **no compile-time dependency** on `ai-core`; it resolves the
-> inference service at runtime through the CodeOnTheGo plugin manager
+> inference service at runtime through the Code On The Go plugin manager
 > (SharedServices). Install **`ai-core` first**, then this plugin, and configure
 > a model in **AI Assistant → AI Settings**.
 
@@ -58,7 +58,7 @@ The build resolves `plugin-api.jar` from the repo-root `../libs/`.
 
 1. Build and install **`ai-core` first** (see [`../ai-core/README.md`](../ai-core/README.md)).
 2. Build this plugin, install `build/plugin/code-suggestions.cgp` via
-   CodeOnTheGo's Plugin Manager, and restart the IDE.
+   Code On The Go's Plugin Manager, and restart the IDE.
 3. Configure a model in **AI Assistant → AI Settings**.
 
 ## Key classes
@@ -68,4 +68,4 @@ The build resolves `plugin-api.jar` from the repo-root `../libs/`.
 
 ## License
 
-GPL-3.0 — same as AndroidIDE / CodeOnTheGo.
+GPL-3.0 — same as AndroidIDE / Code On The Go.

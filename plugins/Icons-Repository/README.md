@@ -10,15 +10,15 @@ This plugin was originally created by [OMAR HAIDAR](https://github.com/omar-haid
 
 ### **Project overview**
 
-A plugin to help add drawable icons to your Android project on the `CodeOnTheGo` IDE.
+A plugin to help add drawable icons to your Android project on the Code On The Go IDE.
 
 ### **Requirements and dependencies**
 
-*   **Supported Code on the Go versions:** 26.17 – 26.22
+*   **Supported Code On The Go versions:** 26.17 – 26.22
 
 ### **Installation**
 
-Install using the Plugin Manager in `CodeOnTheGo`.
+Install using the Plugin Manager in Code On The Go.
 
 ### **Building from source**
 

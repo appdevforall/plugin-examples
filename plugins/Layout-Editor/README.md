@@ -1,4 +1,4 @@
-# Layout Editor Plugin for Code on the Go
+# Layout Editor Plugin for Code On The Go
 
 A visual, drag-and-drop editor for Android XML layouts, running on-device. Open a
 layout XML file, tap the Layout Editor action in the editor toolbar, and build the
@@ -104,5 +104,5 @@ long-press any control, palette item, or attribute for its tooltip.
 
 ## License
 
-Layout Editor is an open-source example plugin for Code on the Go, licensed per the
+Layout Editor is an open-source example plugin for Code On The Go, licensed per the
 surrounding `plugin-examples` repository. See `LICENSE` at the repo root.

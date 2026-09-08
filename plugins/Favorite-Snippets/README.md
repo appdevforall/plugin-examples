@@ -1,6 +1,6 @@
 # Snippets
 
-A Code on the Go plugin that adds user-managed code snippets to the editor. Snippets are stored per-project as JSON and contributed to the IDE's snippet registry, so typing a prefix expands it in-place with tab stops and placeholders.
+A Code On The Go plugin that adds user-managed code snippets to the editor. Snippets are stored per-project as JSON and contributed to the IDE's snippet registry, so typing a prefix expands it in-place with tab stops and placeholders.
 
 ## What it adds
 

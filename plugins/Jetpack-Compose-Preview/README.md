@@ -1,6 +1,6 @@
 # Jetpack Compose Preview
 
-A plugin for [CodeOnTheGo](https://github.com/appdevforall/CodeOnTheGo) that renders Jetpack Compose `@Preview` composables **on-device** — it compiles and runs the previews inside the IDE, without a full app build-and-run.
+A plugin for [Code On The Go](https://github.com/appdevforall/CodeOnTheGo) that renders Jetpack Compose `@Preview` composables **on-device** — it compiles and runs the previews inside the IDE, without a full app build-and-run.
 
 Surfaces as a preview action in the editor toolbar, shown only when a Kotlin file containing `@Preview` is open (on those files it also hides the built-in XML layout-preview action, so there's a single preview entry point). Tapping it opens a **Jetpack Compose Preview** screen that renders every `@Preview` in the file, honoring light/dark, `@PreviewParameter`, and per-preview background and size.
 
@@ -29,4 +29,4 @@ The `.cgp` lands in `build/plugin/`. Install it from inside Code On The Go via t
 
 Unlike most example plugins, this one **bundles Jetpack Compose itself** (`compose-bom` as `implementation`) into the `.cgp` and ships the on-device compile toolchain under `assets/`.
 
-> **Note:** this plugin requires the extended `plugin-api` — `IdeProjectService.getModuleContext`, `UIExtension.getHiddenToolbarActionIds`, `ToolbarAction.isVisibleProvider`, and `IdeBuildService.executeTasks`. If `assemblePlugin` fails with unresolved references to those, the shared `libs/` jars are older than the API this plugin needs; refresh them from a CodeOnTheGo build that includes the extensions (`../scripts/update-libs.sh --local <path-to-CodeOnTheGo>`).
+> **Note:** this plugin requires the extended `plugin-api` — `IdeProjectService.getModuleContext`, `UIExtension.getHiddenToolbarActionIds`, `ToolbarAction.isVisibleProvider`, and `IdeBuildService.executeTasks`. If `assemblePlugin` fails with unresolved references to those, the shared `libs/` jars are older than the API this plugin needs; refresh them from a Code On The Go build that includes the extensions (`../scripts/update-libs.sh --local <path-to-CodeOnTheGo>`).

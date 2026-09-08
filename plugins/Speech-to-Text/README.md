@@ -1,4 +1,4 @@
-# Speech to Text plugin for Code on the Go
+# Speech to Text plugin for Code On The Go
 
 Voice-to-code. Adds a **Voice to Code** button to the editor toolbar: tap it,
 speak, and the recognized text — or code generated from it — is inserted at the
@@ -73,7 +73,7 @@ The build resolves `plugin-api.jar` from the repo-root `../libs/`.
 1. (Optional but recommended) Build and install **`ai-core` first** for
    voice→code (see [`../ai-core/README.md`](../ai-core/README.md)).
 2. Build this plugin, install `build/plugin/speech-to-text.cgp` via
-   CodeOnTheGo's Plugin Manager, and restart the IDE.
+   Code On The Go's Plugin Manager, and restart the IDE.
 3. Open a file, tap the microphone in the editor toolbar, grant the microphone
    permission on first use, and speak.
 
@@ -84,4 +84,4 @@ The build resolves `plugin-api.jar` from the repo-root `../libs/`.
 
 ## License
 
-GPL-3.0 — same as AndroidIDE / CodeOnTheGo.
+GPL-3.0 — same as AndroidIDE / Code On The Go.
