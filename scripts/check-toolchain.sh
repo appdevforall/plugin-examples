@@ -47,7 +47,7 @@ EXPECTED_JAVA="JavaVersion.VERSION_17"
 EXPECTED_JVM_TARGET="JVM_17"
 
 # minSdk is deliberately NOT checked. It legitimately varies by what a plugin
-# needs (21 for the template installers, 26 for most, 28 for Beepy and
+# needs (21 for the template installers, 26 for most, 28 for Voice-Alerts and
 # sketch-to-ui, 33 for the AI plugins which rely on API-33 runtime behavior).
 # Do not "standardize" it here.
 

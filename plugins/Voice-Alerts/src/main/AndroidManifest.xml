@@ -2,13 +2,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <application
-        android:label="Beepy"
+        android:label="Voice Alerts"
         android:theme="@style/Theme.AppCompat">
 
         <!-- Plugin metadata -->
         <meta-data
             android:name="plugin.id"
-            android:value="com.example.beepy" />
+            android:value="org.appdevforall.voicealerts" />
 
         <meta-data
             android:name="plugin.name"
@@ -47,7 +47,7 @@
 
         <meta-data
             android:name="plugin.main_class"
-            android:value="com.example.beepy.Beepy" />
+            android:value="org.appdevforall.voicealerts.VoiceAlertsPlugin" />
 
         <!-- Plugin Manager icons (day/night). Required for debug installs. -->
         <meta-data

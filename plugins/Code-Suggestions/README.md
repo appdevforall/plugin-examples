@@ -47,8 +47,8 @@ Prerequisites: Android SDK (API 33+), JDK 17. Create `local.properties` with
 `sdk.dir=...`. No NDK or native toolchain.
 
 ```bash
-cd code-suggestions-plugin
-../gradlew assemblePlugin          # release  -> build/plugin/code-suggestions-plugin.cgp
+cd Code-Suggestions
+../gradlew assemblePlugin          # release  -> build/plugin/code-suggestions.cgp
 ../gradlew assemblePluginDebug     # debug variant
 ```
 
@@ -57,7 +57,7 @@ The build resolves `plugin-api.jar` from the repo-root `../libs/`.
 ## Installation
 
 1. Build and install **`ai-core` first** (see [`../ai-core/README.md`](../ai-core/README.md)).
-2. Build this plugin, install `build/plugin/code-suggestions-plugin.cgp` via
+2. Build this plugin, install `build/plugin/code-suggestions.cgp` via
    CodeOnTheGo's Plugin Manager, and restart the IDE.
 3. Configure a model in **AI Assistant → AI Settings**.
 

@@ -7,11 +7,11 @@ Surfaces as a preview action in the editor toolbar, shown only when a Kotlin fil
 ## Building
 
 ```sh
-cd compose-preview
+cd Jetpack-Compose-Preview
 ./gradlew assemblePlugin
 ```
 
-The `.cgp` lands in `build/plugin/`. Install it from inside CodeOnTheGo via the Plugin Manager.
+The `.cgp` lands in `build/plugin/`. Install it from inside Code On The Go via the Plugin Manager.
 
 ## How it works
 

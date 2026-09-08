@@ -6,9 +6,9 @@ Two things in one plugin, and **mandatory for every AI feature**:
    the open project behind an approval gate, contributed as an editor tab plus a
    settings screen.
 2. The **LLM inference router** — publishes `LlmInferenceService` through
-   `SharedServices`, which [`code-suggestions-plugin`](../code-suggestions-plugin/),
-   [`speech-to-text-plugin`](../speech-to-text-plugin/) and
-   [`vector-search-plugin`](../vector-search-plugin/) consume at runtime.
+   `SharedServices`, which [`Code-Suggestions`](../plugins/Code-Suggestions/),
+   [`Speech-to-Text`](../plugins/Speech-to-Text/) and
+   [`Vector-Search`](../plugins/Vector-Search/) consume at runtime.
 
 The Agent and the router shipped as separate `ai-assistant` and `ai-core` plugins
 until they were merged here; an existing install's settings and chat history are

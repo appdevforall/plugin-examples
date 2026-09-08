@@ -3,7 +3,7 @@ package org.appdevforall.composepreview
 /**
  * Hands the current file + source from the toolbar/menu action to [ComposePreviewFragment]
  * across the openPluginScreen boundary (which carries no Bundle). Mirrors the
- * SketchToUiState pattern used by sketch-to-ui-plugin.
+ * SketchToUiState pattern used by Sketch-to-UI.
  */
 object ComposePreviewState {
 

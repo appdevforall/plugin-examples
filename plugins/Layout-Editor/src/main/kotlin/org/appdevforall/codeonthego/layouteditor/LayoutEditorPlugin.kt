@@ -26,7 +26,7 @@ import java.io.File
  *
  * Surfaces a content-aware menu item (visible only when an Android layout `.xml` file is open)
  * that opens the editor full-screen via [IdeUIService.openPluginScreen], handing the target
- * layout over through [LayoutEditorState]. Mirrors sketch-to-ui-plugin's proven pattern; the
+ * layout over through [LayoutEditorState]. Mirrors Sketch-to-UI's proven pattern; the
  * host's built-in PreviewLayout action is removed separately when the editor leaves the host build.
  */
 class LayoutEditorPlugin : IPlugin, UIExtension, DocumentationExtension, BuildStatusListener {

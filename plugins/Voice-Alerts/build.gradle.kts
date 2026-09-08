@@ -11,11 +11,11 @@ pluginBuilder {
 }
 
 android {
-    namespace = "com.example.beepy"
+    namespace = "org.appdevforall.voicealerts"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.example.beepy"
+        applicationId = "org.appdevforall.voicealerts"
         minSdk = 28
         targetSdk = 36
         versionCode = 1
