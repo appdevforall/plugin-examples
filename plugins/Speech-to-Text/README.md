@@ -1,5 +1,9 @@
 # Speech to Text plugin for Code On The Go
 
+**The AI Core addon is optional.** Without it, this plugin is plain dictation —
+it writes what you say at the cursor. With AI Core installed, it turns the
+transcript into code instead.
+
 Voice-to-code. Adds a **Voice to Code** button to the editor toolbar: tap it,
 speak, and the recognized text — or code generated from it — is inserted at the
 cursor. Speech recognition uses Android's `SpeechRecognizer` (on-device when
@@ -8,8 +12,6 @@ available); code generation is delegated to the companion `ai-core` plugin.
 > Code generation has **no compile-time dependency** on `ai-core`; the LLM
 > service is resolved at runtime. Install **`ai-core` first** for voice→code.
 > Without it, the raw transcript is inserted instead.
-
-Requires the AI Core plugin.
 
 ## Architecture
 
@@ -61,12 +63,12 @@ Prerequisites: Android SDK (API 33+), JDK 17. Create `local.properties` with
 `sdk.dir=...`.
 
 ```bash
-cd Speech-to-Text
-../gradlew assemblePlugin          # release  -> build/plugin/speech-to-text.cgp
-../gradlew assemblePluginDebug     # debug variant
+cd plugins/Speech-to-Text
+./gradlew assemblePlugin          # release  -> build/plugin/speech-to-text.cgp
+./gradlew assemblePluginDebug     # debug variant
 ```
 
-The build resolves `plugin-api.jar` from the repo-root `../libs/`.
+The build resolves `plugin-api.jar` from the repo-root `../../libs/`.
 
 ## Installation
 
