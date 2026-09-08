@@ -1,4 +1,4 @@
-# Speech to Text plugin for CodeOnTheGo
+# Speech to Text plugin for Code on the Go
 
 Voice-to-code. Adds a **Voice to Code** button to the editor toolbar: tap it,
 speak, and the recognized text — or code generated from it — is inserted at the
@@ -8,6 +8,8 @@ available); code generation is delegated to the companion `ai-core` plugin.
 > Code generation has **no compile-time dependency** on `ai-core`; the LLM
 > service is resolved at runtime. Install **`ai-core` first** for voice→code.
 > Without it, the raw transcript is inserted instead.
+
+Requires the AI Core plugin.
 
 ## Architecture
 
