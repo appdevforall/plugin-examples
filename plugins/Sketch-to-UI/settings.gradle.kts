@@ -27,4 +27,4 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "sketch-to-ui-plugin"
+rootProject.name = "sketch-to-ui"

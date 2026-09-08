@@ -1,6 +1,6 @@
-# Beepy
+# Voice Alerts
 
-A CodeOnTheGo plugin that plays a short sound on build start, success, and failure. Useful when your eyes are on the editor and you want an audible cue that the build has turned over.
+A Code On The Go plugin that plays a short sound on build start, success, and failure. Useful when your eyes are on the editor and you want an audible cue that the build has turned over.
 
 ## Behaviour
 
@@ -20,13 +20,13 @@ Sounds route through the `USAGE_ASSISTANCE_SONIFICATION` audio attribute, so the
 
 ## Replacing the sounds
 
-Drop your own WAVs into `Beepy/src/main/res/raw/` using the existing filenames (`started.wav`, `finished.wav`, `failed.wav`) and rebuild. Keep them short — `SoundPool` is intended for clips under ~1 MB decoded.
+Drop your own WAVs into `Voice-Alerts/src/main/res/raw/` using the existing filenames (`started.wav`, `finished.wav`, `failed.wav`) and rebuild. Keep them short — `SoundPool` is intended for clips under ~1 MB decoded.
 
 ## Building
 
 ```
-./gradlew :Beepy:assembleRelease
+../../gradlew assemblePlugin
 ```
 
-Output is a `.cgp` plugin package in `Beepy/build/outputs/`, installable from the IDE's plugin manager.
+Output is a `.cgp` plugin package in `Voice-Alerts/build/plugin/`, installable from the IDE's plugin manager.
 

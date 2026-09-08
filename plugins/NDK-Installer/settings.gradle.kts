@@ -1,4 +1,4 @@
-rootProject.name = "ndk-installer-plugin"
+rootProject.name = "ndk-installer"
 
 pluginManagement {
     repositories {

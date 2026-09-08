@@ -1,4 +1,4 @@
-### **IconsRepository-Plugin**
+### **Icons Repository**
 
 **Version:** 1.0.1
 
@@ -34,7 +34,7 @@ Build command:
 ./gradlew assemblePlugin
 ```
 
-The signed `.cgp` artifact is written to `build/plugin/IconsRepository-Plugin.cgp`. Use `./gradlew assemblePluginDebug` for the debug variant.
+The signed `.cgp` artifact is written to `build/plugin/icons-repository.cgp`. Use `./gradlew assemblePluginDebug` for the debug variant.
 
 ### **Usage**
 

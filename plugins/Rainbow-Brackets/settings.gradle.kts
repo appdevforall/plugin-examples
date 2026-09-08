@@ -27,4 +27,4 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "rainbow-on-the-go"
+rootProject.name = "rainbow-brackets"

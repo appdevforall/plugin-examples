@@ -2,8 +2,8 @@
 
 On-device GGUF inference for CodeOnTheGo's AI plugins. Registers itself as the
 `local` backend with [`ai-core`](../ai-core/)'s `LlmInferenceService`, which is
-what `ai-core`'s Agent chat, `code-suggestions-plugin`, `speech-to-text-plugin` and
-`vector-search-plugin` actually talk to.
+what `ai-core`'s Agent chat, `Code-Suggestions`, `Speech-to-Text` and
+`Vector-Search` actually talk to.
 
 Runs `.gguf` models through a bundled, prebuilt **llama.cpp** AAR. Declares no
 INTERNET permission — prompts and code never leave the device. Requires a 64-bit
