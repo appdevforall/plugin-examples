@@ -5,7 +5,7 @@
 | **Status** | Draft for approval |
 | **Owner** | Hal Eisen, App Dev For All |
 | **Date** | 2026-08-27 |
-| **Product** | Code On The Go — addon ecosystem |
+| **Product** | Code on the Go — addon ecosystem |
 | **Repo** | `appdevforall/plugin-examples` |
 
 > **Scope of this document.** Requirements and behaviors only — what the system must do and why. Mechanism, file layouts, tooling choices, and work sequencing are deliberately absent; they belong in the design document that follows approval of this PRD.
@@ -14,7 +14,7 @@
 
 ## 1. Summary
 
-Code On The Go's addons are built in `plugin-examples` and delivered to users through two pieces of infrastructure that are both failing us:
+Code on the Go's addons are built in `plugin-examples` and delivered to users through two pieces of infrastructure that are both failing us:
 
 1. **GitHub Actions artifact storage**, which the build consumes so fast that the quota is exhausted within a couple of release runs.
 2. **A GreenGeeks WordPress host**, which serves every published `.cgp` and is unstable enough that downloads cannot be relied on.
@@ -27,7 +27,7 @@ This PRD defines the requirements for moving addon delivery to a Cloudflare R2 b
 
 ### 2.1 What exists today
 
-`plugin-examples` holds 31 independent Gradle projects, each producing a `.cgp` plugin installable through Code On The Go's Plugin Manager. A manually-triggered workflow rebuilds the shared libraries, builds every plugin, and copies the results to a directory on the GreenGeeks host. Users find and download plugins from a page on appdevforall.org.
+`plugin-examples` holds 31 independent Gradle projects, each producing a `.cgp` plugin installable through Code on the Go's Plugin Manager. A manually-triggered workflow rebuilds the shared libraries, builds every plugin, and copies the results to a directory on the GreenGeeks host. Users find and download plugins from a page on appdevforall.org.
 
 ### 2.2 Measured problems
 
@@ -39,7 +39,7 @@ This PRD defines the requirements for moving addon delivery to a Cloudflare R2 b
 | **P04** | Published downloads depend on a WordPress host outside our control, reached over SSH with long-lived credentials. |
 | **P05** | Addon names have drifted. The same plugin can carry one name in its directory, another in the Plugin Manager, a third in its `.cgp` filename, and a fourth in its documentation page. Directory names mix conventions; one plugin hardcodes a version the build is supposed to inject. |
 | **P06** | All 31 plugins sit at the repository root, leaving no room for the other addon types that are coming. |
-| **P07** | **No addon's source is independently obtainable or buildable.** Every addon depends on a shared `libs/` directory one level up, so a single addon directory is not a standalone project — a user who wants to read, build, or modify one must clone the entire repository and infer the layout. Code On The Go is AGPL v3; publishing usable source alongside each binary is the point, not a bonus. |
+| **P07** | **No addon's source is independently obtainable or buildable.** Every addon depends on a shared `libs/` directory one level up, so a single addon directory is not a standalone project — a user who wants to read, build, or modify one must clone the entire repository and infer the layout. Code on the Go is AGPL v3; publishing usable source alongside each binary is the point, not a bonus. |
 
 ### 2.3 P02 in detail — the publish fan-out
 
@@ -92,7 +92,7 @@ The quota problem blocks releases outright, and the naming drift compounds with 
 - Reducing the size of any addon.
 - Reducing CI build time or dependency-download cost.
 - Changing how GitHub Releases work.
-- Changing any addon's runtime identity or its behavior inside Code On The Go.
+- Changing any addon's runtime identity or its behavior inside Code on the Go.
 - Building templates, snippets, or code actions. This makes room for them; it does not create them.
 - User accounts, submissions, ratings, reviews, or download telemetry.
 - Installing addons directly from the catalog. The catalog links to a file; the Plugin Manager installs it.
@@ -103,7 +103,7 @@ The quota problem blocks releases outright, and the naming drift compounds with 
 
 | User | Need |
 |---|---|
-| **Addon consumer** — a Code On The Go user, usually on an Android phone or tablet. | Find an addon, understand what it does well enough to decide, and download it reliably. |
+| **Addon consumer** — a Code on the Go user, usually on an Android phone or tablet. | Find an addon, understand what it does well enough to decide, and download it reliably. |
 | **App Dev For All maintainer.** | Cut a release without hitting a quota wall, and add an addon without touching a central registry file. |
 | **Community contributor.** | Have their addon published and credited under their own name. |
 
@@ -112,7 +112,7 @@ The quota problem blocks releases outright, and the naming drift compounds with 
 1. A user browses the catalog on a phone, searches for a capability, reads the description page, and downloads the addon.
 2. A user filters to a single addon type, or to community-contributed addons only.
 3. A maintainer triggers a release; every addon and its page publish and are immediately downloadable.
-4. A maintainer builds one addon against a development branch of Code On The Go and installs the result on a device to test it.
+4. A maintainer builds one addon against a development branch of Code on the Go and installs the result on a device to test it.
 5. A contributor's addon appears in the catalog credited to them, linking to their source.
 
 ---
@@ -186,7 +186,7 @@ Every addon has two HTML pages. They are **not duplicates** and must not be merg
 | Page | Audience | Answers |
 |---|---|---|
 | **Gallery page** — published to the catalog site. | Someone browsing who has never seen this addon. | *"Should I download this at all?"* Information scent: enough to decide, short enough to skim on a phone. |
-| **In-app page** — bundled inside the addon, shown in Code On The Go. | Someone who has already installed it. | *"How do I use every feature of this?"* Complete reference documentation. |
+| **In-app page** — bundled inside the addon, shown in Code on the Go. | Someone who has already installed it. | *"How do I use every feature of this?"* Complete reference documentation. |
 
 | ID | Requirement |
 |---|---|
@@ -307,7 +307,7 @@ They are different products with a shared purpose. One ships now; one is held.
 | `ndk-installer-plugin` | First-party. Introduced 2026-04-23 by Joel Menchavez. | Ours and first. Becomes `NDK-Installer`, follows the naming standard. Ships. |
 | `cotg-ndk` | **Community — Aman Khan** (`github.com/aman-khan-786/cotgx-ndk`). | **Held out of the build** pending Q1. Not renamed, not relocated, not published, not in the catalog. |
 
-**Provenance.** Aman Khan built and released a custom NDK engine for the Code On The Go community, announced in the project's Telegram discussion group. App Dev For All could not accept an outside pull request at the time, so a staff engineer implemented it on his behalf. The work is his; the commit authorship is an artifact of that process and must not be mistaken for origin.
+**Provenance.** Aman Khan built and released a custom NDK engine for the Code on the Go community, announced in the project's Telegram discussion group. App Dev For All could not accept an outside pull request at the time, so a staff engineer implemented it on his behalf. The work is his; the commit authorship is an artifact of that process and must not be mistaken for origin.
 
 **Why it is held.** Publishing a contributor's work under a name and attribution we have not confirmed with them is the wrong order of operations. Holding it costs nothing — the first-party `NDK-Installer` still ships, so users are not left without the capability. The hold is released by answering Q1 with Aman, not by a technical change; the naming and attribution requirements (R36–R38) are already in place to receive the answer.
 

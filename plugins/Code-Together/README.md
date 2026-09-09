@@ -1,6 +1,6 @@
 # Code Together
 
-A plugin for [CodeOnTheGo](https://github.com/appdevforall/CodeOnTheGo) that turns the IDE into a real-time collaborative editor. Two phones on the same WiFi share one editing session: one device **hosts**, others **join** by typing the host's `ip:port` or scanning its QR code, and from then on edits, cursors, and file opens flow between devices as they happen — no server, no cloud, no signup.
+A plugin for [Code on the Go](https://github.com/appdevforall/CodeOnTheGo) that turns the IDE into a real-time collaborative editor. Two phones on the same WiFi share one editing session: one device **hosts**, others **join** by typing the host's `ip:port` or scanning its QR code, and from then on edits, cursors, and file opens flow between devices as they happen — no server, no cloud, no signup.
 
 It surfaces as a **Pair** tab in the editor. Host a session and an invite card shows the address and a QR code; join one and the peer list fills in. When the host types in `MainActivity.kt`, the guest sees the same file open and the text arrive keystroke by keystroke, with each peer's live position shown in the peer list.
 
@@ -11,7 +11,7 @@ cd plugins/Code-Together
 ../../gradlew clean assemblePlugin
 ```
 
-The `.cgp` lands in `build/plugin/`. Install it from inside CodeOnTheGo via the Plugin Manager. Always `clean` first — the plugin builder copies the built APK into the `.cgp` and then deletes the source APK, so an incremental build can package an empty artifact.
+The `.cgp` lands in `build/plugin/`. Install it from inside Code on the Go via the Plugin Manager. Always `clean` first — the plugin builder copies the built APK into the `.cgp` and then deletes the source APK, so an incremental build can package an empty artifact.
 
 ## How it works
 
@@ -48,7 +48,7 @@ plugins/Code-Together/
 
 Jetpack Compose is linked `compileOnly` (host-provided), not bundled.
 
-> **Note:** Code Together requires an extended `plugin-api` beyond the current `stage` baseline — `IdeProjectService.openProject(File)` (open a project after a pull-model sync) and `IdeEditorService.showPeerCursor` / `hidePeerCursor` / `clearPeerCursors` (inline remote-cursor decoration). These land on the `feat/ADFA-4419-remote-peer-editor-decoration` branch. If `assemblePlugin` fails with unresolved references to those symbols, the shared `libs/` jars are older than the API Code Together needs; refresh them from a CodeOnTheGo build that includes the extensions (`../../scripts/update-libs.sh --local <path-to-CodeOnTheGo> --ref feat/ADFA-4419-remote-peer-editor-decoration`).
+> **Note:** Code Together requires an extended `plugin-api` beyond the current `stage` baseline — `IdeProjectService.openProject(File)` (open a project after a pull-model sync) and `IdeEditorService.showPeerCursor` / `hidePeerCursor` / `clearPeerCursors` (inline remote-cursor decoration). These land on the `feat/ADFA-4419-remote-peer-editor-decoration` branch. If `assemblePlugin` fails with unresolved references to those symbols, the shared `libs/` jars are older than the API Code Together needs; refresh them from a Code on the Go build that includes the extensions (`../../scripts/update-libs.sh --local <path-to-CodeOnTheGo> --ref feat/ADFA-4419-remote-peer-editor-decoration`).
 
 ## License
 

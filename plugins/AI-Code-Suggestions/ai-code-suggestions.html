@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Code Suggestions</title>
+<title>AI Code Suggestions</title>
 <style>
   body {
     background: #ffffff;
@@ -37,11 +37,18 @@
 </style>
 </head>
 <body>
-  <h1>Code Suggestions Plugin</h1>
+  <h1>AI Code Suggestions Plugin</h1>
+
+  <div class="note">
+    <b>Requires the AI Core addon.</b> This plugin holds no model of its own —
+    it asks AI Core for every completion. Install <b>AI Core</b> first and
+    select a model in <b>AI Assistant &rarr; AI Settings</b>. Until you do, this
+    plugin shows no completions.
+  </div>
 
   <h2>Executive overview</h2>
-  <p><b>Code Suggestions</b> adds inline <b>ghost-text</b> code completions to
-  the Code On The Go editor. As you type, it asks the on-device model provided by
+  <p><b>AI Code Suggestions</b> adds inline <b>ghost-text</b> code completions to
+  the Code on the Go editor. As you type, it asks the on-device model provided by
   the companion <b>AI Core</b> plugin for a completion at the cursor and shows it
   as dimmed text you can accept or ignore.</p>
   <p>It is a <b>headless</b> plugin — it has no screens of its own. It depends on
@@ -82,7 +89,7 @@
 
   <h2>Usage</h2>
   <ol>
-    <li>Install <b>AI Core</b>, then <b>Code Suggestions</b>, via the Plugin
+    <li>Install <b>AI Core</b>, then <b>AI Code Suggestions</b>, via the Plugin
       Manager and restart the IDE.</li>
     <li>Select a local <code>.gguf</code> model in <b>AI Assistant → AI
       Settings</b>.</li>

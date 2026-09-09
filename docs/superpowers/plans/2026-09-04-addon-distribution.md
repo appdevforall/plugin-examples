@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Publish Code On The Go addons to Cloudflare R2 directly from the build job, and stop all use of GitHub Actions artifact storage.
+**Goal:** Publish Code on the Go addons to Cloudflare R2 directly from the build job, and stop all use of GitHub Actions artifact storage.
 
 **Architecture:** A small Python tool owns addon identity. It derives names from directory names, builds source tarballs, generates a catalog, and uploads to R2. The workflows only call the tool. The tool runs offline against test data, so a pull request can check names and metadata.
 
@@ -21,7 +21,7 @@ Every task must obey this section.
 3. Python version is 3.11 or later.
 4. Do not change `plugin.id`, `namespace`, or `applicationId` in any addon.
 5. The directory name is the only source of addon identity. Do not add an override.
-6. Write "Code On The Go" in full in all text that a user reads. Do not write "CoGo", "CotG", or "CodeOnTheGo".
+6. Write "Code on the Go" in full in all text that a user reads. Do not write "CoGo", "CotG", or "CodeOnTheGo".
 7. Every catalog field is always present. Write `""` or `[]` for an empty value. Never write `null`. Never omit a field.
 8. Upload `v1/catalog.json` last, after all other objects.
 9. Do not add `actions/upload-artifact` or `actions/download-artifact` to any workflow.
@@ -889,7 +889,7 @@ from addons import model
 
 README = """# {name}
 
-Source for the {name} addon for Code On The Go.
+Source for the {name} addon for Code on the Go.
 
 ## Build
 
@@ -1328,11 +1328,11 @@ cat > site/page.template.html <<'EOF'
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{title}} — Code On The Go</title>
+<title>{{title}} — Code on the Go</title>
 <link rel="stylesheet" href="/assets/styles.css">
 </head>
 <body>
-<header class="chrome"><a href="/">Code On The Go addons</a></header>
+<header class="chrome"><a href="/">Code on the Go addons</a></header>
 <main class="page">{{body}}</main>
 <footer class="chrome"><a href="/">Back to all addons</a></footer>
 </body>
@@ -1621,11 +1621,11 @@ cat > site/index.html <<'EOF'
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Addons for Code On The Go</title>
+<title>Addons for Code on the Go</title>
 <link rel="stylesheet" href="/assets/styles.css">
 </head>
 <body>
-<header class="chrome"><h1>Addons for Code On The Go</h1></header>
+<header class="chrome"><h1>Addons for Code on the Go</h1></header>
 <main>
   <div class="controls">
     <input id="q" type="search" placeholder="Search addons" aria-label="Search addons">
@@ -2151,7 +2151,7 @@ mkdir -p snippets
 cat > snippets/README.md <<'EOF'
 # Snippets
 
-Snippet addons for Code On The Go. This directory is empty for now.
+Snippet addons for Code on the Go. This directory is empty for now.
 EOF
 ```
 

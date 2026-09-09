@@ -1,6 +1,6 @@
 # Rainbow Brackets
 
-A Code On The Go plugin that colors matching parentheses, brackets, and braces by
+A Code on the Go plugin that colors matching parentheses, brackets, and braces by
 nesting depth — an opening delimiter and its match share a color, cycling through six
 colors (red, orange, yellow, green, blue, purple). Separate palettes are tuned for the
 editor's light and dark themes.
@@ -11,7 +11,7 @@ and the editor merges them on top of the normal syntax highlighting. The IDE has
 knowledge of brackets; it just merges plugin-provided spans. The plugin adds no UI, requests
 no permissions, makes no network calls, and reads no files.
 
-> **Note:** this plugin requires a build of Code On The Go that includes the
+> **Note:** this plugin requires a build of Code on the Go that includes the
 > `EditorDecorationProvider` API and the editor-side decoration merge. All of the rainbow
 > logic lives in this plugin.
 
@@ -23,7 +23,7 @@ cd Rainbow-Brackets
 ```
 
 The plugin compiles against `../libs/plugin-api.jar`. If the `EditorDecorationProvider` API
-was just added to Code On The Go, refresh the jars first from a local IDE checkout:
+was just added to Code on the Go, refresh the jars first from a local IDE checkout:
 
 ```sh
 cd ..

@@ -41,7 +41,7 @@ does not affect nesting depth.</p>
 color. The change applies immediately to open editors.</p>
 
 <h2>How it's built</h2>
-<p>Rainbow Brackets implements <code>EditorDecorationProvider</code>, a generic Code On The Go
+<p>Rainbow Brackets implements <code>EditorDecorationProvider</code>, a generic Code on the Go
 plugin API. Its <code>decorate</code> method scans a region of text for bracket characters,
 tracks the running nesting depth, skips brackets inside strings and comments, and returns a
 foreground-color span per bracket. The editor merges those spans on top of the normal

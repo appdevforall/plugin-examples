@@ -17,4 +17,4 @@ dependencyResolutionManagement {
     repositories { google(); mavenCentral() }
 }
 
-rootProject.name = "code-suggestions"
+rootProject.name = "ai-code-suggestions"

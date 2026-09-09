@@ -31,7 +31,7 @@ Helps potential users of the plugin to decide if they want to download and insta
 
 ## 6.7 Tooltips and in-app help
 
-Help must be available *inside* the running IDE, not only in the standalone 6.6 page. Code On The Go uses a three-tier help model and plugins are expected to participate fully:
+Help must be available *inside* the running IDE, not only in the standalone 6.6 page. Code on the Go uses a three-tier help model and plugins are expected to participate fully:
 
 - **Tier 1 (brief)** and **Tier 2 (more detail)** are delivered as tooltips. A user long-presses any UI element and sees a brief summary, then "See More" for detail.
 - **Tier 3 (full)** is an exhaustive in-app web page reached from a button on the tooltip, served from the bundled documentation database — no network required.

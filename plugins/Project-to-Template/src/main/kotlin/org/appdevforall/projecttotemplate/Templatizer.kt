@@ -7,7 +7,7 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
 /**
- * Turns an Android Studio project into a Code On The Go (.cgt) template
+ * Turns an Android Studio project into a Code on the Go (.cgt) template
  * bundle by substituting concrete values (versions, package name, app name,
  * SDK levels, Java compatibility levels) with Pebble tokens (${{ TOKEN }}),
  * then writing templates.json and template/template.json alongside a

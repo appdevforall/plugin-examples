@@ -5,15 +5,15 @@ plugins {
 }
 
 pluginBuilder {
-    pluginName = "code-suggestions"
+    pluginName = "ai-code-suggestions"
 }
 
 android {
-    namespace = "com.itsaky.androidide.plugins.codesuggestions"
+    namespace = "com.itsaky.androidide.plugins.aicodesuggestions"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.itsaky.androidide.plugins.codesuggestions"
+        applicationId = "com.itsaky.androidide.plugins.aicodesuggestions"
         minSdk = 33
         targetSdk = 36
         versionCode = 1

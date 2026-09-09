@@ -1,6 +1,6 @@
 # Voice Alerts
 
-A Code On The Go plugin that plays a short sound on build start, success, and failure. Useful when your eyes are on the editor and you want an audible cue that the build has turned over.
+A Code on the Go plugin that plays a short sound on build start, success, and failure. Useful when your eyes are on the editor and you want an audible cue that the build has turned over.
 
 ## Behaviour
 
