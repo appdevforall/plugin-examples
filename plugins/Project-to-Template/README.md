@@ -1,6 +1,6 @@
 # Project to Template
 
-A [Code On The Go](https://github.com/appdevforall/CodeOnTheGo) plugin (`.cgp`)
+A [Code on the Go](https://github.com/appdevforall/CodeOnTheGo) plugin (`.cgp`)
 that converts the Android project currently open in the IDE into a Code On The
 Go (`.cgt`) template bundle — driven entirely from a tab inside the IDE, with an
 option to install the result straight into the New Project template picker. The
@@ -8,7 +8,7 @@ original project directory is never modified: the plugin copies it into a new
 bundle directory next to it and templatizes the copy.
 
 This started as a `templatize_project.py` desktop script, was ported to a
-standalone Kotlin/Compose Android app, and is now a Code On The Go plugin so it
+standalone Kotlin/Compose Android app, and is now a Code on the Go plugin so it
 runs inside the IDE with no separate app to install.
 
 ## UI
@@ -94,7 +94,7 @@ From this directory, using the repo-root Gradle wrapper:
 ../gradlew assemblePluginDebug   # debug .cgp   -> build/plugin/project-to-template-debug.cgp
 ```
 
-Install the resulting `.cgp` through Code On The Go's Plugin Manager. A
+Install the resulting `.cgp` through Code on the Go's Plugin Manager. A
 `local.properties` with `sdk.dir=<Android SDK path>` is required to build.
 
 ## Next steps

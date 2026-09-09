@@ -50,6 +50,12 @@ sealed interface GeminiFailure {
     /** No response at all — no network, DNS failure, timeout. */
     data object Unreachable : GeminiFailure
 
+    /**
+     * Generation stopped at the output cap (`finishReason: MAX_TOKENS`) with nothing runnable.
+     * Not an API error — the request succeeded — so it is never produced by [GeminiErrorFormatter].
+     */
+    data object ReplyTruncated : GeminiFailure
+
     /** Everything else, including failures that never reached the network. */
     data class Failed(val reason: String?) : GeminiFailure
 }

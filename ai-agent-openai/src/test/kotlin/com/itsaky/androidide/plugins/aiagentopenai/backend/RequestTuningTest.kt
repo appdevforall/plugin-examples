@@ -162,4 +162,27 @@ class UnsupportedParameterTest {
         assertNull(UnsupportedParameter.nameIn(null))
         assertNull(UnsupportedParameter.nameIn(""))
     }
+
+    @Test
+    fun givenAServerThatRefusesToolDeclarations_whenClassified_thenTheRetryDropsThem() {
+        val body = """{"error":{"message":"Unsupported parameter: 'tools'","param":"tools"}}"""
+        assertTrue(UnsupportedTools.rejectedIn(400, body))
+        // Some compatible servers answer an unknown field with 422 instead.
+        assertTrue(UnsupportedTools.rejectedIn(422, """{"error":"unknown field: functions"}"""))
+    }
+
+    @Test
+    fun givenAFailureAboutSomethingElse_whenClassified_thenToolsAreKept() {
+        // Dropping tools changes which protocol the run uses, so only a refusal of the
+        // declaration itself may trigger it.
+        assertFalse(UnsupportedTools.rejectedIn(400, """{"error":{"message":"model not found"}}"""))
+        assertFalse(
+            UnsupportedTools.rejectedIn(
+                400,
+                """{"error":{"message":"Unsupported parameter: 'temperature'"}}"""
+            )
+        )
+        assertFalse(UnsupportedTools.rejectedIn(401, """{"error":"unsupported tools"}"""))
+        assertFalse(UnsupportedTools.rejectedIn(400, null))
+    }
 }

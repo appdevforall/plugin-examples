@@ -1,6 +1,6 @@
 {
   "summary": "Adds vector icons to a project from inside the editor.",
-  "description": "Browses a library of vector drawable icons and writes the one you pick straight into the project resources. Contributed to Code On The Go by Omar Haidar.",
+  "description": "Browses a library of vector drawable icons and writes the one you pick straight into the project resources. Contributed to Code on the Go by Omar Haidar.",
   "tags": [
     "icons",
     "resources",

@@ -52,7 +52,7 @@
 <body>
 <header>
   <h1>Rainbow Brackets</h1>
-  <p class="subtitle">Depth-colored parentheses, brackets, and braces for the Code On The Go editor.</p>
+  <p class="subtitle">Depth-colored parentheses, brackets, and braces for the Code on the Go editor.</p>
 </header>
 
 <nav>
@@ -72,7 +72,7 @@
   brackets according to how deeply it is nested. An opening delimiter and its matching
   closing delimiter share the same color, so you can see at a glance which <code>(</code>
   pairs with which <code>)</code>, even in deeply nested expressions.</p>
-  <p>The plugin computes the coloring itself and the Code On The Go editor merges it on top of
+  <p>The plugin computes the coloring itself and the Code on the Go editor merges it on top of
   the normal highlighting. It adds no toolbar buttons, requests no permissions, makes no network
   calls, and reads no files.</p>
 </section>
@@ -97,7 +97,7 @@
 <section id="architecture">
   <h2>3. Technical Architecture</h2>
   <p>The plugin implements <code>EditorDecorationProvider</code>, a generic additive extension
-  in the Code On The Go plugin API. Its only method, <code>decorate(text, start, end, isDark)</code>,
+  in the Code on the Go plugin API. Its only method, <code>decorate(text, start, end, isDark)</code>,
   returns a list of foreground-color spans for a region of editor text; the IDE merges them on top
   of the existing highlighting. Because the only output is a list of colored ranges, a provider can
   never replace or suppress the editor's syntax highlighting — and the IDE has no knowledge of
@@ -115,7 +115,7 @@
 <section id="usage">
   <h2>4. Usage</h2>
   <ol>
-    <li>Install <code>rainbow-brackets.cgp</code> from the Code On The Go Plugin Manager.</li>
+    <li>Install <code>rainbow-brackets.cgp</code> from the Code on the Go Plugin Manager.</li>
     <li>Enable the plugin. Open editors repaint automatically.</li>
     <li>Open a Java or Kotlin file with nested brackets — each nesting level is a different color,
     and matching delimiters share a color. Other languages are left untouched.</li>

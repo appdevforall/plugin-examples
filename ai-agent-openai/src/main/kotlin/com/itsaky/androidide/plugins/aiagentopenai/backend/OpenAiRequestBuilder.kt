@@ -2,6 +2,7 @@ package com.itsaky.androidide.plugins.aiagentopenai.backend
 
 import com.itsaky.androidide.plugins.services.LlmInferenceService.ChatMessage
 import com.itsaky.androidide.plugins.services.LlmInferenceService.LlmConfig
+import com.itsaky.androidide.plugins.services.LlmInferenceService.ToolDefinition
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -43,7 +44,8 @@ internal object OpenAiRequestBuilder {
                 ChatMessage.Role.USER -> ROLE_USER
                 ChatMessage.Role.ASSISTANT -> ROLE_ASSISTANT
                 ChatMessage.Role.SYSTEM -> ROLE_SYSTEM
-                // No native function calling here, so a tool result rides in as a user turn.
+                // A `tool` role is only legal after an assistant turn carrying the matching
+                // `tool_calls`, which ChatMessage gives the assistant turn no way to hold.
                 ChatMessage.Role.TOOL -> ROLE_USER
             }
             messages.put(message(role, entry.content))
@@ -59,6 +61,7 @@ internal object OpenAiRequestBuilder {
      * @param stream true to ask for the SSE token stream
      * @param config supplies the token cap and temperature
      * @param tuning decides which optional parameters are sent at all
+     * @param tools the tools to declare; omitted from the body when empty
      * @return the request JSON
      */
     fun body(
@@ -67,11 +70,18 @@ internal object OpenAiRequestBuilder {
         stream: Boolean,
         config: LlmConfig,
         tuning: RequestTuning,
+        tools: List<ToolDefinition> = emptyList(),
     ): JSONObject {
         val body = JSONObject()
             .put("model", model)
             .put("messages", messages)
             .put("stream", stream)
+
+        // Declared, not described in the prompt: the arguments then arrive already structured, so
+        // a file whose contents carry quotes or newlines can no longer break the call (ADFA-5410).
+        if (tools.isNotEmpty()) {
+            body.put("tools", OpenAiToolProtocol.toolsArray(tools))
+        }
 
         if (config.maxTokens > 0) {
             body.put(tuning.tokenParam, config.maxTokens)

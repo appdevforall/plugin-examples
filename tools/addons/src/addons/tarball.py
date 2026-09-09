@@ -13,14 +13,14 @@ SOURCE = "https://github.com/appdevforall/plugin-examples"
 # and the one a reader wants first is the addon's, not this notice.
 NOTES = """# Building {name}
 
-Source for the {name} addon for Code On The Go.
+Source for the {name} addon for Code on the Go.
 
 - Origin: {origin}
 - Author: {author}
 - Comes from: {source}/tree/main/{directory}
 - License: {license}. The full text is in LICENSE beside this file.
 
-This folder is the project root. Open it in Code On The Go, or build it from a
+This folder is the project root. Open it in Code on the Go, or build it from a
 desktop:
 
     ./gradlew assemblePlugin
@@ -31,7 +31,7 @@ A desktop build needs `local.properties` beside this file, with one line:
 
     sdk.dir=/path/to/your/Android/sdk
 
-On a phone you do not need that file: Code On The Go puts `ANDROID_HOME` and
+On a phone you do not need that file: Code on the Go puts `ANDROID_HOME` and
 `ANDROID_SDK_ROOT` in the build environment.
 """
 
@@ -91,7 +91,7 @@ def _stage(root: Path, addon: Path, out: Path, meta: dict) -> Path:
     files = tracked_files(root, addon)
     if not files:
         raise RuntimeError(f"{addon.name}: git tracks no file in this directory")
-    # The archive root IS the project root: Code On The Go reads a folder as a
+    # The archive root IS the project root: Code on the Go reads a folder as a
     # plugin project only when build.gradle.kts and libs/plugin-api.jar sit in
     # the folder it was given (isPluginProject in ProjectValidations.kt).
     for repo_path in files:
