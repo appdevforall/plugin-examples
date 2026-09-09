@@ -91,6 +91,31 @@ sealed interface OpenAiFailure {
 }
 
 /**
+ * Whether this failure is about the credential rather than the request, the model or the network.
+ *
+ * The settings pane reports only these: a 500, a spent quota or an unreachable server says nothing
+ * about the key, and recording one as a credential problem would send the user off to replace a key
+ * that works. [OpenAiFailure.QuotaExceeded] and [OpenAiFailure.BillingRequired] are deliberately
+ * outside it — the key was accepted, the account simply has nothing left to spend.
+ */
+internal val OpenAiFailure.isCredentialProblem: Boolean
+    get() = when (this) {
+        OpenAiFailure.KeyRefused, OpenAiFailure.KeyMissing, OpenAiFailure.KeyForbidden -> true
+        is OpenAiFailure.ModelUnavailable,
+        OpenAiFailure.QuotaExceeded,
+        OpenAiFailure.BillingRequired,
+        is OpenAiFailure.RequestRejected,
+        is OpenAiFailure.ServiceUnavailable,
+        is OpenAiFailure.Unexpected,
+        OpenAiFailure.ServerNotRunning,
+        OpenAiFailure.Unreachable,
+        is OpenAiFailure.EmptyReply,
+        OpenAiFailure.ReasoningOnly,
+        OpenAiFailure.TruncatedBeforeReply,
+        is OpenAiFailure.Failed -> false
+    }
+
+/**
  * Classifies an OpenAI-compatible failure so it can be reported as one translated sentence.
  *
  * The log keeps the full body; **no [OpenAiFailure] ever carries a JSON payload** — putting the raw

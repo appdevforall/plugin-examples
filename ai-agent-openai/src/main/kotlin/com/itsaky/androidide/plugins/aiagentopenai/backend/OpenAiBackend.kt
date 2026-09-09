@@ -7,10 +7,12 @@ import android.util.Log
 import android.widget.Toast
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aiagentopenai.R
+import com.itsaky.androidide.plugins.aiagentopenai.errors.CredentialFailureLog
 import com.itsaky.androidide.plugins.aiagentopenai.errors.OpenAiErrorFormatter
 import com.itsaky.androidide.plugins.aiagentopenai.errors.OpenAiFailure
 import com.itsaky.androidide.plugins.aiagentopenai.errors.OpenAiFailureMessages
 import com.itsaky.androidide.plugins.aiagentopenai.errors.OpenAiHttpException
+import com.itsaky.androidide.plugins.aiagentopenai.errors.isCredentialProblem
 import com.itsaky.androidide.plugins.aiagentopenai.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aiagentopenai.preferences.OpenAiPreferences
 import com.itsaky.androidide.plugins.aiagentopenai.prompt.OpenAiSystemPrompt
@@ -65,6 +67,12 @@ class OpenAiBackend(
         ApiKeyCache(::openAiPrefs, OpenAiPreferences.KEY_API_KEY, context.logger, scope)
 
     private val failureMessages = OpenAiFailureMessages(context, ::getBaseUrl)
+
+    /**
+     * Where a refused credential is left for the settings pane to report, so a key problem is not
+     * only readable in a transcript the user has already navigated away from.
+     */
+    private val credentialFailures = CredentialFailureLog(::openAiPrefs)
 
     @Volatile
     private var currentJob: Job? = null
@@ -405,6 +413,9 @@ class OpenAiBackend(
                     )
                     callback.onError(failureMessages.of(emptyReplyFailure(outcome)))
                 } else {
+                    // The saved key was accepted, so any recorded refusal describes a key that is
+                    // no longer in use and must stop being reported in settings.
+                    credentialFailures.clear()
                     val tokenCount = finalText.split("\\s+".toRegex()).size
                     context.logger.info("OpenAiBackend: Streamed ${finalText.length} chars in $chunkCount chunks, ~$tokenCount tokens")
                     callback.onComplete(LlmResponse.success(finalText, tokenCount, System.currentTimeMillis() - startTime))
@@ -741,14 +752,17 @@ class OpenAiBackend(
      */
     private fun formatErrorMessage(e: Exception): String {
         val baseUrl = getBaseUrl()
-        return failureMessages.of(
-            OpenAiErrorFormatter.classify(
-                error = e,
-                modelName = getModelName(),
-                hasApiKey = readApiKeyOrBlank().isNotBlank(),
-                isOpenAiHost = BaseUrlPolicy.requiresApiKey(baseUrl),
-            )
+        val failure = OpenAiErrorFormatter.classify(
+            error = e,
+            modelName = getModelName(),
+            hasApiKey = readApiKeyOrBlank().isNotBlank(),
+            isOpenAiHost = BaseUrlPolicy.requiresApiKey(baseUrl),
         )
+        val message = failureMessages.of(failure)
+        // Only a credential failure is recorded: any other reason says nothing about the key, and
+        // filing it as one would send the user off to replace a key that works.
+        if (failure.isCredentialProblem) credentialFailures.record(message)
+        return message
     }
 }
 

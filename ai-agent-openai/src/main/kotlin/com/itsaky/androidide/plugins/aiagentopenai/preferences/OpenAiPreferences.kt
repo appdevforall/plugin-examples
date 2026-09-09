@@ -65,6 +65,13 @@ internal object OpenAiPreferences {
     const val KEY_REMEMBERED_MODELS_URL = "openai_remembered_models_url"
 
     /**
+     * Why the last request was refused for credential reasons, or absent. Diagnostics rather than a
+     * setting: a stale reason would accuse a key the user has since replaced, so it is written by
+     * the backend and forgotten as soon as the settings pane has reported it.
+     */
+    const val KEY_CREDENTIAL_FAILURE = "openai_credential_failure"
+
+    /**
      * This plugin's preferences.
      *
      * @param context this plugin's own context — never another plugin's

@@ -7,8 +7,6 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
-import android.text.method.HideReturnsTransformationMethod
-import android.text.method.PasswordTransformationMethod
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -17,7 +15,6 @@ import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
-import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.Spinner
 import android.widget.TextView
@@ -27,9 +24,11 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.textfield.TextInputLayout
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aiagentgemini.plugin.GeminiPlugin
 import com.itsaky.androidide.plugins.aiagentgemini.R
+import com.itsaky.androidide.plugins.aiagentgemini.ui.SecretRevealController
 import com.itsaky.androidide.plugins.base.PluginFragmentHelper
 import com.itsaky.androidide.plugins.security.KeystoreSecretStore
 import com.itsaky.androidide.plugins.services.IdeTooltipService
@@ -57,6 +56,12 @@ class GeminiSettingsFragment : Fragment() {
      * so holding it any longer would leak them.
      */
     private var onPaneResume: (() -> Unit)? = null
+
+    /**
+     * The API key field's reveal control, held so the key can be re-masked when this pane leaves
+     * the foreground. Captures views, so it is dropped in [onDestroyView] like [onPaneResume].
+     */
+    private var apiKeyReveal: SecretRevealController? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -109,9 +114,22 @@ class GeminiSettingsFragment : Fragment() {
         onPaneResume?.invoke()
     }
 
+    /**
+     * Re-mask a revealed key on the way out of the foreground.
+     *
+     * Re-masking rather than only clearing [WindowManager.LayoutParams.FLAG_SECURE]: the flag has
+     * to go, since the window outlives this pane and nothing else would clear it, and dropping it
+     * over a legible key is what would let the recents thumbnail keep a copy of it.
+     */
+    override fun onPause() {
+        apiKeyReveal?.mask()
+        super.onPause()
+    }
+
     override fun onDestroyView() {
         // Drops the captured pane views along with the callback.
         onPaneResume = null
+        apiKeyReveal = null
         setSecureWindow(false)
         super.onDestroyView()
     }
@@ -128,8 +146,8 @@ class GeminiSettingsFragment : Fragment() {
     @SuppressLint("SetTextI18n")
     private fun setupApiKeyUi(view: View) {
         val apiKeyLayout = view.findViewById<LinearLayout>(R.id.gemini_api_key_layout)
+        val apiKeyBox = view.findViewById<TextInputLayout>(R.id.gemini_api_key_box)
         val apiKeyInput = view.findViewById<EditText>(R.id.gemini_api_key_input)
-        val toggleVisibilityButton = view.findViewById<ImageButton>(R.id.btn_toggle_api_key_visibility)
         val saveButton = view.findViewById<Button>(R.id.btn_save_api_key)
         val editButton = view.findViewById<Button>(R.id.btn_edit_api_key)
         val clearButton = view.findViewById<Button>(R.id.btn_clear_api_key)
@@ -138,8 +156,8 @@ class GeminiSettingsFragment : Fragment() {
         val verificationText = view.findViewById<TextView>(R.id.gemini_key_verification_text)
 
         // Not on apiKeyInput: long-press there is the paste menu, and a key is pasted.
-        listOf(
-            toggleVisibilityButton, saveButton, editButton, clearButton, verificationText
+        listOf<View>(
+            apiKeyBox, saveButton, editButton, clearButton, verificationText
         ).forEach { wireTooltip(it, GeminiPlugin.TOOLTIP_TAG_SETTINGS_GEMINI_KEY) }
         wireTooltip(getKeyButton, GeminiPlugin.TOOLTIP_TAG_SETTINGS_GET_KEY)
 
@@ -224,35 +242,24 @@ class GeminiSettingsFragment : Fragment() {
                     ).show()
                 }
             }
-        }
-
-        toggleVisibilityButton.setColorFilter(apiKeyInput.currentHintTextColor)
-
-        var isKeyVisible = false
-
-        fun applyKeyVisibility() {
-            apiKeyInput.transformationMethod = if (isKeyVisible) {
-                HideReturnsTransformationMethod.getInstance()
-            } else {
-                PasswordTransformationMethod.getInstance()
+            // A request Google refused for credential reasons is reported here too, and named:
+            // this pane is where the key gets fixed, and the transcript that carried the reason
+            // has been left behind by the time the user arrives.
+            viewModel.credentialFailure()?.let { reason ->
+                showVerification(
+                    getString(R.string.msg_key_chat_failure, reason),
+                    R.drawable.ic_key_rejected
+                )
             }
-            toggleVisibilityButton.setImageResource(
-                if (isKeyVisible) R.drawable.ic_visibility_off else R.drawable.ic_visibility
-            )
-            toggleVisibilityButton.contentDescription = getString(
-                if (isKeyVisible) R.string.cd_hide_api_key else R.string.cd_show_api_key
-            )
-            toggleVisibilityButton.setColorFilter(apiKeyInput.currentHintTextColor)
-            apiKeyInput.setSelection(apiKeyInput.text?.length ?: 0)
-            setSecureWindow(isKeyVisible)
         }
 
-        applyKeyVisibility()
-
-        toggleVisibilityButton.setOnClickListener {
-            isKeyVisible = !isKeyVisible
-            applyKeyVisibility()
+        // The window is flagged secure for exactly as long as the key is legible, which is why the
+        // click is owned here rather than left to endIconMode="password_toggle".
+        val reveal = SecretRevealController(apiKeyBox, apiKeyInput) { legible ->
+            setSecureWindow(legible)
         }
+        reveal.attach()
+        apiKeyReveal = reveal
 
         getKeyButton.setOnClickListener { openAiStudio() }
 
@@ -369,10 +376,19 @@ class GeminiSettingsFragment : Fragment() {
                         resultIcon = R.drawable.ic_key_verified
                     )
 
-                    // Nothing is written: a definitive refusal would only resurface mid-chat.
+                    // Nothing is written: a definitive refusal would only resurface mid-chat. Said
+                    // aloud, because a user who is told the key was refused and then sees chat fail
+                    // concludes the attempt destroyed the key they had, and re-buys a credential
+                    // they never lost.
                     KeyVerification.Rejected -> {
                         showVerification(
-                            getString(R.string.msg_key_rejected),
+                            getString(
+                                if (viewModel.hasStoredGeminiApiKey()) {
+                                    R.string.msg_key_rejected_kept
+                                } else {
+                                    R.string.msg_key_rejected
+                                }
+                            ),
                             R.drawable.ic_key_rejected
                         )
                         apiKeyInput.requestFocus()
@@ -394,8 +410,8 @@ class GeminiSettingsFragment : Fragment() {
             // The old verdict described the stored key, which is about to change.
             hideVerification()
             updateUiState(isEditing = true)
-            isKeyVisible = false
-            applyKeyVisibility()
+            // Opened masked: the key is loaded, not being read back.
+            reveal.mask()
             apiKeyInput.requestFocus()
         }
 

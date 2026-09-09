@@ -61,6 +61,25 @@ sealed interface GeminiFailure {
 }
 
 /**
+ * Whether this failure is about the credential rather than the request, the model or the network.
+ *
+ * The settings pane reports only these: a 500 or an unreachable network says nothing about the key,
+ * and recording one as a credential problem would send the user off to re-enter a key that works.
+ */
+internal val GeminiFailure.isCredentialProblem: Boolean
+    get() = when (this) {
+        GeminiFailure.KeyRefused, GeminiFailure.KeyInvalid -> true
+        is GeminiFailure.ModelUnavailable,
+        GeminiFailure.QuotaExceeded,
+        is GeminiFailure.RequestRejected,
+        is GeminiFailure.ServiceUnavailable,
+        is GeminiFailure.Unexpected,
+        GeminiFailure.Unreachable,
+        GeminiFailure.ReplyTruncated,
+        is GeminiFailure.Failed -> false
+    }
+
+/**
  * Classifies a Gemini failure so it can be reported as one translated sentence.
  *
  * Replaces `"Gemini API error: ${e.message}"`, which put the entire HTTP error body in the chat.

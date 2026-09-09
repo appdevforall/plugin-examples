@@ -7,8 +7,6 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
-import android.text.method.HideReturnsTransformationMethod
-import android.text.method.PasswordTransformationMethod
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -32,6 +30,7 @@ import com.google.android.material.textfield.TextInputLayout
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aiagentopenai.R
 import com.itsaky.androidide.plugins.aiagentopenai.plugin.OpenAiPlugin
+import com.itsaky.androidide.plugins.aiagentopenai.ui.SecretRevealController
 import com.itsaky.androidide.plugins.base.PluginFragmentHelper
 import com.itsaky.androidide.plugins.security.KeystoreSecretStore
 import com.itsaky.androidide.plugins.services.IdeTooltipService
@@ -64,6 +63,12 @@ class OpenAiSettingsFragment : Fragment() {
      * holding it any longer would leak them.
      */
     private var onPaneResume: (() -> Unit)? = null
+
+    /**
+     * The API key field's reveal control, held so the key can be re-masked when this pane leaves
+     * the foreground. Captures views, so it is dropped in [onDestroyView] like [onPaneResume].
+     */
+    private var apiKeyReveal: SecretRevealController? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -116,10 +121,23 @@ class OpenAiSettingsFragment : Fragment() {
         onPaneResume?.invoke()
     }
 
+    /**
+     * Re-mask a revealed key on the way out of the foreground.
+     *
+     * Re-masking rather than only clearing [WindowManager.LayoutParams.FLAG_SECURE]: the flag has
+     * to go, since the window outlives this pane and nothing else would clear it, and dropping it
+     * over a legible key is what would let the recents thumbnail keep a copy of it.
+     */
+    override fun onPause() {
+        apiKeyReveal?.mask()
+        super.onPause()
+    }
+
     override fun onDestroyView() {
         // Drops the captured pane views along with the callbacks.
         onPaneResume = null
         onServerChanged = null
+        apiKeyReveal = null
         setSecureWindow(false)
         super.onDestroyView()
     }
@@ -383,38 +401,29 @@ class OpenAiSettingsFragment : Fragment() {
                     ).show()
                 }
             }
+            // A request the server refused for credential reasons is reported here too, and named:
+            // this pane is where the key gets fixed, and the transcript that carried the reason has
+            // been left behind by the time the user arrives.
+            viewModel.credentialFailure()?.let { reason ->
+                showStatus(
+                    verificationText,
+                    getString(R.string.msg_key_chat_failure, reason),
+                    R.drawable.ic_key_rejected
+                )
+            }
         }
 
         // Not saved either, so a recreate cannot park a typed key in plain text in the state
         // Bundle; a stored one is read back from the encrypted store above.
         apiKeyInput.isSaveEnabled = false
 
-        var isKeyVisible = false
-
-        fun applyKeyVisibility() {
-            apiKeyInput.transformationMethod = if (isKeyVisible) {
-                HideReturnsTransformationMethod.getInstance()
-            } else {
-                PasswordTransformationMethod.getInstance()
-            }
-            apiKeyBox.setEndIconDrawable(
-                if (isKeyVisible) R.drawable.ic_visibility_off else R.drawable.ic_visibility
-            )
-            apiKeyBox.setEndIconContentDescription(
-                if (isKeyVisible) R.string.cd_hide_api_key else R.string.cd_show_api_key
-            )
-            apiKeyInput.setSelection(apiKeyInput.text?.length ?: 0)
-            setSecureWindow(isKeyVisible)
-        }
-
-        applyKeyVisibility()
-
         // Not endIconMode="password_toggle": the window has to be flagged secure for as long as the
         // key is legible, and the built-in toggle gives no hook for that.
-        apiKeyBox.setEndIconOnClickListener {
-            isKeyVisible = !isKeyVisible
-            applyKeyVisibility()
+        val reveal = SecretRevealController(apiKeyBox, apiKeyInput) { legible ->
+            setSecureWindow(legible)
         }
+        reveal.attach()
+        apiKeyReveal = reveal
 
         getKeyButton.setOnClickListener { openKeyPage() }
 
@@ -541,11 +550,20 @@ class OpenAiSettingsFragment : Fragment() {
                         resultIcon = R.drawable.ic_key_verified
                     )
 
-                    // Nothing is written: a definitive refusal would only resurface mid-chat.
+                    // Nothing is written: a definitive refusal would only resurface mid-chat. Said
+                    // aloud, because a user who is told the key was refused and then sees chat fail
+                    // concludes the attempt destroyed the key they had, and re-buys a credential
+                    // they never lost.
                     ConnectionVerification.Rejected -> {
                         showStatus(
                             verificationText,
-                            getString(R.string.msg_key_rejected),
+                            getString(
+                                if (viewModel.hasStoredApiKey()) {
+                                    R.string.msg_key_rejected_kept
+                                } else {
+                                    R.string.msg_key_rejected
+                                }
+                            ),
                             R.drawable.ic_key_rejected
                         )
                         apiKeyInput.requestFocus()
@@ -578,8 +596,8 @@ class OpenAiSettingsFragment : Fragment() {
             // The old verdict described the stored key, which is about to change.
             hideStatus(verificationText)
             updateUiState(isEditing = true)
-            isKeyVisible = false
-            applyKeyVisibility()
+            // Opened masked: the key is loaded, not being read back.
+            reveal.mask()
             apiKeyInput.requestFocus()
         }
 

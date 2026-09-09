@@ -5,8 +5,10 @@ import android.os.Looper
 import android.util.Log
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aiagentgemini.R
+import com.itsaky.androidide.plugins.aiagentgemini.errors.CredentialFailureLog
 import com.itsaky.androidide.plugins.aiagentgemini.errors.GeminiErrorFormatter
 import com.itsaky.androidide.plugins.aiagentgemini.errors.GeminiFailure
+import com.itsaky.androidide.plugins.aiagentgemini.errors.isCredentialProblem
 import com.itsaky.androidide.plugins.aiagentgemini.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aiagentgemini.preferences.GeminiPreferences
 import com.itsaky.androidide.plugins.aiagentgemini.prompt.GeminiSystemPrompt
@@ -64,6 +66,12 @@ class GeminiBackend(
      */
     @Volatile
     private var keyCache: Pair<String, String?>? = null
+
+    /**
+     * Where a refused credential is left for the settings pane to report, so a key problem is not
+     * only readable in a transcript the user has already navigated away from.
+     */
+    private val credentialFailures = CredentialFailureLog(::agentPrefs)
 
     companion object {
         /** Current default model. gemini-1.5-* is retired on v1beta and now 404s. */
@@ -408,6 +416,9 @@ class GeminiBackend(
                         callback.onError("Empty response from Gemini API")
 
                     else -> {
+                        // The saved key was accepted, so any recorded refusal describes a key that
+                        // is no longer in use and must stop being reported in settings.
+                        credentialFailures.clear()
                         val tokenCount = finalText.split("\\s+".toRegex()).size
                         callback.onComplete(
                             LlmResponse.success(finalText, tokenCount, System.currentTimeMillis() - startTime)
@@ -841,8 +852,14 @@ User: $userPrompt"""
      * [GeminiErrorFormatter] decides *what* went wrong; the wording comes from `strings.xml`. The
      * raw HTTP error body stays on the logged exception and must never reach the transcript.
      */
-    private fun formatErrorMessage(e: Exception): String =
-        userMessage(GeminiErrorFormatter.classify(e, getModelName()))
+    private fun formatErrorMessage(e: Exception): String {
+        val failure = GeminiErrorFormatter.classify(e, getModelName())
+        val message = userMessage(failure)
+        // Only a credential failure is recorded: any other reason says nothing about the key, and
+        // filing it as one would send the user off to replace a key that works.
+        if (failure.isCredentialProblem) credentialFailures.record(message)
+        return message
+    }
 
     /**
      * Resolve a [GeminiFailure] against the plugin's own resources.
