@@ -5,6 +5,7 @@ import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aicore.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aicore.models.ToolResult
 import com.itsaky.androidide.plugins.aicore.tool.ToolHandler
+import com.itsaky.androidide.plugins.aicore.tool.ToolSchema
 import com.itsaky.androidide.plugins.services.IdeTemplateService
 import org.json.JSONObject
 
@@ -17,8 +18,36 @@ class GenerateFromTemplateHandler(
     private val pluginContext: PluginContext
 ) : ToolHandler {
     override val toolName = "generate_from_template"
+    override val parametersSchema = ToolSchema.objectOf(
+        "template_name" to ToolSchema.string("Name of the registered template to generate from."),
+        "variables" to ToolSchema.freeform(
+            "Template variables, as a flat object of name to value."
+        ),
+        required = listOf("template_name"),
+    )
     override val description = "Generate files from Pebble templates with variable substitution"
     override val requiresApproval = false
+
+    /**
+     * Reads the `variables` argument, whatever shape the backend delivered it in.
+     *
+     * A nested object reaches a handler as [JSONObject], never as a [Map] — both the envelope
+     * parser and a native call hand org.json's own types over — and a backend that cannot declare
+     * a free-form object (Gemini) sends its JSON as text instead.
+     *
+     * @param value the raw argument.
+     * @return the variables, empty when there are none or the text will not parse.
+     */
+    internal fun variablesOf(value: Any?): Map<String, Any?> = when {
+        value == null -> emptyMap()
+        value is JSONObject -> value.keys().asSequence().associateWith { value.get(it) }
+        value is Map<*, *> -> value.entries.associate { (key, entry) -> key.toString() to entry }
+        else -> runCatching { JSONObject(value.toString()) }
+            .onFailure { Log.w(TAG, "variables is not a JSON object: $value") }
+            .getOrNull()
+            ?.let { json -> json.keys().asSequence().associateWith { json.get(it) } }
+            ?: emptyMap()
+    }
 
     override suspend fun execute(args: Map<String, Any?>): ToolResult {
         val templateName = args["template_name"]?.toString()?.trim()
@@ -29,9 +58,7 @@ class GenerateFromTemplateHandler(
             )
         }
 
-        // Variables is a map for substitution
-        @Suppress("UNCHECKED_CAST")
-        val variables = (args["variables"] as? Map<String, Any?>) ?: emptyMap()
+        val variables = variablesOf(args["variables"])
 
         Log.d(TAG, "Generating from template: $templateName with ${variables.size} variables")
 

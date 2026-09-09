@@ -27,6 +27,7 @@ import com.itsaky.androidide.plugins.aicore.tool.ToolCall
 import com.itsaky.androidide.plugins.aicore.tool.ToolCallExtractor
 import com.itsaky.androidide.plugins.aicore.tool.ToolExecutionTracker
 import com.itsaky.androidide.plugins.aicore.tool.ToolHandler
+import com.itsaky.androidide.plugins.aicore.tool.ToolSchema
 import com.itsaky.androidide.plugins.aicore.tool.sources.ToolSourceStore
 import com.itsaky.androidide.plugins.aicore.tool.handlers.AddDependencyHandler
 import com.itsaky.androidide.plugins.aicore.tool.handlers.CreateFileHandler
@@ -81,9 +82,6 @@ class ChatViewModel(
          * `LocalLlmBackend.EXTRA_PARAM_GRAMMAR`.
          */
         private const val EXTRA_PARAM_GRAMMAR = "grammar"
-
-        /** Per-argument cap in the tool badge shown in the transcript. */
-        private const val TOOL_BADGE_ARG_LIMIT = 80
 
         /**
          * The call envelope this side parses back (see [ToolCallExtractor]) and constrains local
@@ -241,9 +239,14 @@ class ChatViewModel(
     @Volatile
     private var lastToolFailedThisRun = false
 
-    /** The current run's most recent fully-successful tool batch, or null; reset per run. */
-    @Volatile
-    private var lastSucceededCalls: List<ToolCall>? = null
+    /**
+     * The transcript row this run rewrites in place as each tool starts, closed as a one-line
+     * summary when the run ends; null before the run's first tool. Main thread only.
+     */
+    private var activityMessageId: String? = null
+
+    /** Every tool name this run executed, in order, for the activity line's closing summary. */
+    private val runToolNames = mutableListOf<String>()
 
     /** The prompt the last run was started with, for [retryLastRun]; null before the first send. */
     @Volatile
@@ -408,6 +411,23 @@ class ChatViewModel(
     }
 
     /**
+     * Drops a message from the transcript and from the session list behind it.
+     *
+     * Both, always: [syncMessageToSession] republishes the transcript from the session's own list,
+     * so a message removed from one and not the other comes back on the next sync. That is what
+     * left a silenced turn's empty agent bubble on screen, animating its dots for the rest of the
+     * conversation.
+     *
+     * @param messageId the message to remove; an unknown id is a no-op.
+     */
+    private fun removeMessageFromSession(messageId: String) {
+        _messages.value = _messages.value.filter { it.id != messageId }
+        _currentSessionId.value
+            ?.let { id -> _sessions.value.firstOrNull { it.id == id } }
+            ?.messages?.removeAll { it.id == messageId }
+    }
+
+    /**
      * Helper method to synchronize a message to the current session.
      * Updates or adds the message to the session's message list.
      */
@@ -482,10 +502,21 @@ class ChatViewModel(
     private suspend fun buildSystemPrompt(tools: AgentTools): String {
         // One editor read serves both the IDE CONTEXT block and the paths in the examples.
         val ide = readIdeSnapshot()
+        val modules = withContext(Dispatchers.IO) {
+            ProjectLayout.describe(File(PathGuard.projectRoot()))
+        }
+        // Paths, not a count: an empty or wrong one here is what sends the agent walking the tree,
+        // and these are project-relative directory names rather than the user's content.
+        AgentTrace.stage(
+            "LAYOUT",
+            "modules=${modules.size}" + modules.joinToString("") {
+                " ${it.name}[src=${it.sourceDir} layout=${it.layoutDir} manifest=${it.manifest}]"
+            },
+        )
         val examplePath = ide.exampleFilePath()
         val base = backendSystemPrompt(tools, examplePath)
             ?: buildDefaultSystemPrompt(tools, examplePath)
-        return base + ide.contextBlock()
+        return base + ide.contextBlock(modules)
     }
 
     /**
@@ -508,7 +539,8 @@ class ChatViewModel(
             backend.getSystemPrompt(
                 LlmInferenceService.SystemPromptRequest(
                     promptToolDefinitions(tools),
-                    TOOL_CALL_SYNTAX,
+                    // Null tells the backend this side parses no envelope; see SystemPromptRequest.
+                    TOOL_CALL_SYNTAX.takeUnless { callsToolsNatively() },
                     examplePath,
                 )
             )?.takeIf { it.isNotBlank() }
@@ -519,6 +551,22 @@ class ChatViewModel(
             )
             null
         }
+    }
+
+    /**
+     * Whether the active backend carries tool calls in its provider's own function-calling API
+     * rather than in the reply text.
+     *
+     * Decides both halves of the protocol at once — the schemas sent with the request and the
+     * envelope the prompt teaches — so the two can never disagree about which one is live.
+     *
+     * @return true when the backend declares [LlmInferenceService.ToolCallingBackend]
+     */
+    private fun callsToolsNatively(): Boolean = try {
+        getLlmService()?.getBackend(currentBackendId) is LlmInferenceService.ToolCallingBackend
+    } catch (e: Throwable) {
+        logWarn("could not resolve backend '$currentBackendId'", e)
+        false
     }
 
     /**
@@ -549,7 +597,12 @@ class ChatViewModel(
             RESPOND_TOOL,
             "Send the user your reply or final answer. It MUST carry a \"message\" holding the " +
                 "text itself — a respond call with no \"message\" shows the user nothing.",
-            emptyMap(),
+            // Schema, not emptyMap(): under native calling a parameterless declaration is one the
+            // model cannot put the answer in, which is the empty respond the description warns of.
+            ToolSchema.objectOf(
+                "message" to ToolSchema.string("The reply to show the user."),
+                required = listOf("message"),
+            ),
         )
     }
 
@@ -564,7 +617,7 @@ class ChatViewModel(
         val toolDescriptions = promptToolDefinitions(tools)
             .joinToString("\n") { "- ${it.name}: ${it.description}" }
 
-        return """
+        val head = """
         You are a coding assistant inside CodeOnTheGo.
 
         Reply with exactly ONE tool call and nothing else. After a tool call, stop and wait — the
@@ -574,13 +627,30 @@ class ChatViewModel(
 
         Tools:
         $toolDescriptions
+        """.trimIndent()
 
+        // Under native calling the provider carries the call; teaching an envelope as well invites
+        // the model to emit both, and the text one would then run the tool a second time.
+        if (callsToolsNatively()) return head
+
+        return head + "\n\n" + """
         TOOL CALL FORMAT — emit a single line in EXACTLY this format and nothing after it:
         $TOOL_CALL_SYNTAX
 
         Example:
         <tool_call>{"tool":"open_file","args":{"file_path":"$examplePath"}}</tool_call>
         """.trimIndent()
+    }
+
+    /**
+     * The advice for a reply that meant to call a tool and produced nothing runnable.
+     *
+     * @param reason how the call failed to parse.
+     * @return the string resource to show the user.
+     */
+    private fun unparsedReplyMessage(reason: ToolCallExtractor.UnparsedReply): Int = when (reason) {
+        ToolCallExtractor.UnparsedReply.TRUNCATED -> R.string.agent_reply_truncated
+        ToolCallExtractor.UnparsedReply.MALFORMED -> R.string.agent_reply_malformed
     }
 
     /**
@@ -627,19 +697,41 @@ class ChatViewModel(
         currentFile ?: otherFiles.firstOrNull() ?: FALLBACK_EXAMPLE_PATH
 
     /**
-     * Describes what the user is looking at: the focused file and other open tabs, project-relative.
-     * Most requests are about the file on screen and the IDE knows that path exactly; without it the
-     * model reconstructs one, which is where invented `.java` paths for Kotlin files came from.
-     * @return a prompt block, or empty when nothing is open.
+     * Describes what the user is looking at: the focused file and other open tabs, project-relative,
+     * plus where [modules] keep their code. Most requests are about the file on screen and the IDE
+     * knows that path exactly; without it the model reconstructs one, which is where invented
+     * `.java` paths for Kotlin files came from.
+     *
+     * @param modules the project's modules, so the agent spends no turns rediscovering them.
+     * @return a prompt block, or empty when there is nothing to say.
      */
-    private fun IdeSnapshot.contextBlock(): String {
-        if (currentFile == null && otherFiles.isEmpty()) return ""
+    private fun IdeSnapshot.contextBlock(modules: List<ProjectLayout.Module>): String {
+        if (currentFile == null && otherFiles.isEmpty() && modules.isEmpty()) return ""
 
         return buildString {
             append("\n\nIDE CONTEXT (real paths — use these verbatim, do not rewrite them):\n")
             currentFile?.let { append("- File the user is viewing: ").append(it).append("\n") }
             if (otherFiles.isNotEmpty()) {
                 append("- Other open files: ").append(otherFiles.joinToString(", ")).append("\n")
+            }
+            for (module in modules) {
+                module.sourceDir?.let {
+                    append("- New classes for module '").append(module.name).append("' go in: ")
+                        .append(it).append("\n")
+                }
+                module.layoutDir?.let {
+                    append("- Layouts for module '").append(module.name).append("': ")
+                        .append(it).append("\n")
+                }
+                module.manifest?.let {
+                    append("- Manifest for module '").append(module.name).append("': ")
+                        .append(it).append("\n")
+                }
+            }
+            if (modules.isNotEmpty()) {
+                append(
+                    "These directories already exist — do not call list_files to rediscover them.\n"
+                )
             }
             append(
                 "If the user names a file that appears above, use that exact path and do not " +
@@ -649,9 +741,13 @@ class ChatViewModel(
     }
 
     /**
-     * Executes a batch of tool calls, renders each result as a TOOL message, and
-     * returns the results for the [agentLoop] to feed back; leaves [AgentState.Idle]
-     * to the loop.
+     * Executes a batch of tool calls and returns the results for the [agentLoop] to feed back;
+     * leaves [AgentState.Idle] to the loop.
+     *
+     * A successful call is reported only on the run's single activity line, which this rewrites as
+     * each call starts. A failure keeps its own message: it is the one thing here a user has to act
+     * on, and it carries the Retry button.
+     *
      * @param tools the snapshot this run started with; a source registered mid-run does not join it.
      * @param toolCalls the calls to execute.
      * @return the results, positionally aligned with [toolCalls].
@@ -670,27 +766,22 @@ class ChatViewModel(
         withContext(Dispatchers.Main) { setState(executingState) }
         startStateTimer(executingState)
 
-        val results = tools.executor.execute(toolCalls)
+        val results = tools.executor.execute(toolCalls) { call ->
+            withContext(Dispatchers.Main) { showActivity(call) }
+        }
 
         // Record whether this batch's last tool failed (read by runModelTurn).
         lastToolFailedThisRun = results.lastOrNull()?.success == false
 
-        lastSucceededCalls = toolCalls.takeIf { results.isNotEmpty() && results.all { r -> r.success } }
-
-        // Add tool results as messages
         withContext(Dispatchers.Main) {
             results.forEachIndexed { index, result ->
+                if (result.success) return@forEachIndexed
                 val toolCall = toolCalls[index]
-                val resultText = if (result.success) {
-                    "${toolCall.name}: ${result.message}\n${result.data ?: ""}"
-                } else {
-                    "${toolCall.name} failed: ${result.message}\n${result.error_details ?: ""}"
-                }
                 val resultMessage = ChatMessage(
                     id = UUID.randomUUID().toString(),
-                    text = resultText,
+                    text = "${toolCall.name} failed: ${result.message}\n${result.error_details ?: ""}",
                     sender = Sender.TOOL,
-                    status = if (result.success) MessageStatus.SENT else MessageStatus.ERROR
+                    status = MessageStatus.ERROR
                 )
                 _messages.value = _messages.value + resultMessage
                 syncMessageToSession(resultMessage)
@@ -821,7 +912,8 @@ class ChatViewModel(
         AgentTrace.beginRun(currentBackendId, userMessage, contextFiles.size)
         // Reset per-run tool tracking.
         lastToolFailedThisRun = false
-        lastSucceededCalls = null
+        activityMessageId = null
+        runToolNames.clear()
         // Where a Retry has to rewind to; read here, on Main, while no run can be appending.
         lastRunPrompt = userMessage
         historySizeBeforeLastRun = _history.value.size
@@ -865,16 +957,33 @@ class ChatViewModel(
                 )
 
                 try {
+                    // The same list the system prompt describes, so a native declaration and the
+                    // prose the model reads can never name different tools.
+                    val toolDefinitions = promptToolDefinitions(tools)
+                    // Which protocol is live for this run. `native=false` against a backend that
+                    // should call natively is the first thing to check when a call reaches the chat
+                    // as text instead of running.
+                    AgentTrace.stage(
+                        "PROTOCOL",
+                        "native=${callsToolsNatively()} tools=${toolDefinitions.size} " +
+                            toolDefinitions.joinToString(",") { it.name },
+                    )
                     val loopResult = agentLoop.run(
                         history = history,
                         generate = { turns ->
                             withContext(Dispatchers.Main) {
                                 setState(AgentState.Processing(str(R.string.msg_generating)))
                             }
-                            runModelTurn(llmService, turns, config, epoch)
+                            runModelTurn(llmService, turns, config, toolDefinitions, epoch)
                         },
                         executeTools = { calls -> executeToolCalls(tools, calls) },
                         events = object : AgentLoop.Events {
+                            // Numbers the turn between its reply and the tools it runs, so the step
+                            // budget a run spent on one tool is counted off the trace, not guessed.
+                            override suspend fun onModelTurn(turn: Int, text: String) {
+                                AgentTrace.stage("TURN", "turn=$turn chars=${text.length}")
+                            }
+
                             override suspend fun onToolResults(
                                 turn: Int,
                                 calls: List<ToolCall>,
@@ -903,6 +1012,36 @@ class ChatViewModel(
                                 addSystemMessage(
                                     str(R.string.agent_max_steps_reached, turns),
                                     MessageStatus.SENT
+                                )
+                            }
+
+                            override suspend fun onUnparsedReply(
+                                turn: Int,
+                                reason: ToolCallExtractor.UnparsedReply,
+                            ) {
+                                // No system message: AgentReplyRenderer already puts this same
+                                // advice in the turn's own bubble, in place of the raw envelope.
+                                AgentTrace.refusal(
+                                    "PARSE",
+                                    "turn=$turn reason=$reason",
+                                    "reply carried no readable tool call",
+                                )
+                            }
+
+                            override suspend fun onAbandonedAfterFailure(turn: Int) {
+                                // No system message: the reply itself already carries the model's
+                                // account of the failure, rendered as such by AgentReplyRenderer.
+                                AgentTrace.refusal(
+                                    "LOOP",
+                                    "turn=$turn",
+                                    "stopped with a failed tool unaddressed",
+                                )
+                            }
+
+                            override suspend fun onRepeatAfterSuccess(turn: Int) {
+                                AgentTrace.stage(
+                                    "LOOP",
+                                    "turn=$turn assumed-complete=repeat-after-success",
                                 )
                             }
 
@@ -939,8 +1078,12 @@ class ChatViewModel(
                 // Allow re-entry once the coroutine unwinds.
                 isGenerating.set(false)
                 // The run can finish with the chat off screen, where nothing else writes.
-                // NonCancellable so a Stop still saves what the run produced before it.
-                withContext(NonCancellable + Dispatchers.Main) { persistState() }
+                // NonCancellable so a Stop still saves what the run produced before it, and so the
+                // activity line is closed rather than left reading as a tool still running.
+                withContext(NonCancellable + Dispatchers.Main) {
+                    finishActivity()
+                    persistState()
+                }
             }
         }
     }
@@ -972,16 +1115,19 @@ class ChatViewModel(
      * @param llmService the inference service.
      * @param turns the conversation so far; the last entry is the current user turn.
      * @param config the generation config.
+     * @param toolDefinitions the tools to offer a natively-calling backend; see [callsToolsNatively].
      * @param epoch this run's epoch, for staleness checks against Stop/newer sends.
-     * @return the final response text (raw, for tool-call extraction).
+     * @return the turn: the reply with any native calls rendered into it for extraction, beside the
+     *   text the model itself wrote, which is what the transcript keeps.
      */
     private suspend fun runModelTurn(
         llmService: LlmInferenceService,
         turns: List<LlmInferenceService.ChatMessage>,
         config: LlmInferenceService.LlmConfig,
+        toolDefinitions: List<LlmInferenceService.ToolDefinition>,
         epoch: Int
-    ): String {
-        val deferred = CompletableDeferred<String>()
+    ): AgentLoop.ModelReply {
+        val deferred = CompletableDeferred<AgentLoop.ModelReply>()
         val agentMessageId = UUID.randomUUID().toString()
         val startTime = System.currentTimeMillis()
         val responseBuilder = StringBuilder()
@@ -999,6 +1145,10 @@ class ChatViewModel(
             _messages.value = _messages.value + agentMessage
             syncMessageToSession(agentMessage)
         }
+
+        // Rendered into the reply on completion, so a natively-called tool reaches extraction,
+        // the transcript badge and the loop's repeat guard by the one path text calls use.
+        val nativeCalls = mutableListOf<LlmInferenceService.ToolCallRequest>()
 
         val streamCallback = object : LlmInferenceService.StreamCallback {
                 override fun onToken(token: String) {
@@ -1021,10 +1171,14 @@ class ChatViewModel(
 
                 override fun onComplete(response: LlmInferenceService.LlmResponse) {
                     // Null text means a failed response, which arrives through onError instead.
-                    val text = response.text.orEmpty()
+                    val written = response.text.orEmpty()
+                    val calls = synchronized(nativeCalls) { nativeCalls.toList() }
+                    val text = withNativeCalls(written, calls)
+                    // The transcript keeps what the model wrote, never the envelopes below.
+                    val reply = AgentLoop.ModelReply(text = text, historyText = written)
                     if (isStale()) {
                         // Already cancelled; the awaiting loop was unblocked by job cancel.
-                        deferred.complete(text)
+                        deferred.complete(reply)
                         return
                     }
                     val durationMs = System.currentTimeMillis() - startTime
@@ -1048,11 +1202,11 @@ class ChatViewModel(
                     // Per-run flag (set by executeToolCalls), not a session-wide scan.
                     val lastToolFailed = lastToolFailedThisRun
 
-                    if (AgentReplyRenderer.isDuplicateTurn(toolCalls, lastSucceededCalls, RESPOND_TOOL)) {
+                    if (AgentReplyRenderer.isSilentTurn(toolCalls, RESPOND_TOOL)) {
                         viewModelScope.launch(Dispatchers.Main) {
-                            _messages.value = _messages.value.filter { it.id != agentMessageId }
+                            removeMessageFromSession(agentMessageId)
                         }
-                        deferred.complete(text)
+                        deferred.complete(reply)
                         return
                     }
 
@@ -1063,10 +1217,8 @@ class ChatViewModel(
                         lastToolFailed = lastToolFailed,
                         actionFailedText = str(R.string.agent_action_failed),
                         noResponseText = str(R.string.agent_no_response),
-                    ) { c ->
-                        // Capped: edit_file snippets would turn the badge into a wall of source.
-                        "🔧 ${c.name}(${c.args.entries.joinToString(", ") { "${it.key}=${abbreviate(it.value)}" }})"
-                    }
+                        unparsedReplyText = { str(unparsedReplyMessage(it)) },
+                    )
                     viewModelScope.launch(Dispatchers.Main) {
                         if (isStale()) return@launch
                         val finalMsg = ChatMessage(
@@ -1079,8 +1231,9 @@ class ChatViewModel(
                         _messages.value = _messages.value.map { if (it.id == agentMessageId) finalMsg else it }
                         syncMessageToSession(finalMsg)
                     }
-                    // Return the RAW text to the loop so extraction/stop logic is unaffected.
-                    deferred.complete(text)
+                    // Hand the loop the reply with the envelopes, so extraction/stop logic sees
+                    // a native call, and the model's own text for the transcript.
+                    deferred.complete(reply)
                 }
 
                 override fun onError(error: String) {
@@ -1090,7 +1243,7 @@ class ChatViewModel(
                     }
                     viewModelScope.launch(Dispatchers.Main) {
                         // Drop the empty/partial bubble; the error surfaces as a SYSTEM message.
-                        _messages.value = _messages.value.filter { it.id != agentMessageId }
+                        removeMessageFromSession(agentMessageId)
                     }
                     deferred.completeExceptionally(RuntimeException(error))
                 }
@@ -1098,18 +1251,33 @@ class ChatViewModel(
 
         try {
             // Every backend takes the structured form: the last turn as the prompt, the rest as
-            // history. Tools are empty because tool calls travel in the reply text (TOOL_CALL_SYNTAX),
-            // not through native function calling.
+            // history. A backend that reports no native calls simply never calls onToolCall, and
+            // its calls arrive in the reply text as TOOL_CALL_SYNTAX instead.
             llmService.generateStreamingWithTools(
                 turns.lastOrNull()?.content.orEmpty(),
                 turns.dropLast(1),
                 config,
-                emptyList(),
+                toolDefinitions,
                 object : LlmInferenceService.ToolStreamCallback {
                     override fun onToken(token: String) = streamCallback.onToken(token)
-                    override fun onToolCall(request: LlmInferenceService.ToolCallRequest) = Unit
+
+                    override fun onToolCall(request: LlmInferenceService.ToolCallRequest) {
+                        if (isStale()) return
+                        // The proof a call came through the provider's API rather than the reply
+                        // text: the PARSE line that follows reports the envelope this one becomes.
+                        AgentTrace.stage(
+                            "NATIVE",
+                            "tool=${request.name} args=${request.args.orEmpty().keys.joinToString(",")}",
+                            AgentTrace.previewArgs(request.args.orEmpty()),
+                        )
+                        synchronized(nativeCalls) { nativeCalls.add(request) }
+                    }
+
+                    // The reported calls are read back in streamCallback.onComplete, which
+                    // renders them into the reply it hands the loop.
                     override fun onComplete(response: LlmInferenceService.LlmResponse) =
                         streamCallback.onComplete(response)
+
                     override fun onError(error: String) = streamCallback.onError(error)
                 }
             )
@@ -1117,13 +1285,122 @@ class ChatViewModel(
             // A synchronous throw fires no callback; complete deferred so await() doesn't hang.
             logError("generateStreaming threw synchronously", e)
             viewModelScope.launch(Dispatchers.Main) {
-                _messages.value = _messages.value.filter { it.id != agentMessageId }
+                removeMessageFromSession(agentMessageId)
             }
             if (!deferred.isCompleted) deferred.completeExceptionally(e)
         }
 
         return deferred.await()
     }
+
+    /**
+     * [written] with [calls] appended as canonical `<tool_call>` envelopes.
+     *
+     * The model never writes these: [ToolCallExtractor.renderEnvelope] encodes them from arguments
+     * the provider already parsed, so the mis-escaping that loses a text-mode call cannot lose one.
+     * For this turn only — see [AgentLoop.ModelReply] for why the transcript keeps [written].
+     *
+     * @param written the reply text as the model produced it.
+     * @param calls the native calls reported during this turn; none leaves [written] unchanged.
+     * @return the text carrying the calls in the form extraction reads back.
+     */
+    private fun withNativeCalls(
+        written: String,
+        calls: List<LlmInferenceService.ToolCallRequest>,
+    ): String {
+        if (calls.isEmpty()) return written
+        val envelopes = calls.joinToString("\n") {
+            ToolCallExtractor.renderEnvelope(it.name, it.args.orEmpty())
+        }
+        val prose = written.trim()
+        return if (prose.isEmpty()) envelopes else prose + "\n" + envelopes
+    }
+
+    /**
+     * Puts [call] on the run's activity line, creating that row on the run's first tool and
+     * rewriting it in place from then on. One row per run is the whole point: the badge-per-call
+     * and result-per-call rows it replaces buried the answer under twenty messages.
+     *
+     * @param call the call that is starting.
+     */
+    private fun showActivity(call: ToolCall) {
+        runToolNames += call.name
+        val subject = AgentActivity.subjectOf(call)
+        putActivity(
+            text = if (subject == null) {
+                str(R.string.agent_activity_running_plain, call.name)
+            } else {
+                str(R.string.agent_activity_running, call.name, subject)
+            },
+            status = MessageStatus.SENT,
+        )
+    }
+
+    /**
+     * Closes the run's activity line: a run that used tools leaves a one-line summary of which
+     * ones, a run that used none leaves nothing at all. Idempotent, since every exit from a run —
+     * completion, Stop, error — passes through here.
+     */
+    private fun finishActivity() {
+        val id = activityMessageId ?: return
+        val names = AgentActivity.distinctNames(runToolNames)
+        // Gone already means the chat was cleared or the session switched under the run.
+        val stillShown = _messages.value.any { it.id == id }
+        if (stillShown && names.isNotEmpty()) {
+            putActivity(
+                text = plural(
+                    R.plurals.agent_activity_done,
+                    runToolNames.size,
+                    runToolNames.size,
+                    names.joinToString(str(R.string.agent_activity_separator)),
+                ),
+                status = MessageStatus.COMPLETED,
+            )
+        } else {
+            removeMessageFromSession(id)
+        }
+        activityMessageId = null
+        runToolNames.clear()
+    }
+
+    /**
+     * Writes [text] to the activity row, appending it if this run has not shown one yet. Also
+     * appends when the row it held has gone — clearing the chat mid-run drops it, and a silently
+     * discarded update would leave the rest of the run with no progress at all.
+     *
+     * @param text the line to show.
+     * @param status the row's status; [MessageStatus.COMPLETED] closes it.
+     */
+    private fun putActivity(text: String, status: MessageStatus) {
+        val id = activityMessageId
+        val existing = id != null && _messages.value.any { it.id == id }
+        val message = ChatMessage(
+            id = if (existing) id!! else UUID.randomUUID().toString(),
+            text = text,
+            sender = Sender.TOOL,
+            status = status,
+            // Any non-null value: a null one is what the adapter animates generating-dots on.
+            durationMs = 0L,
+        )
+        activityMessageId = message.id
+        _messages.value = if (existing) {
+            _messages.value.map { if (it.id == message.id) message else it }
+        } else {
+            _messages.value + message
+        }
+        // Rewrites the row in place by id, as it does for every other message.
+        syncMessageToSession(message)
+    }
+
+    /**
+     * Resolves a quantity string, empty when the plugin context has gone; see [str].
+     * @param resId the plurals resource.
+     * @param quantity the count the wording is chosen by.
+     * @param args the format arguments.
+     * @return the formatted line.
+     */
+    private fun plural(resId: Int, quantity: Int, vararg args: Any?): String =
+        getContext()?.androidContext?.resources?.getQuantityString(resId, quantity, *args).orEmpty()
 
     /**
      * Appends an AGENT message to the chat (terminal state, no streaming dots).
@@ -1178,18 +1455,6 @@ class ChatViewModel(
      */
     private fun str(resId: Int, vararg args: Any?): String =
         getContext()?.androidContext?.getString(resId, *args).orEmpty()
-
-    /**
-     * Renders a tool argument for the one-line tool badge: line breaks flattened and the
-     * value capped, so a code-carrying argument stays a badge instead of a source dump.
-     * @param value the raw argument value.
-     * @return a single-line, length-capped rendering.
-     */
-    private fun abbreviate(value: Any?): String {
-        val text = value?.toString().orEmpty().replace("\n", "⏎")
-        return if (text.length <= TOOL_BADGE_ARG_LIMIT) text
-        else text.take(TOOL_BADGE_ARG_LIMIT) + "…"
-    }
 
     /**
      * Appends a SYSTEM message to the chat (on the main thread).

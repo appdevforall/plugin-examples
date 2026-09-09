@@ -18,6 +18,13 @@ internal object GeminiSystemPrompt {
      */
     private const val FALLBACK_EXAMPLE_PATH = "app/src/main/java/com/example/MainActivity.kt"
 
+    /** How to call a tool when the caller takes calls through the provider's own API. */
+    private val NATIVE_CALL_FORMAT = """
+        TOOL CALL FORMAT — the tools above are declared to you: call one through the function-calling
+        API. A call written into your reply text is NOT read by this system and will not run.
+        Do NOT describe the action in prose (e.g. "Okay, I'll open the file…") — narrating does nothing.
+    """.trimIndent()
+
     /**
      * Builds the prompt for [request].
      *
@@ -61,7 +68,7 @@ internal object GeminiSystemPrompt {
         val workflow = """
         WORKFLOW:
         1. Understand the user's request
-        2. List files to understand the project structure
+        2. Locate what you need with ONE search_project call — the IDE CONTEXT block above already names the source, layout and manifest paths
         3. Create/modify files with complete implementations
         4. Add dependencies if needed
         5. Sync gradle and verify compilation
@@ -69,7 +76,10 @@ internal object GeminiSystemPrompt {
         7. Report success and what was built
         """.trimIndent()
 
-        val syntax = request.toolCallSyntax ?: return head + "\n\n" + workflow
+        // Null syntax means the caller reads calls off the function-calling API instead. Saying so
+        // is what stops the model writing one as text, where nothing would run it (ADFA-5410).
+        val syntax = request.toolCallSyntax ?: return listOf(head, NATIVE_CALL_FORMAT, workflow)
+            .joinToString("\n\n")
 
         val callFormat = """
         TOOL CALL FORMAT — to run a tool, emit a single line in EXACTLY this format and nothing after it:

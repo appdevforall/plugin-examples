@@ -105,7 +105,7 @@ internal object UnsupportedParameter {
     fun nameIn(body: String?): String? {
         if (body.isNullOrBlank()) return null
         val text = body.lowercase()
-        if (!soundsUnsupported(text)) return null
+        if (!saysUnsupported(text)) return null
 
         // The structured field is authoritative when the server supplies one.
         paramField(body)?.let { param -> if (param in ADJUSTABLE) return param }
@@ -123,9 +123,47 @@ internal object UnsupportedParameter {
         OpenAiErrorFormatter.errorObjectIn(body)?.optString("param")
             ?.takeIf { it.isNotBlank() }?.lowercase()
 
-    /** True when the body says the parameter is not accepted, rather than that its value is bad. */
-    private fun soundsUnsupported(text: String): Boolean = listOf(
-        "unsupported", "not supported", "unrecognized", "unknown", "unexpected",
-        "is not permitted", "instead", "deprecated", "extra inputs",
-    ).any { text.contains(it) }
 }
+
+/**
+ * Whether a server refused the request over the `tools` declaration itself.
+ *
+ * Its own detector rather than another [UnsupportedParameter] entry: dropping `tools` changes which
+ * protocol the run uses, so it is recovered from once per server instead of once per request.
+ */
+internal object UnsupportedTools {
+
+    /** Statuses a compatible server uses to refuse a parameter outright. */
+    private val REFUSAL_STATUSES = setOf(400, 404, 422)
+
+    /** Request fields that only exist to carry tools, in either the modern or legacy spelling. */
+    private val TOOL_FIELDS = listOf("tools", "tool_choice", "functions", "function_call")
+
+    /**
+     * True when [body] says this server will not take a tool declaration.
+     *
+     * A rejected *schema* lands here too and degrades the same way, which is a turn that still
+     * answers rather than a lost one — see `OpenAiBackend.withToolRetry` for what that costs.
+     *
+     * @param statusCode the HTTP status the server answered with
+     * @param body the response body of that failure
+     * @return true to retry the request with no tools declared
+     */
+    fun rejectedIn(statusCode: Int, body: String?): Boolean {
+        if (statusCode !in REFUSAL_STATUSES) return false
+        if (body.isNullOrBlank()) return false
+        val text = body.lowercase()
+        if (!saysUnsupported(text)) return false
+        return TOOL_FIELDS.any { text.contains(it) }
+    }
+}
+
+/**
+ * True when an error body says a request field is not accepted, rather than that its value is bad.
+ *
+ * @param text the response body, lowercased
+ */
+private fun saysUnsupported(text: String): Boolean = listOf(
+    "unsupported", "not supported", "unrecognized", "unknown", "unexpected",
+    "is not permitted", "instead", "deprecated", "extra inputs",
+).any { text.contains(it) }
