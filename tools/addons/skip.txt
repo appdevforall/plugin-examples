@@ -19,3 +19,4 @@ ai-agent-mcp  other pull requests in flight; migrate later, do not touch
 ai-agent-openai  other pull requests in flight; migrate later, do not touch
 ai-core  other pull requests in flight; migrate later, do not touch
 ai-literacy-course  other pull requests in flight; migrate later, do not touch
+AI-Code-Suggestions  needs ai-core, which is held back; publish the pair together

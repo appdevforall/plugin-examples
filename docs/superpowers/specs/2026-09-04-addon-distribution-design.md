@@ -34,7 +34,7 @@ Each was taken during design and is recorded with its rationale so a later reade
 | **D02** | Root routing by Cloudflare **Transform Rule**, not a Worker, not a redirect. | Configuration only — no deployable code, nothing to version. **Verified live** (§4, V01). A redirect would work but changes the visible URL to `/index.html`. |
 | **D03** | No cache purge. Bounded staleness via `Cache-Control` at upload. | Cloudflare does not edge-cache HTML or JSON by default, so the catalog, the pages, and the downloads are already current the instant a publish completes. Only icons and tarballs need bounding. This removes the second credential that C04 anticipated: the design needs exactly **one** bucket-scoped token. |
 | **D04** | Publishing is decoupled from the `libs/` rebuild. | Today shipping one fixed addon means a ~30-minute rebuild of everything. A separate publish workflow makes a one-addon hotfix a short job and gives R09 a natural home. |
-| **D05** | A source tarball is **flat**: the archive root is the addon's project root, with the shared jars in its own `libs/`. | Code On The Go reads a folder as a plugin project only when `build.gradle.kts` and `libs/plugin-api.jar` sit in that same folder (`isPluginProject`, `ProjectValidations.kt`), and it picks `assemblePlugin` over `assembleDebug` by the same test (`ProjectManagerImpl.setup`). A two-level mini-repo mirroring this repository needs no path rewriting, but no level of it can be opened on a phone — so the addon that ships the source cannot build it. Rewriting is confined to `(../)+libs/` → `libs/` in the two Gradle files, and §9.6 refuses any archive where a parent reference survives. |
+| **D05** | A source tarball is **flat**: the archive root is the addon's project root, with the shared jars in its own `libs/`. | Code on the Go reads a folder as a plugin project only when `build.gradle.kts` and `libs/plugin-api.jar` sit in that same folder (`isPluginProject`, `ProjectValidations.kt`), and it picks `assemblePlugin` over `assembleDebug` by the same test (`ProjectManagerImpl.setup`). A two-level mini-repo mirroring this repository needs no path rewriting, but no level of it can be opened on a phone — so the addon that ships the source cannot build it. Rewriting is confined to `(../)+libs/` → `libs/` in the two Gradle files, and §9.6 refuses any archive where a parent reference survives. |
 | **D06** | Gallery chrome is injected at publish time, not committed. | The 31 existing pages stay plain HTML that anyone can edit. The published site is still coherent, with no duplicated chrome in git and no manual cache-bust chore. |
 | **D07** | Icons publish as-is; CSS sizes the tile. | Ships icons now at no cost. The one 24×24 icon will look soft and gets a follow-up issue rather than blocking this work. |
 | **D08** | R04 is amended to bounded staleness. | Follows from D03. New text in §12.4. |
@@ -262,7 +262,7 @@ keystore-generator-src/
 
 Build instructions are then `./gradlew assemblePlugin` in the folder as unpacked.
 
-This is the point of D05. Code On The Go tests for `build.gradle.kts` **and** `libs/plugin-api.jar` in the folder it is given, so only a flat archive can be opened on a phone at all. The cost is the one thing X2/R43 warns about — a rewrite — held to `(../)+libs/` → `libs/` in the two Gradle files, which are the only tracked files that reference the shared jars by path. §9.6 fails the run if any parent reference survives, so a missed rewrite cannot be published.
+This is the point of D05. Code on the Go tests for `build.gradle.kts` **and** `libs/plugin-api.jar` in the folder it is given, so only a flat archive can be opened on a phone at all. The cost is the one thing X2/R43 warns about — a rewrite — held to `(../)+libs/` → `libs/` in the two Gradle files, which are the only tracked files that reference the shared jars by path. §9.6 fails the run if any parent reference survives, so a missed rewrite cannot be published.
 
 Flattening merges three sources into one directory: the addon's tracked files, the shared jars, and the Gradle wrapper. Every write claims its path first and a second claim is a hard error, so an addon's own `libs/` jar (`Code-Together/libs/shared.jar`) sits beside the shared ones, while a name clash with them stops the run instead of silently overwriting (X2). An addon that tracks its own wrapper keeps it; only the few without one get the repository's.
 
@@ -298,7 +298,7 @@ After assembly and before upload, every tarball is checked:
 2. no member path escapes the tarball root, and no path is absolute;
 3. `gradlew` and `gradle/wrapper/gradle-wrapper.properties` are present;
 4. no `local.properties`, no `.gradle/`, no `build/`, no file matching a credential pattern;
-5. `build.gradle.kts` and `settings.gradle.kts` are present **at the archive root**, which is what makes the folder openable in Code On The Go;
+5. `build.gradle.kts` and `settings.gradle.kts` are present **at the archive root**, which is what makes the folder openable in Code on the Go;
 6. neither of those two files still references a parent directory — a `../` that survived the rewrite would resolve outside the archive and fail only once someone unpacked it and ran a build.
 
 Any failure aborts the run (R47). Nothing partial is uploaded.
@@ -309,16 +309,16 @@ Any failure aborts the run (R47). Nothing partial is uploaded.
 
 ## 10. The catalog
 
-The gallery reads this file. So, before long, will Code On The Go — and that second consumer is what makes the catalog different from every other object we publish.
+The gallery reads this file. So, before long, will Code on the Go — and that second consumer is what makes the catalog different from every other object we publish.
 
-The gallery ships from the same bucket as the catalog, so a mistake in the format costs one republish of both. A Code On The Go build cannot be fixed that way. Once a released build parses this document, that build exists in the field indefinitely and can never be corrected. **The catalog is therefore a public contract, not an implementation detail**, and everything below follows from that.
+The gallery ships from the same bucket as the catalog, so a mistake in the format costs one republish of both. A Code on the Go build cannot be fixed that way. Once a released build parses this document, that build exists in the field indefinitely and can never be corrected. **The catalog is therefore a public contract, not an implementation detail**, and everything below follows from that.
 
 ### 10.1 Consumers
 
 | Consumer | Needs | Status |
 |---|---|---|
 | The gallery | Everything, rendered as cards. Same-origin. | Built here. |
-| Code On The Go | To answer three questions: *what exists*, *do I already have it*, and *is mine current*. | **Nothing exists app-side yet** — see §10.8. |
+| Code on the Go | To answer three questions: *what exists*, *do I already have it*, and *is mine current*. | **Nothing exists app-side yet** — see §10.8. |
 | Third-party tools | A documented, versioned, validatable document. | Enabled by publishing the schema. |
 
 A survey of the app found no remote catalog, no listing model, no version comparison, and no HTTP stack. The format is therefore entirely ours to define — with the corresponding obligation to define it well, because there is no prior art to inherit blame from.
@@ -694,7 +694,7 @@ Carried from the PRD where still live, plus what the design introduces.
 | R37 | §7 — name and URL required, email only by consent |
 | R38 | §6 — a community addon's original naming is preserved |
 | R39 | §9 — a tarball per published addon |
-| R40 | §9.1 — the flat archive root builds standalone, and opens in Code On The Go |
+| R40 | §9.1 — the flat archive root builds standalone, and opens in Code on the Go |
 | R41 | §9.2 — jar set derived per addon by parsing build files |
 | R42 | §9.1 — root wrapper copied in |
 | R43 | §9.1 — one bounded rewrite, `(../)+libs/` → `libs/`, enforced by check 6 in §9.6 |

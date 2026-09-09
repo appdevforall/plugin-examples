@@ -1,5 +1,9 @@
 # Speech to Text plugin for Code on the Go
 
+**The AI Core addon is optional.** Without it, this plugin is plain dictation —
+it writes what you say at the cursor. With AI Core installed, it turns the
+transcript into code instead.
+
 Voice-to-code. Adds a **Voice to Code** button to the editor toolbar: tap it,
 speak, and the recognized text — or code generated from it — is inserted at the
 cursor. Speech recognition uses Android's `SpeechRecognizer` (on-device when
@@ -8,8 +12,6 @@ available); code generation is delegated to the companion `ai-core` plugin.
 > Code generation has **no compile-time dependency** on `ai-core`; the LLM
 > service is resolved at runtime. Install **`ai-core` first** for voice→code.
 > Without it, the raw transcript is inserted instead.
-
-Requires the AI Core plugin.
 
 ## Architecture
 
@@ -61,19 +63,19 @@ Prerequisites: Android SDK (API 33+), JDK 17. Create `local.properties` with
 `sdk.dir=...`.
 
 ```bash
-cd Speech-to-Text
-../gradlew assemblePlugin          # release  -> build/plugin/speech-to-text.cgp
-../gradlew assemblePluginDebug     # debug variant
+cd plugins/Speech-to-Text
+./gradlew assemblePlugin          # release  -> build/plugin/speech-to-text.cgp
+./gradlew assemblePluginDebug     # debug variant
 ```
 
-The build resolves `plugin-api.jar` from the repo-root `../libs/`.
+The build resolves `plugin-api.jar` from the repo-root `../../libs/`.
 
 ## Installation
 
 1. (Optional but recommended) Build and install **`ai-core` first** for
    voice→code (see [`../ai-core/README.md`](../ai-core/README.md)).
 2. Build this plugin, install `build/plugin/speech-to-text.cgp` via
-   CodeOnTheGo's Plugin Manager, and restart the IDE.
+   Code on the Go's Plugin Manager, and restart the IDE.
 3. Open a file, tap the microphone in the editor toolbar, grant the microphone
    permission on first use, and speak.
 
@@ -84,4 +86,4 @@ The build resolves `plugin-api.jar` from the repo-root `../libs/`.
 
 ## License
 
-GPL-3.0 — same as AndroidIDE / CodeOnTheGo.
+GPL-3.0 — same as AndroidIDE / Code on the Go.

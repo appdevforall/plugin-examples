@@ -77,7 +77,7 @@ def version(addon: Path) -> str:
 
 
 def min_app_version(addon: Path) -> str:
-    """The lowest Code On The Go release this addon declares.
+    """The lowest Code on the Go release this addon declares.
 
     The app's release version is YY.ww. Thirteen addons still carry the
     legacy "1.0.0" placeholder, which states no real minimum, so it is
