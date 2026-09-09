@@ -83,7 +83,7 @@ class ContentModelFileSourceTest {
     fun givenAHeldReadGrant_whenAskedWhetherAccessPersists_thenItDoes() {
         every { resolver.persistedUriPermissions } returns listOf(readGrant(CONTENT_URI))
 
-        assertTrue(source.hasPersistedAccess(context, CONTENT_URI))
+        assertEquals(true, source.hasPersistedAccess(context, CONTENT_URI))
     }
 
     @Test
@@ -92,20 +92,22 @@ class ContentModelFileSourceTest {
         // a revoked one, or a full grant table — brings the "may need re-picking" caveat back.
         every { resolver.persistedUriPermissions } returns listOf(readGrant(OTHER_CONTENT_URI))
 
-        assertFalse(source.hasPersistedAccess(context, CONTENT_URI))
+        assertEquals(false, source.hasPersistedAccess(context, CONTENT_URI))
     }
 
     @Test
-    fun givenAResolverThatCannotAnswer_whenAskedWhetherAccessPersists_thenNoCaveatIsInvented() {
+    fun givenAResolverThatCannotAnswer_whenAskedWhetherAccessPersists_thenItSaysSoRatherThanGuessing() {
+        // Neither direction is safe to guess: inventing a caveat is as wrong as clearing one that a
+        // real persistAccess failure raised, so the caller is told nothing was established.
         every { resolver.persistedUriPermissions } throws SecurityException("denied")
 
-        assertTrue(source.hasPersistedAccess(context, CONTENT_URI))
+        assertNull(source.hasPersistedAccess(context, CONTENT_URI))
         assertEquals(1, errors.size)
     }
 
     @Test
     fun givenFilesystemPath_whenAskedWhetherAccessPersists_thenNoGrantIsNeeded() {
-        assertTrue(source.hasPersistedAccess(context, "/sdcard/Download/model.gguf"))
+        assertEquals(true, source.hasPersistedAccess(context, "/sdcard/Download/model.gguf"))
 
         verify(exactly = 0) { resolver.persistedUriPermissions }
     }

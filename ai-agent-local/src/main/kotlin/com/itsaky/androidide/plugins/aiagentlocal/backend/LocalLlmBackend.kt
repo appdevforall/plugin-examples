@@ -45,6 +45,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Local LLM backend using llama-impl for on-device inference.
@@ -81,6 +82,9 @@ class LocalLlmBackend(
 
         /** How long an answered probe stands in for the next one; see [probeAnswerIsFresh]. */
         private val REACHABILITY_TRUST_NANOS = TimeUnit.SECONDS.toNanos(5)
+
+        /** How long [close] waits for a generation to give [generationMutex] back. */
+        private val UNLOAD_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(5)
     }
 
     private val llamaLazy = lazy { LLamaAndroid.instance() }
@@ -300,18 +304,23 @@ class LocalLlmBackend(
             // Residency is not evidence the file still exists. The descriptor this backend holds
             // keeps a deleted inode alive, so an unchecked early return keeps answering from a
             // model the user threw away — and keeps its gigabytes mapped. Confirm, then serve.
-            if (probeAnswerIsFresh()) return
-            val reachability = modelSource.reachabilityOf(modelRef)
-            // Anything but GONE is served: a silent provider is no reason to pay a GB reload —
-            // and it answered, so the window arms on it too. A provider wedged inside the open
-            // only ever yields UNKNOWN, which armed nothing and cost every message a probe.
-            if (reachability != SourceReachability.GONE) {
+            if (!probeAnswerIsFresh()) {
+                val reachability = modelSource.reachabilityOf(modelRef)
+                if (reachability == SourceReachability.GONE) {
+                    context.logger.info("Resident model is no longer reachable; unloading: $modelRef")
+                    evictResidentModel()
+                    throw unopenable(modelRef)
+                }
+                // Anything but GONE is served: a silent provider is no reason to pay a GB reload —
+                // and it answered, so the window arms on it too. A provider wedged inside the open
+                // only ever yields UNKNOWN, which armed nothing and cost every message a probe.
                 lastProbeAnsweredNanos = System.nanoTime()
-                return
             }
-            context.logger.info("Resident model is no longer reachable; unloading: $modelRef")
-            evictResidentModel()
-            throw unopenable(modelRef)
+            // Here too, not only on the load below: re-picking a model to recover from a refused
+            // one finds it resident, so this is the only place the refused model's grant is ever
+            // given back — without it the list grows one entry per refusal until the next start.
+            releaseSupersededGrants(modelRef)
+            return
         }
 
         val opened = modelSource.open(modelRef) ?: throw unopenable(modelRef)
@@ -418,8 +427,10 @@ class LocalLlmBackend(
      * pick this method never gets to (ADFA-5253). The settings pane writes the list; see
      * `LocalLlmSettingsViewModel.supersede`.
      *
-     * Cleared before the releases, so a provider that throws cannot leave the list to be retried
-     * on every later load.
+     * Written back before the releases, so a provider that throws cannot leave the list to be
+     * retried on every later load — and written back rather than cleared whole: [loadedRef] can be
+     * on the list itself (a generation that read the old path queues behind a selection of a new
+     * one), and dropping it there would hold its grant with nothing left recording it.
      *
      * @param loadedRef the model just adopted; never released, however it got onto the list
      */
@@ -428,8 +439,9 @@ class LocalLlmBackend(
             val prefs = LocalLlmPreferences.of(context)
             val superseded = LocalLlmPreferences.supersededModels(prefs)
             if (superseded.isEmpty()) return
-            LocalLlmPreferences.setSupersededModels(prefs, emptySet())
-            for (reference in superseded - loadedRef) {
+            val release = superseded - loadedRef
+            LocalLlmPreferences.setSupersededModels(prefs, superseded - release)
+            for (reference in release) {
                 context.logger.debug("Releasing the read grant of a replaced model: $reference")
                 modelSource.releaseAccess(reference)
             }
@@ -881,6 +893,8 @@ class LocalLlmBackend(
      * Suspending model unload — safe to call from any coroutine. Takes [generationMutex] because
      * [evictResidentModel] requires it: a watch notification that arrives just before [close] runs
      * its own eviction on [cleanupScope], and two of them would unload the native model twice.
+     *
+     * Callers on the teardown path must bound the wait; see [close].
      */
     private suspend fun unloadModelInternal() = generationMutex.withLock {
         if (modelLoaded) {
@@ -900,6 +914,11 @@ class LocalLlmBackend(
      * is owned by this object and cancelled as soon as the work finishes, so there is no orphan
      * job left behind. It cannot be joined — dispose() may be on the main thread and unload()
      * blocks on the native run loop — so deterministic teardown is the strongest guarantee here.
+     *
+     * The unload is bounded: it waits on [generationMutex], which a generation can be holding
+     * inside the uncancellable binder probe in [ensureModelLoaded], and a wedged `DocumentsProvider`
+     * would otherwise park this coroutine for good — taking [LLamaAndroid.shutdown] with it and
+     * leaking the native context and the run-loop thread for the life of the IDE process.
      */
     fun close() {
         scope.cancel()
@@ -910,15 +929,17 @@ class LocalLlmBackend(
                 return@launch
             }
             try {
-                unloadModelInternal()
+                if (withTimeoutOrNull(UNLOAD_TIMEOUT_MS) { unloadModelInternal() } == null) {
+                    context.logger.warn("Timed out unloading the model during close()")
+                }
             } catch (t: Throwable) {
                 context.logger.error("Error unloading model during close()", t)
-            } finally {
-                try {
-                    llama.shutdown()
-                } catch (t: Throwable) {
-                    context.logger.error("Error shutting down Llm-RunLoop during close()", t)
-                }
+            }
+            // Reached whether or not the unload did: shutdown() is what stops the run-loop thread.
+            try {
+                llama.shutdown()
+            } catch (t: Throwable) {
+                context.logger.error("Error shutting down Llm-RunLoop during close()", t)
             }
         }
         cleanup.invokeOnCompletion { cleanupScope.cancel() }

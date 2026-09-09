@@ -110,6 +110,47 @@ internal fun confirmedGone(probe: () -> SourceReachability): SourceReachability 
 private const val GONE_CONFIRM_DELAY_MS = 250L
 
 /**
+ * One ask of a document, through whatever [open] the caller reaches it with — an input stream for
+ * the metadata reads, a file descriptor for the native loader. Shared by both sources because which
+ * exception means gone is a contract they have to agree on; as two copies they drifted once already.
+ *
+ * @param open opens the document; null without throwing is the provider saying nothing
+ * @param onError reports an exception that is evidence neither way
+ */
+internal fun probeOpenable(
+    open: () -> Closeable?,
+    onError: (Throwable) -> Unit,
+): SourceReachability = try {
+    open()?.use { SourceReachability.REACHABLE }
+    // No handle and no failure is not the provider saying the document is gone.
+        ?: SourceReachability.UNKNOWN
+} catch (_: FileNotFoundException) {
+    // A deleted document, but also every provider-death path: only the re-ask decides.
+    SourceReachability.GONE
+} catch (_: SecurityException) {
+    // The persisted grant is gone, which is as final as a deletion from here.
+    SourceReachability.GONE
+} catch (e: Exception) {
+    // Anything the resolver did not convert on its way out; not evidence either way.
+    onError(e)
+    SourceReachability.UNKNOWN
+}
+
+/**
+ * One ask of a filesystem path. Readability, not just existence: a file the loader cannot open is
+ * gone as far as it cares. Shared for the same reason as [probeOpenable].
+ *
+ * @param onError reports an exception that is evidence neither way
+ */
+internal fun probeFilePath(path: String, onError: (Throwable) -> Unit): SourceReachability = try {
+    if (File(path).let { it.isFile && it.canRead() }) SourceReachability.REACHABLE
+    else SourceReachability.GONE
+} catch (e: Exception) {
+    onError(e)
+    SourceReachability.UNKNOWN
+}
+
+/**
  * Opens the user's selected model for the native loader, in place and without copying it.
  * An interface so the backend's load path can be exercised without a device.
  */
@@ -183,41 +224,18 @@ class ContentNativeModelSource(
         else fileReachability(modelReference)
 
     /** Confirmed, because one `FileNotFoundException` cannot tell a deletion from a dead provider. */
-    private fun documentReachability(uriString: String): SourceReachability =
-        confirmedGone { probeDocument(uriString) }
-
-    private fun probeDocument(uriString: String): SourceReachability = try {
-        context.contentResolver
-            .openFileDescriptor(Uri.parse(uriString), "r")
-            ?.use { SourceReachability.REACHABLE }
-        // No descriptor and no failure is not the provider saying the document is gone.
-            ?: SourceReachability.UNKNOWN
-    } catch (_: FileNotFoundException) {
-        // A deleted document, but also every provider-death path: only the re-ask decides.
-        SourceReachability.GONE
-    } catch (_: SecurityException) {
-        // The persisted grant is gone, which is as final as a deletion from here.
-        SourceReachability.GONE
-    } catch (e: Exception) {
-        // Anything the resolver did not convert on its way out; not evidence either way.
-        onError("could not reach the selected model $uriString", e)
-        SourceReachability.UNKNOWN
+    private fun documentReachability(uriString: String): SourceReachability = confirmedGone {
+        probeOpenable({ context.contentResolver.openFileDescriptor(Uri.parse(uriString), "r") }) {
+            onError("could not reach the selected model $uriString", it)
+        }
     }
 
     /**
      * Confirmed like the document branch, so [reachabilityOf]'s contract — a GONE is only ever an
      * answer given twice — holds for every reference, not only the ones that go through a provider.
      */
-    private fun fileReachability(path: String): SourceReachability =
-        confirmedGone { probeFile(path) }
-
-    /** Readability, not just existence: a file the loader cannot open is gone as far as it cares. */
-    private fun probeFile(path: String): SourceReachability = try {
-        if (File(path).let { it.isFile && it.canRead() }) SourceReachability.REACHABLE
-        else SourceReachability.GONE
-    } catch (e: Exception) {
-        onError("could not stat the model file $path", e)
-        SourceReachability.UNKNOWN
+    private fun fileReachability(path: String): SourceReachability = confirmedGone {
+        probeFilePath(path) { onError("could not stat the model file $path", it) }
     }
 
     override fun releaseAccess(modelReference: String) {

@@ -68,11 +68,21 @@ class PlatformModelSourceWatcher(
      * Registers on the document URI *and* on [parentChildrenUriOf] it, which is where a provider
      * actually notifies a delete and is no descendant of the document URI. Both stay hints, never
      * verdicts — the parent's URI fires for every sibling too — so the callback confirms first.
+     *
+     * Debounced for that reason: the parent's URI fires for every change in the folder, and the
+     * folder the help pages steer users to is Downloads, where every completed download lands.
+     * Each notification the callback acts on costs a binder probe under the backend's generation
+     * lock, so a burst is collapsed into one ask [NOTIFY_DEBOUNCE_MS] after it stops.
      */
     private fun watchDocument(uriString: String, onGone: () -> Unit): Closeable {
         val uri = Uri.parse(uriString)
-        val observer = object : ContentObserver(acquireHandler()) {
-            override fun onChange(selfChange: Boolean, uri: Uri?) = onGone()
+        val handler = acquireHandler()
+        val fire = Runnable { onGone() }
+        val observer = object : ContentObserver(handler) {
+            override fun onChange(selfChange: Boolean, uri: Uri?) {
+                handler.removeCallbacks(fire)
+                handler.postDelayed(fire, NOTIFY_DEBOUNCE_MS)
+            }
         }
         try {
             context.contentResolver.registerContentObserver(uri, true, observer)
@@ -91,6 +101,9 @@ class PlatformModelSourceWatcher(
         // One unregister covers both registrations — the resolver keys them by observer.
         return closeOnce {
             try {
+                // Ahead of the unregister: a debounced notification still queued would otherwise
+                // reach onGone after the watch was closed, on a thread that is about to quit.
+                handler.removeCallbacks(fire)
                 context.contentResolver.unregisterContentObserver(observer)
             } finally {
                 releaseHandler()
@@ -158,6 +171,9 @@ class PlatformModelSourceWatcher(
     private companion object {
         const val CONTENT_SCHEME = "content://"
         const val THREAD_NAME = "LocalLlm-ModelWatch"
+
+        /** Short enough that a real delete is still acted on promptly; see [watchDocument]. */
+        const val NOTIFY_DEBOUNCE_MS = 300L
     }
 }
 

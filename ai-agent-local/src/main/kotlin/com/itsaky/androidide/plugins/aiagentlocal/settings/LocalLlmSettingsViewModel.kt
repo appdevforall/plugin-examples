@@ -292,24 +292,27 @@ class LocalLlmSettingsViewModel(
      * @param savedPath the configured model, confirmed readable a moment ago
      * @param generation the state's generation from before the probe; a status published since is
      *   newer than this answer, so it stands whatever it says
-     * @param accessPersisted whether a durable read grant for [savedPath] is still held
+     * @param accessPersisted whether a durable read grant for [savedPath] is still held, or null
+     *   when the resolver would not say — which leaves the caveat already shown alone rather than
+     *   clearing a warning that a real `persistAccess` failure raised
      */
     private fun publishConfirmedReadable(
         savedPath: String,
         generation: Long,
-        accessPersisted: Boolean,
+        accessPersisted: Boolean?,
     ) {
         updateIfNothingPublishedSince(generation) { state ->
             val model = when (val shown = state.model) {
                 // Stale: the model reads back, so it is not unreachable any more.
-                is ModelLoadingState.Unavailable -> modelStateFor(savedPath, accessPersisted)
+                is ModelLoadingState.Unavailable -> modelStateFor(savedPath, accessPersisted ?: true)
                 // Stands, and only the caveat on it can have changed since it was published.
-                is ModelLoadingState.Loaded -> shown.copy(accessPersisted = accessPersisted)
+                is ModelLoadingState.Loaded ->
+                    shown.copy(accessPersisted = accessPersisted ?: shown.accessPersisted)
                 // An error about another pick is stale; one about this model is the only answer
                 // anyone has to why it would not load, and a readable stream does not refute it.
                 is ModelLoadingState.Error ->
                     if (shown.reference == savedPath) return@updateIfNothingPublishedSince null
-                    else modelStateFor(savedPath, accessPersisted)
+                    else modelStateFor(savedPath, accessPersisted ?: true)
                 else -> return@updateIfNothingPublishedSince null
             }
             if (model == state.model) return@updateIfNothingPublishedSince null

@@ -5,7 +5,6 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.OpenableColumns
 import java.io.File
-import java.io.FileNotFoundException
 import java.io.InputStream
 
 /**
@@ -64,10 +63,14 @@ interface ModelFileSource {
      * still has to warn that the model may need picking again after a restart. Not for the main
      * thread.
      *
-     * @return true for a filesystem path, and whenever the answer cannot be established: a caveat
-     *   that may be wrong is worse than none
+     * Tri-state, because the two directions are not symmetric: inventing a caveat is worse than
+     * none, but erasing one that a real `persistAccess` failure raised tells the user a selection
+     * is fine when the next restart will break it.
+     *
+     * @return true for a filesystem path; null when the answer cannot be established, which leaves
+     *   whatever the pane already says about the grant standing
      */
-    fun hasPersistedAccess(context: Context, uriString: String): Boolean
+    fun hasPersistedAccess(context: Context, uriString: String): Boolean?
 
     /**
      * Give back the persistable read grant the picker took for [uriString], for a model the user
@@ -110,36 +113,16 @@ class ContentModelFileSource(
     override fun readability(context: Context, uriString: String): SourceReachability =
         if (uriString.startsWith(CONTENT_SCHEME)) {
             // Confirmed: one FileNotFoundException covers a deletion and a dead provider alike.
-            confirmedGone { probeDocument(context, uriString) }
+            confirmedGone {
+                probeOpenable({ context.contentResolver.openInputStream(Uri.parse(uriString)) }) {
+                    onError("could not reach $uriString", it)
+                }
+            }
         } else {
             // Confirmed on this branch too, so a GONE is an answer given twice for every reference
             // — a stat that lost a race with a mount refuses a pick over a model that is fine.
-            confirmedGone { probeFile(uriString) }
+            confirmedGone { probeFilePath(uriString) { onError("could not stat $uriString", it) } }
         }
-
-    private fun probeDocument(context: Context, uriString: String): SourceReachability = try {
-        context.contentResolver.openInputStream(Uri.parse(uriString))
-            ?.use { SourceReachability.REACHABLE }
-        // No stream and no failure is not the provider saying the document is gone.
-            ?: SourceReachability.UNKNOWN
-    } catch (_: FileNotFoundException) {
-        // A deleted document, but also every provider-death path: only the re-ask decides.
-        SourceReachability.GONE
-    } catch (_: SecurityException) {
-        // The persisted grant is gone, which is as final as a deletion from here.
-        SourceReachability.GONE
-    } catch (e: Exception) {
-        onError("could not reach $uriString", e)
-        SourceReachability.UNKNOWN
-    }
-
-    private fun probeFile(path: String): SourceReachability = try {
-        if (File(path).let { it.isFile && it.canRead() }) SourceReachability.REACHABLE
-        else SourceReachability.GONE
-    } catch (e: Exception) {
-        onError("could not stat $path", e)
-        SourceReachability.UNKNOWN
-    }
 
     override fun fallbackDisplayName(uriOrPath: String): String =
         (try {
@@ -163,14 +146,16 @@ class ContentModelFileSource(
         }
     }
 
-    override fun hasPersistedAccess(context: Context, uriString: String): Boolean {
+    override fun hasPersistedAccess(context: Context, uriString: String): Boolean? {
         if (!uriString.startsWith(CONTENT_SCHEME)) return true
         return try {
             context.contentResolver.persistedUriPermissions
                 .any { it.isReadPermission && it.uri.toString() == uriString }
         } catch (e: Exception) {
+            // "Could not tell", never "it is fine": a resolver that will not answer must not be
+            // the thing that clears a caveat a failed persistAccess put there.
             onError("could not read the persisted read grants for $uriString", e)
-            true
+            null
         }
     }
 

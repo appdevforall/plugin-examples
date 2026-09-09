@@ -54,6 +54,9 @@ class LocalLlmSettingsViewModelTest {
         /** References whose durable grant is no longer held, as a revoked one reads later. */
         val ungranted = mutableSetOf<String>()
 
+        /** References the resolver will not answer the grant question for at all. */
+        val grantUnknown = mutableSetOf<String>()
+
         /** Runs inside a readability probe, so a test can land a status while one is in flight. */
         var duringReadability: ((String) -> Unit)? = null
 
@@ -81,8 +84,8 @@ class LocalLlmSettingsViewModelTest {
             return true
         }
 
-        override fun hasPersistedAccess(context: Context, uriString: String) =
-            uriString !in ungranted
+        override fun hasPersistedAccess(context: Context, uriString: String): Boolean? =
+            if (uriString in grantUnknown) null else uriString !in ungranted
 
         override fun releaseAccess(context: Context, uriString: String) {
             released += uriString
@@ -484,6 +487,24 @@ class LocalLlmSettingsViewModelTest {
         viewModel.refreshSavedModelAvailability()
 
         assertEquals(ModelLoadingState.Loaded("a.gguf"), viewModel.state.value?.model)
+    }
+
+    @Test
+    fun givenAResolverThatCannotAnswer_whenTheScreenReturns_thenTheCaveatStands() {
+        // "Could not tell" used to come back as "the grant is held", so a resolver that would not
+        // answer erased a warning a real persistAccess failure had raised — and the restart it
+        // warned about then broke the model with nothing on screen having said so.
+        modelFiles.unpersistable += MODEL_A
+        val viewModel = viewModel()
+        viewModel.loadModelFromUri(MODEL_A)
+
+        modelFiles.grantUnknown += MODEL_A
+        viewModel.refreshSavedModelAvailability()
+
+        assertEquals(
+            ModelLoadingState.Loaded("a.gguf", accessPersisted = false),
+            viewModel.state.value?.model,
+        )
     }
 
     private companion object {

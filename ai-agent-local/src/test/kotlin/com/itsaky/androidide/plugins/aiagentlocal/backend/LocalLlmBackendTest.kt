@@ -507,11 +507,32 @@ class LocalLlmBackendTest {
         // Re-picking a model that had been replaced takes it off the list; releasing it here would
         // revoke the grant on the model that just loaded.
         val source = FakeModelSource(mapOf(CONTENT_URI to handleFor(chatModel())))
-        supersede(CONTENT_URI)
+        val pending = supersede(CONTENT_URI)
 
         runBlocking { backendWith(source, FakeEngine()).ensureModelLoaded(CONTENT_URI) }
 
         assertEquals(emptyList<String>(), source.released)
+        // Kept on the list rather than cleared with the rest: a generation that read the old path
+        // can load it after the pane already configured another, and the list is the only record
+        // of a grant to give back when that other model loads.
+        assertEquals(setOf(CONTENT_URI), pending[KEY_SUPERSEDED])
+    }
+
+    @Test
+    fun givenAModelAlreadyResident_whenItIsAskedForAgain_thenAReplacedModelsGrantIsStillGivenBack() {
+        // The recovery path: A is resident, an embedding model is picked and refused, and re-picking
+        // A finds it resident. That never reaches the load, so this is the only place the refused
+        // model's grant can come back — it used to be held for the life of the process.
+        val source = FakeModelSource(mapOf(CONTENT_URI to handleFor(chatModel())))
+        val pending = supersede()
+        val backend = backendWith(source, FakeEngine())
+        runBlocking { backend.ensureModelLoaded(CONTENT_URI) }
+
+        pending[KEY_SUPERSEDED] = mutableSetOf(OTHER_CONTENT_URI)
+        runBlocking { backend.ensureModelLoaded(CONTENT_URI) }
+
+        assertEquals(listOf(OTHER_CONTENT_URI), source.released)
+        assertEquals(emptySet<String>(), pending[KEY_SUPERSEDED])
     }
 
     private fun awaitUnload(engine: FakeEngine) {
