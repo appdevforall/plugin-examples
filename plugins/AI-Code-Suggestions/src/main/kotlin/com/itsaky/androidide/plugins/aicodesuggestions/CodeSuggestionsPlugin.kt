@@ -23,7 +23,7 @@ private const val TAG = "CodeSuggestionsPlugin"
 private const val DEBOUNCE_MS = 800L
 
 /**
- * Code Suggestions Plugin provides inline ghost-text completions.
+ * AI Code Suggestions Plugin provides inline ghost-text completions.
  *
  * Listens to editor content changes, debounces 800ms, calls LLM for suggestions,
  * and displays ghost text via IdeEditorService.showInlineSuggestion().
@@ -199,9 +199,9 @@ class CodeSuggestionsPlugin : IPlugin, DocumentationExtension {
     override fun getTooltipEntries(): List<PluginTooltipEntry> = listOf(
         PluginTooltipEntry(
             tag = TOOLTIP_TAG_PLUGIN,
-            summary = "Code Suggestions shows inline ghost-text completions while typing - tab accepts one.",
+            summary = "AI Code Suggestions shows inline ghost-text completions while typing - tab accepts one.",
             detail = """
-                <p><b>Code Suggestions</b> listens to editor changes, debounces
+                <p><b>AI Code Suggestions</b> listens to editor changes, debounces
                 typing, and asks AI Core for a completion at the cursor.</p>
                 <p>Accept a suggestion with the <b>&#8633;</b> key in the symbol
                 row above the keyboard (or <b>Tab</b> on a hardware keyboard);
@@ -212,7 +212,7 @@ class CodeSuggestionsPlugin : IPlugin, DocumentationExtension {
             """.trimIndent(),
             buttons = listOf(
                 PluginTooltipButton(
-                    description = "Code Suggestions guide",
+                    description = "AI Code Suggestions guide",
                     uri = "index.html",
                     order = 0
                 )

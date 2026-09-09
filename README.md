@@ -1,6 +1,6 @@
 # plugin-examples
 
-Reference plugins for [Code On The Go](https://github.com/appdevforall/CodeOnTheGo). Each folder is a fully self-contained Gradle project that builds to a `.cgp` installable plugin file.
+Reference plugins for [Code on the Go](https://github.com/appdevforall/CodeOnTheGo). Each folder is a fully self-contained Gradle project that builds to a `.cgp` installable plugin file.
 
 See the official [plugin documentation](https://www.appdevforall.org/codeonthego/help/exp-plugins-top.html) for concepts, the plugin API surface, and install workflow.
 
@@ -43,7 +43,7 @@ cd plugins/Voice-Alerts
 ./gradlew assemblePlugin
 ```
 
-The resulting `.cgp` file lands under the plugin's `build/plugin/` directory. Install it from inside Code On The Go via the Plugin Manager.
+The resulting `.cgp` file lands under the plugin's `build/plugin/` directory. Install it from inside Code on the Go via the Plugin Manager.
 
 ## Git hooks
 
@@ -65,7 +65,7 @@ when your push doesn't touch any plugin folder.
 
 ## The `libs/` folder
 
-Every plugin depends on two jars produced by the Code On The Go source tree:
+Every plugin depends on two jars produced by the Code on the Go source tree:
 
 - **`plugin-api.jar`** — the interface surface a plugin implements (`IPlugin`, `BuildStatusListener`, etc.). Used as `compileOnly` at build time; provided by the IDE at runtime.
 - **`gradle-plugin.jar`** — the custom Gradle plugin (`com.itsaky.androidide.plugins.build`) that packages a compiled Android library into a `.cgp` file. Applied via `classpath` in each plugin's `settings.gradle.kts`.
@@ -74,11 +74,11 @@ Both jars live in `libs/` at the repo root; each plugin references them via `../
 
 ## Refreshing `libs/`
 
-Whenever Code On The Go changes the plugin API or the build plugin, the jars need to be rebuilt. Two ways to do that:
+Whenever Code on the Go changes the plugin API or the build plugin, the jars need to be rebuilt. Two ways to do that:
 
 ### GitHub Action (normal path)
 
-Go to [Actions → **Update libs from CodeOnTheGo**](../../actions/workflows/update-libs.yml) and click **Run workflow**. It will clone Code On The Go at the branch or tag you specify (default: `stage`), build both jars, and commit them directly to the default branch.
+Go to [Actions → **Update libs from CodeOnTheGo**](../../actions/workflows/update-libs.yml) and click **Run workflow**. It will clone Code on the Go at the branch or tag you specify (default: `stage`), build both jars, and commit them directly to the default branch.
 
 ### Locally
 
@@ -88,7 +88,7 @@ Go to [Actions → **Update libs from CodeOnTheGo**](../../actions/workflows/upd
 ./scripts/update-libs.sh --local ../CodeOnTheGo   # use an existing local checkout instead of cloning
 ```
 
-First local run clones Code On The Go into `.cache/CodeOnTheGo/` (gitignored); subsequent runs `git pull` in place. Review the diff in `libs/` and commit if you're happy with it.
+First local run clones Code on the Go into `.cache/CodeOnTheGo/` (gitignored); subsequent runs `git pull` in place. Review the diff in `libs/` and commit if you're happy with it.
 
 ## Adding a new plugin example
 

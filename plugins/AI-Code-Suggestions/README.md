@@ -1,4 +1,4 @@
-# AI Code Suggestions plugin for Code On The Go
+# AI Code Suggestions plugin for Code on the Go
 
 **Requires the AI Core addon.** This plugin holds no model of its own. It asks
 AI Core for every completion, so install AI Core first and select a model in
@@ -63,7 +63,7 @@ The build resolves `plugin-api.jar` from the repo-root `../../libs/`.
 
 1. Build and install **`ai-core` first** (see [`../ai-core/README.md`](../ai-core/README.md)).
 2. Build this plugin, install `build/plugin/ai-code-suggestions.cgp` via
-   Code On The Go's Plugin Manager, and restart the IDE.
+   Code on the Go's Plugin Manager, and restart the IDE.
 3. Configure a model in **AI Assistant → AI Settings**.
 
 ## Key classes
@@ -73,4 +73,4 @@ The build resolves `plugin-api.jar` from the repo-root `../../libs/`.
 
 ## License
 
-GPL-3.0 — same as AndroidIDE / Code On The Go.
+GPL-3.0 — same as AndroidIDE / Code on the Go.

@@ -1,4 +1,4 @@
-# Speech to Text plugin for Code On The Go
+# Speech to Text plugin for Code on the Go
 
 **The AI Core addon is optional.** Without it, this plugin is plain dictation —
 it writes what you say at the cursor. With AI Core installed, it turns the
@@ -75,7 +75,7 @@ The build resolves `plugin-api.jar` from the repo-root `../../libs/`.
 1. (Optional but recommended) Build and install **`ai-core` first** for
    voice→code (see [`../ai-core/README.md`](../ai-core/README.md)).
 2. Build this plugin, install `build/plugin/speech-to-text.cgp` via
-   Code On The Go's Plugin Manager, and restart the IDE.
+   Code on the Go's Plugin Manager, and restart the IDE.
 3. Open a file, tap the microphone in the editor toolbar, grant the microphone
    permission on first use, and speak.
 
@@ -86,4 +86,4 @@ The build resolves `plugin-api.jar` from the repo-root `../../libs/`.
 
 ## License
 
-GPL-3.0 — same as AndroidIDE / Code On The Go.
+GPL-3.0 — same as AndroidIDE / Code on the Go.

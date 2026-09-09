@@ -1,6 +1,6 @@
 # Flutter Template
 
-A [Code On The Go](https://github.com/appdevforall/CodeOnTheGo) plugin that adds **Flutter starter
+A [Code on the Go](https://github.com/appdevforall/CodeOnTheGo) plugin that adds **Flutter starter
 project templates** to the IDE's New Project screen, alongside the built-in core templates.
 
 It contributes five templates, one per state-management approach:
@@ -35,7 +35,7 @@ cd flutter-template
 ../gradlew clean assemblePlugin
 ```
 
-The `.cgp` lands in `build/plugin/flutter-templates.cgp`. Install it from inside Code On The Go via
+The `.cgp` lands in `build/plugin/flutter-templates.cgp`. Install it from inside Code on the Go via
 the Plugin Manager, then open **New Project** to see the Flutter templates.
 
 ## Note on the Flutter SDK
@@ -50,5 +50,5 @@ lower-cased for `pubspec.yaml`'s `name:` field.
 
 Original idea by **Raju Kumar** ([ADFA-2599](https://appdevforall.atlassian.net/browse/ADFA-2599)).
 
-Contributed by **RJ Ali** &lt;rjali3232@gmail.com&gt; via the Code On The Go community submission
+Contributed by **RJ Ali** &lt;rjali3232@gmail.com&gt; via the Code on the Go community submission
 process, rebuilt on the IDE's template system ([ADFA-3857](https://appdevforall.atlassian.net/browse/ADFA-3857)).

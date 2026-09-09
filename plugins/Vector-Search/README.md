@@ -1,4 +1,4 @@
-# Vector Search plugin for Code On The Go
+# Vector Search plugin for Code on the Go
 
 Semantic (meaning-based) code search. Files are chunked and embedded into
 vectors; a query is embedded the same way and ranked by cosine similarity. The
@@ -62,7 +62,7 @@ The build resolves `plugin-api.jar` from the repo-root `../libs/`.
 1. Build and install **`ai-core` first** for quality embeddings (see
    [`../ai-core/README.md`](../ai-core/README.md)).
 2. Build this plugin, install `build/plugin/vector-search.cgp` via
-   Code On The Go's Plugin Manager, and restart the IDE.
+   Code on the Go's Plugin Manager, and restart the IDE.
 3. Run a query from the project search screen; look for the **Semantic
    Results** section.
 
@@ -75,4 +75,4 @@ The build resolves `plugin-api.jar` from the repo-root `../libs/`.
 
 ## License
 
-GPL-3.0 — same as AndroidIDE / Code On The Go.
+GPL-3.0 — same as AndroidIDE / Code on the Go.

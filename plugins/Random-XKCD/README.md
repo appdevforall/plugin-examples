@@ -1,12 +1,12 @@
 # random-xkcd
 
-A small Code On The Go plugin that shows a random xkcd comic in the
+A small Code on the Go plugin that shows a random xkcd comic in the
 editor bottom sheet. Three buttons above the comic — Random / Copy
 URL / Copy image — mirror the xkcd.com control bar. Tap the image
 to copy URL, double-tap to copy image. Long-press the tab for
 in-IDE help.
 
-Designed as a canonical "this is what a small Code On The Go plugin looks like"
+Designed as a canonical "this is what a small Code on the Go plugin looks like"
 example. Under 300 lines of Kotlin, every plugin-specific concept
 called out where it shows up in the code.
 
@@ -19,10 +19,10 @@ once the plugin is installed.
 
 To read it:
 
-- **Inside Code On The Go** (the canonical path) — long-press the **XKCD** tab in
+- **Inside Code on the Go** (the canonical path) — long-press the **XKCD** tab in
   the editor bottom sheet → tap **"See More"** → tap **"Code
   walkthrough"**. The IDE opens the page in an in-IDE WebView.
-- **Outside Code On The Go** — open `src/main/assets/docs/index.html` directly
+- **Outside Code on the Go** — open `src/main/assets/docs/index.html` directly
   in any browser. Renders identically.
 
 The tutorial covers the plugin in 7 steps:
@@ -42,7 +42,7 @@ The tutorial covers the plugin in 7 steps:
 ```
 
 Produces `build/plugin/random-xkcd.cgp` — the bundle you sideload
-into Code On The Go via **Preferences → Plugin Manager → +**.
+into Code on the Go via **Preferences → Plugin Manager → +**.
 
 ## Source layout
 
