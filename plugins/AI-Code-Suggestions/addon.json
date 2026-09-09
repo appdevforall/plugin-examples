@@ -1,5 +1,5 @@
 {
-  "summary": "Shows inline code completions as you type.",
+  "summary": "Inline code completions as you type. Requires the AI Core addon.",
   "description": "Adds grey ghost text to the editor that completes the line you are writing. The suggestions come from the on-device model that the AI Core addon provides.",
   "tags": [
     "ai",

@@ -1,8 +1,8 @@
 # Python Tools
 
-A Python + Flask plugin for Code On the Go
+A Python + Flask plugin for Code on the Go
 
-This plugin shows how to add languages and projects to Code On the Go. It contains a version of Python and Flask.
+This plugin shows how to add languages and projects to Code on the Go. It contains a version of Python and Flask.
 
 ## What it adds
 

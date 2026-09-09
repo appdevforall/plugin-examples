@@ -77,9 +77,14 @@ class Executor(
      * read-only handler, and a batch of four reads must not go sequential over spelling.
      *
      * @param toolCalls the calls to run, in the order the model emitted them.
+     * @param onCallStarted invoked as each call begins, for the UI's activity line; a parallel run
+     *   invokes it once per call in that run, in no guaranteed order.
      * @return one result per call, positionally aligned with [toolCalls].
      */
-    suspend fun execute(toolCalls: List<ToolCall>): List<ToolResult> = coroutineScope {
+    suspend fun execute(
+        toolCalls: List<ToolCall>,
+        onCallStarted: suspend (ToolCall) -> Unit = {},
+    ): List<ToolResult> = coroutineScope {
         Log.i(TAG, "Executing ${toolCalls.size} tool call(s)...")
 
         val results = arrayOfNulls<ToolResult>(toolCalls.size)
@@ -91,6 +96,7 @@ class Executor(
         var index = 0
         while (index < toolCalls.size) {
             if (!parallelSafe[index]) {
+                onCallStarted(toolCalls[index])
                 results[index] = executeCall(toolCalls[index], handlers[index], "Sequential")
                 index++
                 continue
@@ -99,7 +105,10 @@ class Executor(
             var end = index
             while (end < toolCalls.size && parallelSafe[end]) end++
             (index until end).map { i ->
-                async { results[i] = executeCall(toolCalls[i], handlers[i], "Parallel") }
+                async {
+                    onCallStarted(toolCalls[i])
+                    results[i] = executeCall(toolCalls[i], handlers[i], "Parallel")
+                }
             }.awaitAll()
             index = end
         }
@@ -236,11 +245,23 @@ class Executor(
         toolExecutionTracker?.logToolCall(toolName, toolDuration)
 
         Log.i(TAG, "($executionMode): Result: ${result.toResultMap()}")
-        AgentTrace.stage(
-            "EXEC",
-            "$toolName done success=${result.success} tookMs=$toolDuration",
-            AgentTrace.preview(result.message),
-        )
+        // A failure's reason goes in the head, not the preview: it is the handler's own short
+        // message rather than the user's content, and a release build drops previews — which is
+        // what left a run_app that failed in 0ms indistinguishable from one that ran and failed.
+        if (result.success) {
+            AgentTrace.stage(
+                "EXEC",
+                "$toolName done success=true tookMs=$toolDuration",
+                AgentTrace.preview(result.message),
+            )
+        } else {
+            AgentTrace.refusal(
+                "EXEC",
+                "$toolName done success=false tookMs=$toolDuration " +
+                    "reason=${AgentTrace.preview(result.message, 80)}",
+                result.error_details.orEmpty(),
+            )
+        }
         return result
     }
 

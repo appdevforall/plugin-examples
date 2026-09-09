@@ -55,7 +55,7 @@ def build(tmp_path: Path, addon: Path, meta: dict | None = None) -> Path:
 
 
 def test_the_archive_root_is_the_project_root(tmp_path):
-    """Code On The Go accepts a folder only when build.gradle.kts and
+    """Code on the Go accepts a folder only when build.gradle.kts and
     libs/plugin-api.jar sit in that same folder (isPluginProject)."""
     names = names_in(build(tmp_path, make_repo(tmp_path)))
     top = "keystore-generator-src"

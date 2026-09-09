@@ -1,6 +1,6 @@
 {
   "summary": "Turns the open project into a reusable template.",
-  "description": "Takes the project you have open and writes it out as a Code On The Go template, so you can start new projects from it.",
+  "description": "Takes the project you have open and writes it out as a Code on the Go template, so you can start new projects from it.",
   "tags": [
     "templates",
     "project",

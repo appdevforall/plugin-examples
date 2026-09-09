@@ -15,7 +15,7 @@ import java.util.TreeMap
 /**
  * Rainbow Brackets — tints matching parentheses, brackets, and braces by nesting depth.
  *
- * Implemented as a generic [EditorDecorationProvider]: the Code On The Go editor calls [decorate]
+ * Implemented as a generic [EditorDecorationProvider]: the Code on the Go editor calls [decorate]
  * for each analyzed region and merges the returned color spans on top of the normal syntax
  * highlighting. All of the logic — bracket detection, nesting-depth tracking, theme palettes, and
  * skipping brackets inside strings/comments — lives here in the plugin; the IDE is unaware that

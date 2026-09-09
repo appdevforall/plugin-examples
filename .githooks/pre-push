@@ -2,7 +2,7 @@
 #
 # pre-push nudge (ADFA-4678)
 #
-# Reminds the developer to run the Code On The Go plugin-review skill
+# Reminds the developer to run the Code on the Go plugin-review skill
 # (/plugin-review) before finishing a PR, so peer review isn't spent on
 # issues the skill catches automatically.
 #

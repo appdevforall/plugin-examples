@@ -1,19 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.itsaky.androidide.plugins.codesuggestions">
+    package="com.itsaky.androidide.plugins.aicodesuggestions">
 
     <application
-        android:label="Code Suggestions Plugin"
+        android:label="AI Code Suggestions Plugin"
         android:theme="@style/PluginTheme">
 
         <!-- Plugin metadata -->
         <meta-data
             android:name="plugin.id"
-            android:value="com.itsaky.androidide.plugins.codesuggestions" />
+            android:value="com.itsaky.androidide.plugins.aicodesuggestions" />
 
         <meta-data
             android:name="plugin.name"
-            android:value="Code Suggestions" />
+            android:value="AI Code Suggestions" />
 
         <meta-data
             android:name="plugin.version"
@@ -37,7 +37,7 @@
 
         <meta-data
             android:name="plugin.main_class"
-            android:value="com.itsaky.androidide.plugins.codesuggestions.CodeSuggestionsPlugin" />
+            android:value="com.itsaky.androidide.plugins.aicodesuggestions.CodeSuggestionsPlugin" />
 
         <meta-data
             android:name="plugin.icon_day"
