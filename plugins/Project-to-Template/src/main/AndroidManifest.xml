@@ -19,7 +19,7 @@
 
         <meta-data
             android:name="plugin.description"
-            android:value="Converts the open Android project into a Code On The Go (.cgt) template, and can install it directly into the IDE." />
+            android:value="Converts the open Android project into a Code on the Go (.cgt) template, and can install it directly into the IDE." />
 
         <meta-data
             android:name="plugin.author"

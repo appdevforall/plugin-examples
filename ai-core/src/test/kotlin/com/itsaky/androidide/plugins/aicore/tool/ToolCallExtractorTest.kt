@@ -162,4 +162,90 @@ class ToolCallExtractorTest {
 
         assertEquals(2, calls.size)
     }
+
+    /**
+     * The reply from ADFA-5410: Gemini wrote a whole layout into `new_string` without escaping the
+     * quotes in it, so the envelope closed but its JSON did not parse and nothing ran.
+     */
+    private val malformedLayoutEdit =
+        """<tool_call>{"tool":"edit_file","args":{"file_path":"app/src/main/res/layout/fragment_home.xml",""" +
+            """"new_string":"<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"/>"}}</tool_call>"""
+
+    @Test
+    fun givenAnEnvelopeWhoseJsonDoesNotParse_whenExtracting_thenNothingIsExtracted() {
+        assertTrue(ToolCallExtractor.extractToolCalls(malformedLayoutEdit).isEmpty())
+    }
+
+    @Test
+    fun givenAnEnvelopeWhoseJsonDoesNotParse_whenDiagnosed_thenItReadsAsMalformed() {
+        assertEquals(
+            ToolCallExtractor.UnparsedReply.MALFORMED,
+            ToolCallExtractor.diagnoseUnparsedReply(malformedLayoutEdit),
+        )
+    }
+
+    @Test
+    fun givenAnEnvelopeThatWasNeverClosed_whenDiagnosed_thenItReadsAsTruncated() {
+        assertEquals(
+            ToolCallExtractor.UnparsedReply.TRUNCATED,
+            ToolCallExtractor.diagnoseUnparsedReply(
+                """<tool_call>{"tool":"edit_file","args":{"file_path":"A.kt","new_string":"class"""
+            ),
+        )
+    }
+
+    @Test
+    fun givenABareCallTheJsonStrategyCouldNotRead_whenDiagnosed_thenItReadsAsMalformed() {
+        assertEquals(
+            ToolCallExtractor.UnparsedReply.MALFORMED,
+            ToolCallExtractor.diagnoseUnparsedReply("""{"tool":"open_file","args":{"file_path":"A"}"""),
+        )
+    }
+
+    @Test
+    fun givenAnOrdinaryProseReply_whenDiagnosed_thenNothingIsReportedAsWrong() {
+        assertNull(ToolCallExtractor.diagnoseUnparsedReply("Hello! What would you like to build?"))
+    }
+
+    @Test
+    fun givenProseThatQuotesTheWordTool_whenDiagnosed_thenNothingIsReportedAsWrong() {
+        // Without the colon there is no key, so this is an answer and not a broken call. Reading
+        // it as one replaces the reply with an error message.
+        val reply = """I used the "tool" you asked about; the {curly} braces are just prose."""
+
+        assertNull(ToolCallExtractor.diagnoseUnparsedReply(reply))
+    }
+
+    @Test
+    fun givenProseThatQuotesTheWordTool_whenStrippingCalls_thenTheProseSurvives() {
+        val reply = """The "tool" finished."""
+
+        assertEquals(reply, ToolCallExtractor.proseOutsideToolCalls(reply))
+    }
+
+    @Test
+    fun givenArgumentsWithQuotesAndNewlines_whenRenderedAsAnEnvelope_thenTheyExtractBackUnchanged() {
+        // The payload that cannot survive the model writing it by hand; rendering escapes it.
+        val layout = "<ScrollView android:text=\"Binary Search\">\n  <TextView/>\n</ScrollView>"
+
+        val envelope = ToolCallExtractor.renderEnvelope(
+            "edit_file",
+            mapOf("file_path" to "app/src/main/res/layout/fragment_home.xml", "new_string" to layout),
+        )
+        val calls = ToolCallExtractor.extractToolCalls(envelope)
+
+        assertEquals(1, calls.size)
+        assertEquals("edit_file", calls[0].name)
+        assertEquals(layout, calls[0].args["new_string"])
+    }
+
+    @Test
+    fun givenARenderedEnvelopeBesideProse_whenExtracting_thenTheCallStillRuns() {
+        val envelope = ToolCallExtractor.renderEnvelope("list_files", mapOf("directory" to ""))
+
+        val calls = ToolCallExtractor.extractToolCalls("Let me look at the project.\n" + envelope)
+
+        assertEquals(1, calls.size)
+        assertEquals("list_files", calls[0].name)
+    }
 }

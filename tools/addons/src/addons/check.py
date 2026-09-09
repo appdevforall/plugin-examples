@@ -97,7 +97,7 @@ def check_names(root: Path) -> list[str]:
                 if re.search(r"\b" + bad + r"\b", prose):
                     problems.append(
                         f"{directory}: the page says '{bad}'; write "
-                        f"'Code On The Go' in full")
+                        f"'Code on the Go' in full")
             heading = re.search(r"<h1[^>]*>(.*?)</h1>", html, re.S | re.I)
             if heading:
                 text = " ".join(re.sub(r"<[^>]+>", "", heading.group(1)).split())

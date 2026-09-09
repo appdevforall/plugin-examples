@@ -1,6 +1,6 @@
 ---
 name: cogo-plugin-review
-description: Review a Code on the Go (CoGo or cotg) plugin project for submission readiness — verify the assemblePlugin build, audit actual security risks, and score the code against the submission rubric (compatibility, resource discipline, build reproducibility, native binaries, reflection ban, html documentation, tooltips and in-app help, manifest completeness, icons and imagery). Use when the user asks to review, audit, or check a Code On The Go plugin repo.
+description: Review a Code on the Go (CoGo or cotg) plugin project for submission readiness — verify the assemblePlugin build, audit actual security risks, and score the code against the submission rubric (compatibility, resource discipline, build reproducibility, native binaries, reflection ban, html documentation, tooltips and in-app help, manifest completeness, icons and imagery). Use when the user asks to review, audit, or check a Code on the Go plugin repo.
 metadata:
   author: Hal Eisen
   keywords:
@@ -104,7 +104,7 @@ Search the source tree:
 - Must be at the top-level of the plugin folder, named after the **plugin folder** (kebab-case) with a `.html` extension: `template-manager/` → `template-manager.html`. The short folder-name form is preferred; a `-documentation` suffix (`random-xkcd-documentation.html`) is also acceptable. Do **not** name it after the lowercase `pluginBuilder { pluginName }` when that differs from the folder (i.e. not `templatemanagerplugin.html`).
 
 #### 6.7 Tooltips and in-app help
-Code On The Go has a three-tier in-IDE help model: Tier 1 (brief) and Tier 2 (more detail) are tooltips; Tier 3 is a full offline web page reached from a button on the tooltip. Plugins participate through `DocumentationExtension` (all symbols verifiable in `plugin-api.jar`). This is separate from the 6.6 install-decision page — grade them independently.
+Code on the Go has a three-tier in-IDE help model: Tier 1 (brief) and Tier 2 (more detail) are tooltips; Tier 3 is a full offline web page reached from a button on the tooltip. Plugins participate through `DocumentationExtension` (all symbols verifiable in `plugin-api.jar`). This is separate from the 6.6 install-decision page — grade them independently.
 
 - **Implements the extension**: confirm the main class (or one of the plugin's classes) implements `DocumentationExtension`. `grep -rlE 'DocumentationExtension' src --include='*.kt' --include='*.java'`. Absent → **Fail** (no in-app help at all).
 - **Every UI element has a tooltip**: reuse the extension enumeration from *Manifest completeness* below. For each contributed `NavigationItem` / `MenuItem` / `TabItem` / FAB / toolbar action, confirm `tooltipTag` is set; for each `EditorTabItem`, confirm `tooltip` is set. Any custom `View` the plugin shows (dialog, fragment, bottom sheet) must be wired to the tooltip system (`IdeTooltipService.showTooltip(...)` or `View.displayTooltipOnLongPress(...)`). One or more contributed elements with no tooltip → **Fail** ("all UI elements" is the bar); a stray non-interactive view missing one → **Partial**.

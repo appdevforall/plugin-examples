@@ -8,7 +8,7 @@
 #
 # WHY THESE NUMBERS: they are not "latest". They track the toolchain that Code
 # On The Go itself ships on-device, because these plugins are meant to be built
-# *with* Code On The Go (ADFA-4693). Verified against CoGo build C-d-0727-1613:
+# *with* Code on the Go (ADFA-4693). Verified against CoGo build C-d-0727-1613:
 #
 #   * android-36 is the ONLY installed platform in CoGo's bundled SDK
 #   * AGP 8.11.0 is the ONLY AGP in CoGo's Gradle caches
@@ -206,7 +206,7 @@ check_catalog_file() {
 # Walk
 #
 # Files under src/main/assets/ are shipped project *templates* -- skeletons that
-# Code On The Go stamps out for the user's own app. They are not our builds and
+# Code on the Go stamps out for the user's own app. They are not our builds and
 # must not be held to our toolchain.
 # ---------------------------------------------------------------------------
 while IFS= read -r -d '' f; do
@@ -246,8 +246,8 @@ fi
   printf '  %s\n' "${failures[@]}"
   echo
   echo "The standard is defined at the top of scripts/check-toolchain.sh and tracks"
-  echo "Code On The Go's own on-device toolchain (ADFA-4907). Fix the files above, or"
-  echo "-- if Code On The Go itself has moved -- update the script's constants and say"
+  echo "Code on the Go's own on-device toolchain (ADFA-4907). Fix the files above, or"
+  echo "-- if Code on the Go itself has moved -- update the script's constants and say"
   echo "which CoGo build you verified against."
   echo
 } >&2

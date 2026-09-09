@@ -6,7 +6,7 @@ URL / Copy image — mirror the xkcd.com control bar. Tap the image
 to copy URL, double-tap to copy image. Long-press the tab for
 in-IDE help.
 
-Designed as a canonical "this is what a small CoGo plugin looks like"
+Designed as a canonical "this is what a small Code on the Go plugin looks like"
 example. Under 300 lines of Kotlin, every plugin-specific concept
 called out where it shows up in the code.
 
@@ -19,10 +19,10 @@ once the plugin is installed.
 
 To read it:
 
-- **Inside CoGo** (the canonical path) — long-press the **XKCD** tab in
+- **Inside Code on the Go** (the canonical path) — long-press the **XKCD** tab in
   the editor bottom sheet → tap **"See More"** → tap **"Code
   walkthrough"**. The IDE opens the page in an in-IDE WebView.
-- **Outside CoGo** — open `src/main/assets/docs/index.html` directly
+- **Outside Code on the Go** — open `src/main/assets/docs/index.html` directly
   in any browser. Renders identically.
 
 The tutorial covers the plugin in 7 steps:

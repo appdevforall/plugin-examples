@@ -8,6 +8,10 @@ import java.util.concurrent.atomic.AtomicInteger
  * One log stream for a whole agent run: prompt, model turns, parsing, guards, approval, result.
  * Every line shares one tag, a per-run id, elapsed ms and a sequence number (`adb logcat -s
  * AiCore.AgentTrace:*`). Runs never overlap, so the current run is object state, not a parameter.
+ *
+ * A backend plugin cannot reach this class — it ships in `ai-core` — so one that traces its own
+ * half of a run logs under `<its prefix>.AgentTrace` instead, and
+ * `adb logcat -s AiCore.AgentTrace:V AiAgentGemini.AgentTrace:V` follows both halves in order.
  */
 object AgentTrace {
 
@@ -17,11 +21,15 @@ object AgentTrace {
     const val PREVIEW_CHARS = 120
 
     /**
-     * Whether previewed content (prompt, code snippets, model replies) reaches logcat: debug only.
-     * The structured head of each line is what a trace is read for and always logs; a release build
-     * has no reason to write the user's source into a log it does not own.
+     * Whether previewed content (prompt, code snippets, model replies) reaches logcat.
+     *
+     * On in a debug build. A release `.cgp` — what the Plugin Manager installs — writes only the
+     * structured head of each line, which is what a trace is read for, until someone asks for the
+     * content with `adb shell setprop log.tag.AiCore.AgentTrace VERBOSE`. Read per line rather than
+     * cached, so that takes effect on the next message instead of the next IDE restart.
      */
-    private val CONTENT_LOGGING = BuildConfig.DEBUG
+    private val contentLogging: Boolean
+        get() = BuildConfig.DEBUG || Log.isLoggable(TAG, Log.VERBOSE)
 
     @Volatile
     private var runId: String = "-"
@@ -121,6 +129,6 @@ object AgentTrace {
     private fun line(stage: String, detail: String, preview: String?): String {
         val elapsed = if (runStartMs == 0L) 0 else System.currentTimeMillis() - runStartMs
         val head = "[$runId +${elapsed}ms #${sequence.incrementAndGet()}] $stage | $detail"
-        return if (preview == null || !CONTENT_LOGGING) head else "$head | $preview"
+        return if (preview == null || !contentLogging) head else "$head | $preview"
     }
 }

@@ -1,4 +1,4 @@
-package com.itsaky.androidide.plugins.codesuggestions
+package com.itsaky.androidide.plugins.aicodesuggestions
 
 import android.util.Log
 import com.itsaky.androidide.plugins.services.LlmInferenceService

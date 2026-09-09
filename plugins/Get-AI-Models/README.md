@@ -1,6 +1,6 @@
 # Get AI Models
 
-A Code On The Go plugin that adds a **Get AI Models** tab to the project editor's bottom drawer. The
+A Code on the Go plugin that adds a **Get AI Models** tab to the project editor's bottom drawer. The
 tab lists a bundled catalog of small GGUF language-model files; each row downloads one `.gguf`
 to `/sdcard/Download` and verifies its SHA-256.
 
@@ -22,7 +22,7 @@ Uses the shared repo-root Gradle wrapper and the shared repo-root `libs/` jars â
 wrapper or jars of its own. A `local.properties` containing `sdk.dir=<path-to-android-sdk>` is
 required.
 
-Install the resulting `.cgp` through Code On The Go's Plugin Manager, then open a project and look in
+Install the resulting `.cgp` through Code on the Go's Plugin Manager, then open a project and look in
 the editor's bottom drawer.
 
 ## Supported IDE versions
