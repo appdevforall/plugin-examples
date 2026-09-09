@@ -15,6 +15,8 @@ import android.widget.Toast
 import androidx.core.content.ContextCompat
 import com.itsaky.androidide.plugins.IPlugin
 import com.itsaky.androidide.plugins.PluginContext
+import com.itsaky.androidide.plugins.PluginLifecycleListener
+import com.itsaky.androidide.plugins.PluginLogger
 import com.itsaky.androidide.plugins.extensions.DocumentationExtension
 import com.itsaky.androidide.plugins.extensions.PluginTooltipButton
 import com.itsaky.androidide.plugins.extensions.PluginTooltipEntry
@@ -25,13 +27,17 @@ import com.itsaky.androidide.plugins.services.IdeEditorService
 import com.itsaky.androidide.plugins.services.IdeUIService
 import com.itsaky.androidide.plugins.services.LlmInferenceService
 import com.itsaky.androidide.plugins.services.SharedServices
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.TimeoutException
+import kotlinx.coroutines.withTimeoutOrNull
+import java.util.concurrent.CompletableFuture
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 /**
  * Speech-to-Text Plugin provides voice-to-code capabilities.
@@ -49,6 +55,8 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
 
     private val scope = CoroutineScope(Dispatchers.IO)
     private lateinit var context: PluginContext
+    /** Populated on the main thread by activate(), read from [scope]'s IO threads. */
+    @Volatile
     private var llmService: LlmInferenceService? = null
     private var editorService: IdeEditorService? = null
     private var uiService: IdeUIService? = null
@@ -77,9 +85,17 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
         RecordingState.PROCESSING -> R.drawable.ic_processing
     }
 
+    /**
+     * The host logger, or null before [initialize] ran. [context] is `lateinit`, and the host
+     * still calls [deactivate]/[dispose] after a failed or skipped load.
+     */
+    private val logger: PluginLogger?
+        get() = if (::context.isInitialized) context.logger else null
+
     override fun initialize(context: PluginContext): Boolean {
         this.context = context
-        context.logger.info("Plugin initialized")
+        context.addPluginLifecycleListener(aiCoreLifecycleListener)
+        logger?.info("Plugin initialized")
         return true
     }
 
@@ -92,20 +108,20 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
         resolveLlmService()
 
         if (editorService == null) {
-            context.logger.warn("IdeEditorService not available - editor integration disabled")
+            logger?.warn("IdeEditorService not available - editor integration disabled")
         }
         if (uiService == null) {
-            context.logger.warn("IdeUIService not available - toolbar icon will not animate between states")
+            logger?.warn("IdeUIService not available - toolbar icon will not animate between states")
         }
 
-        context.logger.info("Plugin activated")
+        logger?.info("Plugin activated")
         return true
     }
 
     /**
      * Resolves AI Core's router, caching only a successful lookup so a later call retries.
-     * AI Core publishes it to the process-global [SharedServices]; the plugin-local registry
-     * is a fallback for hosts that bridge it there instead.
+     * Hosts differ in where they publish it: the process-global [SharedServices], AI Core's
+     * per-plugin export, or the plugin-local registry.
      *
      * @return the service, or null while AI Core is absent or has not activated yet
      */
@@ -114,30 +130,51 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
 
         val service = try {
             SharedServices.get(LlmInferenceService::class.java)
+                ?: context.getPluginService(AI_CORE_PLUGIN_ID, LlmInferenceService::class.java)
                 ?: context.services.get(LlmInferenceService::class.java)
         } catch (e: Exception) {
-            context.logger.warn("Error resolving LlmInferenceService", e)
+            logger?.warn("Error resolving LlmInferenceService", e)
             null
         }
 
         if (service == null) {
-            context.logger.info("LlmInferenceService not available yet - install/activate the AI Core plugin")
+            logger?.info("LlmInferenceService not available yet - install/activate the AI Core plugin")
             return null
         }
 
         llmService = service
-        context.logger.info("LlmInferenceService resolved - voice generation enabled")
+        logger?.info("LlmInferenceService resolved - voice generation enabled")
         return service
     }
 
+    /**
+     * Drops the cached router when AI Core goes away, so the next transcript re-resolves rather
+     * than calling into an unloaded plugin's object and pinning its ClassLoader for the process.
+     */
+    private val aiCoreLifecycleListener = object : PluginLifecycleListener {
+        override fun onPluginActivated(pluginId: String) = Unit
+        override fun onPluginDeactivated(pluginId: String) = forgetLlmService(pluginId)
+        override fun onPluginUninstalled(pluginId: String) = forgetLlmService(pluginId)
+    }
+
+    private fun forgetLlmService(pluginId: String) {
+        if (pluginId != AI_CORE_PLUGIN_ID) return
+        llmService = null
+        logger?.info("AI Core went away - dropped the cached LlmInferenceService")
+    }
+
     override fun deactivate(): Boolean {
-        context.logger.info("Plugin deactivating")
+        logger?.info("Plugin deactivating")
         destroyRecognizer()
         return true
     }
 
     override fun dispose() {
-        context.logger.info("Plugin disposed")
+        logger?.info("Plugin disposed")
+        if (::context.isInitialized) {
+            context.removePluginLifecycleListener(aiCoreLifecycleListener)
+        }
+        llmService = null
         destroyRecognizer()
         // Tear down the transcript-processing scope so no LLM/generation coroutine
         // outlives the plugin after unload.
@@ -246,7 +283,7 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
             recognizer.startListening(intent)
             setState(RecordingState.RECORDING)
         } catch (e: Exception) {
-            context.logger.error("Failed to start speech recognition", e)
+            logger?.error("Failed to start speech recognition", e)
             toast(str(R.string.stt_start_failed))
             destroyRecognizer()
             setState(RecordingState.IDLE)
@@ -289,12 +326,14 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
      * code, and inserts the result at the cursor.
      */
     private fun handleTranscript(transcript: String) {
-        context.logger.debug("Transcript received (${transcript.length} chars)")
+        logger?.debug("Transcript received (${transcript.length} chars)")
+        // Read here: onResults is a main-thread callback, and the IO dispatcher below is not.
+        val language = currentLanguageId()
         scope.launch {
             // Resolved once per transcript: AI Core may have finished activating after we did.
             val service = resolveLlmService()
             // Generate code when AI Core is present; fall back to the raw transcript so speech is never dropped.
-            val generated = service?.let { generateCodeFromVoice(it, transcript) }
+            val generated = service?.let { generateCodeFromVoice(it, transcript, language) }
             val generationFailed = service != null && generated == null
             val output = generated ?: transcript
             withContext(Dispatchers.Main) {
@@ -320,85 +359,113 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
      *
      * @param service AI Core's router, resolved by the caller so one transcript resolves it once
      * @param voiceText The transcribed text from speech-to-text
-     * @param language Programming language context; defaults to the open file's language
+     * @param language Programming language of the open file, read by the caller on the main thread
      * @return Generated code snippet, or null if generation failed (details are logged).
      */
     suspend fun generateCodeFromVoice(
         service: LlmInferenceService,
         voiceText: String,
-        language: String = currentLanguageId(),
+        language: String,
     ): String? {
         return try {
-            // Build a completion prompt for code generation
-            val prompt = """
-                User request: $voiceText
-
-                Generate $language code to fulfill this request. Return only the code,
-                with no explanation and no markdown code fences.
-                Code:
-            """.trimIndent()
+            val prompt = "Write $language code for this request: $voiceText"
 
             // AI Core routes to the user-selected backend; we don't pick one here.
-            val config = LlmInferenceService.LlmConfig(AUTO_BACKEND_ID)
-            // The router hands back a blocking future, so the wait is pinned to Dispatchers.IO
-            // rather than to whichever dispatcher the caller happens to be on.
+            val config = LlmInferenceService.LlmConfig(AUTO_BACKEND_ID).apply {
+                systemPrompt = GENERATION_SYSTEM_PROMPT
+                temperature = GENERATION_TEMPERATURE
+                maxTokens = MAX_GENERATION_TOKENS
+                // No FENCE stop sequence, unlike the inline-completion sibling: a block answer
+                // opens with a fence, so stopping there would truncate it to nothing.
+            }
+            // await() is cancellation-aware, so dispose() unwinds this instead of leaving an IO
+            // thread parked in Future.get for the rest of the timeout.
             val response = withContext(Dispatchers.IO) {
-                val future = service.generateCompletion(prompt, config)
-                try {
-                    future.get(GENERATION_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-                } catch (e: TimeoutException) {
-                    // Cancel only this future; cancelGeneration() is router-wide and would stop other plugins.
-                    future.cancel(true)
-                    context.logger.warn("Code generation timed out after ${GENERATION_TIMEOUT_SECONDS}s")
-                    null
+                withTimeoutOrNull(GENERATION_TIMEOUT_SECONDS * MILLIS_PER_SECOND) {
+                    service.generateCompletion(prompt, config).await()
                 }
-            } ?: return null
+            }
+            if (response == null) {
+                // Only maxTokens bounds the backend: cancelling the future does not stop decoding,
+                // and cancelGeneration() is router-wide and would abort other plugins' requests.
+                logger?.warn("Code generation timed out after ${GENERATION_TIMEOUT_SECONDS}s")
+                return null
+            }
             if (response.success) {
                 response.text?.let { stripCodeFences(it) }?.takeIf { it.isNotBlank() }
             } else {
-                context.logger.warn("Code generation failed: ${response.error}")
+                logger?.warn("Code generation failed: ${response.error}")
                 null
             }
+        } catch (e: CancellationException) {
+            // A plugin unload cancels the scope; that is teardown, not a generation error.
+            throw e
         } catch (e: Exception) {
-            context.logger.error("Error generating code from voice", e)
+            logger?.error("Error generating code from voice", e)
             null
         }
     }
 
     /**
      * The language of the file being edited, so the model is asked for the language actually
-     * in front of the user rather than the plugin's own default.
+     * in front of the user rather than the plugin's own default. Call on the main thread.
      *
      * @return the host's language id for the open file, or [DEFAULT_LANGUAGE] when unknown
      */
     private fun currentLanguageId(): String = try {
         editorService?.getCurrentLanguageId()?.takeIf { it.isNotBlank() } ?: DEFAULT_LANGUAGE
     } catch (e: Exception) {
-        context.logger.warn("Could not resolve the editor language", e)
+        logger?.warn("Could not resolve the editor language", e)
         DEFAULT_LANGUAGE
     }
 
     /**
      * Unwraps the markdown code fence a chat-tuned model puts around its answer, so the editor
-     * receives code rather than backticks and a language tag.
+     * receives code rather than a lead-in line, backticks and a language tag.
      *
      * @param raw the backend's response text
-     * @return the first fenced block's body, the reply itself when it carries no fence, or
-     *   empty when the reply was nothing but fences
+     * @return the fenced block's body, the reply itself when it carries no fence, or empty when
+     *   the reply was nothing but fences
      */
     private fun stripCodeFences(raw: String): String {
-        val text = raw.trim()
+        val lines = raw.trim().lines()
+        // The fence can open on any line: a model often writes "Here is the code:" first.
+        val opening = lines.indexOfFirst { it.trimStart().startsWith(FENCE) }
+        if (opening < 0) return raw.trim()
 
-        val fenced = FENCED_BLOCK.find(text)?.groupValues?.get(1)
-        if (fenced != null) return fenced.trim('\n', '\r').trimEnd()
-
-        // A fence the model never closed still has to lose its opening line.
-        if (text.startsWith(FENCE)) {
-            return text.substringAfter('\n', "").removeSuffix(FENCE).trim()
+        val afterFence = lines[opening].trim().removePrefix(FENCE)
+        // A one-line reply closes on its opening line; otherwise that line is only the info string.
+        val firstCodeLine = if (afterFence.endsWith(FENCE)) {
+            stripLanguageInfo(afterFence.removeSuffix(FENCE).trim())
+        } else {
+            ""
         }
 
-        return text
+        val rest = lines.drop(opening + 1)
+        val closing = rest.indexOfFirst { it.trimStart().startsWith(FENCE) }
+        // An unclosed fence (a reply truncated at maxTokens) keeps everything that did arrive.
+        val body = if (closing >= 0) rest.take(closing) else rest
+
+        return (if (firstCodeLine.isEmpty()) body else listOf(firstCodeLine) + body)
+            .joinToString("\n")
+            .trim()
+            .removeSuffix(FENCE)
+            .trimEnd()
     }
+
+    /**
+     * Drops the language info from a one-line fenced reply, so `kotlin println()` (the remains
+     * of ` ```kotlin println()``` `) yields just the code.
+     *
+     * @param fenceLine the opening fence line with its fence markers already removed
+     * @return the line without a leading language tag, empty when that was all it held
+     */
+    private fun stripLanguageInfo(fenceLine: String): String =
+        if (fenceLine.substringBefore(' ').lowercase() in LANGUAGE_TAGS) {
+            fenceLine.substringAfter(' ', "").trim()
+        } else {
+            fenceLine
+        }
 
     /**
      * Inserts generated code at the cursor position.
@@ -409,7 +476,7 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
         return try {
             editorService?.insertTextAtCursor(code) ?: false
         } catch (e: Exception) {
-            context.logger.error("Failed to insert text at cursor", e)
+            logger?.error("Failed to insert text at cursor", e)
             false
         }
     }
@@ -431,11 +498,11 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
      */
     fun requestMicrophonePermission() {
         if (hasMicrophonePermission()) {
-            context.logger.debug("Microphone permission already granted")
+            logger?.debug("Microphone permission already granted")
             return
         }
 
-        context.logger.debug("Requesting microphone permission")
+        logger?.debug("Requesting microphone permission")
         try {
             // Must be the host Activity: the plugin's androidContext is a ContextThemeWrapper,
             // never an Activity, and RECORD_AUDIO is owned by the host app's UID.
@@ -446,10 +513,10 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
                     PERMISSION_REQUEST_CODE
                 )
             } else {
-                context.logger.warn("No host Activity available to request microphone permission")
+                logger?.warn("No host Activity available to request microphone permission")
             }
         } catch (e: Exception) {
-            context.logger.error("Error requesting microphone permission", e)
+            logger?.error("Error requesting microphone permission", e)
         }
     }
 
@@ -460,7 +527,7 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
             try {
                 recognizer.destroy()
             } catch (e: Exception) {
-                context.logger.warn("Failed to destroy SpeechRecognizer", e)
+                logger?.warn("Failed to destroy SpeechRecognizer", e)
             }
         }
     }
@@ -509,7 +576,7 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
         try {
             Toast.makeText(hostContext(), message, Toast.LENGTH_LONG).show()
         } catch (e: Exception) {
-            context.logger.warn("Failed to show toast", e)
+            logger?.warn("Failed to show toast", e)
         }
     }
 
@@ -530,16 +597,59 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
         /** Sentinel backend id: AI Core resolves the user-selected backend for us. */
         private const val AUTO_BACKEND_ID = "auto"
 
-        /** Bounds one generation so a wedged backend can't strand the toolbar on the spinner. */
-        private const val GENERATION_TIMEOUT_SECONDS = 60L
+        /** AI Core's plugin id: its per-plugin service export, and the cache-invalidation key. */
+        private const val AI_CORE_PLUGIN_ID = "com.itsaky.androidide.plugins.aicore"
+
+        private const val FENCE = "```"
+
+        private const val MILLIS_PER_SECOND = 1000L
+
+        /** Low, because a voice command wants the obvious code rather than a creative answer. */
+        private const val GENERATION_TEMPERATURE = 0.2f
+
+        /** A voice command asks for a snippet, not a file; this also bounds the timeout below. */
+        private const val MAX_GENERATION_TOKENS = 512
+
+        /** Floor throughput of a phone-class llama.cpp backend, used only to size the timeout. */
+        private const val SLOWEST_TOKENS_PER_SECOND = 5
+
+        /** Headroom for loading the model and evaluating the prompt before the first token. */
+        private const val PROMPT_EVAL_SECONDS = 30
+
+        /**
+         * Bounds one generation so a wedged backend can't strand the toolbar on the spinner.
+         * Sized to [MAX_GENERATION_TOKENS] so a slow device finishes rather than being cut off.
+         */
+        private const val GENERATION_TIMEOUT_SECONDS =
+            MAX_GENERATION_TOKENS / SLOWEST_TOKENS_PER_SECOND + PROMPT_EVAL_SECONDS
+
+        /** Keeps fences and prose out of the reply, so stripCodeFences is only a safety net. */
+        private const val GENERATION_SYSTEM_PROMPT =
+            "You are a code generator inside a code editor. Reply with the raw code that " +
+                "fulfils the request and nothing else. Do not explain. Do not use markdown or " +
+                "code fences ($FENCE). Do not name the language."
 
         /** Used only when the host cannot name the open file's language. */
         private const val DEFAULT_LANGUAGE = "kotlin"
 
-        private const val FENCE = "```"
-
-        /** First markdown fenced block; group 1 is the body, with the language info dropped. */
-        private val FENCED_BLOCK =
-            Regex("```[ \\t]*[A-Za-z0-9+#.\\-]*[ \\t]*\\r?\\n([\\s\\S]*?)```")
+        /** Bare fence infos ("java", "kotlin", ...) that are never code. */
+        private val LANGUAGE_TAGS = setOf(
+            "java", "kotlin", "kt", "python", "py", "xml", "json", "gradle", "groovy",
+            "javascript", "js", "typescript", "ts", "c", "cpp", "c++", "sh", "bash",
+            "text", "plaintext", "code",
+        )
     }
 }
+
+/**
+ * Suspends until this future completes, cancelling it if the coroutine is cancelled.
+ * @receiver the future to await
+ * @return the future's completed value
+ */
+private suspend fun <T> CompletableFuture<T>.await(): T =
+    suspendCancellableCoroutine { cont ->
+        whenComplete { value, error ->
+            if (error == null) cont.resume(value) else cont.resumeWithException(error)
+        }
+        cont.invokeOnCancellation { cancel(true) }
+    }
