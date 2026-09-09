@@ -76,7 +76,7 @@ internal object PythonToolsDocumentation {
             order = 0,
         ),
         PluginTooltipButton(
-            description = "About Code On The Go plugins",
+            description = "About Code on the Go plugins",
             uri = "i/plugins-adfa.html",
             order = 1,
             directPath = true,

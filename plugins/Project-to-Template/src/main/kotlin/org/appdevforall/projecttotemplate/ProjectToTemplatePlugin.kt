@@ -16,8 +16,8 @@ import androidx.fragment.app.Fragment
 import org.appdevforall.projecttotemplate.fragments.ProjectToTemplateFragment
 
 /**
- * Converts the Android project currently open in Code On The Go into a
- * Code On The Go (.cgt) template bundle, and optionally installs it directly
+ * Converts the Android project currently open in Code on the Go into a
+ * Code on the Go (.cgt) template bundle, and optionally installs it directly
  * into the IDE via IdeTemplateService.
  */
 class ProjectToTemplatePlugin : IPlugin, UIExtension, EditorTabExtension, DocumentationExtension {
@@ -106,7 +106,7 @@ class ProjectToTemplatePlugin : IPlugin, UIExtension, EditorTabExtension, Docume
                 order = 0,
                 isEnabled = true,
                 isVisible = true,
-                tooltip = "Convert the open Android project into a Code On The Go template",
+                tooltip = "Convert the open Android project into a Code on the Go template",
             )
         )
     }
@@ -127,14 +127,14 @@ class ProjectToTemplatePlugin : IPlugin, UIExtension, EditorTabExtension, Docume
         return listOf(
             PluginTooltipEntry(
                 tag = TOOLTIP_TAG,
-                summary = "<b>Project to Template</b><br>Convert the project currently open in Code On The Go into a reusable (.cgt) template.",
+                summary = "<b>Project to Template</b><br>Convert the project currently open in Code on the Go into a reusable (.cgt) template.",
                 detail = """
                     <h3>Project to Template</h3>
                     <p>Enter a template name and tap <b>Convert to Template</b>. The plugin copies the
                     open project, substitutes concrete values (Gradle/AGP/Kotlin versions, package name,
                     app name, SDK levels) with Pebble tokens, writes <code>template.json</code> and a
                     thumbnail, and zips the result into a <code>.cgt</code> file. You can then install it
-                    directly into Code On The Go's New Project template picker.</p>
+                    directly into Code on the Go's New Project template picker.</p>
                 """.trimIndent(),
                 buttons = listOf(
                     PluginTooltipButton(
