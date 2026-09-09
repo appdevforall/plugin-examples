@@ -48,6 +48,12 @@ class LocalLlmSettingsViewModelTest {
         /** Makes the lookup blow up, standing in for a provider that fails mid-selection. */
         var failInfo = false
 
+        /** References the grant table has no room for, standing in for a full one. */
+        val unpersistable = mutableSetOf<String>()
+
+        /** Runs inside a readability probe, so a test can land a status while one is in flight. */
+        var duringReadability: ((String) -> Unit)? = null
+
         override fun info(context: Context, uriString: String): ModelFileInfo {
             if (failInfo) throw IllegalStateException("provider failed")
             return ModelFileInfo(fallbackDisplayName(uriString), 1_024L)
@@ -55,15 +61,19 @@ class LocalLlmSettingsViewModelTest {
 
         override fun openStream(context: Context, uriString: String): InputStream? = null
 
-        override fun readability(context: Context, uriString: String) = when (uriString) {
-            in silent -> SourceReachability.UNKNOWN
-            in unreadable -> SourceReachability.GONE
-            else -> SourceReachability.REACHABLE
+        override fun readability(context: Context, uriString: String): SourceReachability {
+            duringReadability?.invoke(uriString)
+            return when (uriString) {
+                in silent -> SourceReachability.UNKNOWN
+                in unreadable -> SourceReachability.GONE
+                else -> SourceReachability.REACHABLE
+            }
         }
 
         override fun fallbackDisplayName(uriOrPath: String) = uriOrPath.substringAfterLast('/')
 
         override fun persistAccess(context: Context, uriString: String): Boolean {
+            if (uriString in unpersistable) return false
             persisted += uriString
             return true
         }
@@ -339,6 +349,75 @@ class LocalLlmSettingsViewModelTest {
         viewModel.onMemoryWarningDecision(false)
 
         assertEquals(MODEL_A, viewModel.state.value?.savedModelPath)
+    }
+
+    @Test
+    fun givenASelectionWhoseGrantCannotBePersisted_thenItIsKeptAndTheCaveatIsShown() {
+        // Only logging it left the model working all session and failing every message after a
+        // restart, with advice to re-pick a file that never moved.
+        modelFiles.unpersistable += MODEL_A
+        val viewModel = viewModel()
+
+        viewModel.loadModelFromUri(MODEL_A)
+
+        assertEquals(MODEL_A, viewModel.getLocalModelPath())
+        assertEquals(
+            ModelLoadingState.Loaded("a.gguf", accessPersisted = false),
+            viewModel.state.value?.model,
+        )
+        assertEquals(EngineState.Initialized, viewModel.state.value?.engine)
+    }
+
+    @Test
+    fun givenARefusalOfTheConfiguredModel_thenTheEngineLineCarriesItToo() {
+        // Otherwise the pane draws "Engine ready" beside "isn't a valid .gguf", about one file.
+        val viewModel = viewModel()
+        viewModel.loadModelFromUri(MODEL_A)
+        every { resolver.openInputStream(any()) } answers { ByteArrayInputStream("NOPE".toByteArray()) }
+
+        viewModel.loadModelFromUri(MODEL_A)
+
+        val refusal = viewModel.state.value?.model as ModelLoadingState.Error
+        assertEquals(EngineState.Error(refusal.message), viewModel.state.value?.engine)
+    }
+
+    @Test
+    fun givenAnEngineReadingUnavailable_whenTheConfiguredModelIsRefused_thenItStopsSayingUnavailable() {
+        // The mirror case: the model reads back fine, so "(unavailable)" must not outlive the probe
+        // that disproved it — and nothing else can clear it, now that the error rightly stands.
+        val viewModel = viewModel()
+        viewModel.loadModelFromUri(MODEL_A)
+        modelFiles.unreadable += MODEL_A
+        viewModel.refreshSavedModelAvailability()
+        assertEquals(EngineState.ModelUnavailable, viewModel.state.value?.engine)
+
+        modelFiles.unreadable -= MODEL_A
+        every { resolver.openInputStream(any()) } answers { ByteArrayInputStream("NOPE".toByteArray()) }
+        viewModel.loadModelFromUri(MODEL_A)
+
+        assertTrue(viewModel.state.value?.engine is EngineState.Error)
+    }
+
+    @Test
+    fun givenARejectedPick_whenAReCheckStartedBeforeItLands_thenTheRejectionsErrorStands() {
+        // The re-check's answer is only about the configured model, and it is the older one: it
+        // used to overwrite the refusal with "Model loaded" and lose the only explanation.
+        val viewModel = viewModel()
+        viewModel.loadModelFromUri(MODEL_A)
+        modelFiles.duringReadability = { probed ->
+            if (probed == MODEL_A) {
+                modelFiles.duringReadability = null
+                every { resolver.openInputStream(any()) } answers {
+                    ByteArrayInputStream("NOPE".toByteArray())
+                }
+                viewModel.loadModelFromUri(MODEL_B)
+            }
+        }
+
+        viewModel.refreshSavedModelAvailability()
+
+        val error = viewModel.state.value?.model as ModelLoadingState.Error
+        assertEquals(MODEL_B, error.reference)
     }
 
     private companion object {

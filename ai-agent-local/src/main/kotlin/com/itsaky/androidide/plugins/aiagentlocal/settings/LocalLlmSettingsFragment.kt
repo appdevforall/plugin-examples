@@ -40,22 +40,16 @@ class LocalLlmSettingsFragment : Fragment(), MemoryWarningDialogFragment.Host {
     private val filePickerLauncher =
         registerForActivityResult(PickLocalDocument) { uri: Uri? ->
             uri?.let {
-                try {
-                    // The durable read grant is taken by the view model, with the rest of the
-                    // selection's bookkeeping — see LocalLlmSettingsViewModel.loadModelFromUri.
-                    viewModel.loadModelFromUri(it.toString())
-                    Toast.makeText(
-                        requireContext(),
-                        getString(R.string.model_loading_toast),
-                        Toast.LENGTH_SHORT
-                    ).show()
-                } catch (e: Exception) {
-                    Toast.makeText(
-                        requireContext(),
-                        getString(R.string.state_error, e.message),
-                        Toast.LENGTH_LONG
-                    ).show()
-                }
+                // The durable read grant is taken by the view model, with the rest of the
+                // selection's bookkeeping — see LocalLlmSettingsViewModel.loadModelFromUri. It
+                // runs in its own scope and puts every outcome on the status line, so nothing
+                // here can throw and there is nothing to catch.
+                viewModel.loadModelFromUri(it.toString())
+                Toast.makeText(
+                    requireContext(),
+                    getString(R.string.model_loading_toast),
+                    Toast.LENGTH_SHORT
+                ).show()
             }
         }
 
@@ -192,7 +186,12 @@ class LocalLlmSettingsFragment : Fragment(), MemoryWarningDialogFragment.Host {
             modelStatusTextView.text = when (val model = state.model) {
                 is ModelLoadingState.Idle -> getString(R.string.model_none_loaded)
                 is ModelLoadingState.Loading -> getString(R.string.model_loading_wait)
-                is ModelLoadingState.Loaded -> getString(R.string.model_loaded, model.modelName)
+                is ModelLoadingState.Loaded ->
+                    if (model.accessPersisted) {
+                        getString(R.string.model_loaded, model.modelName)
+                    } else {
+                        getString(R.string.model_loaded_access_not_persisted, model.modelName)
+                    }
                 is ModelLoadingState.Unavailable ->
                     getString(R.string.model_unavailable, model.modelName)
                 is ModelLoadingState.Error -> getString(R.string.model_load_error, model.message)

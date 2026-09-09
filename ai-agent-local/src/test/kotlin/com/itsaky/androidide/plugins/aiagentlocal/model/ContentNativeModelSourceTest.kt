@@ -69,6 +69,18 @@ class ContentNativeModelSourceTest {
     }
 
     @Test
+    fun givenAPathThatComesBackBeforeTheSecondAsk_whenProbed_thenItIsReachableRatherThanGone() {
+        // The file branch is confirmed too, so reachabilityOf's contract — GONE is only ever an
+        // answer given twice — holds for a legacy filesystem path as well. Created well inside the
+        // confirmation delay: a late first ask can only make this pass, never fail.
+        val model = temporaryFolder.newFile("model.gguf")
+        assertTrue(model.delete())
+        Thread { Thread.sleep(20L); model.writeBytes(ByteArray(8)) }.start()
+
+        assertEquals(SourceReachability.REACHABLE, source.reachabilityOf(model.absolutePath))
+    }
+
+    @Test
     fun givenADocumentTheProviderStillServes_whenProbed_thenItIsReachable() {
         every { resolver.openFileDescriptor(any(), "r") } returns mockk<ParcelFileDescriptor>(relaxed = true)
 

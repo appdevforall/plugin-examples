@@ -164,7 +164,8 @@ class ContentNativeModelSource(
     /**
      * One binder round trip for a document, one stat for a path — nothing is read, so this is cheap
      * enough to ask before every generation. [SourceReachability.GONE] is only ever an answer the
-     * source gave twice (see [confirmedGone]); anything less is [SourceReachability.UNKNOWN].
+     * source gave twice (see [confirmedGone]), on either branch; anything less is
+     * [SourceReachability.UNKNOWN].
      */
     override fun reachabilityOf(modelReference: String): SourceReachability =
         if (modelReference.startsWith(CONTENT_SCHEME)) documentReachability(modelReference)
@@ -192,8 +193,17 @@ class ContentNativeModelSource(
         SourceReachability.UNKNOWN
     }
 
-    private fun fileReachability(path: String): SourceReachability = try {
-        if (File(path).isFile) SourceReachability.REACHABLE else SourceReachability.GONE
+    /**
+     * Confirmed like the document branch, so [reachabilityOf]'s contract — a GONE is only ever an
+     * answer given twice — holds for every reference, not only the ones that go through a provider.
+     */
+    private fun fileReachability(path: String): SourceReachability =
+        confirmedGone { probeFile(path) }
+
+    /** Readability, not just existence: a file the loader cannot open is gone as far as it cares. */
+    private fun probeFile(path: String): SourceReachability = try {
+        if (File(path).let { it.isFile && it.canRead() }) SourceReachability.REACHABLE
+        else SourceReachability.GONE
     } catch (e: Exception) {
         onError("could not stat the model file $path", e)
         SourceReachability.UNKNOWN

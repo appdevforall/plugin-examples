@@ -317,6 +317,25 @@ class LocalLlmBackendTest {
     }
 
     @Test
+    fun givenAProviderThatOnlyEverAnswersUnknown_whenGeneratingAgain_thenItIsNotReProbed() {
+        // A provider wedged inside openFileDescriptor never yields REACHABLE, so arming the trust
+        // window on REACHABLE alone left every message paying the probe, under generationMutex.
+        val source = FakeModelSource(mapOf(CONTENT_URI to handleFor(chatModel())))
+        val backend = backendWith(source, FakeEngine())
+
+        runBlocking { backend.ensureModelLoaded(CONTENT_URI) }
+        source.reachable = false
+        source.whenUnreachable = SourceReachability.UNKNOWN
+        runBlocking { backend.ensureModelLoaded(CONTENT_URI) }
+        val after = source.probeCount
+
+        runBlocking { backend.ensureModelLoaded(CONTENT_URI) }
+        runBlocking { backend.ensureModelLoaded(CONTENT_URI) }
+
+        assertEquals("an answered probe stands in for the next ones", after, source.probeCount)
+    }
+
+    @Test
     fun givenAResidentModel_whenItsWatchFiresAndTheProviderIsSilent_thenItStaysLoaded() {
         // The same distinction on the watch path, where a burst of notifications arrives.
         val source = FakeModelSource(mapOf(CONTENT_URI to handleFor(chatModel())))

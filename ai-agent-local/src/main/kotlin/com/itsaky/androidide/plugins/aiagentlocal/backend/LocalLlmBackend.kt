@@ -79,7 +79,7 @@ class LocalLlmBackend(
          */
         private const val LEGACY_MODEL_CACHE_DIR = "llm-models"
 
-        /** How long a REACHABLE answer stands in for the next one; see [reachabilityIsFresh]. */
+        /** How long an answered probe stands in for the next one; see [probeAnswerIsFresh]. */
         private val REACHABILITY_TRUST_NANOS = TimeUnit.SECONDS.toNanos(5)
     }
 
@@ -131,11 +131,11 @@ class LocalLlmBackend(
     private val sourceCheckInFlight = AtomicBoolean(false)
 
     /**
-     * When the resident model's source last answered REACHABLE, as a [System.nanoTime] reading.
-     * The probe is a synchronous binder call in front of every generation, holding
+     * When the resident model's source last answered a probe at all, as a [System.nanoTime]
+     * reading. The probe is a synchronous binder call in front of every generation, holding
      * [generationMutex] — and a provider that hangs rather than dies cannot be cancelled out of.
      */
-    @Volatile private var lastReachableNanos = 0L
+    @Volatile private var lastProbeAnsweredNanos = 0L
 
     /**
      * Opens the configured model for the native loader. Lazy so construction touches no Android
@@ -300,11 +300,15 @@ class LocalLlmBackend(
             // Residency is not evidence the file still exists. The descriptor this backend holds
             // keeps a deleted inode alive, so an unchecked early return keeps answering from a
             // model the user threw away — and keeps its gigabytes mapped. Confirm, then serve.
-            if (reachabilityIsFresh()) return
+            if (probeAnswerIsFresh()) return
             val reachability = modelSource.reachabilityOf(modelRef)
-            if (reachability == SourceReachability.REACHABLE) lastReachableNanos = System.nanoTime()
-            // Anything but GONE is served: a silent provider is no reason to pay a GB reload.
-            if (reachability != SourceReachability.GONE) return
+            // Anything but GONE is served: a silent provider is no reason to pay a GB reload —
+            // and it answered, so the window arms on it too. A provider wedged inside the open
+            // only ever yields UNKNOWN, which armed nothing and cost every message a probe.
+            if (reachability != SourceReachability.GONE) {
+                lastProbeAnsweredNanos = System.nanoTime()
+                return
+            }
             context.logger.info("Resident model is no longer reachable; unloading: $modelRef")
             evictResidentModel()
             throw unopenable(modelRef)
@@ -466,13 +470,13 @@ class LocalLlmBackend(
     }
 
     /**
-     * Whether the source answered REACHABLE recently enough to be taken at its word again, which
-     * bounds a wedged provider to one blocked message instead of the session. Only a probe refreshes
-     * it, so a model deleted between its load and its first message is still caught.
+     * Whether the source answered a probe — with anything but GONE — recently enough to be taken
+     * at its word again, which bounds a wedged provider to one blocked message rather than the
+     * session. Only a probe arms it, so a model deleted before its first message is still caught.
      */
-    private fun reachabilityIsFresh(): Boolean {
-        val since = System.nanoTime() - lastReachableNanos
-        return lastReachableNanos != 0L && since in 0..REACHABILITY_TRUST_NANOS
+    private fun probeAnswerIsFresh(): Boolean {
+        val since = System.nanoTime() - lastProbeAnsweredNanos
+        return lastProbeAnsweredNanos != 0L && since in 0..REACHABILITY_TRUST_NANOS
     }
 
     /**
@@ -485,7 +489,7 @@ class LocalLlmBackend(
         currentModelRef = null
         openModel?.close()
         openModel = null
-        lastReachableNanos = 0L
+        lastProbeAnsweredNanos = 0L
     }
 
     /**

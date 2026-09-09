@@ -34,7 +34,19 @@ import kotlinx.coroutines.launch
 sealed class ModelLoadingState {
     object Idle : ModelLoadingState()
     object Loading : ModelLoadingState()
-    data class Loaded(val modelName: String) : ModelLoadingState()
+
+    /**
+     * A model is configured and readable. [accessPersisted] false means only the picker's own
+     * one-off grant makes it so, and the selection may not survive a restart — said now, while the
+     * user still holds that grant and can act on it (ADFA-5253).
+     *
+     * @param modelName the model's display name
+     * @param accessPersisted whether the read grant will still be held after a restart
+     */
+    data class Loaded(
+        val modelName: String,
+        val accessPersisted: Boolean = true,
+    ) : ModelLoadingState()
 
     /**
      * A model is configured but its file can no longer be read — deleted, unmounted, or the read
@@ -149,13 +161,42 @@ class LocalLlmSettingsViewModel(
     val state: LiveData<LocalLlmSettingsState> get() = _state
 
     /**
+     * How many states have been published. A background check reads it before its probe and hands
+     * it back on the way out: anything published while the probe ran is newer than the answer it
+     * is carrying, and a refused pick's explanation is not the probe's to overwrite.
+     */
+    private var statusGeneration = 0L
+
+    /** The generation to hand back to [updateIfNothingPublishedSince] after a probe. */
+    @Synchronized
+    private fun currentGeneration(): Long = statusGeneration
+
+    /**
      * Applies [transform] to the state and publishes the result. Synchronized because the memory
      * pre-flight, the availability re-check and a load can all be in flight at once.
      */
     @Synchronized
     private fun update(transform: (LocalLlmSettingsState) -> LocalLlmSettingsState) {
         current = transform(current)
+        statusGeneration++
         _state.postValue(current)
+    }
+
+    /**
+     * [update], unless something was published since [generation] — in which case this caller's
+     * answer is the older one and the newer status stands.
+     *
+     * @param generation the value [currentGeneration] returned before the work that led here
+     * @param transform the new state, or null to publish nothing and leave the generation alone
+     */
+    @Synchronized
+    private fun updateIfNothingPublishedSince(
+        generation: Long,
+        transform: (LocalLlmSettingsState) -> LocalLlmSettingsState?,
+    ) {
+        if (statusGeneration != generation) return
+        val next = transform(current) ?: return
+        update { next }
     }
 
     /** The memory pre-flight's consent gate; see [loadModelFromUri]. */
@@ -202,19 +243,27 @@ class LocalLlmSettingsViewModel(
     fun refreshSavedModelAvailability() {
         val savedPath = getLocalModelPath() ?: return
         val context = getContext()?.androidContext ?: return
+        // Taken before the probe: a pick refused while it runs publishes a newer status, and this
+        // answer — which is only ever about savedPath — must not overwrite the explanation.
+        val generation = currentGeneration()
 
         viewModelScope.launch(ioDispatcher) {
             val reachability = modelFiles.readability(context, savedPath)
 
             // A selection made while the check ran owns the status now; leave it to that load.
             if (getLocalModelPath() != savedPath) return@launch
+            // Not covered by the generation guard below: a load already in flight when this check
+            // started published its Loading before the generation was taken.
             if (current.model is ModelLoadingState.Loading) return@launch
 
             when (reachability) {
-                SourceReachability.REACHABLE -> clearStatusMadeStaleBy(savedPath)
+                SourceReachability.REACHABLE -> clearStatusMadeStaleBy(savedPath, generation)
                 SourceReachability.GONE -> {
                     logger?.warn("$TAG: the configured model can no longer be read: $savedPath")
-                    publishModelState(ModelLoadingState.Unavailable(displayNameFor(savedPath)))
+                    val gone = ModelLoadingState.Unavailable(displayNameFor(savedPath))
+                    updateIfNothingPublishedSince(generation) {
+                        it.copy(model = gone, engine = engineStateFor(gone) ?: it.engine)
+                    }
                 }
                 // Silence says nothing about the model, so it may not restate its status either way.
                 SourceReachability.UNKNOWN ->
@@ -229,14 +278,20 @@ class LocalLlmSettingsViewModel(
      * that a stream opens, which is no answer to a model whose bytes stopped being a GGUF.
      *
      * @param savedPath the configured model, confirmed readable a moment ago
+     * @param generation the state's generation from before the probe; a status published since is
+     *   newer than this answer, so it stands whatever it says
      */
-    private fun clearStatusMadeStaleBy(savedPath: String) {
-        val stale = when (val model = current.model) {
-            is ModelLoadingState.Unavailable -> true
-            is ModelLoadingState.Error -> model.reference != savedPath
-            else -> false
+    private fun clearStatusMadeStaleBy(savedPath: String, generation: Long) {
+        updateIfNothingPublishedSince(generation) { state ->
+            val stale = when (val model = state.model) {
+                is ModelLoadingState.Unavailable -> true
+                is ModelLoadingState.Error -> model.reference != savedPath
+                else -> false
+            }
+            if (!stale) return@updateIfNothingPublishedSince null
+            val model = modelStateFor(savedPath)
+            state.copy(model = model, engine = engineStateFor(model) ?: state.engine)
         }
-        if (stale) publishModelState(modelStateFor(savedPath))
     }
 
     /**
@@ -250,7 +305,8 @@ class LocalLlmSettingsViewModel(
     /**
      * Publishes a selection that was not kept: the model line says what went wrong with the pick,
      * the engine line keeps describing the *configured* model. A pick of another file hands the
-     * engine back untouched; "Load from saved" re-picks the configured one, so its failure counts.
+     * engine back untouched; "Load from saved" re-picks the configured one, so its failure counts
+     * on both lines.
      *
      * @param uriString the pick that was abandoned
      * @param model what to say about it
@@ -261,12 +317,13 @@ class LocalLlmSettingsViewModel(
         model: ModelLoadingState,
         engineBefore: EngineState,
     ) {
-        val engine =
-            if (uriString == getLocalModelPath()) engineStateFor(model) ?: engineBefore
-            else engineBefore
-        // Stamped here rather than at each call site, so no refusal can forget what it was about.
+        // Stamped here rather than at each call site, so no refusal can forget what it was about,
+        // and before the engine state below, which is derived from the reference it carries.
         val stamped =
             if (model is ModelLoadingState.Error) model.copy(reference = uriString) else model
+        val engine =
+            if (uriString == getLocalModelPath()) engineStateFor(stamped) ?: engineBefore
+            else engineBefore
 
         update { it.copy(model = stamped, engine = engine) }
     }
@@ -281,9 +338,15 @@ class LocalLlmSettingsViewModel(
         is ModelLoadingState.Loading -> EngineState.Initializing
         is ModelLoadingState.Loaded -> EngineState.Initialized
         is ModelLoadingState.Unavailable -> EngineState.ModelUnavailable
-        // A rejected *selection* says nothing about the model that is actually configured, which
-        // this leaves in place — so it must not restate that model's readiness either way.
-        is ModelLoadingState.Error -> null
+        // A refusal of the *configured* model is the engine's too: it is the model the engine would
+        // load, so leaving the line alone draws "Engine ready" beside "isn't a valid .gguf". A
+        // refusal of any other pick says nothing about it, and hands the line back untouched.
+        is ModelLoadingState.Error ->
+            if (state.reference != null && state.reference == getLocalModelPath()) {
+                EngineState.Error(state.message)
+            } else {
+                null
+            }
     }
 
     /**
@@ -357,7 +420,9 @@ class LocalLlmSettingsViewModel(
      * and therefore never loaded (ADFA-1798).
      *
      * The read grant is made persistable first: the model is read in place rather than copied, so
-     * without a durable grant the stored path would stop resolving at the next restart (ADFA-5253).
+     * without a durable grant the stored path would stop resolving at the next restart. When that
+     * grant cannot be taken the model is still kept, and the status line says it may need picking
+     * again after a restart (ADFA-5253).
      *
      * @param uriString the selected model, as a `content://` URI or a filesystem path
      */
@@ -380,9 +445,11 @@ class LocalLlmSettingsViewModel(
             var stored = false
             try {
                 // Taken before the first read, so every step below works off the durable grant.
-                if (!modelFiles.persistAccess(context, uriString)) {
-                    // Readable now through the picker's own grant, but not after a restart. Better
-                    // to load it and say so later than to refuse a model the user just picked.
+                // Readable now through the picker's own grant even when this fails, so the model is
+                // kept rather than refused — and the status line carries the caveat, at selection
+                // time, while the user is still holding a grant they can act on.
+                val accessPersisted = modelFiles.persistAccess(context, uriString)
+                if (!accessPersisted) {
                     logger?.warn("$TAG: no persistable read grant for $uriString")
                 }
 
@@ -433,7 +500,7 @@ class LocalLlmSettingsViewModel(
                 stored = true
 
                 // Nothing is loaded here; the engine reads this path when it needs the model.
-                publishModelState(ModelLoadingState.Loaded(fileName))
+                publishModelState(ModelLoadingState.Loaded(fileName, accessPersisted))
 
                 logger?.debug("$TAG: model path saved: $uriString ($fileName)")
             } catch (e: CancellationException) {
