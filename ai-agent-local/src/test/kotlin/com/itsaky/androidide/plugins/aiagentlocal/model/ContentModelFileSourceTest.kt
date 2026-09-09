@@ -3,6 +3,7 @@ package com.itsaky.androidide.plugins.aiagentlocal.model
 import android.content.ContentResolver
 import android.content.Context
 import android.content.Intent
+import android.content.UriPermission
 import android.net.Uri
 import io.mockk.every
 import io.mockk.mockk
@@ -79,6 +80,37 @@ class ContentModelFileSourceTest {
     }
 
     @Test
+    fun givenAHeldReadGrant_whenAskedWhetherAccessPersists_thenItDoes() {
+        every { resolver.persistedUriPermissions } returns listOf(readGrant(CONTENT_URI))
+
+        assertTrue(source.hasPersistedAccess(context, CONTENT_URI))
+    }
+
+    @Test
+    fun givenOnlyAGrantForAnotherDocument_whenAskedWhetherAccessPersists_thenItDoesNot() {
+        // Derived on every visit rather than remembered from the pick, so a grant dropped since —
+        // a revoked one, or a full grant table — brings the "may need re-picking" caveat back.
+        every { resolver.persistedUriPermissions } returns listOf(readGrant(OTHER_CONTENT_URI))
+
+        assertFalse(source.hasPersistedAccess(context, CONTENT_URI))
+    }
+
+    @Test
+    fun givenAResolverThatCannotAnswer_whenAskedWhetherAccessPersists_thenNoCaveatIsInvented() {
+        every { resolver.persistedUriPermissions } throws SecurityException("denied")
+
+        assertTrue(source.hasPersistedAccess(context, CONTENT_URI))
+        assertEquals(1, errors.size)
+    }
+
+    @Test
+    fun givenFilesystemPath_whenAskedWhetherAccessPersists_thenNoGrantIsNeeded() {
+        assertTrue(source.hasPersistedAccess(context, "/sdcard/Download/model.gguf"))
+
+        verify(exactly = 0) { resolver.persistedUriPermissions }
+    }
+
+    @Test
     fun givenDeletedDocument_whenProbed_thenGoneWithoutReportingAnError() {
         every { resolver.openInputStream(uri) } throws
             FileNotFoundException("open failed: ENOENT (No such file or directory)")
@@ -125,7 +157,18 @@ class ContentModelFileSourceTest {
 
     @Test
     fun givenMissingFilesystemPath_whenProbed_thenGone() {
+        // Confirmed like the document branch: it is asked twice before it answers GONE.
         assertEquals(SourceReachability.GONE, source.readability(context, "/sdcard/Download/gone.gguf"))
+    }
+
+    @Test
+    fun givenAFileThatIsBackOnTheSecondAsk_whenProbed_thenItIsReachableRatherThanGone() {
+        // A stat that lost a race with a mount used to refuse the pick outright on this branch.
+        val file = File.createTempFile("model", ".gguf").apply { delete(); deleteOnExit() }
+        // Lands inside the confirmation delay, so the second ask is the one that finds it.
+        Thread { Thread.sleep(50); file.writeBytes(ByteArray(4)) }.start()
+
+        assertEquals(SourceReachability.REACHABLE, source.readability(context, file.absolutePath))
     }
 
     @Test
@@ -135,7 +178,18 @@ class ContentModelFileSourceTest {
         assertEquals(SourceReachability.REACHABLE, source.readability(context, file.absolutePath))
     }
 
+    /** A persisted read grant on [uriString], as the resolver reports one. */
+    private fun readGrant(uriString: String): UriPermission {
+        val granted = mockk<Uri>(relaxed = true)
+        every { granted.toString() } returns uriString
+        return mockk<UriPermission>(relaxed = true).also {
+            every { it.uri } returns granted
+            every { it.isReadPermission } returns true
+        }
+    }
+
     private companion object {
         const val CONTENT_URI = "content://com.android.providers.downloads/document/42"
+        const val OTHER_CONTENT_URI = "content://com.android.providers.downloads/document/43"
     }
 }

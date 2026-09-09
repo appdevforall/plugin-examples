@@ -401,11 +401,41 @@ class LocalLlmBackend(
             currentModelRef = modelRef
             openModel = opened
             adopted = true
+            releaseSupersededGrants(modelRef)
             startWatching(modelRef)
             context.logger.info("Model loaded successfully")
             reportEffectiveContextSize(contextSize.contextTokens)
         } finally {
             if (!adopted) opened.close()
+        }
+    }
+
+    /**
+     * Gives back the read grants of the models this selection replaced, now that one has actually
+     * loaded. Deferred to here on purpose: the checks that reject a model — `isSeekable`,
+     * `isReopenable`, the embedding-model guard — all run above, and nothing is copied any more,
+     * so releasing at selection time would have cost the user the model they were running for a
+     * pick this method never gets to (ADFA-5253). The settings pane writes the list; see
+     * `LocalLlmSettingsViewModel.supersede`.
+     *
+     * Cleared before the releases, so a provider that throws cannot leave the list to be retried
+     * on every later load.
+     *
+     * @param loadedRef the model just adopted; never released, however it got onto the list
+     */
+    private fun releaseSupersededGrants(loadedRef: String) {
+        try {
+            val prefs = LocalLlmPreferences.of(context)
+            val superseded = LocalLlmPreferences.supersededModels(prefs)
+            if (superseded.isEmpty()) return
+            LocalLlmPreferences.setSupersededModels(prefs, emptySet())
+            for (reference in superseded - loadedRef) {
+                context.logger.debug("Releasing the read grant of a replaced model: $reference")
+                modelSource.releaseAccess(reference)
+            }
+        } catch (e: Exception) {
+            // Grant bookkeeping, not the load: a model that is resident stays resident.
+            context.logger.warn("Could not release the replaced models' read grants", e)
         }
     }
 

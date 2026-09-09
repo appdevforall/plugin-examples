@@ -59,6 +59,17 @@ interface ModelFileSource {
     fun persistAccess(context: Context, uriString: String): Boolean
 
     /**
+     * Whether a durable read grant for [uriString] is held right now, which is what decides
+     * — asked again on every visit rather than remembered from the selection — whether the pane
+     * still has to warn that the model may need picking again after a restart. Not for the main
+     * thread.
+     *
+     * @return true for a filesystem path, and whenever the answer cannot be established: a caveat
+     *   that may be wrong is worse than none
+     */
+    fun hasPersistedAccess(context: Context, uriString: String): Boolean
+
+    /**
      * Give back the persistable read grant the picker took for [uriString], for a model the user
      * ended up not keeping — the grant table has a hard per-app limit. A no-op for a filesystem
      * path, and for a grant that was never held.
@@ -101,7 +112,9 @@ class ContentModelFileSource(
             // Confirmed: one FileNotFoundException covers a deletion and a dead provider alike.
             confirmedGone { probeDocument(context, uriString) }
         } else {
-            probeFile(uriString)
+            // Confirmed on this branch too, so a GONE is an answer given twice for every reference
+            // — a stat that lost a race with a mount refuses a pick over a model that is fine.
+            confirmedGone { probeFile(uriString) }
         }
 
     private fun probeDocument(context: Context, uriString: String): SourceReachability = try {
@@ -147,6 +160,17 @@ class ContentModelFileSource(
             // A provider that hands out non-persistable grants, or a grant table that is full.
             onError("could not persist the read grant for $uriString", e)
             false
+        }
+    }
+
+    override fun hasPersistedAccess(context: Context, uriString: String): Boolean {
+        if (!uriString.startsWith(CONTENT_SCHEME)) return true
+        return try {
+            context.contentResolver.persistedUriPermissions
+                .any { it.isReadPermission && it.uri.toString() == uriString }
+        } catch (e: Exception) {
+            onError("could not read the persisted read grants for $uriString", e)
+            true
         }
     }
 

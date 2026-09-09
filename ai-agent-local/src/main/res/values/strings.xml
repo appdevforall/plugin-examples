@@ -17,6 +17,7 @@
     <string name="engine_ready">Engine ready</string>
     <string name="engine_no_model">Engine not ready — no model selected</string>
     <string name="engine_model_unavailable">Engine not ready — the selected model can\'t be reached</string>
+    <string name="engine_error">Engine not ready — the selected model was refused</string>
     <string name="model_saved_path">Saved: %s</string>
     <string name="model_none_loaded">No model is currently loaded</string>
     <string name="model_loading_wait">Loading model, please wait…</string>

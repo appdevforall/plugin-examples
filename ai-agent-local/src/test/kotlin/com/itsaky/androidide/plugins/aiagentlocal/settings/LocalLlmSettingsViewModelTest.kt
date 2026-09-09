@@ -51,6 +51,9 @@ class LocalLlmSettingsViewModelTest {
         /** References the grant table has no room for, standing in for a full one. */
         val unpersistable = mutableSetOf<String>()
 
+        /** References whose durable grant is no longer held, as a revoked one reads later. */
+        val ungranted = mutableSetOf<String>()
+
         /** Runs inside a readability probe, so a test can land a status while one is in flight. */
         var duringReadability: ((String) -> Unit)? = null
 
@@ -78,12 +81,16 @@ class LocalLlmSettingsViewModelTest {
             return true
         }
 
+        override fun hasPersistedAccess(context: Context, uriString: String) =
+            uriString !in ungranted
+
         override fun releaseAccess(context: Context, uriString: String) {
             released += uriString
         }
     }
 
     private lateinit var stored: MutableMap<String, String?>
+    private lateinit var storedSets: MutableMap<String, MutableSet<String>?>
     private lateinit var resolver: ContentResolver
     private lateinit var pluginContext: PluginContext
     private lateinit var modelFiles: FakeModelFiles
@@ -95,12 +102,18 @@ class LocalLlmSettingsViewModelTest {
         every { Uri.decode(any()) } answers { firstArg() }
 
         stored = mutableMapOf()
+        storedSets = mutableMapOf()
         val prefs = mockk<SharedPreferences>(relaxed = true)
         val editor = mockk<SharedPreferences.Editor>(relaxed = true)
         every { prefs.getString(any(), any()) } answers { stored[firstArg()] ?: secondArg() }
+        every { prefs.getStringSet(any(), any()) } answers { storedSets[firstArg()] ?: mutableSetOf() }
         every { prefs.edit() } returns editor
         every { editor.putString(any(), any()) } answers {
             stored[firstArg()] = secondArg()
+            editor
+        }
+        every { editor.putStringSet(any(), any()) } answers {
+            storedSets[firstArg()] = secondArg()
             editor
         }
 
@@ -147,16 +160,33 @@ class LocalLlmSettingsViewModelTest {
     }
 
     @Test
-    fun givenAConfiguredModel_whenAnotherIsSelected_thenOnlyTheReplacedGrantIsReleased() {
-        // Grants are capped per app, so the model no longer read by anything has to give its back.
+    fun givenAConfiguredModel_whenAnotherIsSelected_thenTheReplacedGrantIsHeldNotReleased() {
+        // Nothing here rejects a model — isSeekable, isReopenable and the embedding-model guard all
+        // run in the backend — so releasing now would strand a working model behind a pick that is
+        // about to be refused. The backend gives it back once a model actually loads.
         val viewModel = viewModel()
         viewModel.loadModelFromUri(MODEL_A)
 
         viewModel.loadModelFromUri(MODEL_B)
 
         assertEquals(listOf(MODEL_A, MODEL_B), modelFiles.persisted)
-        assertEquals(listOf(MODEL_A), modelFiles.released)
+        assertEquals("the replaced model must stay readable", emptyList<String>(), modelFiles.released)
+        assertEquals(setOf(MODEL_A), storedSets[KEY_SUPERSEDED_MODELS])
         assertEquals(MODEL_B, viewModel.getLocalModelPath())
+    }
+
+    @Test
+    fun givenAReplacedModel_whenItIsSelectedAgain_thenItIsNoLongerQueuedForRelease() {
+        // How the user recovers from a pick the backend refused: the model they came back to is the
+        // one to keep, and the refused one takes its place on the list.
+        val viewModel = viewModel()
+        viewModel.loadModelFromUri(MODEL_A)
+        viewModel.loadModelFromUri(MODEL_B)
+
+        viewModel.loadModelFromUri(MODEL_A)
+
+        assertEquals(setOf(MODEL_B), storedSets[KEY_SUPERSEDED_MODELS])
+        assertEquals(emptyList<String>(), modelFiles.released)
     }
 
     @Test
@@ -377,8 +407,8 @@ class LocalLlmSettingsViewModelTest {
 
         viewModel.loadModelFromUri(MODEL_A)
 
-        val refusal = viewModel.state.value?.model as ModelLoadingState.Error
-        assertEquals(EngineState.Error(refusal.message), viewModel.state.value?.engine)
+        assertTrue(viewModel.state.value?.model is ModelLoadingState.Error)
+        assertEquals(EngineState.Error, viewModel.state.value?.engine)
     }
 
     @Test
@@ -420,9 +450,46 @@ class LocalLlmSettingsViewModelTest {
         assertEquals(MODEL_B, error.reference)
     }
 
+    @Test
+    fun givenAConfiguredModelWhoseGrantWasDropped_whenTheScreenReturns_thenTheCaveatIsShownAgain() {
+        // The caveat used to be published only by the selection that took the grant, so leaving the
+        // pane and coming back repainted a plain "Model loaded" for a model that will not survive a
+        // restart. It is derived from the grants actually held, on every visit.
+        val viewModel = viewModel()
+        viewModel.loadModelFromUri(MODEL_A)
+        assertEquals(ModelLoadingState.Loaded("a.gguf"), viewModel.state.value?.model)
+
+        modelFiles.ungranted += MODEL_A
+        viewModel.refreshSavedModelAvailability()
+
+        assertEquals(
+            ModelLoadingState.Loaded("a.gguf", accessPersisted = false),
+            viewModel.state.value?.model,
+        )
+        assertEquals(EngineState.Initialized, viewModel.state.value?.engine)
+    }
+
+    @Test
+    fun givenAModelWhoseGrantWasTakenLater_whenTheScreenReturns_thenTheCaveatGoesAway() {
+        // The mirror case: a caveat that outlived the grant table making room reads as a warning
+        // about a selection that is now durable.
+        modelFiles.unpersistable += MODEL_A
+        val viewModel = viewModel()
+        viewModel.loadModelFromUri(MODEL_A)
+        assertEquals(
+            ModelLoadingState.Loaded("a.gguf", accessPersisted = false),
+            viewModel.state.value?.model,
+        )
+
+        viewModel.refreshSavedModelAvailability()
+
+        assertEquals(ModelLoadingState.Loaded("a.gguf"), viewModel.state.value?.model)
+    }
+
     private companion object {
         const val MODEL_A = "content://com.android.externalstorage.documents/document/a.gguf"
         const val MODEL_B = "content://com.android.externalstorage.documents/document/b.gguf"
         const val KEY_MODEL_PATH = "local_llm_model_path"
+        const val KEY_SUPERSEDED_MODELS = "local_llm_superseded_models"
     }
 }

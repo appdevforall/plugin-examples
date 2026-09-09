@@ -154,12 +154,14 @@ class LocalLlmSettingsFragment : Fragment(), MemoryWarningDialogFragment.Host {
         // All three lines describe the same model, so they are drawn from one state in one pass:
         // an unreachable model must not read as ready on one line and missing on another.
         viewModel.state.observe(viewLifecycleOwner) { state ->
-            engineStatusTextView.text = when (val engine = state.engine) {
+            // Every branch is a short phrase about the engine; the refusal's own sentence belongs
+            // to the model line below, which would otherwise draw the same paragraph twice.
+            engineStatusTextView.text = when (state.engine) {
                 is EngineState.NoModel -> getString(R.string.engine_no_model)
                 is EngineState.ModelUnavailable -> getString(R.string.engine_model_unavailable)
                 is EngineState.Initializing -> getString(R.string.engine_initializing)
                 is EngineState.Initialized -> getString(R.string.engine_ready)
-                is EngineState.Error -> engine.message
+                is EngineState.Error -> getString(R.string.engine_error)
             }
 
             // Enabled off the model status, not off engine readiness: picking a model is exactly

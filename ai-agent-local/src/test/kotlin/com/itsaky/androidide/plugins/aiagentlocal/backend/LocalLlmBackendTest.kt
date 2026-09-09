@@ -52,6 +52,9 @@ class LocalLlmBackendTest {
         /** Reachability probes served, so a burst of watch notifications can be counted. */
         @Volatile var probeCount = 0
 
+        /** Read grants given back, which only a load that succeeded may do. */
+        val released = mutableListOf<String>()
+
         override fun open(modelReference: String): OpenModelFile? {
             openCount++
             return handles[modelReference].takeIf { reachable }
@@ -61,6 +64,10 @@ class LocalLlmBackendTest {
             probeCount++
             return if (reachable && handles.containsKey(modelReference)) SourceReachability.REACHABLE
             else whenUnreachable
+        }
+
+        override fun releaseAccess(modelReference: String) {
+            released += modelReference
         }
     }
 
@@ -467,6 +474,46 @@ class LocalLlmBackendTest {
     }
 
     /** The eviction runs on the backend's own cleanup scope, so the test waits for it. */
+    @Test
+    fun givenAReplacedModel_whenTheNewOneLoads_thenItsReadGrantIsGivenBack() {
+        // Deferred to here from the selection: the settings pane keeps the grant so a pick this
+        // method refuses cannot cost the user the model they were running (ADFA-5253).
+        val source = FakeModelSource(mapOf(CONTENT_URI to handleFor(chatModel())))
+        val pending = supersede(OTHER_CONTENT_URI)
+
+        runBlocking { backendWith(source, FakeEngine()).ensureModelLoaded(CONTENT_URI) }
+
+        assertEquals(listOf(OTHER_CONTENT_URI), source.released)
+        assertEquals("a released grant must not be released again", emptySet<String>(), pending[KEY_SUPERSEDED])
+    }
+
+    @Test
+    fun givenAReplacedModel_whenTheNewOneIsRefused_thenItsReadGrantSurvives() {
+        // The whole point: an embedding model gets past the settings pane's checks and is refused
+        // here, and the working model it replaced has to still be readable afterwards.
+        val source = FakeModelSource(mapOf(CONTENT_URI to handleFor(GgufTestFiles.withArchitecture("bert"))))
+        val pending = supersede(OTHER_CONTENT_URI)
+
+        assertThrows(IncompatibleModelException::class.java) {
+            runBlocking { backendWith(source).ensureModelLoaded(CONTENT_URI) }
+        }
+
+        assertEquals(emptyList<String>(), source.released)
+        assertEquals(setOf(OTHER_CONTENT_URI), pending[KEY_SUPERSEDED])
+    }
+
+    @Test
+    fun givenTheLoadedModelItselfOnTheList_whenItLoads_thenItsOwnGrantIsNotReleased() {
+        // Re-picking a model that had been replaced takes it off the list; releasing it here would
+        // revoke the grant on the model that just loaded.
+        val source = FakeModelSource(mapOf(CONTENT_URI to handleFor(chatModel())))
+        supersede(CONTENT_URI)
+
+        runBlocking { backendWith(source, FakeEngine()).ensureModelLoaded(CONTENT_URI) }
+
+        assertEquals(emptyList<String>(), source.released)
+    }
+
     private fun awaitUnload(engine: FakeEngine) {
         val deadline = System.currentTimeMillis() + 2000
         while (engine.unloadCount == 0 && System.currentTimeMillis() < deadline) {
@@ -485,11 +532,30 @@ class LocalLlmBackendTest {
         every { pluginContext.getPluginSharedPreferences(any()) } returns prefs
     }
 
+    /**
+     * Puts [references] on the list of models a later selection replaced, the way the settings pane
+     * does, and hands back the store so the test can read what is left on it.
+     */
+    private fun supersede(vararg references: String): MutableMap<String, MutableSet<String>?> {
+        val sets = mutableMapOf<String, MutableSet<String>?>(KEY_SUPERSEDED to references.toMutableSet())
+        val prefs = mockk<android.content.SharedPreferences>(relaxed = true)
+        val editor = mockk<android.content.SharedPreferences.Editor>(relaxed = true)
+        every { prefs.getStringSet(any(), any()) } answers { sets[firstArg()] ?: mutableSetOf() }
+        every { prefs.edit() } returns editor
+        every { editor.putStringSet(any(), any()) } answers {
+            sets[firstArg()] = secondArg()
+            editor
+        }
+        every { pluginContext.getPluginSharedPreferences(any()) } returns prefs
+        return sets
+    }
+
     private fun handleFor(file: File, descriptor: Closeable? = null) =
         OpenModelFile(file.absolutePath, file.length(), descriptor)
 
     private companion object {
         const val CONTENT_URI = "content://com.android.externalstorage.documents/document/model.gguf"
         const val OTHER_CONTENT_URI = "content://com.android.externalstorage.documents/document/other.gguf"
+        const val KEY_SUPERSEDED = "local_llm_superseded_models"
     }
 }

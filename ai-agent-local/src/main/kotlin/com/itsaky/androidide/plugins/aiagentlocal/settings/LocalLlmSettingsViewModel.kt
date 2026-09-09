@@ -37,8 +37,9 @@ sealed class ModelLoadingState {
 
     /**
      * A model is configured and readable. [accessPersisted] false means only the picker's own
-     * one-off grant makes it so, and the selection may not survive a restart — said now, while the
-     * user still holds that grant and can act on it (ADFA-5253).
+     * one-off grant makes it so, and the selection may not survive a restart — said at selection
+     * time, while the user still holds that grant and can act on it, and re-derived on every later
+     * visit by [LocalLlmSettingsViewModel.refreshSavedModelAvailability] (ADFA-5253).
      *
      * @param modelName the model's display name
      * @param accessPersisted whether the read grant will still be held after a restart
@@ -81,7 +82,13 @@ sealed class EngineState {
 
     object Initializing : EngineState()
     object Initialized : EngineState()
-    data class Error(val message: String) : EngineState()
+
+    /**
+     * The configured model was refused, so there is nothing the engine could load. Carries no
+     * message: the refusal is the model line's to explain in full, and an engine line that
+     * repeated it drew the same paragraph twice.
+     */
+    object Error : EngineState()
 }
 
 /**
@@ -249,6 +256,9 @@ class LocalLlmSettingsViewModel(
 
         viewModelScope.launch(ioDispatcher) {
             val reachability = modelFiles.readability(context, savedPath)
+            // Asked here rather than remembered from the selection: this is the pass that runs on
+            // every visit, and a grant can be dropped long after the pick that took it.
+            val accessPersisted = modelFiles.hasPersistedAccess(context, savedPath)
 
             // A selection made while the check ran owns the status now; leave it to that load.
             if (getLocalModelPath() != savedPath) return@launch
@@ -257,7 +267,8 @@ class LocalLlmSettingsViewModel(
             if (current.model is ModelLoadingState.Loading) return@launch
 
             when (reachability) {
-                SourceReachability.REACHABLE -> clearStatusMadeStaleBy(savedPath, generation)
+                SourceReachability.REACHABLE ->
+                    publishConfirmedReadable(savedPath, generation, accessPersisted)
                 SourceReachability.GONE -> {
                     logger?.warn("$TAG: the configured model can no longer be read: $savedPath")
                     val gone = ModelLoadingState.Unavailable(displayNameFor(savedPath))
@@ -273,23 +284,35 @@ class LocalLlmSettingsViewModel(
     }
 
     /**
-     * Replaces a status that a just-confirmed readability makes stale, and leaves every other one.
-     * An [ModelLoadingState.Error] about the configured model is not stale: this probe only proves
-     * that a stream opens, which is no answer to a model whose bytes stopped being a GGUF.
+     * Replaces a status that a just-confirmed readability makes stale, and refreshes the durable-
+     * grant caveat on one that stands. An [ModelLoadingState.Error] about the configured model is
+     * not stale: this probe only proves that a stream opens, which is no answer to a model whose
+     * bytes stopped being a GGUF.
      *
      * @param savedPath the configured model, confirmed readable a moment ago
      * @param generation the state's generation from before the probe; a status published since is
      *   newer than this answer, so it stands whatever it says
+     * @param accessPersisted whether a durable read grant for [savedPath] is still held
      */
-    private fun clearStatusMadeStaleBy(savedPath: String, generation: Long) {
+    private fun publishConfirmedReadable(
+        savedPath: String,
+        generation: Long,
+        accessPersisted: Boolean,
+    ) {
         updateIfNothingPublishedSince(generation) { state ->
-            val stale = when (val model = state.model) {
-                is ModelLoadingState.Unavailable -> true
-                is ModelLoadingState.Error -> model.reference != savedPath
-                else -> false
+            val model = when (val shown = state.model) {
+                // Stale: the model reads back, so it is not unreachable any more.
+                is ModelLoadingState.Unavailable -> modelStateFor(savedPath, accessPersisted)
+                // Stands, and only the caveat on it can have changed since it was published.
+                is ModelLoadingState.Loaded -> shown.copy(accessPersisted = accessPersisted)
+                // An error about another pick is stale; one about this model is the only answer
+                // anyone has to why it would not load, and a readable stream does not refute it.
+                is ModelLoadingState.Error ->
+                    if (shown.reference == savedPath) return@updateIfNothingPublishedSince null
+                    else modelStateFor(savedPath, accessPersisted)
+                else -> return@updateIfNothingPublishedSince null
             }
-            if (!stale) return@updateIfNothingPublishedSince null
-            val model = modelStateFor(savedPath)
+            if (model == state.model) return@updateIfNothingPublishedSince null
             state.copy(model = model, engine = engineStateFor(model) ?: state.engine)
         }
     }
@@ -343,7 +366,7 @@ class LocalLlmSettingsViewModel(
         // refusal of any other pick says nothing about it, and hands the line back untouched.
         is ModelLoadingState.Error ->
             if (state.reference != null && state.reference == getLocalModelPath()) {
-                EngineState.Error(state.message)
+                EngineState.Error
             } else {
                 null
             }
@@ -354,10 +377,16 @@ class LocalLlmSettingsViewModel(
      * load time, so it needs no engine query.
      *
      * @param savedPath the stored model path, or null when none is configured
+     * @param accessPersisted whether a durable read grant is held; only the off-main pass in
+     *   [refreshSavedModelAvailability] can answer that, so the main-thread callers assume it and
+     *   let that pass correct them
      */
-    private fun modelStateFor(savedPath: String?): ModelLoadingState =
+    private fun modelStateFor(
+        savedPath: String?,
+        accessPersisted: Boolean = true,
+    ): ModelLoadingState =
         if (savedPath != null) {
-            ModelLoadingState.Loaded(displayNameFor(savedPath))
+            ModelLoadingState.Loaded(displayNameFor(savedPath), accessPersisted)
         } else {
             ModelLoadingState.Idle
         }
@@ -488,11 +517,8 @@ class LocalLlmSettingsViewModel(
                     return@launch
                 }
 
-                // The model being replaced is no longer read by anything, and grants are capped.
-                val replaced = getLocalModelPath()
-                if (replaced != null && replaced != uriString) {
-                    modelFiles.releaseAccess(context, replaced)
-                }
+                // Held rather than given back here; see supersede().
+                supersede(replaced = getLocalModelPath(), selected = uriString)
 
                 // Persist the name before the path so the savedModelPath observer can read it.
                 saveLocalModelName(fileName)
@@ -579,6 +605,27 @@ class LocalLlmSettingsViewModel(
                 )
             }
         }
+    }
+
+    /**
+     * Records the model [selected] replaced, whose read grant is kept until the backend has loaded
+     * a model at least once. None of the checks above is the one that rejects a model —
+     * `isSeekable`, `isReopenable` and the embedding-model guard all run in `ensureModelLoaded` —
+     * and nothing is copied any more, so releasing here would strand the model the user was
+     * running behind a pick the loader is about to refuse (ADFA-5253).
+     *
+     * [selected] itself is dropped from the list: re-picking a superseded model makes it the one
+     * to keep. `LocalLlmBackend.releaseSupersededGrants` gives the rest back.
+     *
+     * @param replaced the configured model this selection displaces, if any
+     * @param selected the model just picked
+     */
+    private fun supersede(replaced: String?, selected: String) {
+        val prefs = prefs() ?: return
+        val pending = LocalLlmPreferences.supersededModels(prefs).toMutableSet()
+        replaced?.takeIf { it != selected }?.let(pending::add)
+        pending -= selected
+        LocalLlmPreferences.setSupersededModels(prefs, pending)
     }
 
     /**

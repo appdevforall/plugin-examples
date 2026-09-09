@@ -1,6 +1,7 @@
 package com.itsaky.androidide.plugins.aiagentlocal.model
 
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import java.io.Closeable
 import java.io.File
@@ -131,6 +132,16 @@ interface NativeModelSource {
      * @return what the probe found; [SourceReachability.UNKNOWN] when the source stayed silent
      */
     fun reachabilityOf(modelReference: String): SourceReachability
+
+    /**
+     * Give back the persistable read grant for [modelReference], a model a later selection
+     * replaced. Held until this side rather than released when the replacement was picked: every
+     * check that actually refuses a model runs here, and with nothing copied any more that grant
+     * is the only thing keeping the replaced model readable (ADFA-5253).
+     *
+     * A no-op for a filesystem path, and for a grant that was never held.
+     */
+    fun releaseAccess(modelReference: String)
 }
 
 /**
@@ -207,6 +218,20 @@ class ContentNativeModelSource(
     } catch (e: Exception) {
         onError("could not stat the model file $path", e)
         SourceReachability.UNKNOWN
+    }
+
+    override fun releaseAccess(modelReference: String) {
+        if (!modelReference.startsWith(CONTENT_SCHEME)) return
+        try {
+            context.contentResolver.releasePersistableUriPermission(
+                Uri.parse(modelReference),
+                Intent.FLAG_GRANT_READ_URI_PERMISSION,
+            )
+        } catch (_: SecurityException) {
+            // Nothing was held, or it was already released: the no-op this documents.
+        } catch (e: Exception) {
+            onError("could not release the read grant for $modelReference", e)
+        }
     }
 
     private fun openFile(path: String): OpenModelFile? = try {
