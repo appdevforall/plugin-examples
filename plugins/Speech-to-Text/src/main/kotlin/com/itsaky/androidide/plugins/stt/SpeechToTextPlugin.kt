@@ -543,7 +543,9 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
         val locale = activeLocale
         val requested = languageLabel()
 
-        val installed = usableTag(support.installedOnDeviceLanguages, locale)
+        // Skip the requested tag: it is the one that just errored, so a pack the recognizer
+        // lists as installed for it is missing or corrupt and would fail the retry the same way.
+        val installed = usableTag(support.installedOnDeviceLanguages, locale, skipRequested = true)
         if (installed != null) {
             val fallback = Locale.forLanguageTag(installed)
             logger?.info("Retrying offline with the installed pack $installed")
@@ -640,14 +642,21 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
      * otherwise another region of the same language, which still understands the user (an es-US
      * pack transcribes es-ES speech).
      *
+     * @param skipRequested drops [locale]'s own tag from the candidates, for the caller that
+     *   has already watched it fail
      * @return the recognizer's own spelling of the tag, or null when the language is absent
      */
-    private fun usableTag(tags: List<String>?, locale: Locale): String? {
+    private fun usableTag(
+        tags: List<String>?,
+        locale: Locale,
+        skipRequested: Boolean = false,
+    ): String? {
         if (tags.isNullOrEmpty()) return null
         val wanted = normalizeTag(locale.toLanguageTag())
         val language = locale.language.lowercase(Locale.ROOT)
-        return tags.firstOrNull { normalizeTag(it) == wanted }
-            ?: tags.firstOrNull { normalizeTag(it).substringBefore('-') == language }
+        val candidates = if (skipRequested) tags.filterNot { normalizeTag(it) == wanted } else tags
+        return candidates.firstOrNull { normalizeTag(it) == wanted }
+            ?: candidates.firstOrNull { normalizeTag(it).substringBefore('-') == language }
     }
 
     /** Services spell tags inconsistently (`es_ES`, `es-es`), so compare them normalized. */
@@ -1056,8 +1065,16 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
         /** How long a pack-download request keeps its recognizer alive so the request survives. */
         private const val PACK_REQUEST_HOLD_MS = 5_000L
 
-        /** A capture idle this long is assumed dead, so the microphone button works again. */
-        private const val STALE_CAPTURE_MS = 90_000L
+        /** Slack over one whole generation, so the guard never expires before what it guards. */
+        private const val STALE_CAPTURE_HEADROOM_MS = 15_000L
+
+        /**
+         * A capture idle this long is assumed dead, so the microphone button works again.
+         * Derived from [GENERATION_TIMEOUT_SECONDS] because a guard that expires first lets a
+         * second capture start while the first generation is still on its way to the cursor.
+         */
+        private const val STALE_CAPTURE_MS =
+            GENERATION_TIMEOUT_SECONDS * MILLIS_PER_SECOND + STALE_CAPTURE_HEADROOM_MS
 
         /** Used only when the host cannot name the open file's language. */
         private const val DEFAULT_LANGUAGE = "kotlin"
