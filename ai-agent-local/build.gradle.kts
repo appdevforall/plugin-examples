@@ -81,6 +81,9 @@ dependencies {
     testImplementation(files("../libs/plugin-api.jar"))
     testImplementation("junit:junit:4.13.2")
     testImplementation("io.mockk:mockk:1.13.8")
+    // LiveData's postValue needs the arch-core executor swapped for a synchronous one; the
+    // settings pane publishes its state through it, so its tests cannot run without this.
+    testImplementation("androidx.arch.core:core-testing:2.2.0")
 }
 
 // The one ABI this plugin ships. Shared by the packaging check and the unit tests.

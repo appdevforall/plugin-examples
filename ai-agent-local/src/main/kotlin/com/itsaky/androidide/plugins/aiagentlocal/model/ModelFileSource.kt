@@ -35,8 +35,42 @@ interface ModelFileSource {
     /** Opens the model for reading; null when it cannot be opened. Not for the main thread. */
     fun openStream(context: Context, uriString: String): InputStream?
 
+    /**
+     * Whether the model can still be opened right now: a configured model can be deleted or
+     * unmounted underneath the settings screen, and the stored path says nothing about that.
+     * Tri-state, because a provider that stayed silent is no reason to tell the user to re-pick a
+     * model that is intact. Reports rather than logs, and not for the main thread.
+     *
+     * @return what the probe found; [SourceReachability.UNKNOWN] leaves the screen's status alone
+     */
+    fun readability(context: Context, uriString: String): SourceReachability
+
     /** Decoded last path segment — a cheap name that at least avoids raw `%3A` escapes. */
     fun fallbackDisplayName(uriOrPath: String): String
+
+    /**
+     * Turn the picker's one-off read grant for [uriString] into a persistable one, so the model is
+     * still readable after the IDE is restarted — nothing is copied into private storage, so that
+     * grant is the only thing keeping it reachable (ADFA-5253). A no-op for a filesystem path.
+     *
+     * @return true when the model will still be readable after a restart
+     */
+    fun persistAccess(context: Context, uriString: String): Boolean
+
+    /**
+     * Whether a durable read grant for [uriString] is held right now, which is what decides
+     * — asked again on every visit rather than remembered from the selection — whether the pane
+     * still has to warn that the model may need picking again after a restart. Not for the main
+     * thread.
+     *
+     * Tri-state, because the two directions are not symmetric: inventing a caveat is worse than
+     * none, but erasing one that a real `persistAccess` failure raised tells the user a selection
+     * is fine when the next restart will break it.
+     *
+     * @return true for a filesystem path; null when the answer cannot be established, which leaves
+     *   whatever the pane already says about the grant standing
+     */
+    fun hasPersistedAccess(context: Context, uriString: String): Boolean?
 
     /**
      * Give back the persistable read grant the picker took for [uriString], for a model the user
@@ -76,12 +110,54 @@ class ContentModelFileSource(
         null
     }
 
+    override fun readability(context: Context, uriString: String): SourceReachability =
+        if (uriString.startsWith(CONTENT_SCHEME)) {
+            // Confirmed: one FileNotFoundException covers a deletion and a dead provider alike.
+            confirmedGone {
+                probeOpenable({ context.contentResolver.openInputStream(Uri.parse(uriString)) }) {
+                    onError("could not reach $uriString", it)
+                }
+            }
+        } else {
+            // Confirmed on this branch too, so a GONE is an answer given twice for every reference
+            // — a stat that lost a race with a mount refuses a pick over a model that is fine.
+            confirmedGone { probeFilePath(uriString) { onError("could not stat $uriString", it) } }
+        }
+
     override fun fallbackDisplayName(uriOrPath: String): String =
         (try {
             Uri.decode(uriOrPath)
         } catch (e: Exception) {
             uriOrPath
         }).substringAfterLast('/')
+
+    override fun persistAccess(context: Context, uriString: String): Boolean {
+        if (!uriString.startsWith(CONTENT_SCHEME)) return true
+        return try {
+            context.contentResolver.takePersistableUriPermission(
+                Uri.parse(uriString),
+                Intent.FLAG_GRANT_READ_URI_PERMISSION,
+            )
+            true
+        } catch (e: Exception) {
+            // A provider that hands out non-persistable grants, or a grant table that is full.
+            onError("could not persist the read grant for $uriString", e)
+            false
+        }
+    }
+
+    override fun hasPersistedAccess(context: Context, uriString: String): Boolean? {
+        if (!uriString.startsWith(CONTENT_SCHEME)) return true
+        return try {
+            context.contentResolver.persistedUriPermissions
+                .any { it.isReadPermission && it.uri.toString() == uriString }
+        } catch (e: Exception) {
+            // "Could not tell", never "it is fine": a resolver that will not answer must not be
+            // the thing that clears a caveat a failed persistAccess put there.
+            onError("could not read the persisted read grants for $uriString", e)
+            null
+        }
+    }
 
     override fun releaseAccess(context: Context, uriString: String) {
         if (!uriString.startsWith(CONTENT_SCHEME)) return
@@ -90,8 +166,9 @@ class ContentModelFileSource(
                 Uri.parse(uriString),
                 Intent.FLAG_GRANT_READ_URI_PERMISSION,
             )
+        } catch (_: SecurityException) {
+            // Nothing was held, or it was already released: the no-op this documents.
         } catch (e: Exception) {
-            // Never held, or already released — nothing is broken either way.
             onError("could not release the read grant for $uriString", e)
         }
     }

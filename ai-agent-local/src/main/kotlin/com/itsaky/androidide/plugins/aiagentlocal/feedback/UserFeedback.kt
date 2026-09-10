@@ -55,13 +55,6 @@ object UserFeedback {
 sealed class UserActionableLlmException(message: String) : IllegalStateException(message)
 
 /**
- * Thrown when the local LLM isn't set up (no model selected, or the path can't be resolved), so the
- * backend can surface it to the user instead of failing silently.
- * @param message user-facing, display-ready text
- */
-class ModelNotConfiguredException(message: String) : UserActionableLlmException(message)
-
-/**
  * Thrown when the selected model is the wrong kind for the request (e.g. an embedding model for
  * chat, which would abort native inference). See ADFA-4388.
  * @param message user-facing, display-ready text
