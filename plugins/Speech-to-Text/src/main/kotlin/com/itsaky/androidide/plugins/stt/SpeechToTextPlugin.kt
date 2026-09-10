@@ -31,11 +31,13 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.CompletableFuture
+import kotlin.coroutines.coroutineContext
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -53,7 +55,9 @@ import kotlin.coroutines.resumeWithException
  */
 class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
 
-    private val scope = CoroutineScope(Dispatchers.IO)
+    /** Cancelled by [teardown], so [activate] rebuilds it when the plugin is re-enabled. */
+    @Volatile
+    private var scope = CoroutineScope(Dispatchers.IO)
     private lateinit var context: PluginContext
     /** Populated on the main thread by activate(), read from [scope]'s IO threads. */
     @Volatile
@@ -94,12 +98,17 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
 
     override fun initialize(context: PluginContext): Boolean {
         this.context = context
-        context.addPluginLifecycleListener(aiCoreLifecycleListener)
         logger?.info("Plugin initialized")
         return true
     }
 
     override fun activate(): Boolean {
+        // deactivate() cancels the scope, so a re-enabled plugin needs a fresh one.
+        if (!scope.isActive) {
+            scope = CoroutineScope(Dispatchers.IO)
+        }
+        context.addPluginLifecycleListener(aiCoreLifecycleListener)
+
         // Get services from plugin context
         editorService = context.services.get(IdeEditorService::class.java)
         uiService = context.services.get(IdeUIService::class.java)
@@ -165,19 +174,26 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
 
     override fun deactivate(): Boolean {
         logger?.info("Plugin deactivating")
-        destroyRecognizer()
+        teardown()
         return true
     }
 
     override fun dispose() {
         logger?.info("Plugin disposed")
+        teardown()
+    }
+
+    /**
+     * Releases everything that could outlive a disabled plugin: an in-flight generation that
+     * would still write into the user's file, host callbacks to a dead instance, and the
+     * cached router that pins AI Core's ClassLoader. Idempotent - dispose() follows deactivate().
+     */
+    private fun teardown() {
         if (::context.isInitialized) {
-            context.removePluginLifecycleListener(aiCoreLifecycleListener)
+            runCatching { context.removePluginLifecycleListener(aiCoreLifecycleListener) }
         }
         llmService = null
         destroyRecognizer()
-        // Tear down the transcript-processing scope so no LLM/generation coroutine
-        // outlives the plugin after unload.
         scope.cancel()
     }
 
@@ -330,14 +346,14 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
         // Read here: onResults is a main-thread callback, and the IO dispatcher below is not.
         val language = currentLanguageId()
         scope.launch {
-            // Resolved once per transcript: AI Core may have finished activating after we did.
-            val service = resolveLlmService()
-            // Generate code when AI Core is present; fall back to the raw transcript so speech is never dropped.
-            val generated = service?.let { generateCodeFromVoice(it, transcript, language) }
-            val generationFailed = service != null && generated == null
-            val output = generated ?: transcript
-            withContext(Dispatchers.Main) {
-                try {
+            try {
+                // Resolved once per transcript: AI Core may have finished activating after we did.
+                val service = resolveLlmService()
+                // Generate code when AI Core is present; fall back to the raw transcript so speech is never dropped.
+                val generated = service?.let { generateCodeFromVoice(it, transcript, language) }
+                val generationFailed = service != null && generated == null
+                val output = generated ?: transcript
+                withContext(Dispatchers.Main) {
                     val inserted = insertCodeAtCursor(output)
                     toast(
                         when {
@@ -346,10 +362,11 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
                             else -> str(R.string.stt_inserted)
                         }
                     )
-                } finally {
-                    // Back to idle (mic) regardless of how processing ended.
-                    setState(RecordingState.IDLE)
                 }
+            } finally {
+                // Posted, not dispatched: a cancelled coroutine can no longer suspend, and the
+                // toolbar must leave the spinner even then.
+                runOnMain { setState(RecordingState.IDLE) }
             }
         }
     }
@@ -392,14 +409,18 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
                 return null
             }
             if (response.success) {
-                response.text?.let { stripCodeFences(it) }?.takeIf { it.isNotBlank() }
+                response.text?.let { stripCodeFences(it, language) }?.takeIf { it.isNotBlank() }
             } else {
                 logger?.warn("Code generation failed: ${response.error}")
                 null
             }
         } catch (e: CancellationException) {
             // A plugin unload cancels the scope; that is teardown, not a generation error.
-            throw e
+            if (!coroutineContext.isActive) throw e
+            // AI Core's cancelGeneration() is router-wide, so another plugin's Stop button can
+            // cancel our future while we are alive; that is a failed generation, not a teardown.
+            logger?.warn("Code generation was cancelled by the backend", e)
+            null
         } catch (e: Exception) {
             logger?.error("Error generating code from voice", e)
             null
@@ -424,22 +445,19 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
      * receives code rather than a lead-in line, backticks and a language tag.
      *
      * @param raw the backend's response text
-     * @return the fenced block's body, the reply itself when it carries no fence, or empty when
-     *   the reply was nothing but fences
+     * @param language the language asked for, the only fence info string treated as removable
+     * @return the fenced block's body, the code of an unfenced reply, or empty when the reply
+     *   held no code at all
      */
-    private fun stripCodeFences(raw: String): String {
+    private fun stripCodeFences(raw: String, language: String): String {
         val lines = raw.trim().lines()
         // The fence can open on any line: a model often writes "Here is the code:" first.
         val opening = lines.indexOfFirst { it.trimStart().startsWith(FENCE) }
-        if (opening < 0) return raw.trim()
+        if (opening < 0) return dropLeadingProse(lines)
 
+        // The opening line can carry code after its info string whether or not it also closes.
         val afterFence = lines[opening].trim().removePrefix(FENCE)
-        // A one-line reply closes on its opening line; otherwise that line is only the info string.
-        val firstCodeLine = if (afterFence.endsWith(FENCE)) {
-            stripLanguageInfo(afterFence.removeSuffix(FENCE).trim())
-        } else {
-            ""
-        }
+        val firstCodeLine = stripLanguageInfo(afterFence.removeSuffix(FENCE).trim(), language)
 
         val rest = lines.drop(opening + 1)
         val closing = rest.indexOfFirst { it.trimStart().startsWith(FENCE) }
@@ -454,18 +472,52 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
     }
 
     /**
-     * Drops the language info from a one-line fenced reply, so `kotlin println()` (the remains
+     * Keeps an unfenced reply from its first line of code onwards, so a lead-in or a refusal is
+     * never written into the open file. An all-prose reply yields empty, which the caller
+     * reports as a failed generation and answers with the raw transcript.
+     *
+     * @param lines the trimmed reply, split into lines
+     * @return the reply from its first code line on, or empty when it holds none
+     */
+    private fun dropLeadingProse(lines: List<String>): String {
+        val firstCode = lines.indexOfFirst { it.isNotBlank() && !isProse(it.trim()) }
+        return if (firstCode < 0) "" else lines.drop(firstCode).joinToString("\n").trimEnd()
+    }
+
+    /**
+     * Detects a natural-language line: a lead-in ("Here is the code:") or a refusal ("I cannot
+     * write that code."). Deliberately narrow, because the system prompt asks for bare code and
+     * a false positive throws real output away.
+     *
+     * @param line a trimmed, non-empty line
+     * @return true when the line reads as an English sentence rather than as code
+     */
+    private fun isProse(line: String): Boolean =
+        line.first().isUpperCase() &&
+            line.last() in SENTENCE_TERMINATORS &&
+            line.none { it in CODE_PUNCTUATION } &&
+            line.count { it == ' ' } >= MIN_PROSE_SPACES
+
+    /**
+     * Drops the language info from a fence's opening line, so `kotlin println()` (the remains
      * of ` ```kotlin println()``` `) yields just the code.
      *
      * @param fenceLine the opening fence line with its fence markers already removed
-     * @return the line without a leading language tag, empty when that was all it held
+     * @param language the language asked for; any other tag with code behind it is left alone
+     * @return the line without its language tag, empty when the tag was all it held
      */
-    private fun stripLanguageInfo(fenceLine: String): String =
-        if (fenceLine.substringBefore(' ').lowercase() in LANGUAGE_TAGS) {
-            fenceLine.substringAfter(' ', "").trim()
-        } else {
-            fenceLine
-        }
+    private fun stripLanguageInfo(fenceLine: String, language: String): String {
+        val tag = fenceLine.substringBefore(' ')
+        if (tag.lowercase() !in LANGUAGE_TAGS) return fenceLine
+
+        val rest = fenceLine.substringAfter(' ', "").trim()
+        // A tag on its own is always an info string, whatever language it names.
+        if (rest.isEmpty()) return ""
+        // With code behind it the tag may be code itself, so require the tag we asked for and a
+        // remainder that starts a name - `c = a + b` and `bash -c "..."` are code, not info.
+        val startsName = rest.first().isLetter() || rest.first() == '_' || rest.first() == '@'
+        return if (startsName && tag.equals(language, ignoreCase = true)) rest else fenceLine
+    }
 
     /**
      * Inserts generated code at the cursor position.
@@ -631,6 +683,15 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
 
         /** Used only when the host cannot name the open file's language. */
         private const val DEFAULT_LANGUAGE = "kotlin"
+
+        /** Ends a sentence; a code line that reaches one of these also holds code punctuation. */
+        private const val SENTENCE_TERMINATORS = ".:!?"
+
+        /** Marks a line as code however sentence-like it otherwise reads. */
+        private const val CODE_PUNCTUATION = "(){}[];=<>"
+
+        /** Three words or more, matching the sibling's isPreamble; shorter lines stay. */
+        private const val MIN_PROSE_SPACES = 2
 
         /** Bare fence infos ("java", "kotlin", ...) that are never code. */
         private val LANGUAGE_TAGS = setOf(
