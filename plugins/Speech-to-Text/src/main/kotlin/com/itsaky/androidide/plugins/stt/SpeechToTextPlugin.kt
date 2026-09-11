@@ -589,7 +589,7 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
      * silent by choice: this service answers the support check with code 14, meaning it cannot
      * report download events, so any promise made to the user here could not be kept.
      *
-     * @param locale pack to fetch, spelled the way the recognizer spells it
+     * @param locale pack to fetch, built from the normalized tag [usableTag] returned
      */
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     private fun requestLanguagePack(locale: Locale) {
@@ -652,7 +652,8 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
      *
      * @param skipRequested drops [locale]'s own tag from the candidates, for the caller that
      *   has already watched it fail
-     * @return the recognizer's own spelling of the tag, or null when the language is absent
+     * @return the tag normalized, so callers can hand it to [Locale.forLanguageTag], or null
+     *   when the language is absent
      */
     private fun usableTag(
         tags: List<String>?,
@@ -662,12 +663,17 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
         if (tags.isNullOrEmpty()) return null
         val wanted = normalizeTag(locale.toLanguageTag())
         val language = locale.language.lowercase(Locale.ROOT)
-        val candidates = if (skipRequested) tags.filterNot { normalizeTag(it) == wanted } else tags
-        return candidates.firstOrNull { normalizeTag(it) == wanted }
-            ?: candidates.firstOrNull { normalizeTag(it).substringBefore('-') == language }
+        val normalized = tags.map(::normalizeTag)
+        val candidates = if (skipRequested) normalized.filterNot { it == wanted } else normalized
+        return candidates.firstOrNull { it == wanted }
+            ?: candidates.firstOrNull { it.substringBefore('-') == language }
     }
 
-    /** Services spell tags inconsistently (`es_ES`, `es-es`), so compare them normalized. */
+    /**
+     * Services spell tags inconsistently (`es_ES`, `es-es`), so normalize before comparing them
+     * or building a [Locale]: `Locale.forLanguageTag` reads an underscore as ill-formed and
+     * answers `und`, which would put an undetermined language in the retry intent.
+     */
     private fun normalizeTag(tag: String): String = tag.replace('_', '-').lowercase(Locale.ROOT)
 
     /**
