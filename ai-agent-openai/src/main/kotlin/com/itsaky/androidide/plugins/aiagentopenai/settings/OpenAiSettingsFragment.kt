@@ -152,6 +152,21 @@ class OpenAiSettingsFragment : Fragment() {
     }
 
     /**
+     * Long-press on [box]'s end icon shows [tag]'s tooltip.
+     *
+     * Separate from [wireTooltip] because the end icon is a clickable child that consumes the
+     * long-press before the box sees it — without this the reveal control would be the one
+     * contributed element with no tooltip of its own.
+     */
+    private fun wireEndIconTooltip(box: TextInputLayout, tag: String) {
+        box.setEndIconOnLongClickListener { icon ->
+            val service = tooltipService ?: return@setEndIconOnLongClickListener false
+            service.showTooltip(icon, OpenAiPlugin.TOOLTIP_CATEGORY, tag)
+            true
+        }
+    }
+
+    /**
      * Show [message] on [target] with an optional leading status icon.
      *
      * @param icon leading status drawable, or 0 for the states that don't warrant one
@@ -404,10 +419,10 @@ class OpenAiSettingsFragment : Fragment() {
             // A request the server refused for credential reasons is reported here too, and named:
             // this pane is where the key gets fixed, and the transcript that carried the reason has
             // been left behind by the time the user arrives.
-            viewModel.credentialFailure()?.let { reason ->
+            viewModel.credentialFailure()?.let { failure ->
                 showStatus(
                     verificationText,
-                    getString(R.string.msg_key_chat_failure, reason),
+                    getString(R.string.msg_key_chat_failure, getString(failure.messageRes)),
                     R.drawable.ic_key_rejected
                 )
             }
@@ -424,6 +439,7 @@ class OpenAiSettingsFragment : Fragment() {
         }
         reveal.attach()
         apiKeyReveal = reveal
+        wireEndIconTooltip(apiKeyBox, OpenAiPlugin.TOOLTIP_TAG_SETTINGS_KEY)
 
         getKeyButton.setOnClickListener { openKeyPage() }
 
@@ -555,10 +571,17 @@ class OpenAiSettingsFragment : Fragment() {
                     // concludes the attempt destroyed the key they had, and re-buys a credential
                     // they never lost.
                     ConnectionVerification.Rejected -> {
+                        // "Kept, and chat is still using it" only for a key chat can actually
+                        // send. getApiKeyFor applies the same origin rule the backend applies
+                        // before sending one, and a key the Keystore will no longer open is not
+                        // sent either; claiming otherwise stops the user fixing a configuration
+                        // that is genuinely broken.
+                        val stored = viewModel.getApiKeyFor(viewModel.getBaseUrl())
+                        val keptKeyInUse = stored is KeystoreSecretStore.Stored.Value
                         showStatus(
                             verificationText,
                             getString(
-                                if (viewModel.hasStoredApiKey()) {
+                                if (keptKeyInUse) {
                                     R.string.msg_key_rejected_kept
                                 } else {
                                     R.string.msg_key_rejected

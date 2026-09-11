@@ -20,7 +20,9 @@ import com.itsaky.androidide.plugins.aiagentopenai.security.ApiKeyCache
 import com.itsaky.androidide.plugins.aiagentopenai.settings.BaseUrlPolicy
 import com.itsaky.androidide.plugins.aiagentopenai.settings.BaseUrlResult
 import com.itsaky.androidide.plugins.services.LlmInferenceService.*
+import java.io.BufferedReader
 import java.io.IOException
+import java.net.HttpURLConnection
 import java.util.concurrent.CompletableFuture
 import kotlin.coroutines.coroutineContext
 import kotlinx.coroutines.CancellationException
@@ -73,6 +75,16 @@ class OpenAiBackend(
      * only readable in a transcript the user has already navigated away from.
      */
     private val credentialFailures = CredentialFailureLog(::openAiPrefs)
+
+    /**
+     * When the key the requests in flight are carrying was saved.
+     *
+     * Noted where a request picks the key up rather than where a refusal is recorded: by the time
+     * a 401 lands the user may already have saved a replacement, and this is what tells the
+     * settings pane the refusal describes a key that is no longer there.
+     */
+    @Volatile
+    private var keyInUseStamp: Long = 0L
 
     @Volatile
     private var currentJob: Job? = null
@@ -413,9 +425,6 @@ class OpenAiBackend(
                     )
                     callback.onError(failureMessages.of(emptyReplyFailure(outcome)))
                 } else {
-                    // The saved key was accepted, so any recorded refusal describes a key that is
-                    // no longer in use and must stop being reported in settings.
-                    credentialFailures.clear()
                     val tokenCount = finalText.split("\\s+".toRegex()).size
                     context.logger.info("OpenAiBackend: Streamed ${finalText.length} chars in $chunkCount chunks, ~$tokenCount tokens")
                     callback.onComplete(LlmResponse.success(finalText, tokenCount, System.currentTimeMillis() - startTime))
@@ -469,9 +478,7 @@ class OpenAiBackend(
         val requestContext = coroutineContext
         var cancelHandle: DisposableHandle? = null
         try {
-            http.post(
-                url = getBaseUrl() + CHAT_COMPLETIONS_PATH,
-                apiKey = readApiKeyOrBlank(),
+            postChat(
                 body = body,
                 sse = true,
                 onConnected = { conn ->
@@ -634,14 +641,36 @@ class OpenAiBackend(
             val body = OpenAiRequestBuilder.body(
                 messages, getModelName(), stream = false, config = config, tuning = tuning
             )
-            text = http.post(
-                url = getBaseUrl() + CHAT_COMPLETIONS_PATH,
-                apiKey = readApiKeyOrBlank(),
-                body = body,
-            ) { reader -> extractText(JSONObject(reader.readText())) }
+            text = postChat(body) { reader -> extractText(JSONObject(reader.readText())) }
         }
         return text
     }
+
+    /**
+     * POST [body] to the configured server's chat endpoint with the stored credential.
+     *
+     * Every generation goes through here, streaming or not, which is why the recorded refusal is
+     * cleared here: the server answering is the server accepting the key, so any refusal on record
+     * describes a credential that is no longer the one in use. Clearing from one success path left
+     * the settings pane accusing a key that path had just proven works.
+     *
+     * @param sse true to ask for the server-sent-events stream
+     * @param onConnected receives the live connection, so the caller can disconnect it on cancel
+     * @return whatever [readResponse] produced
+     */
+    private fun <T> postChat(
+        body: JSONObject,
+        sse: Boolean = false,
+        onConnected: (HttpURLConnection) -> Unit = {},
+        readResponse: (BufferedReader) -> T,
+    ): T = http.post(
+        url = getBaseUrl() + CHAT_COMPLETIONS_PATH,
+        apiKey = readApiKeyOrBlank(),
+        body = body,
+        sse = sse,
+        onConnected = onConnected,
+        readResponse = readResponse,
+    ).also { credentialFailures.clear() }
 
     /**
      * List the models the configured server offers, filtered to plausible chat models.
@@ -697,6 +726,10 @@ class OpenAiBackend(
      * sent — it cannot be shown to belong elsewhere, and dropping it would break an upgrade.
      */
     private fun readApiKeyOrBlank(): String {
+        // Every request picks its credential up here, so this is where the stored key's stamp is
+        // taken — before the origin test, since a request that deliberately sends none is still
+        // describing the key that is on disk now. See keyInUseStamp.
+        keyInUseStamp = openAiPrefs()?.getLong(OpenAiPreferences.KEY_API_KEY_TIMESTAMP, 0L) ?: 0L
         val savedFor = openAiPrefs()?.getString(OpenAiPreferences.KEY_API_KEY_URL, null)
         if (savedFor != null && !BaseUrlPolicy.sameOrigin(savedFor, getBaseUrl())) {
             context.logger.debug("OpenAiBackend: saved key belongs to another server; sending none")
@@ -761,7 +794,7 @@ class OpenAiBackend(
         val message = failureMessages.of(failure)
         // Only a credential failure is recorded: any other reason says nothing about the key, and
         // filing it as one would send the user off to replace a key that works.
-        if (failure.isCredentialProblem) credentialFailures.record(message)
+        if (failure.isCredentialProblem) credentialFailures.record(failure, keyInUseStamp)
         return message
     }
 }

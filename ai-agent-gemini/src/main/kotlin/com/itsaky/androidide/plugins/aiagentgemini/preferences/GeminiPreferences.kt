@@ -30,6 +30,13 @@ internal object GeminiPreferences {
      */
     const val KEY_CREDENTIAL_FAILURE = "gemini_credential_failure"
 
+    /**
+     * When the key that [KEY_CREDENTIAL_FAILURE] describes was saved, so a refusal that lands after
+     * a replacement was saved can be told from one about the key in use. Outside [OWNED_KEYS] with
+     * the reason it stamps.
+     */
+    const val KEY_CREDENTIAL_FAILURE_KEY_STAMP = "gemini_credential_failure_key_stamp"
+
     /** Set once [migrateIfNeeded] has run, so a value changed since is never overwritten. */
     private const val KEY_MIGRATED = "migrated_from_agent_settings"
 

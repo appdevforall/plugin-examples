@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.PluginLogger
 import com.itsaky.androidide.plugins.aiagentgemini.backend.GeminiBackend
+import com.itsaky.androidide.plugins.aiagentgemini.errors.CredentialFailure
 import com.itsaky.androidide.plugins.aiagentgemini.errors.CredentialFailureLog
 import com.itsaky.androidide.plugins.aiagentgemini.logging.LOG_PREFIX
 import com.itsaky.androidide.plugins.aiagentgemini.preferences.GeminiPreferences
@@ -92,9 +93,10 @@ class GeminiSettingsViewModel(
      * being used. It is cleared where it stops being true instead: when a new credential is saved,
      * and when a request goes through on the stored one.
      *
-     * @return the reason to show, or null when the credential has not been refused
+     * @return the failure to report, whose wording the caller resolves, or null when the
+     *   credential has not been refused
      */
-    fun credentialFailure(): String? = credentialFailures.read()
+    internal fun credentialFailure(): CredentialFailure? = credentialFailures.read()
 
     /**
      * Check whether [apiKey] actually works, without storing it anywhere.
@@ -204,6 +206,7 @@ class GeminiSettingsViewModel(
             remove(KEY_API_KEY_VERIFIED)
             // Same reasoning: the refusal described the key being removed.
             remove(GeminiPreferences.KEY_CREDENTIAL_FAILURE)
+            remove(GeminiPreferences.KEY_CREDENTIAL_FAILURE_KEY_STAMP)
             apply()
         }
     }

@@ -14,6 +14,10 @@ import com.itsaky.androidide.plugins.aiagentmcp.R
  * description and toggle behaviour are decided here and nowhere else, so this dialog cannot drift
  * from the other AI plugins' credential fields (ADFA-5491).
  *
+ * Deliberately one copy per AI plugin: each addon is an independent Gradle build sharing only the
+ * repo's `libs/` jars, so there is nowhere cheaper to put this until the host's plugin-api carries
+ * it — a change to the masking logic is three edits, on purpose.
+ *
  * @param box the field's own layout, whose end icon becomes the control
  * @param field the masked field
  * @param onLegibleChanged called with true while the secret stands in clear text, so the caller can
@@ -42,8 +46,10 @@ internal class SecretRevealController(
         box.isHintEnabled = false
         box.boxBackgroundMode = TextInputLayout.BOX_BACKGROUND_NONE
         box.endIconMode = TextInputLayout.END_ICON_CUSTOM
-        // Announced as a toggle rather than a plain button, which is what it is.
-        box.isEndIconCheckable = true
+        // Not announced as a toggle: with END_ICON_CUSTOM nothing ever moves the icon's checked
+        // state, so TalkBack would read "not checked" over a legible secret. The content
+        // description below carries the state instead.
+        box.isEndIconCheckable = false
         box.setEndIconOnClickListener { toggle() }
         apply()
     }

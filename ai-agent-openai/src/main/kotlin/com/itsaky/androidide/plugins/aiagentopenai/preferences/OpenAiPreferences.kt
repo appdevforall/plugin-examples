@@ -66,10 +66,17 @@ internal object OpenAiPreferences {
 
     /**
      * Why the last request was refused for credential reasons, or absent. Diagnostics rather than a
-     * setting: a stale reason would accuse a key the user has since replaced, so it is written by
-     * the backend and forgotten as soon as the settings pane has reported it.
+     * setting: written by the backend, and cleared when a new credential is saved or a request goes
+     * through on the stored one — not when the settings pane reads it, which happens on every
+     * rotation.
      */
     const val KEY_CREDENTIAL_FAILURE = "openai_credential_failure"
+
+    /**
+     * When the key that [KEY_CREDENTIAL_FAILURE] describes was saved, so a refusal that lands after
+     * a replacement was saved can be told from one about the key in use.
+     */
+    const val KEY_CREDENTIAL_FAILURE_KEY_STAMP = "openai_credential_failure_key_stamp"
 
     /**
      * This plugin's preferences.

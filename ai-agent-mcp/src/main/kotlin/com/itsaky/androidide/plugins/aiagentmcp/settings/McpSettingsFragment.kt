@@ -184,6 +184,11 @@ class McpSettingsFragment : Fragment() {
         wireTooltip(urlField, McpPlugin.TOOLTIP_TAG_SERVER_URL)
         wireTooltip(tokenField, McpPlugin.TOOLTIP_TAG_SERVER_TOKEN)
         wireTooltip(tokenBox, McpPlugin.TOOLTIP_TAG_SERVER_TOKEN)
+        wireEndIconTooltip(tokenBox, McpPlugin.TOOLTIP_TAG_SERVER_TOKEN)
+
+        // Not saved, so a recreate cannot park a typed or revealed token in plain text in the
+        // state Bundle; a stored one is read back from the encrypted store instead.
+        tokenField.isSaveEnabled = false
 
         // The token was maskable and nothing more before this: it could only be typed blind.
         tokenReveal = SecretRevealController(tokenBox, tokenField) { legible ->
@@ -693,6 +698,21 @@ class McpSettingsFragment : Fragment() {
         view.setOnLongClickListener { anchor ->
             val service = tooltipService ?: return@setOnLongClickListener false
             service.showTooltip(anchor, McpPlugin.TOOLTIP_CATEGORY, tag)
+            true
+        }
+    }
+
+    /**
+     * Long-press on [box]'s end icon shows [tag]'s tooltip.
+     *
+     * Separate from [wireTooltip] because the end icon is a clickable child that consumes the
+     * long-press before the box sees it — without this the reveal control would be the one
+     * contributed element with no tooltip of its own.
+     */
+    private fun wireEndIconTooltip(box: TextInputLayout, tag: String) {
+        box.setEndIconOnLongClickListener { icon ->
+            val service = tooltipService ?: return@setEndIconOnLongClickListener false
+            service.showTooltip(icon, McpPlugin.TOOLTIP_CATEGORY, tag)
             true
         }
     }

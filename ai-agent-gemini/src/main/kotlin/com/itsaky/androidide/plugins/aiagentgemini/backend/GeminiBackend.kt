@@ -5,6 +5,7 @@ import android.os.Looper
 import android.util.Log
 import com.itsaky.androidide.plugins.PluginContext
 import com.itsaky.androidide.plugins.aiagentgemini.R
+import com.itsaky.androidide.plugins.aiagentgemini.errors.CredentialFailure
 import com.itsaky.androidide.plugins.aiagentgemini.errors.CredentialFailureLog
 import com.itsaky.androidide.plugins.aiagentgemini.errors.GeminiErrorFormatter
 import com.itsaky.androidide.plugins.aiagentgemini.errors.GeminiFailure
@@ -73,6 +74,16 @@ class GeminiBackend(
      */
     private val credentialFailures = CredentialFailureLog(::agentPrefs)
 
+    /**
+     * When the key the requests in flight are carrying was saved.
+     *
+     * Noted where a request picks the key up rather than where a refusal is recorded: by the time
+     * a 401 lands the user may already have saved a replacement, and this is what tells the
+     * settings pane the refusal describes a key that is no longer there.
+     */
+    @Volatile
+    private var keyInUseStamp: Long = 0L
+
     companion object {
         /** Current default model. gemini-1.5-* is retired on v1beta and now 404s. */
         const val DEFAULT_MODEL = "gemini-2.5-flash"
@@ -120,6 +131,9 @@ class GeminiBackend(
             keyCache = null
             return null
         }
+        // Every request that sends the stored key picks it up here, so this is where the key in
+        // use is stamped; see keyInUseStamp.
+        keyInUseStamp = agentPrefs()?.getLong(GeminiPreferences.KEY_API_KEY_TIMESTAMP, 0L) ?: 0L
         keyCache?.let { (raw, plain) -> if (raw == stored) return plain }
         if (Looper.myLooper() == Looper.getMainLooper()) {
             context.logger.warn("GeminiBackend: API key read on the main thread; refreshing off-thread")
@@ -416,9 +430,6 @@ class GeminiBackend(
                         callback.onError("Empty response from Gemini API")
 
                     else -> {
-                        // The saved key was accepted, so any recorded refusal describes a key that
-                        // is no longer in use and must stop being reported in settings.
-                        credentialFailures.clear()
                         val tokenCount = finalText.split("\\s+".toRegex()).size
                         callback.onComplete(
                             LlmResponse.success(finalText, tokenCount, System.currentTimeMillis() - startTime)
@@ -756,6 +767,10 @@ User: $userPrompt"""
             val err = conn.errorStream?.bufferedReader()?.use { it.readText() }.orEmpty()
             throw IOException("Gemini HTTP $code: $err")
         }
+        // Every request passes here, streaming or not, and a 2xx is the API accepting the key: any
+        // recorded refusal describes a credential that is no longer the one in use. Cleared here
+        // rather than on one success path, which left the pane accusing a key it had just proven.
+        credentialFailures.clear()
     }
 
     /**
@@ -857,7 +872,7 @@ User: $userPrompt"""
         val message = userMessage(failure)
         // Only a credential failure is recorded: any other reason says nothing about the key, and
         // filing it as one would send the user off to replace a key that works.
-        if (failure.isCredentialProblem) credentialFailures.record(message)
+        if (failure.isCredentialProblem) credentialFailures.record(failure, keyInUseStamp)
         return message
     }
 
@@ -876,11 +891,13 @@ User: $userPrompt"""
             GeminiFailure.QuotaExceeded ->
                 resources.getString(R.string.gemini_error_quota)
 
+            // Through CredentialFailure, which is also what the settings pane resolves, so the
+            // transcript and the pane cannot describe the same refusal differently.
             GeminiFailure.KeyRefused ->
-                resources.getString(R.string.gemini_error_key_refused)
+                resources.getString(CredentialFailure.KeyRefused.messageRes)
 
             GeminiFailure.KeyInvalid ->
-                resources.getString(R.string.gemini_error_key_invalid)
+                resources.getString(CredentialFailure.KeyInvalid.messageRes)
 
             is GeminiFailure.RequestRejected -> failure.reason?.let {
                 resources.getString(R.string.gemini_error_request_rejected_reason, it)
