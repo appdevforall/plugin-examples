@@ -21,6 +21,14 @@ internal object LocalLlmPreferences {
     const val KEY_MODEL_SHA256 = "local_llm_model_sha256"
     const val KEY_SIMPLE_PROMPT = "use_simple_local_prompt"
 
+    /**
+     * Models a later selection replaced, whose persisted read grant is still held. Written by the
+     * settings pane at selection time and cleared by the first load that actually succeeds, so a
+     * pick the loader goes on to refuse never costs the user the model they already had. See
+     * [supersededModels] (ADFA-5253).
+     */
+    private const val KEY_SUPERSEDED_MODELS = "local_llm_superseded_models"
+
     /** Set once [migrateIfNeeded] has run, so a value changed since is never overwritten. */
     private const val KEY_MIGRATED = "migrated_from_agent_settings"
 
@@ -67,6 +75,25 @@ internal object LocalLlmPreferences {
      */
     fun useSimplePrompt(context: PluginContext): Boolean =
         of(context).getBoolean(KEY_SIMPLE_PROMPT, true)
+
+    /**
+     * The models whose read grants are held for a selection that has not been loaded yet. Not one
+     * of [OWNED_KEYS]: it is grant bookkeeping for this install, and nothing a legacy store holds.
+     *
+     * @return a copy — the stored set is the one `SharedPreferences` handed out, so it may not be
+     *   modified in place
+     */
+    fun supersededModels(prefs: SharedPreferences): Set<String> =
+        prefs.getStringSet(KEY_SUPERSEDED_MODELS, emptySet())?.toSet().orEmpty()
+
+    /**
+     * Replaces the whole list read by [supersededModels].
+     *
+     * @param references the models whose grants are still held; empty once they are given back
+     */
+    fun setSupersededModels(prefs: SharedPreferences, references: Set<String>) {
+        prefs.edit().putStringSet(KEY_SUPERSEDED_MODELS, HashSet(references)).apply()
+    }
 
     /**
      * Copies this backend's settings out of every store in [LEGACY_FILES], once.
