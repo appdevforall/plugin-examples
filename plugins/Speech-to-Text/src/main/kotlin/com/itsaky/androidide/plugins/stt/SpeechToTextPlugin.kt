@@ -136,6 +136,9 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
         if (!scope.isActive) {
             scope = CoroutineScope(Dispatchers.IO)
         }
+        // The cancelled generation's finally never reached the toolbar, so the field can still
+        // read PROCESSING here and would strand a re-enabled plugin on the spinner.
+        recordingState = RecordingState.IDLE
         context.addPluginLifecycleListener(aiCoreLifecycleListener)
 
         // Get services from plugin context
@@ -222,6 +225,10 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
             runCatching { context.removePluginLifecycleListener(aiCoreLifecycleListener) }
         }
         llmService = null
+        // A cancelled generation's finally still posts setState, which lands after deactivate()
+        // returned; without these a disabled plugin reaches into the host toolbar.
+        editorService = null
+        uiService = null
         endCapture()
         scope.cancel()
     }
@@ -304,12 +311,13 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
     private fun startVoiceCapture() {
         val ctx = hostContext()
 
-        // One capture at a time: a second recognizer would race the first for the microphone
-        // and for the transcript. A capture stuck past the LLM timeout is treated as over.
+        // One capture at a time: a second tap would race the first for the microphone, insert
+        // twice, and leave the icon describing whichever run finished last. A capture stuck
+        // past the LLM timeout is treated as over.
         val elapsed = System.currentTimeMillis() - captureStartedAt
         if (recordingState != RecordingState.IDLE && elapsed < STALE_CAPTURE_MS) {
             logger?.info("Ignoring the tap: a capture is already $recordingState")
-            toast(str(R.string.stt_error_busy))
+            toast(str(R.string.stt_busy))
             return
         }
 
@@ -690,8 +698,12 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
                 }
             } finally {
                 // Posted, not dispatched: a cancelled coroutine can no longer suspend, and the
-                // toolbar must leave the spinner even then.
-                runOnMain { setState(RecordingState.IDLE) }
+                // toolbar must leave the spinner even then. Only our own PROCESSING is cleared.
+                runOnMain {
+                    if (recordingState == RecordingState.PROCESSING) {
+                        setState(RecordingState.IDLE)
+                    }
+                }
             }
         }
     }
@@ -720,21 +732,30 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
                 // No FENCE stop sequence, unlike the inline-completion sibling: a block answer
                 // opens with a fence, so stopping there would truncate it to nothing.
             }
+            // withTimeoutOrNull reports a timeout as null, and generateCompletion is platform-typed,
+            // so record a future that completed with null rather than reading it as a slow model.
+            var completedWithoutResponse = false
             // await() is cancellation-aware, so dispose() unwinds this instead of leaving an IO
             // thread parked in Future.get for the rest of the timeout.
             val response = withContext(Dispatchers.IO) {
                 withTimeoutOrNull(GENERATION_TIMEOUT_SECONDS * MILLIS_PER_SECOND) {
                     service.generateCompletion(prompt, config).await()
+                        .also { if (it == null) completedWithoutResponse = true }
                 }
             }
             if (response == null) {
-                // Only maxTokens bounds the backend: cancelling the future does not stop decoding,
-                // and cancelGeneration() is router-wide and would abort other plugins' requests.
-                logger?.warn("Code generation timed out after ${GENERATION_TIMEOUT_SECONDS}s")
+                if (completedWithoutResponse) {
+                    logger?.warn("Backend completed the request without a response")
+                } else {
+                    // Only maxTokens bounds the backend: cancelling the future does not stop
+                    // decoding, and cancelGeneration() is router-wide and would abort other
+                    // plugins' requests.
+                    logger?.warn("Code generation timed out after ${GENERATION_TIMEOUT_SECONDS}s")
+                }
                 return null
             }
             if (response.success) {
-                response.text?.let { stripCodeFences(it, language) }?.takeIf { it.isNotBlank() }
+                response.text?.let { stripCodeFences(it) }?.takeIf { it.isNotBlank() }
             } else {
                 logger?.warn("Code generation failed: ${response.error}")
                 null
@@ -770,19 +791,18 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
      * receives code rather than a lead-in line, backticks and a language tag.
      *
      * @param raw the backend's response text
-     * @param language the language asked for, the only fence info string treated as removable
      * @return the fenced block's body, the code of an unfenced reply, or empty when the reply
      *   held no code at all
      */
-    private fun stripCodeFences(raw: String, language: String): String {
+    private fun stripCodeFences(raw: String): String {
         val lines = raw.trim().lines()
         // The fence can open on any line: a model often writes "Here is the code:" first.
         val opening = lines.indexOfFirst { it.trimStart().startsWith(FENCE) }
-        if (opening < 0) return dropLeadingProse(lines)
+        if (opening < 0) return dropProse(lines)
 
         // The opening line can carry code after its info string whether or not it also closes.
         val afterFence = lines[opening].trim().removePrefix(FENCE)
-        val firstCodeLine = stripLanguageInfo(afterFence.removeSuffix(FENCE).trim(), language)
+        val firstCodeLine = stripLanguageInfo(afterFence.removeSuffix(FENCE).trim())
 
         val rest = lines.drop(opening + 1)
         val closing = rest.indexOfFirst { it.trimStart().startsWith(FENCE) }
@@ -797,17 +817,17 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
     }
 
     /**
-     * Keeps an unfenced reply from its first line of code onwards, so a lead-in or a refusal is
-     * never written into the open file. An all-prose reply yields empty, which the caller
-     * reports as a failed generation and answers with the raw transcript.
+     * Drops the natural-language lines of an unfenced reply wherever they sit, so neither a
+     * lead-in nor a trailing explanation is written into the open file. An all-prose reply yields
+     * empty, which the caller reports as a failed generation and answers with the raw transcript.
      *
      * @param lines the trimmed reply, split into lines
-     * @return the reply from its first code line on, or empty when it holds none
+     * @return the reply's code lines, or empty when it holds none
      */
-    private fun dropLeadingProse(lines: List<String>): String {
-        val firstCode = lines.indexOfFirst { it.isNotBlank() && !isProse(it.trim()) }
-        return if (firstCode < 0) "" else lines.drop(firstCode).joinToString("\n").trimEnd()
-    }
+    private fun dropProse(lines: List<String>): String =
+        lines.filterNot { it.isNotBlank() && isProse(it.trim()) }
+            .joinToString("\n")
+            .trim()
 
     /**
      * Detects a natural-language line: a lead-in ("Here is the code:") or a refusal ("I cannot
@@ -828,20 +848,19 @@ class SpeechToTextPlugin : IPlugin, UIExtension, DocumentationExtension {
      * of ` ```kotlin println()``` `) yields just the code.
      *
      * @param fenceLine the opening fence line with its fence markers already removed
-     * @param language the language asked for; any other tag with code behind it is left alone
      * @return the line without its language tag, empty when the tag was all it held
      */
-    private fun stripLanguageInfo(fenceLine: String, language: String): String {
+    private fun stripLanguageInfo(fenceLine: String): String {
         val tag = fenceLine.substringBefore(' ')
         if (tag.lowercase() !in LANGUAGE_TAGS) return fenceLine
 
         val rest = fenceLine.substringAfter(' ', "").trim()
         // A tag on its own is always an info string, whatever language it names.
         if (rest.isEmpty()) return ""
-        // With code behind it the tag may be code itself, so require the tag we asked for and a
-        // remainder that starts a name - `c = a + b` and `bash -c "..."` are code, not info.
+        // With code behind it the tag may be code itself, so require a remainder that starts a
+        // name - `c = a + b` and `bash -c "..."` are code, not an info string plus code.
         val startsName = rest.first().isLetter() || rest.first() == '_' || rest.first() == '@'
-        return if (startsName && tag.equals(language, ignoreCase = true)) rest else fenceLine
+        return if (startsName) rest else fenceLine
     }
 
     /**
