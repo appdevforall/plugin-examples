@@ -572,12 +572,13 @@ class OpenAiSettingsFragment : Fragment() {
                     // they never lost.
                     ConnectionVerification.Rejected -> {
                         // "Kept, and chat is still using it" only for a key chat can actually
-                        // send. getApiKeyFor applies the same origin rule the backend applies
-                        // before sending one, and a key the Keystore will no longer open is not
-                        // sent either; claiming otherwise stops the user fixing a configuration
-                        // that is genuinely broken.
+                        // send and that is not the one just refused: getApiKeyFor applies the
+                        // backend's own origin rule, a key the Keystore will not open is not sent
+                        // either, and Edit prefills the stored key, so re-saving it unchanged
+                        // refuses the very credential chat is still sending.
                         val stored = viewModel.getApiKeyFor(viewModel.getBaseUrl())
-                        val keptKeyInUse = stored is KeystoreSecretStore.Stored.Value
+                        val keptKeyInUse = stored is KeystoreSecretStore.Stored.Value &&
+                            stored.plain.trim() != apiKey
                         showStatus(
                             verificationText,
                             getString(

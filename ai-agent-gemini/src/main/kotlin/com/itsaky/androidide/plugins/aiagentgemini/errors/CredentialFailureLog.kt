@@ -32,11 +32,10 @@ internal class CredentialFailureLog(private val prefs: () -> SharedPreferences?)
     }
 
     /**
-     * The recorded failure, or null when the credential has not been refused since it was set.
+     * The recorded failure, or null unless it describes the credential that is on disk now.
      *
-     * A refusal describing a key older than the one on disk is dropped: a request still in flight
-     * when a new key is saved lands after the save has cleared the log, and would otherwise accuse
-     * a key that has never been tried.
+     * Equal stamps mean nothing was saved or cleared between the refused request reading the key
+     * and now, so a refusal that landed after either is dropped rather than reported.
      */
     fun read(): CredentialFailure? {
         val prefs = prefs() ?: return null
@@ -44,7 +43,8 @@ internal class CredentialFailureLog(private val prefs: () -> SharedPreferences?)
             ?.takeIf { it.isNotBlank() }
             ?: return null
         val keyStamp = prefs.getLong(GeminiPreferences.KEY_CREDENTIAL_FAILURE_KEY_STAMP, 0L)
-        if (keyStamp < prefs.getLong(GeminiPreferences.KEY_API_KEY_TIMESTAMP, 0L)) return null
+        // Clear removes the key's timestamp too, so "not older than" would keep a keyless refusal.
+        if (keyStamp != prefs.getLong(GeminiPreferences.KEY_API_KEY_TIMESTAMP, 0L)) return null
         return CredentialFailure.ofTag(tag)
     }
 

@@ -403,11 +403,12 @@ class GeminiSettingsFragment : Fragment() {
                     // they never lost.
                     KeyVerification.Rejected -> {
                         // "Kept, and chat is still using it" only for a key chat can actually
-                        // send. A stored key the Keystore will no longer open — a restored backup,
-                        // an OEM Keystore reset — is on disk but unusable, and telling the user it
-                        // is in use stops them fixing the thing that is actually broken.
+                        // send and that is not the one just refused: a key the Keystore will no
+                        // longer open is unusable, and Edit prefills the stored key, so re-saving
+                        // it unchanged refuses the very credential chat is still sending.
                         val stored = viewModel.getGeminiApiKey()
-                        val keptKeyInUse = stored is KeystoreSecretStore.Stored.Value
+                        val keptKeyInUse = stored is KeystoreSecretStore.Stored.Value &&
+                            stored.plain.trim() != apiKey
                         showVerification(
                             getString(
                                 if (keptKeyInUse) {

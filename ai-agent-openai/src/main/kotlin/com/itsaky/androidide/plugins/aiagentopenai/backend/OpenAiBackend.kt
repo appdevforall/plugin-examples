@@ -76,16 +76,6 @@ class OpenAiBackend(
      */
     private val credentialFailures = CredentialFailureLog(::openAiPrefs)
 
-    /**
-     * When the key the requests in flight are carrying was saved.
-     *
-     * Noted where a request picks the key up rather than where a refusal is recorded: by the time
-     * a 401 lands the user may already have saved a replacement, and this is what tells the
-     * settings pane the refusal describes a key that is no longer there.
-     */
-    @Volatile
-    private var keyInUseStamp: Long = 0L
-
     @Volatile
     private var currentJob: Job? = null
 
@@ -204,6 +194,7 @@ class OpenAiBackend(
         val future = CompletableFuture<LlmResponse>()
 
         currentJob = scope.launch {
+            val keyStamp = storedKeyStamp()
             try {
                 val startTime = System.currentTimeMillis()
                 context.logger.info("OpenAiBackend: Generating response for prompt (${prompt.length} chars)")
@@ -223,7 +214,7 @@ class OpenAiBackend(
                 throw e
             } catch (e: Exception) {
                 context.logger.error("OpenAiBackend: Error generating response", e)
-                future.complete(LlmResponse.failure(formatErrorMessage(e)))
+                future.complete(LlmResponse.failure(formatErrorMessage(e, keyStamp)))
             }
         }
 
@@ -253,6 +244,7 @@ class OpenAiBackend(
         val future = CompletableFuture<LlmResponse>()
 
         currentJob = scope.launch {
+            val keyStamp = storedKeyStamp()
             try {
                 val startTime = System.currentTimeMillis()
 
@@ -271,7 +263,7 @@ class OpenAiBackend(
                 throw e
             } catch (e: Exception) {
                 context.logger.error("OpenAiBackend: Error generating with history", e)
-                future.complete(LlmResponse.failure(formatErrorMessage(e)))
+                future.complete(LlmResponse.failure(formatErrorMessage(e, keyStamp)))
             }
         }
 
@@ -357,6 +349,7 @@ class OpenAiBackend(
         callback: ToolStreamCallback
     ) {
         currentJob = scope.launch {
+            val keyStamp = storedKeyStamp()
             try {
                 val startTime = System.currentTimeMillis()
 
@@ -435,7 +428,7 @@ class OpenAiBackend(
                 ensureActive()
                 Log.e(TAG, "STREAM | failed: ${e.message}", e)
                 context.logger.error("OpenAiBackend: Error in streaming", e)
-                callback.onError(formatErrorMessage(e))
+                callback.onError(formatErrorMessage(e, keyStamp))
             }
         }
     }
@@ -650,9 +643,8 @@ class OpenAiBackend(
      * POST [body] to the configured server's chat endpoint with the stored credential.
      *
      * Every generation goes through here, streaming or not, which is why the recorded refusal is
-     * cleared here: the server answering is the server accepting the key, so any refusal on record
-     * describes a credential that is no longer the one in use. Clearing from one success path left
-     * the settings pane accusing a key that path had just proven works.
+     * cleared here — on the status line, since a 2xx is the server accepting the key whether or not
+     * the body that follows is read to the end, or cancelled, or dropped mid-stream.
      *
      * @param sse true to ask for the server-sent-events stream
      * @param onConnected receives the live connection, so the caller can disconnect it on cancel
@@ -669,8 +661,9 @@ class OpenAiBackend(
         body = body,
         sse = sse,
         onConnected = onConnected,
+        onAccepted = { credentialFailures.clear() },
         readResponse = readResponse,
-    ).also { credentialFailures.clear() }
+    )
 
     /**
      * List the models the configured server offers, filtered to plausible chat models.
@@ -718,6 +711,15 @@ class OpenAiBackend(
 
     /** The stored key as a possibly-empty string, for the calls that treat "no key" as valid. */
     /**
+     * When the stored key was saved, or 0 when none is stored.
+     *
+     * Read into a local at the top of each request and carried to that request's error handler: a
+     * field on the backend is overwritten by any other key read before the refusal lands.
+     */
+    private fun storedKeyStamp(): Long =
+        openAiPrefs()?.getLong(OpenAiPreferences.KEY_API_KEY_TIMESTAMP, 0L) ?: 0L
+
+    /**
      * The saved key, but only for the server it was saved for.
      *
      * A key entered for OpenAI must not travel to whatever server the URL is pointed at next: a
@@ -726,10 +728,6 @@ class OpenAiBackend(
      * sent — it cannot be shown to belong elsewhere, and dropping it would break an upgrade.
      */
     private fun readApiKeyOrBlank(): String {
-        // Every request picks its credential up here, so this is where the stored key's stamp is
-        // taken — before the origin test, since a request that deliberately sends none is still
-        // describing the key that is on disk now. See keyInUseStamp.
-        keyInUseStamp = openAiPrefs()?.getLong(OpenAiPreferences.KEY_API_KEY_TIMESTAMP, 0L) ?: 0L
         val savedFor = openAiPrefs()?.getString(OpenAiPreferences.KEY_API_KEY_URL, null)
         if (savedFor != null && !BaseUrlPolicy.sameOrigin(savedFor, getBaseUrl())) {
             context.logger.debug("OpenAiBackend: saved key belongs to another server; sending none")
@@ -782,8 +780,11 @@ class OpenAiBackend(
      *
      * [OpenAiErrorFormatter] decides *what* went wrong; the wording comes from `strings.xml`. The
      * raw HTTP error body stays on the logged exception and must never reach the transcript.
+     *
+     * @param keyStamp when the key this request read was saved, so a refusal landing after a later
+     *   save or clear is not reported against a credential that was never tried
      */
-    private fun formatErrorMessage(e: Exception): String {
+    private fun formatErrorMessage(e: Exception, keyStamp: Long): String {
         val baseUrl = getBaseUrl()
         val failure = OpenAiErrorFormatter.classify(
             error = e,
@@ -794,7 +795,7 @@ class OpenAiBackend(
         val message = failureMessages.of(failure)
         // Only a credential failure is recorded: any other reason says nothing about the key, and
         // filing it as one would send the user off to replace a key that works.
-        if (failure.isCredentialProblem) credentialFailures.record(failure, keyInUseStamp)
+        if (failure.isCredentialProblem) credentialFailures.record(failure, keyStamp)
         return message
     }
 }
